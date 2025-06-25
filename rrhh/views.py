@@ -477,34 +477,27 @@ def firmar_ficha_ingreso(request, ficha_id):
             request, "No puedes firmar esta ficha aún. Falta la aprobación del PM.")
         return redirect('rrhh:listar_fichas_ingreso_usuario')
 
-    # Función auxiliar para validar firma accesible
-    def firma_es_valida(firma):
-        if not firma or not getattr(firma, 'url', None):
-            return False
-        try:
-            response = requests.get(firma.url)
-            return response.status_code == 200
-        except:
-            return False
+    # Validar si falta alguna firma
+    errores = []
 
-    # Validar firma del usuario
-    if not firma_es_valida(request.user.firma_digital):
-        messages.warning(
-            request, "Debes registrar tu firma antes de poder firmar la ficha.")
-        return redirect(f"{reverse('liquidaciones:registrar_firma')}?next={request.path}")
+    if not request.user.firma_digital or not hasattr(request.user.firma_digital, 'url'):
+        errores.append(
+            "Debes registrar tu firma digital antes de poder firmar la ficha.")
+    if not ficha.pm or not ficha.pm.firma_digital:
+        errores.append("El PM asignado aún no ha registrado su firma.")
+    if not ficha.creado_por or not ficha.creado_por.firma_digital:
+        errores.append("El encargado de RRHH aún no ha registrado su firma.")
 
-    # Validar firma del PM
-    if not ficha.pm or not firma_es_valida(ficha.pm.firma_digital):
-        messages.error(
-            request, "El PM asignado aún no ha registrado una firma válida.")
-        return redirect('rrhh:listar_fichas_ingreso_usuario')
+    if errores:
+        for e in errores:
+            messages.error(request, e)
 
-    # Validar firma del RRHH
-    if not ficha.creado_por or not firma_es_valida(ficha.creado_por.firma_digital):
-        messages.error(
-            request, "El responsable de RRHH aún no ha registrado una firma válida.")
-        return redirect('rrhh:listar_fichas_ingreso_usuario')
+        # Reenviar fichas a la misma plantilla con errores
+        fichas = FichaIngreso.objects.filter(
+            usuario=request.user).order_by('-id')
+        return render(request, 'rrhh/listar_fichas_ingreso_usuario.html', {'fichas': fichas})
 
+    # Si es POST, firmamos
     if request.method == 'POST':
         ficha.firma_trabajador = request.user.firma_digital
         ficha.firma_rrhh = ficha.creado_por.firma_digital
@@ -521,7 +514,6 @@ def firmar_ficha_ingreso(request, ficha_id):
         except Exception as e:
             messages.error(
                 request, f"No se pudo completar la firma del PDF: {e}")
-            return redirect('rrhh:listar_fichas_ingreso_usuario')
 
         return redirect('rrhh:listar_fichas_ingreso_usuario')
 
@@ -545,6 +537,7 @@ def rechazar_ficha_ingreso(request, ficha_id):
     return redirect('rrhh:listar_fichas_ingreso_usuario')
 
 
+"""
 @login_required
 @rol_requerido('usuario')
 def firmar_ficha_ingreso_trabajador(request, ficha_id):
@@ -568,7 +561,7 @@ def firmar_ficha_ingreso_trabajador(request, ficha_id):
     except Exception as e:
         messages.error(request, f"Ocurrió un error al firmar: {e}")
 
-    return redirect('rrhh:listar_fichas_ingreso_usuario')
+    return redirect('rrhh:listar_fichas_ingreso_usuario')"""
 
 
 @staff_member_required
