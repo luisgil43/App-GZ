@@ -1,3 +1,5 @@
+from collections import Counter
+from openpyxl.styles import Font
 from django.urls import NoReverseMatch
 from rrhh.forms import CronogramaPagoForm
 from rrhh.models import CronogramaPago
@@ -611,6 +613,125 @@ def generar_ficha_pdf(request, ficha_id):
     # Nombre de archivo lógico para descarga
     nombre_archivo = f"FichaIngreso_{ficha.rut.replace('.', '').replace('-', '')}.pdf"
     return FileResponse(buffer, as_attachment=True, filename=nombre_archivo)
+
+
+def exportar_fichas_ingreso_excel(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Fichas de Ingreso"
+
+    # Encabezados organizados por sección del formulario
+    encabezados = [
+        'Usuario', 'Nombres', 'Apellidos', 'RUT', 'Fecha de nacimiento', 'Edad',
+        'Sexo', 'Estado civil', 'Nacionalidad', 'Hijos', 'Nivel estudios',
+        'Profesión u oficio',
+        'Dirección', 'Comuna', 'Región',
+        'Teléfono', 'Correo electrónico',
+        'Nombre contacto emergencia', 'Teléfono emergencia', 'Parentesco emergencia',
+        'Dirección emergencia',
+        'AFP', 'Salud',
+        'Banco 1', 'Tipo cuenta 1', 'Número cuenta 1',
+        'Banco 2', 'Tipo cuenta 2', 'Número cuenta 2',
+        'Cargo', 'Jefe directo', 'Proyecto', 'Fecha inicio',
+        'Tipo contrato', 'Jornada', 'Sueldo base', 'Bono', 'Colación', 'Movilización',
+        'Talla polera', 'Talla pantalón', 'Talla zapato', 'Observaciones',
+        'Estado ficha', 'Motivo rechazo PM', 'Motivo rechazo usuario',
+    ]
+    ws.append(encabezados)
+
+    # Obtener fichas
+    fichas = FichaIngreso.objects.select_related('usuario').all()
+
+    # Agregar datos
+    for ficha in fichas:
+        ws.append([
+            ficha.usuario.get_full_name() if ficha.usuario else '',
+            ficha.nombres,
+            ficha.apellidos,
+            ficha.rut,
+            ficha.fecha_nacimiento.strftime(
+                '%d-%m-%Y') if ficha.fecha_nacimiento else '',
+            ficha.edad,
+            ficha.sexo,
+            ficha.estado_civil,
+            ficha.nacionalidad,
+            ficha.hijos,
+            ficha.nivel_estudios,
+            ficha.profesion_u_oficio,
+            ficha.direccion,
+            ficha.comuna,
+            ficha.region,
+            ficha.telefono,
+            ficha.email,
+            ficha.nombre_contacto_emergencia,
+            ficha.telefono_emergencia,
+            ficha.parentesco_emergencia,
+            ficha.direccion_emergencia,
+            ficha.afp,
+            ficha.salud,
+            ficha.banco,
+            ficha.tipo_cuenta,
+            ficha.numero_cuenta,
+            ficha.banco_2,
+            ficha.tipo_cuenta_2,
+            ficha.numero_cuenta_2,
+            ficha.cargo,
+            ficha.jefe_directo,
+            ficha.proyecto,
+            ficha.fecha_inicio.strftime(
+                '%d-%m-%Y') if ficha.fecha_inicio else '',
+            ficha.tipo_contrato,
+            ficha.jornada,
+            ficha.sueldo_base,
+            ficha.bono,
+            ficha.colacion,
+            ficha.movilizacion,
+            ficha.talla_polera,
+            ficha.talla_pantalon,
+            ficha.talla_zapato,
+            ficha.observaciones,
+            ficha.get_estado_display(),
+            ficha.motivo_rechazo_pm or '',
+            ficha.motivo_rechazo_usuario or '',
+        ])
+
+    # Crear hoja de resumen
+    ws_resumen = wb.create_sheet(title="Resumen")
+
+    resumenes = {
+        "Sexo": Counter(ficha.sexo or "No definido" for ficha in fichas),
+        "Nacionalidad": Counter(ficha.nacionalidad or "No definida" for ficha in fichas),
+        "AFP": Counter(ficha.afp or "No definida" for ficha in fichas),
+        "Salud": Counter(ficha.salud or "No definida" for ficha in fichas),
+        "Tipo de Contrato": Counter(ficha.tipo_contrato or "No definido" for ficha in fichas),
+        "Talla Polera": Counter(ficha.talla_polera or "No definida" for ficha in fichas),
+        "Talla Pantalón": Counter(ficha.talla_pantalon or "No definida" for ficha in fichas),
+        "Talla Zapato": Counter(ficha.talla_zapato or "No definida" for ficha in fichas),
+    }
+
+    fila = 1
+    for titulo, conteo in resumenes.items():
+        ws_resumen.cell(row=fila, column=1,
+                        value=titulo).font = Font(bold=True)
+        fila += 1
+        ws_resumen.cell(row=fila, column=1,
+                        value="Valor").font = Font(bold=True)
+        ws_resumen.cell(row=fila, column=2,
+                        value="Cantidad").font = Font(bold=True)
+        fila += 1
+        for valor, cantidad in conteo.items():
+            ws_resumen.cell(row=fila, column=1, value=valor)
+            ws_resumen.cell(row=fila, column=2, value=cantidad)
+            fila += 1
+        fila += 2
+
+    # Generar respuesta
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename=FichasIngreso.xlsx'
+    wb.save(response)
+    return response
 
 
 @login_required

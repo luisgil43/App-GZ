@@ -107,4 +107,6 @@ urlpatterns = [
     path('cronograma/ver/', views.ver_cronograma_pago, name='ver_cronograma'),
     path('cronograma/', views.cronograma_pago_admin,
          name='cronograma_pago_admin'),
+    path('fichas/exportar_excel/', views.exportar_fichas_ingreso_excel,
+         name='exportar_fichas_excel'),
 ]

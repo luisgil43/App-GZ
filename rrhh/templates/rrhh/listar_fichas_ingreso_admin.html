@@ -6,10 +6,15 @@
     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Ficha de ingreso</h1>
 
     {% if request.user.es_rrhh or request.user.es_admin_general %}
-      <a href="{% url 'rrhh:crear_ficha' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
-        ➕ Añadir ficha de ingreso
-      </a>
-    {% endif %}
+  <div class="flex flex-col sm:flex-row gap-2">
+    <a href="{% url 'rrhh:crear_ficha' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
+      ➕ Añadir ficha de ingreso
+    </a>
+    <a href="{% url 'rrhh:exportar_fichas_excel' %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-center">
+      📤 Exportar a Excel
+    </a>
+  </div>
+{% endif %}
   </div>
 
   <div class="overflow-x-auto bg-white rounded-lg shadow">
