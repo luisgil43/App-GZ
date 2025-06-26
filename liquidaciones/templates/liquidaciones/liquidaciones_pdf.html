@@ -21,7 +21,6 @@
         <thead>
             <tr>
                 <th>Mes</th>
-                <th>Monto</th>
                 <th>Fecha Emisión</th>
                 <th>Firmada</th>
                 <th>Fecha Firma</th>
@@ -31,7 +30,6 @@
             {% for liquidacion in liquidaciones %}
             <tr>
                 <td>{{ liquidacion.mes }}</td>
-                <td>{{ liquidacion.monto|floatformat:2 }}</td>  <!-- Formatea monto a 2 decimales -->
                 <td>{{ liquidacion.fecha_emision|date:"d/m/Y" }}</td> <!-- Mejor formato de fecha -->
                 <td>{% if liquidacion.firmada %}Sí{% else %}No{% endif %}</td>
                 <td>{% if liquidacion.fecha_firma %}{{ liquidacion.fecha_firma|date:"d/m/Y H:i" }}{% else %}-{% endif %}</td>

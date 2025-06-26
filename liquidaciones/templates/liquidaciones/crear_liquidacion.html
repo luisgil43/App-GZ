@@ -12,15 +12,14 @@
     {{ form.media }}
     {{ form.non_field_errors }}
 
-    {# 🔴 Muestra errores generales del formulario #}
     {% if form.errors %}
     <div class="bg-red-100 border border-red-300 text-red-700 p-4 rounded-xl mb-6">
       <strong>Se encontraron errores en el formulario:</strong>
       <ul class="list-disc pl-5 mt-2 text-sm">
         {% for field, errors in form.errors.items %}
-        {% for error in errors %}
-        <li><strong>{{ field|capfirst }}:</strong> {{ error }}</li>
-        {% endfor %}
+          {% for error in errors %}
+            <li><strong>{{ field|capfirst }}:</strong> {{ error }}</li>
+          {% endfor %}
         {% endfor %}
       </ul>
     </div>
@@ -46,15 +45,8 @@
     </div>
 
     <div>
-      {{ form.monto.label_tag }}
-      {{ form.monto }}
-      {{ form.monto.errors }}
-    </div>
-
-    <div>
       {{ form.archivo_pdf_liquidacion.label_tag }}
       {{ form.archivo_pdf_liquidacion }}
-
       {% if form.archivo_pdf_liquidacion.errors %}
         <p class="mt-2 text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded">
           {{ form.archivo_pdf_liquidacion.errors.0 }}
@@ -62,12 +54,21 @@
       {% endif %}
     </div>
 
-    <div class="pt-4">
+    <!-- 🔁 Botones reorganizados -->
+    <div class="pt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+      <!-- Botón Volver -->
+      <a href="{% url 'liquidaciones:admin_lista' %}"
+         class="inline-flex items-center gap-2 text-gray-700 bg-gray-100 px-4 py-2 rounded-xl hover:bg-gray-200 transition text-sm">
+        <i class="lucide lucide-arrow-left"></i> <--- Volver
+      </a>
+
+      <!-- Botón Guardar -->
       <button type="submit"
         class="bg-green-600 text-white font-medium px-6 py-2 rounded-xl shadow hover:bg-green-700 transition">
         Guardar Liquidación
       </button>
     </div>
+
   </form>
 </div>
 {% endblock %}

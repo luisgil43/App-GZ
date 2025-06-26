@@ -18,15 +18,18 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='Liquidacion',
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('id', models.BigAutoField(auto_created=True,
+                 primary_key=True, serialize=False, verbose_name='ID')),
                 ('mes', models.PositiveIntegerField()),
                 ('año', models.PositiveIntegerField()),
-                ('monto', models.DecimalField(blank=True, decimal_places=2, max_digits=10, null=True)),
-                ('archivo_pdf_liquidacion', models.FileField(blank=True, null=True, upload_to=liquidaciones.models.ruta_archivo_sin_firmar, verbose_name='Liquidación de Sueldo')),
-                ('pdf_firmado', models.FileField(blank=True, null=True, upload_to=liquidaciones.models.ruta_archivo_firmado, verbose_name='Liquidación de sueldo firmada')),
+                ('archivo_pdf_liquidacion', models.FileField(blank=True, null=True,
+                 upload_to=liquidaciones.models.ruta_archivo_sin_firmar, verbose_name='Liquidación de Sueldo')),
+                ('pdf_firmado', models.FileField(blank=True, null=True,
+                 upload_to=liquidaciones.models.ruta_archivo_firmado, verbose_name='Liquidación de sueldo firmada')),
                 ('fecha_firma', models.DateTimeField(blank=True, null=True)),
                 ('firmada', models.BooleanField(default=False)),
-                ('tecnico', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
+                ('tecnico', models.ForeignKey(
+                    on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL)),
             ],
             options={
                 'verbose_name': 'Liquidación',

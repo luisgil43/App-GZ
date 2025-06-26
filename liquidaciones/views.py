@@ -36,6 +36,9 @@ from django.contrib.auth import get_user_model
 from usuarios.decoradores import rol_requerido
 from django.utils.http import urlencode
 from django.urls import reverse
+from .forms import CargaMasivaLiquidacionesForm
+from usuarios.models import CustomUser
+import os
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -49,15 +52,12 @@ def admin_lista_liquidaciones(request):
         nombres = sorted(set(l.tecnico.get_full_name() for l in liquidaciones))
         meses = sorted(set(l.mes for l in liquidaciones))
         años = sorted(set(l.año for l in liquidaciones))
-        montos = sorted(
-            set(l.monto for l in liquidaciones if l.monto is not None))
 
         return render(request, 'liquidaciones/admin_lista.html', {
             'liquidaciones': liquidaciones,
             'nombres': nombres,
             'meses': meses,
             'años': años,
-            'montos': montos,
         })
 
     except Exception as e:
@@ -371,7 +371,6 @@ def confirmar_reemplazo(request):
                     tecnico_id=tecnico_id,
                     mes=mes,
                     año=año,
-                    monto=data.get('monto'),
                     firmada=False
                 )
                 nueva.archivo_pdf_liquidacion.name = ruta_guardada
@@ -410,83 +409,71 @@ def confirmar_reemplazo(request):
         'tecnico': tecnico_nombre,
         'mes': data.get('mes'),
         'año': data.get('año'),
-        'monto': data.get('monto'),
         'pdf_name': archivo_nombre,
     })
 
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
-def carga_masiva_view(request):
+def carga_masiva_liquidaciones(request):
+    resumen = None
+
     if request.method == 'POST':
-        mes = int(request.POST.get('mes'))
-        año = int(request.POST.get('año'))
+        form = CargaMasivaLiquidacionesForm(request.POST, request.FILES)
 
-        archivos = request.FILES.getlist('archivos[]')
-        if not archivos:
-            messages.error(request, "No se han subido archivos.")
-            return render(request, 'liquidaciones/carga_masiva.html')
+        if form.is_valid():
+            mes = form.cleaned_data['mes']
+            año = form.cleaned_data['año']
+            archivos = request.FILES.getlist('archivos')
 
-        errores = []
-        exitos = 0
+            errores = []
+            cargadas = 0
 
-        for archivo in archivos:
-            nombre_archivo = os.path.splitext(archivo.name)[0]
-            if not nombre_archivo.isdigit():
-                errores.append(f"Nombre de archivo inválido: {archivo.name}")
-                continue
+            for archivo in archivos:
+                nombre = os.path.splitext(archivo.name)[0]
 
-            tecnico_id = int(nombre_archivo)
-            tecnico = Tecnico.objects.filter(pk=tecnico_id).first()
-            if not tecnico:
-                errores.append(f"Técnico con ID {tecnico_id} no existe.")
-                continue
+                if not archivo.name.lower().endswith('.pdf'):
+                    errores.append(f"{archivo.name} (no es un PDF)")
+                    continue
 
-            # Verificar si existe una liquidación previa
-            existente = Liquidacion.objects.filter(
-                tecnico=tecnico, mes=mes, año=año).first()
+                rut = nombre.strip()
+                usuario = CustomUser.objects.filter(identidad=rut).first()
 
-            if existente:
-                # ⚠️ Guardamos en sesión para confirmar reemplazo
-                request.session['duplicado_data'] = {
-                    'tecnico': tecnico.pk,
-                    'mes': mes,
-                    'año': año,
-                    'monto': None,
-                }
-                request.session['archivo_temporal_nombre'] = archivo.name
-                request.session['archivo_temporal_bytes'] = archivo.read()
+                if not usuario:
+                    errores.append(f"{rut} (usuario no existe)")
+                    continue
 
-                messages.warning(
-                    request,
-                    f"Ya existe una liquidación para Técnico {tecnico_id}, mes {mes}, año {año}. ¿Deseas reemplazarla?"
+                # Sobrescribir si ya existe
+                liquidacion, creada = Liquidacion.objects.update_or_create(
+                    tecnico=usuario,
+                    mes=mes,
+                    año=año,
+                    defaults={'archivo_pdf_liquidacion': archivo}
                 )
-                return redirect('liquidaciones:confirmar_reemplazo')
 
-            # Si no existe, se guarda normalmente en Cloudinary
-            nueva = Liquidacion(
-                tecnico=tecnico,
-                mes=mes,
-                año=año,
-                monto=None,
-                firmada=False
-            )
+                cargadas += 1
 
-            file_name = f"liquidaciones_sin_firmar/{uuid.uuid4()}_{archivo.name}"
-            ruta_guardada = default_storage.save(
-                file_name, ContentFile(archivo.read()))
-            nueva.archivo_pdf_liquidacion.name = ruta_guardada
-            nueva.save()
-            exitos += 1
+            resumen = {
+                'exitosas': cargadas,
+                'fallidas': errores,
+            }
 
-        if exitos:
-            messages.success(
-                request, f"Se cargaron correctamente {exitos} liquidaciones.")
-        if errores:
-            for error in errores:
-                messages.error(request, error)
+            messages.success(request, "Carga finalizada")
+            form = CargaMasivaLiquidacionesForm()  # resetea el form
 
-    return render(request, 'liquidaciones/carga_masiva.html')
+        else:
+            # Mostrar mensajes de error individuales del formulario
+            for campo, errores in form.errors.items():
+                for error in errores:
+                    messages.error(request, f"{campo.capitalize()}: {error}")
+
+    else:
+        form = CargaMasivaLiquidacionesForm()
+
+    return render(request, 'liquidaciones/carga_masiva_liquidaciones.html', {
+        'form': form,
+        'resumen': resumen,
+    })
 
 
 @staff_member_required

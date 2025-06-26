@@ -1,8 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django_select2.forms import ModelSelect2Widget
-from .models import Liquidacion
 from django.urls import reverse_lazy
+from .models import Liquidacion
 
 User = get_user_model()
 
@@ -45,10 +45,7 @@ class LiquidacionForm(forms.ModelForm):
                 'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500',
                 'placeholder': 'Ej. 2025'
             }),
-            'monto': forms.NumberInput(attrs={
-                'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500',
-                'placeholder': 'Ej. 1000000'
-            }),
+
             'archivo_pdf_liquidacion': forms.ClearableFileInput(attrs={
                 'class': 'block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100',
                 'accept': 'application/pdf',
@@ -70,8 +67,6 @@ class LiquidacionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
-        self.fields['monto'].required = True
-        self.fields['monto'].widget.attrs['required'] = 'required'
 
     def clean_tecnico(self):
         tecnico = self.cleaned_data.get('tecnico')
@@ -96,12 +91,6 @@ class LiquidacionForm(forms.ModelForm):
 
         return archivo
 
-    def clean_monto(self):
-        monto = self.cleaned_data.get('monto')
-        if monto is None:
-            raise forms.ValidationError("Debes ingresar un monto.")
-        return monto
-
     def clean_mes(self):
         mes = self.cleaned_data.get('mes')
         try:
@@ -109,8 +98,29 @@ class LiquidacionForm(forms.ModelForm):
         except (ValueError, TypeError):
             raise forms.ValidationError(
                 "El mes debe ser un número del 1 al 12.")
-
         if mes_int < 1 or mes_int > 12:
             raise forms.ValidationError("El mes debe estar entre 1 y 12.")
-
         return mes_int
+
+
+class CargaMasivaLiquidacionesForm(forms.Form):
+    mes = forms.CharField(label="Mes", max_length=20)
+    año = forms.IntegerField(label="Año")
+    archivos = forms.FileField(
+        label="Seleccionar archivos PDF",
+        required=True
+        # NO se especifica widget aquí para evitar errores
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        archivos = self.files.getlist('archivos')
+
+        if not archivos:
+            raise forms.ValidationError("Debes subir al menos un archivo.")
+
+        for archivo in archivos:
+            if not archivo.name.lower().endswith('.pdf'):
+                raise forms.ValidationError(
+                    f"El archivo '{archivo.name}' no es PDF.")
+        return cleaned_data

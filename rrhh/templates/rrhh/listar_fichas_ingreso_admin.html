@@ -6,15 +6,15 @@
     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Ficha de ingreso</h1>
 
     {% if request.user.es_rrhh or request.user.es_admin_general %}
-  <div class="flex flex-col sm:flex-row gap-2">
-    <a href="{% url 'rrhh:crear_ficha' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
-      ➕ Añadir ficha de ingreso
-    </a>
-    <a href="{% url 'rrhh:exportar_fichas_excel' %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-center">
-      📤 Exportar a Excel
-    </a>
-  </div>
-{% endif %}
+    <div class="flex flex-col sm:flex-row gap-2">
+      <a href="{% url 'rrhh:crear_ficha' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
+        ➕ Añadir ficha de ingreso
+      </a>
+      <a href="{% url 'rrhh:exportar_fichas_excel' %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-center">
+        📤 Exportar a Excel
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   <div class="overflow-x-auto bg-white rounded-lg shadow">
@@ -60,30 +60,31 @@
               <span class="text-gray-400 italic">No disponible</span>
             {% endif %}
           </td>
-<td class="px-4 py-3 align-middle">
-  {% if ficha.estado == 'rechazada_pm' %}
-    <span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold text-sm">❌ Rechazada por PM</span>
-  {% elif ficha.estado == 'rechazada_usuario' %}
-    <span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold text-sm">❌ Rechazada por Trabajador</span>
-  {% elif ficha.estado == 'pendiente_pm' %}
-    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-semibold text-sm">🕐 Pendiente por autorización PM</span>
-  {% elif ficha.estado == 'pendiente_usuario' %}
-    <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-semibold text-sm">📝 Pendiente por firma del trabajador</span>
-  {% elif ficha.estado == 'aprobada' %}
-    <span class="bg-green-100 text-green-700 px-2 py-1 rounded font-semibold text-sm">✅ Ficha completada</span>
-  {% endif %}
-</td>
-<td class="px-4 py-3 text-gray-900 align-middle">
-  {% if ficha.estado == 'rechazada_pm' and ficha.motivo_rechazo_pm %}
-    {{ ficha.motivo_rechazo_pm }}
-  {% elif ficha.estado == 'rechazada_usuario' and ficha.motivo_rechazo_usuario %}
-    {{ ficha.motivo_rechazo_usuario }}
-  {% else %}
-    <span class="text-gray-400 italic">—</span>
-  {% endif %}
-</td>
+          <td class="px-4 py-3 align-middle">
+            {% if ficha.estado == 'rechazada_pm' %}
+              <span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold text-sm">❌ Rechazada por PM</span>
+            {% elif ficha.estado == 'rechazada_usuario' %}
+              <span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold text-sm">❌ Rechazada por Trabajador</span>
+            {% elif ficha.estado == 'pendiente_pm' %}
+              <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-semibold text-sm">🕐 Pendiente por autorización PM</span>
+            {% elif ficha.estado == 'pendiente_usuario' %}
+              <span class="bg-orange-100 text-orange-800 px-2 py-1 rounded font-semibold text-sm">📝 Pendiente por firma del trabajador</span>
+            {% elif ficha.estado == 'aprobada' %}
+              <span class="bg-green-100 text-green-700 px-2 py-1 rounded font-semibold text-sm">✅ Ficha completada</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3 text-gray-900 align-middle">
+            {% if ficha.estado == 'rechazada_pm' and ficha.motivo_rechazo_pm %}
+              {{ ficha.motivo_rechazo_pm }}
+            {% elif ficha.estado == 'rechazada_usuario' and ficha.motivo_rechazo_usuario %}
+              {{ ficha.motivo_rechazo_usuario }}
+            {% else %}
+              <span class="text-gray-400 italic">—</span>
+            {% endif %}
+          </td>
           <td class="px-4 py-3 flex flex-col sm:flex-row gap-2 justify-center items-center">
-            {% if request.user.es_rrhh %}
+
+            {% if request.user.es_rrhh or request.user.es_admin_general %}
               <a href="{% url 'rrhh:editar_ficha' ficha.id %}" class="text-blue-600 font-medium">
                 🖊️ <span class="underline ml-1">Editar</span>
               </a>
@@ -98,8 +99,8 @@
                   ✅ <span class="underline ml-1">Aprobar ficha (firmar)</span>
                 </a>
                 <button type="button" onclick="abrirModal('{{ ficha.id }}')" class="text-red-600 font-medium">
-  ❌ <span class="underline ml-1">Rechazar ficha</span>
-</button>
+                  ❌ <span class="underline ml-1">Rechazar ficha</span>
+                </button>
               {% elif ficha.estado == 'rechazada_pm' or ficha.estado == 'rechazada_usuario' %}
                 <span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold text-sm">❌ Ya fue rechazada</span>
               {% else %}
@@ -107,24 +108,16 @@
               {% endif %}
             {% endif %}
 
-            {% if request.user.es_admin_general %}
-              <a href="{% url 'rrhh:editar_ficha' ficha.id %}" class="text-blue-600 font-medium">
-                🖊️ <span class="underline ml-1">Editar</span>
-              </a>
-              <a href="{% url 'rrhh:eliminar_ficha' ficha.id %}" class="text-red-600 font-medium">
-                🗑️ <span class="underline ml-1">Eliminar</span>
-              </a>
-              {% if not ficha.firma_pm %}
-                <a href="{% url 'rrhh:firmar_ficha_pm' ficha.id %}" class="text-green-600 font-medium">
-                  ✅ <span class="underline ml-1">Firmar como PM</span>
-                </a>
-              {% endif %}
-            {% endif %}
+          {% if request.user.es_admin_general and not request.user.es_pm and not ficha.firma_pm %}
+  <a href="{% url 'rrhh:firmar_ficha_pm' ficha.id %}" class="text-green-600 font-medium">
+    ✅ <span class="underline ml-1">Firmar como PM</span>
+  </a>
+{% endif %}
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="5" class="px-4 py-6 text-center text-gray-500">No se encontraron fichas de ingreso.</td>
+          <td colspan="6" class="px-4 py-6 text-center text-gray-500">No se encontraron fichas de ingreso.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -132,6 +125,7 @@
   </div>
 </div>
 
+<!-- Filtro script -->
 <script>
   const filtros = document.querySelectorAll(".filtro");
   const tabla = document.getElementById("tabla-fichas").getElementsByTagName("tbody")[0];
@@ -154,6 +148,7 @@
     });
   });
 </script>
+
 <!-- Modal de Rechazo -->
 <div id="modal-rechazo" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
   <div class="bg-white rounded-lg shadow-lg w-full max-w-md p-6 relative">
@@ -163,8 +158,7 @@
       <textarea name="motivo" required class="w-full border rounded p-2 text-sm mb-4"
         placeholder="Escribe aquí el motivo del rechazo..."></textarea>
       <div class="flex justify-end gap-2">
-        <button type="button" onclick="cerrarModal()"
-          class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Cancelar</button>
+        <button type="button" onclick="cerrarModal()" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded">Cancelar</button>
         <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">Rechazar</button>
       </div>
     </form>
@@ -175,7 +169,7 @@
   function abrirModal(fichaId) {
     const modal = document.getElementById('modal-rechazo');
     const form = document.getElementById('form-rechazo');
-    form.action = `/rrhh/fichas/${fichaId}/rechazar-pm/`; // ajusta si tienes namespaces
+    form.action = `/rrhh/fichas/${fichaId}/rechazar-pm/`;
     modal.classList.remove('hidden');
   }
 

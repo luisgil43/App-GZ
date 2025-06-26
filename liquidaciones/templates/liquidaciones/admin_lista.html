@@ -5,15 +5,12 @@
   <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-2 sm:space-y-0">
     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Liquidaciones de Sueldo</h1>
 
-
-    <div class="flex flex-col sm:flex-row gap-2 sm:gap-2">
-      <a href="{% url 'liquidaciones:crear' %}"
-        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-center">
-        Añadir Liquidación
+    <div class="flex flex-col sm:flex-row gap-2">
+      <a href="{% url 'liquidaciones:crear' %}" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-center">
+        ➕ Añadir Liquidación
       </a>
-      <a href="#"
-        class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
-        Cargar Liquidaciones Masiva
+      <a href="{% url 'liquidaciones:carga_masiva' %}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-center">
+        📥 Cargar Liquidaciones Masiva
       </a>
     </div>
   </div>
@@ -22,118 +19,86 @@
     <table id="tabla-liquidaciones" class="min-w-full divide-y divide-gray-200 text-sm">
       <thead class="bg-gray-100">
         <tr>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Nombre y Apellido</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Mes</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Año</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Monto</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Liquidación sin firmar</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Firmado</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Fecha Firma</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Liquidación firmada</th>
-          <th class="px-4 py-3 text-left font-semibold text-gray-700">Acciones</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Nombre y Apellido</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Mes</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Año</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Liquidación sin firmar</th>
+          <th class="px-4 py-3 font-semibold text-center text-gray-700">Firmado</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Fecha Firma</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Liquidación firmada</th>
+          <th class="px-4 py-3 font-semibold text-left text-gray-700">Acciones</th>
         </tr>
         <tr>
-          <th></th>
-          <th><select class="filtro px-2 py-1 w-full text-sm border">
-              <option value="">Todos</option>{% for nombre in nombres %}<option>{{ nombre }}</option>{% endfor %}
-            </select></th>
-          <th><select class="filtro px-2 py-1 w-full text-sm border">
-              <option value="">Todos</option>{% for mes in meses %}<option>{{ mes }}</option>{% endfor %}
-            </select></th>
-          <th><select class="filtro px-2 py-1 w-full text-sm border">
-              <option value="">Todos</option>{% for año in años %}<option>{{ año }}</option>{% endfor %}
-            </select></th>
-          <th><select class="filtro px-2 py-1 w-full text-sm border">
-              <option value="">Todos</option>{% for monto in montos %}<option>${{ monto }}</option>{% endfor %}
-            </select></th>
-          <th></th>
-          <th></th>
-          <th></th>
-          <th></th>
+          <th><select class="filtro w-full text-sm border px-2 py-1"><option value="">Todos</option>{% for nombre in nombres %}<option>{{ nombre }}</option>{% endfor %}</select></th>
+          <th><select class="filtro w-full text-sm border px-2 py-1"><option value="">Todos</option>{% for mes in meses %}<option>{{ mes }}</option>{% endfor %}</select></th>
+          <th><select class="filtro w-full text-sm border px-2 py-1"><option value="">Todos</option>{% for año in años %}<option>{{ año }}</option>{% endfor %}</select></th>
+          <th colspan="5"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-100 bg-white">
         {% for l in liquidaciones %}
         <tr class="hover:bg-gray-50 transition">
-          <td class="px-4 py-3 text-gray-900">{{ l.tecnico.get_full_name }}</td>
-          <td class="px-4 py-3 text-gray-900">{{ l.mes }}</td>
-          <td class="px-4 py-3 text-gray-900">{{ l.año }}</td>
-          <td class="px-4 py-3 text-gray-900">${{ l.monto }}</td>
+          <td class="px-4 py-3">{{ l.tecnico.get_full_name }}</td>
+          <td class="px-4 py-3">{{ l.mes }}</td>
+          <td class="px-4 py-3">{{ l.año }}</td>
           <td class="px-4 py-3 text-center">
             {% if l.archivo_pdf_liquidacion %}
-            <a href="{% url 'liquidaciones:ver_pdf_admin' l.id %}" target="_blank" class="text-blue-600">
-              📄 <span class="underline ml-1">Ver PDF</span>
-            </a>
+              <a href="{% url 'liquidaciones:ver_pdf_admin' l.id %}" target="_blank" class="text-blue-600">
+  <span class="mr-1">📄</span><span class="underline">Ver PDF</span>
+</a>
             {% else %}
-            <span class="text-red-500 italic">No disponible</span>
+              <span class="text-red-500 italic">No disponible</span>
             {% endif %}
           </td>
           <td class="px-4 py-3 text-center">
-            <span class="text-green-600">
-              {% if l.firmada %}✅{% else %}❌{% endif %}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-gray-900">{{ l.fecha_firma|date:"d/m/Y"|default:"—" }}</td>
-          <td class="px-4 py-3">
-            {% if l.pdf_firmado %}
-            <a href="{% url 'liquidaciones:ver_pdf_firmado_admin' l.id %}" target="_blank" class="text-blue-600">
-              ⬇️ <span class="underline ml-1">Descargar</span>
-            </a>
+            {% if l.firmada %}
+              ✅
             {% else %}
-            <span class="text-red-500 italic">No disponible</span>
+              ❌
             {% endif %}
           </td>
-          <td class="px-4 py-3 flex flex-col sm:flex-row gap-2">
-            <a href="{% url 'liquidaciones:editar' l.id %}" class="text-blue-600 font-medium">
-              🖊️ <span class="underline">Editar</span>
-            </a>
-            <a href="{% url 'liquidaciones:eliminar' l.id %}" class="text-red-600 font-medium">
-              🗑️ <span class="underline">Eliminar</span>
-            </a>
+          <td class="px-4 py-3">{{ l.fecha_firma|date:"d/m/Y"|default:"—" }}</td>
+          <td class="px-4 py-3">
+            {% if l.pdf_firmado %}
+              <a href="{% url 'liquidaciones:ver_pdf_firmado_admin' l.id %}" target="_blank" class="text-blue-600 underline">⬇️ Descargar</a>
+            {% else %}
+              <span class="text-red-500 italic">No disponible</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-col sm:flex-row gap-2">
+              <a href="{% url 'liquidaciones:editar' l.id %}" class="text-indigo-600 hover:underline">🖊️ Editar</a>
+              <a href="{% url 'liquidaciones:eliminar' l.id %}" class="text-red-600 hover:underline">🗑️ Eliminar</a>
+            </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="10" class="px-4 py-6 text-center text-gray-500">No hay liquidaciones registradas.</td>
+          <td colspan="8" class="px-4 py-6 text-center text-gray-500">No hay liquidaciones registradas.</td>
         </tr>
         {% endfor %}
       </tbody>
-
     </table>
   </div>
 </div>
 
 <script>
-  // Filtro por columna
+  // Filtros por columnas
   const filtros = document.querySelectorAll(".filtro");
-  const tabla = document.getElementById("tabla-liquidaciones").getElementsByTagName("tbody")[0];
+  const tabla = document.querySelector("#tabla-liquidaciones tbody");
 
   filtros.forEach((select, colIndex) => {
     select.addEventListener("change", () => {
-      const valores = Array.from(filtros).map(s => s.value.trim().toLowerCase());
+      const valores = Array.from(filtros).map(f => f.value.toLowerCase());
       Array.from(tabla.rows).forEach(row => {
         let visible = true;
-        valores.forEach((filtro, i) => {
-          if (filtro !== "" && filtro !== "todos") {
-            const cellText = row.cells[i + 1].textContent.replace(/\s+/g, " ").trim().toLowerCase();
-            if (!cellText.includes(filtro)) visible = false;
+        valores.forEach((val, i) => {
+          if (val && !row.cells[i].textContent.toLowerCase().includes(val)) {
+            visible = false;
           }
         });
         row.style.display = visible ? "" : "none";
       });
-    });
-  });
-
-  // Animación entrada/salida para mensajes
-  window.addEventListener('DOMContentLoaded', () => {
-    const alerts = document.querySelectorAll('.alert-slide');
-    alerts.forEach(alert => {
-      alert.classList.remove('opacity-0', '-translate-y-4');
-      alert.classList.add('opacity-100', 'translate-y-0');
-      setTimeout(() => {
-        alert.classList.add('opacity-0');
-        setTimeout(() => alert.remove(), 1000);
-      }, 5000);
     });
   });
 </script>

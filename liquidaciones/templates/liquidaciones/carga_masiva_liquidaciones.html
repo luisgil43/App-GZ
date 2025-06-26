@@ -1,0 +1,73 @@
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+
+{% block dashboard_content %}
+<div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">Carga Masiva de Liquidaciones</h2>
+
+
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    {% csrf_token %}
+
+    <!-- Campo Mes -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700">Mes</label>
+      {{ form.mes|add_class:"w-full rounded-xl border-gray-300 px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500" }}
+    </div>
+
+    <!-- Campo Año -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700">Año</label>
+      {{ form.año|add_class:"w-full rounded-xl border-gray-300 px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500" }}
+    </div>
+
+    <!-- Campo Archivos -->
+    <div>
+      <label class="block text-sm font-semibold text-gray-700">Archivos PDF</label>
+      {% render_field form.archivos class="w-full rounded-xl border-gray-300 px-4 py-2 shadow-sm bg-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-green-50 file:text-green-700 hover:file:bg-green-100" multiple="multiple" %}
+    </div>
+
+    <!-- Botones -->
+    <div class="flex justify-between items-center pt-4">
+      <!-- Botón Volver -->
+      <a href="{% url 'liquidaciones:admin_lista' %}" class="inline-flex items-center gap-2 text-gray-700 bg-gray-100 px-4 py-2 rounded-xl hover:bg-gray-200 transition text-sm">
+        <i class="lucide lucide-arrow-left"></i><--- Volver
+      </a>
+
+      <!-- Botón Subir -->
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm shadow">
+        📤 Subir Liquidaciones
+      </button>
+    </div>
+  </form>
+
+  {% if resumen %}
+    <div class="mt-6 bg-white border rounded-xl p-4 shadow space-y-4">
+      <h3 class="text-lg font-semibold text-gray-800">📊 Resumen de carga</h3>
+
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex-1 bg-green-100 text-green-800 rounded-lg p-3 text-center">
+          <p class="text-3xl font-bold">{{ resumen.exitosas }}</p>
+          <p class="text-sm">Liquidaciones cargadas correctamente</p>
+        </div>
+
+        <div class="flex-1 bg-red-100 text-red-800 rounded-lg p-3 text-center">
+          <p class="text-3xl font-bold">{{ resumen.fallidas|length }}</p>
+          <p class="text-sm">Fallidas (sin usuario o mal nombre)</p>
+        </div>
+      </div>
+
+      {% if resumen.fallidas %}
+        <div class="mt-4">
+          <h4 class="text-sm font-bold text-gray-700">⚠️ Archivos/RUT fallidos:</h4>
+          <ul class="mt-2 list-disc list-inside text-sm text-red-700 space-y-1">
+            {% for error in resumen.fallidas %}
+              <li>{{ error }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

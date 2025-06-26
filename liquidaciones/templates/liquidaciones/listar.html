@@ -39,7 +39,6 @@
             <tr>
                 <th class="border px-4 py-2">Mes</th>
                 <th class="border px-4 py-2">Año</th>
-                <th class="border px-4 py-2">Monto</th>
                 <th class="border px-4 py-2">Liquidación sin firmar</th>
                 <th class="border px-4 py-2">Estado</th>
                 <th class="border px-4 py-2">Acciones</th>
@@ -50,7 +49,6 @@
             <tr class="hover:bg-gray-50 transition">
                 <td class="border px-4 py-2 text-center">{{ liquidacion.mes }}</td>
                 <td class="border px-4 py-2 text-center">{{ liquidacion.año }}</td>
-                <td class="border px-4 py-2 text-center">${{ liquidacion.monto|floatformat:0 }}</td>
                 <td class="border px-4 py-2 text-center">
                     {% if liquidacion.archivo_pdf_liquidacion %}
                     <a href="{% url 'liquidaciones:ver_pdf' liquidacion.id %}" target="_blank" class="text-blue-600"

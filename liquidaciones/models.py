@@ -43,8 +43,6 @@ class Liquidacion(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     mes = models.PositiveIntegerField()
     año = models.PositiveIntegerField()
-    monto = models.DecimalField(
-        max_digits=10, decimal_places=2, null=True, blank=True)
 
     archivo_pdf_liquidacion = models.FileField(
         upload_to=ruta_archivo_sin_firmar,

@@ -17,7 +17,6 @@ urlpatterns = [
          views.confirmar_firma, name='confirmar_firma'),
     path('confirmar-reemplazo/', views.confirmar_reemplazo,
          name='confirmar_reemplazo'),
-    path('carga-masiva/', views.carga_masiva_view, name='carga_masiva'),
     path('crear/', views.crear_liquidacion, name='crear'),
     path('usuario-autocomplete/', UsuarioAutocomplete.as_view(),
          name='usuario-autocomplete'),
@@ -28,6 +27,8 @@ urlpatterns = [
     path('ver-firmado/<int:pk>/', views.ver_pdf_firmado_admin,
          name='ver_pdf_firmado_admin'),
     path('ver-pdf/<int:pk>/', views.ver_pdf_admin, name='ver_pdf_admin'),
+    path('carga-masiva/', views.carga_masiva_liquidaciones, name='carga_masiva'),
+
 
 
 
