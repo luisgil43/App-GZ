@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from simple_history import register
 
 
 class UsuariosConfig(AppConfig):
@@ -7,3 +8,5 @@ class UsuariosConfig(AppConfig):
 
     def ready(self):
         import usuarios.signals
+        from .models import CustomUser
+        register(CustomUser)

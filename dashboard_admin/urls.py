@@ -33,5 +33,6 @@ urlpatterns = [
     path('feriados/', admin_views.listar_feriados, name='listar_feriados'),
     path('feriados/eliminar/<int:pk>/',
          admin_views.eliminar_feriado, name='eliminar_feriado'),
+    path('historial/', views.historial_modelos, name='historial_modelos'),
 
 ]
