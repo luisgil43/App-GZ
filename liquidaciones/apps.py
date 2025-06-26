@@ -6,8 +6,10 @@ class LiquidacionesConfig(AppConfig):
     name = 'liquidaciones'
     verbose_name = 'Gestión de Liquidaciones'
 
+
+"""
     def ready(self):
         from simple_history import register
         from .models import Liquidacion
 
-        register(Liquidacion)
+        register(Liquidacion) """

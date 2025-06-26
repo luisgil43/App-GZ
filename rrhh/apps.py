@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from simple_history import register
+# from simple_history import register
 
 
 class RrhhConfig(AppConfig):
@@ -7,6 +7,8 @@ class RrhhConfig(AppConfig):
     name = 'rrhh'
     verbose_name = "Recursos Humanos"
 
+
+"""
     def ready(self):
         from .models import (
             ContratoTrabajo,
@@ -24,3 +26,4 @@ class RrhhConfig(AppConfig):
         register(TipoDocumento)
         register(Feriado)
         register(CronogramaPago)
+"""

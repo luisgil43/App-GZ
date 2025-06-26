@@ -19,11 +19,7 @@ from django.core.exceptions import PermissionDenied
 from usuarios.models import CustomUser as User
 from usuarios.decoradores import rol_requerido
 import re
-from simple_history.models import HistoricalRecords
-from simple_history.utils import update_change_reason
-from django.contrib.contenttypes.models import ContentType
-from django.contrib.admin.utils import quote
-from django.apps import apps
+
 
 User = get_user_model()
 
@@ -378,29 +374,3 @@ def eliminar_feriado(request, pk):
     messages.success(
         request, f'El feriado "{feriado.nombre}" fue eliminado con éxito.')
     return redirect('dashboard_admin:listar_feriados')
-
-
-@rol_requerido('admin')
-def historial_modelos(request):
-    # Obtenemos todos los modelos históricos
-    historial_total = []
-
-    for model in apps.get_models():
-        if hasattr(model, 'history'):
-            historial = model.history.all().order_by(
-                '-history_date')[:50]  # solo últimos 50
-            for cambio in historial:
-                modelo_nombre = str(model._meta.verbose_name.title())
-                historial_total.append({
-                    "modelo": modelo_nombre,
-                    "pk": cambio.instance.pk if cambio.instance else '—',
-                    "tipo": cambio.history_type,
-                    "usuario": cambio.history_user,
-                    "fecha": cambio.history_date
-                })
-
-    historial_total.sort(key=lambda x: x['fecha'], reverse=True)
-
-    return render(request, 'dashboard_admin/historial_modelos.html', {
-        'historial': historial_total
-    })
