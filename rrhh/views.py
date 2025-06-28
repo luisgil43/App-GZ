@@ -1649,8 +1649,8 @@ def listar_adelantos_usuario(request):
     else:
         messages.error(
             request, "No tienes ficha de ingreso registrada con sueldo base.")
-        # O redirige a otra vista si es necesario
-        return redirect('dashboard:index')
+        sueldo_disponible = 0
+        adelanto_mes = True  # bloquea el formulario
 
     # Bloquear si ya tiene solicitud aprobada este mes
     adelanto_mes = SolicitudAdelanto.objects.filter(
