@@ -402,3 +402,103 @@ def firmar_ficha_ingreso_pdf(ficha):
     ruta_final = f"fichas_de_ingreso/{identidad}/Ficha_ingreso.pdf"
     contenido = ContentFile(final_output.read())
     ficha.archivo.save(ruta_final, contenido, save=True)
+
+
+def calcular_monto_disponible(ficha):
+    if not ficha or not ficha.sueldo_base or not ficha.fecha_inicio:
+        return 0
+    return round(ficha.sueldo_base * 0.5, 2)  # 50% del sueldo base mensual
+
+
+def generar_pdf_solicitud_adelanto(solicitud):
+    print("📝 Generando PDF para adelanto ID:", solicitud.id)
+
+    usuario = solicitud.trabajador
+    pm = solicitud.aprobado_por_pm
+    rrhh = solicitud.aprobado_por_rrhh
+
+    firma_trabajador = descargar_firma_desde_url(
+        usuario.firma_digital.url) if usuario.firma_digital else None
+    firma_pm = descargar_firma_desde_url(
+        pm.firma_digital.url) if pm and pm.firma_digital else None
+    firma_rrhh = descargar_firma_desde_url(
+        rrhh.firma_digital.url) if rrhh and rrhh.firma_digital else None
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter,
+                            topMargin=1.5 * cm, bottomMargin=2 * cm)
+    styles = getSampleStyleSheet()
+
+    # Estilos
+    titulo_style = ParagraphStyle(name='Titulo', alignment=TA_CENTER, fontSize=18,
+                                  leading=22, spaceAfter=16, fontName='Helvetica-Bold')
+    subtitulo_style = ParagraphStyle(name='Subtitulo', alignment=TA_CENTER, fontSize=13,
+                                     leading=16, spaceAfter=24, fontName='Helvetica-Bold')
+    fila_style = ParagraphStyle(
+        name='Fila', fontName='Helvetica', fontSize=10, leading=14)
+    normal_center = ParagraphStyle(
+        name='NormalCenter', fontSize=10, alignment=TA_CENTER)
+
+    elements = [
+        Paragraph("FORMULARIO SOLICITUD DE ADELANTO", titulo_style),
+        Paragraph("INGENIERÍA Y CONSTRUCCIÓN MV LIMITADA", subtitulo_style)
+    ]
+
+    datos = [
+        Paragraph(f'<b>NOMBRE:</b> {usuario.get_full_name()}', fila_style),
+        Paragraph(f'<b>RUT:</b> {usuario.identidad}', fila_style),
+        Paragraph(
+            f'<b>FECHA DE SOLICITUD:</b> {solicitud.fecha_solicitud.strftime("%d-%m-%Y")}', fila_style),
+        Paragraph(
+            f'<b>MONTO SOLICITADO:</b> ${solicitud.monto_solicitado:,.0f}', fila_style),
+        Paragraph(
+            f'<b>MONTO APROBADO:</b> ${solicitud.monto_aprobado:,.0f}' if solicitud.monto_aprobado else '', fila_style)
+    ]
+
+    tabla = Table([[d] for d in datos], colWidths=[16.5 * cm])
+    tabla.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    elements.append(tabla)
+    elements.append(Spacer(1, 24))
+
+    # Firmas
+    encabezados = ['Firma del Trabajador',
+                   'Jefe Directo', 'V° B° Recursos Humanos']
+    firmas = [
+        Image(firma_trabajador, width=4 * cm, height=2 *
+              cm) if firma_trabajador else Spacer(4 * cm, 2 * cm),
+        Image(firma_pm, width=4 * cm, height=2 *
+              cm) if firma_pm else Spacer(4 * cm, 2 * cm),
+        Image(firma_rrhh, width=4 * cm, height=2 *
+              cm) if firma_rrhh else Spacer(4 * cm, 2 * cm),
+    ]
+    nombres = [
+        Paragraph(usuario.get_full_name(), normal_center),
+        Paragraph(pm.get_full_name() if pm else "No disponible", normal_center),
+        Paragraph(rrhh.get_full_name(), normal_center),
+    ]
+
+    tabla_firmas = Table([encabezados, firmas, nombres],
+                         colWidths=[5.5 * cm] * 3)
+    tabla_firmas.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 1), (-1, 1), 4),
+        ('TOPPADDING', (0, 2), (-1, 2), 6),
+    ]))
+    elements.append(tabla_firmas)
+
+    # Guardar
+    doc.build(elements)
+    nombre_archivo = f"Solicitud de adelanto.pdf"
+    content = ContentFile(buffer.getvalue())
+
+    # Eliminar anterior
+    if solicitud.planilla_pdf:
+        solicitud.planilla_pdf.delete(save=False)
+
+    solicitud.planilla_pdf.save(nombre_archivo, content, save=True)
+    print("✅ Planilla de adelanto guardada:", nombre_archivo)

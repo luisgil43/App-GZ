@@ -1,0 +1,160 @@
+{% extends 'dashboard_admin/base.html' %}
+{% load formatos %}
+{% block dashboard_content %}
+<div class="max-w-7xl mx-auto p-4">
+  <h1 class="text-2xl font-bold mb-6">Solicitudes de Adelanto de Sueldo</h1>
+
+  <form method="get" class="flex flex-wrap gap-4 mb-6">
+    <input type="text" name="busqueda" placeholder="Buscar por nombre o identidad"
+      value="{{ request.GET.busqueda }}"
+      class="border border-gray-300 rounded px-3 py-2 w-full sm:w-64">
+    <select name="mes" class="border border-gray-300 rounded px-3 py-2">
+      <option value="">Todos los meses</option>
+      {% for numero, nombre in meses %}
+        <option value="{{ numero }}" {% if request.GET.mes == numero|stringformat:"s" %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+    <select name="año" class="border border-gray-300 rounded px-3 py-2">
+      <option value="">Todos los años</option>
+      {% for año in años %}
+        <option value="{{ año }}" {% if request.GET.año == año|stringformat:"s" %}selected{% endif %}>{{ año }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">🔍 Filtrar</button>
+<a href="{% url 'rrhh:listar_adelanto_admin' %}" class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+  🧹 Limpiar
+</a>
+  </form>
+
+  <div class="overflow-x-auto bg-white rounded-xl shadow">
+    <table class="w-full text-sm text-left">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="px-4 py-2">Identidad</th>
+          <th class="px-4 py-2">Nombre</th>
+          <th class="px-4 py-2">Mes</th>
+          <th class="px-4 py-2">Monto Solicitado</th>
+          <th class="px-4 py-2">Monto Aprobado</th>
+          <th class="px-4 py-2">Estado</th>
+          <th class="px-4 py-2">Archivos</th>
+          <th class="px-4 py-2">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for solicitud in solicitudes %}
+        <tr class="border-b">
+          <td class="px-4 py-2">{{ solicitud.trabajador.identidad }}</td>
+          <td class="px-4 py-2">{{ solicitud.trabajador.get_full_name }}</td>
+          <td class="px-4 py-2">{{ solicitud.fecha_solicitud|date:"F Y" }}</td>
+          <td class="px-4 py-2">${{ solicitud.monto_solicitado|punto_miles }}</td>
+          <td class="px-4 py-2">
+            {% if solicitud.monto_aprobado %}
+              ${{ solicitud.monto_aprobado|punto_miles }}
+            {% else %}
+              <span class="text-gray-400">—</span>
+            {% endif %}
+          </td>
+         <td class="px-4 py-2 align-top text-sm">
+  <div class="flex flex-col gap-1 leading-tight">
+    {% if solicitud.estado == 'aprobada' %}
+      <span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">
+        ✅ Aprobada por:
+      </span>
+      <ul class="list-disc list-inside text-gray-800 ml-2 text-xs">
+        {% if solicitud.aprobado_por_pm %}
+          <li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>
+        {% endif %}
+        {% if solicitud.aprobado_por_rrhh %}
+          <li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>
+        {% endif %}
+      </ul>
+    {% elif solicitud.estado|slice:":9" == "rechazada" %}
+      <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">
+        ❌ {{ solicitud.get_estado_display }}
+      </span>
+    {% elif solicitud.estado == 'pendiente_pm' %}
+      <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
+        ⏳ En revisión del PM
+      </span>
+    {% elif solicitud.estado == 'pendiente_rrhh' %}
+      <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
+        ✅ PM: {{ solicitud.aprobado_por_pm.get_full_name }}<br>
+        ⏳ En revisión de RRHH
+      </span>
+    {% else %}
+      <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
+        {{ solicitud.get_estado_display }}
+      </span>
+    {% endif %}
+  </div>
+</td>
+
+          <td class="px-4 py-2">
+            <div class="flex flex-col gap-1">
+              {% if solicitud.planilla_pdf %}
+                <a href="{{ solicitud.planilla_pdf.url }}" class="text-blue-700 font-semibold hover:underline" target="_blank">📄 Planilla PDF</a>
+              {% endif %}
+              {% if solicitud.comprobante_transferencia %}
+                <a href="{{ solicitud.comprobante_transferencia.url }}" class="text-green-700 font-semibold hover:underline" target="_blank">💸 Comprobante</a>
+              {% endif %}
+            </div>
+          </td>
+          <td class="px-4 py-2 space-x-2 whitespace-nowrap">
+           {% if solicitud.estado == 'pendiente_pm' and user.es_pm %}
+  <a href="{% url 'rrhh:aprobar_adelanto_pm' solicitud.id %}" class="text-green-600 font-semibold">✔️ Aprobar</a>
+  <button onclick="mostrarModal('modal-rechazo-{{ solicitud.id }}')" class="text-red-600 font-semibold">❌ Rechazar</button>
+
+{% elif solicitud.estado == 'pendiente_rrhh' and user.es_rrhh %}
+  <a href="{% url 'rrhh:aprobar_adelanto_rrhh' solicitud.id %}" class="text-green-600 font-semibold">✔️ Aprobar</a>
+  <button onclick="mostrarModal('modal-rechazo-{{ solicitud.id }}')" class="text-red-600 font-semibold">❌ Rechazar</button>
+
+{% elif user == solicitud.trabajador and solicitud.estado == 'pendiente_pm' or user == solicitud.trabajador and solicitud.estado == 'rechazada_pm' or user == solicitud.trabajador and solicitud.estado == 'rechazada_rrhh' %}
+  <a href="{% url 'rrhh:editar_adelanto' solicitud.id %}" class="text-blue-600 font-semibold">✏️ Editar</a>
+  <a href="{% url 'rrhh:eliminar_adelanto' solicitud.id %}" class="text-red-500 font-semibold">🗑️ Eliminar</a>
+
+{% elif solicitud.estado == 'aprobada' and user.es_admin_general %}
+  <a href="{% url 'rrhh:editar_adelanto' solicitud.id %}" class="text-blue-600 font-semibold">✏️ Editar</a>
+  <a href="{% url 'rrhh:eliminar_adelanto' solicitud.id %}" class="text-red-500 font-semibold">🗑️ Eliminar</a>
+
+{% else %}
+  <span class="text-gray-400">Sin acciones</span>
+{% endif %}
+          </td>
+        </tr>
+
+        <!-- Modal de Rechazo -->
+        <div id="modal-rechazo-{{ solicitud.id }}" class="fixed inset-0 z-50 hidden justify-center items-center bg-black bg-opacity-50">
+          <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md mx-auto relative z-50">
+            <form method="post" action="{% if user.es_pm %}{% url 'rrhh:rechazar_adelanto_pm' solicitud.id %}{% else %}{% url 'rrhh:rechazar_adelanto_rrhh' solicitud.id %}{% endif %}">
+              {% csrf_token %}
+              <h2 class="text-xl font-bold mb-4">Motivo del rechazo</h2>
+              <textarea name="motivo_rechazo" required class="w-full border px-3 py-2 rounded-xl resize-none"></textarea>
+              <div class="mt-4 flex justify-end gap-2">
+                <button type="button" onclick="ocultarModal('modal-rechazo-{{ solicitud.id }}')" class="px-4 py-2 bg-gray-300 rounded-xl">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-xl">Rechazar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {% empty %}
+        <tr>
+          <td colspan="8" class="px-4 py-4 text-center text-gray-500">No hay solicitudes registradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  function mostrarModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+    document.getElementById(id).classList.add('flex');
+  }
+  function ocultarModal(id) {
+    document.getElementById(id).classList.remove('flex');
+    document.getElementById(id).classList.add('hidden');
+  }
+</script>
+{% endblock %}

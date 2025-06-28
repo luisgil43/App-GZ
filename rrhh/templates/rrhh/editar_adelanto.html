@@ -1,0 +1,58 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block dashboard_content %}
+<div class="max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow-md">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    <i class="lucide lucide-edit mr-2 text-yellow-500"></i>
+    Editar Solicitud de Adelanto
+  </h2>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 px-4 py-3 rounded {{ message.tags|yesno:'bg-green-100 text-green-800,bg-red-100 text-red-800' }}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6">
+    {% csrf_token %}
+
+    <!-- Monto solicitado -->
+    <div>
+      <label for="id_monto_solicitado" class="block text-sm font-medium text-gray-700">Monto solicitado</label>
+      {{ form.monto_solicitado|add_class:"w-full border px-4 py-2 rounded-xl" }}
+      {% if form.monto_solicitado.help_text %}
+        <p class="text-sm text-gray-500 mt-1">{{ form.monto_solicitado.help_text }}</p>
+      {% endif %}
+      {% for error in form.monto_solicitado.errors %}
+        <p class="text-sm text-red-600">{{ error }}</p>
+      {% endfor %}
+    </div>
+
+    <!-- Subir nuevo comprobante -->
+    <div>
+      <label for="id_comprobante_transferencia" class="block text-sm font-medium text-gray-700">
+        Nuevo comprobante de transferencia (opcional)
+      </label>
+      <input type="file" name="comprobante_transferencia" accept="application/pdf"
+        class="w-full border px-4 py-2 rounded-xl">
+      {% if solicitud.comprobante_transferencia %}
+        <p class="text-sm text-green-600 mt-2">
+          Archivo actual:
+          <a href="{{ solicitud.comprobante_transferencia.url }}" target="_blank" class="underline font-semibold">ver</a>
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Botón -->
+    <div class="pt-4">
+      <button type="submit" class="bg-yellow-500 text-white px-6 py-2 rounded-xl hover:bg-yellow-600 transition">
+        Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

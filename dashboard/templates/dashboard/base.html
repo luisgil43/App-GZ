@@ -24,26 +24,28 @@
 
 <body class="bg-gray-100 text-gray-900">
 
- <!-- Header igual que el admin -->
-<header class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
-  <div class="flex items-center gap-3">
-    <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
-    <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-9 shrink-0">
-    <strong class="text-gray-800 text-sm md:text-base">MV INGENIERÍA & CONSTRUCCIÓN</strong>
-  </div>
+  <!-- Header igual que el admin -->
+  <header
+    class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
+    <div class="flex items-center gap-3">
+      <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
+      <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-9 shrink-0">
+      <strong class="text-gray-800 text-sm md:text-base">MV INGENIERÍA & CONSTRUCCIÓN</strong>
+    </div>
 
-  <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm md:text-base text-left max-w-xs sm:max-w-full overflow-hidden">
-    <span class="text-gray-800 break-words leading-tight">
-      {{ request.user.get_full_name|default:request.user.username }}
-    </span>
-    <form method="post" action="{% url 'logout' %}" class="mt-1 sm:mt-0">
-      {% csrf_token %}
-      <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-        Cerrar Sesión
-      </button>
-    </form>
-  </div>
-</header>
+    <div
+      class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm md:text-base text-left max-w-xs sm:max-w-full overflow-hidden">
+      <span class="text-gray-800 break-words leading-tight">
+        {{ request.user.get_full_name|default:request.user.username }}
+      </span>
+      <form method="post" action="{% url 'logout' %}" class="mt-1 sm:mt-0">
+        {% csrf_token %}
+        <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+          Cerrar Sesión
+        </button>
+      </form>
+    </div>
+  </header>
 
   <!-- Contenedor principal -->
   <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
@@ -123,10 +125,10 @@
             <li><a href="{% url 'rrhh:mis_documentos' %}" class="hover:text-emerald-400">Mis Documentos</a></li>
             <li><a href="{% url 'dashboard:registrar_firma_usuario' %}" class="hover:text-emerald-400">Mi Firma
                 Digital</a></li>
-            {% if user.es_usuario %}
             <li><a href="{% url 'rrhh:ver_cronograma' %}" class="hover:text-emerald-400">Mi cronograma de pago</a></li>
-            {% endif %}
-            <li><a href="#" class="hover:text-emerald-400">Solicitud de avance de sueldo</a></li>
+            <li><a href="{% url 'rrhh:listar_adelantos_usuario' %}" class="hover:text-emerald-400">Solicitud de
+                adelanto de sueldo</a>
+            </li>
           </ul>
         </li>
         <li data-toggle class="group">

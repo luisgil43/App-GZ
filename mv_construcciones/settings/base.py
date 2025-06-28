@@ -71,7 +71,7 @@ INSTALLED_APPS = [
     'dal',
     'dal_select2',
     'widget_tweaks',
-    # 'simple_history',
+    'django.contrib.humanize',
 ]
 
 # Middleware

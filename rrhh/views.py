@@ -1,3 +1,5 @@
+from reportlab.lib.pagesizes import A4
+from rrhh.forms import AprobacionAdelantoForm
 from collections import Counter
 from openpyxl.styles import Font
 from django.urls import NoReverseMatch
@@ -57,7 +59,6 @@ from .utils import calcular_estado_documento
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 import io
-from .models import FichaIngreso
 from rrhh.utils import generar_ficha_ingreso_pdf
 # from rrhh.utils import agregar_firma_trabajador_a_ficha
 import requests
@@ -68,6 +69,14 @@ from usuarios.models import CustomUser
 from PIL import Image
 from .forms import FirmaForm
 import base64
+from rrhh.forms import SolicitudAdelantoAdminForm
+from rrhh.models import SolicitudAdelanto
+from rrhh.models import FichaIngreso
+from decimal import Decimal
+import calendar
+from django.db.models import Sum
+from .forms import SolicitudAdelantoForm
+from rrhh.utils import generar_pdf_solicitud_adelanto
 User = get_user_model()
 
 
@@ -537,33 +546,6 @@ def rechazar_ficha_ingreso(request, ficha_id):
             request, "No puedes rechazar esta ficha en su estado actual.")
 
     return redirect('rrhh:listar_fichas_ingreso_usuario')
-
-
-"""
-@login_required
-@rol_requerido('usuario')
-def firmar_ficha_ingreso_trabajador(request, ficha_id):
-    ficha = get_object_or_404(FichaIngreso, id=ficha_id)
-
-    if ficha.firma_trabajador:
-        messages.warning(request, "Ya has firmado esta ficha.")
-        return redirect('rrhh:listar_fichas_ingreso_usuario')
-
-    if not request.user.firma_digital:
-        messages.error(
-            request, "Debes registrar tu firma digital antes de firmar.")
-        return redirect('rrhh:listar_fichas_ingreso_usuario')
-
-    ficha.usuario = request.user
-    ficha.firma_trabajador = request.user.firma_digital
-
-    try:
-        agregar_firma_trabajador_a_ficha(ficha)
-        messages.success(request, "Ficha firmada correctamente.")
-    except Exception as e:
-        messages.error(request, f"Ocurrió un error al firmar: {e}")
-
-    return redirect('rrhh:listar_fichas_ingreso_usuario')"""
 
 
 @staff_member_required
@@ -1059,7 +1041,7 @@ def rechazar_solicitud_vacaciones(request):
     return HttpResponseForbidden("Acceso denegado.")
 
 
-@rol_requerido('supervisor')
+@rol_requerido('supervisor', 'admin')
 def aprobar_vacacion_supervisor(request, pk):
     solicitud = get_object_or_404(SolicitudVacaciones, pk=pk)
     if solicitud.estatus == 'pendiente_supervisor':
@@ -1073,7 +1055,8 @@ def aprobar_vacacion_supervisor(request, pk):
     return redirect('rrhh:revisar_supervisor')
 
 
-@rol_requerido('pm')
+@rol_requerido('pm'
+               'admin')
 def aprobar_vacacion_pm(request, pk):
     solicitud = get_object_or_404(SolicitudVacaciones, pk=pk)
     if solicitud.estatus == 'pendiente_pm':
@@ -1393,7 +1376,8 @@ def exportar_documentos_excel(request):
     return response
 
 
-@login_required
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
 def mis_documentos(request):
     documentos = DocumentoTrabajador.objects.filter(trabajador=request.user)
     documentos_info = []
@@ -1453,12 +1437,14 @@ def eliminar_tipo_documento(request, pk):
     return redirect('rrhh:crear_tipo_documento')
 
 
+@staff_member_required
 @rol_requerido('rrhh', 'admin')
 def listar_firmas(request):
     usuarios = CustomUser.objects.all()
     return render(request, 'rrhh/listar_firmas.html', {'usuarios': usuarios})
 
 
+@staff_member_required
 @rol_requerido('rrhh', 'admin')
 def eliminar_firma(request, user_id):
     user = get_object_or_404(CustomUser, id=user_id)
@@ -1484,7 +1470,8 @@ def eliminar_firma(request, user_id):
     return redirect('rrhh:listar_firmas')
 
 
-@login_required
+@staff_member_required
+@rol_requerido('rrhh', 'admin', 'pm')
 def registrar_firma_admin(request, user_id):
     from usuarios.models import CustomUser  # Asegúrate de importar el modelo
     if not request.user.is_staff:
@@ -1535,7 +1522,7 @@ def registrar_firma_admin(request, user_id):
     })
 
 
-@login_required
+@staff_member_required
 @rol_requerido('rrhh', 'admin', 'pm')
 def editar_cronograma_pago(request, usuario_id):
     usuario = get_object_or_404(CustomUser, id=usuario_id)
@@ -1556,6 +1543,8 @@ def editar_cronograma_pago(request, usuario_id):
     })
 
 
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
 def ver_cronograma_pago(request):
     cronograma = CronogramaPago.objects.first()
 
@@ -1591,6 +1580,7 @@ def ver_cronograma_pago(request):
     return render(request, "rrhh/ver_cronograma_pago.html", context)
 
 
+@staff_member_required
 @rol_requerido('admin', 'rrhh', 'pm')
 def cronograma_pago_admin(request):
     cronograma, _ = CronogramaPago.objects.get_or_create(id=1)
@@ -1632,3 +1622,363 @@ def cronograma_pago_admin(request):
         'cronograma': cronograma,
         'datos_meses': datos_meses
     })
+
+
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
+def listar_adelantos_usuario(request):
+    usuario = request.user
+
+    ficha = FichaIngreso.objects.filter(usuario=usuario).first()
+    hoy = date.today()
+    sueldo_disponible = 0
+    adelanto_mes = None
+
+    if ficha and ficha.sueldo_base:
+        maximo = ficha.sueldo_base * Decimal('0.5')
+        total_aprobado = SolicitudAdelanto.objects.filter(
+            trabajador=usuario,
+            estado='aprobada',
+            fecha_solicitud__month=hoy.month,
+            fecha_solicitud__year=hoy.year
+        ).aggregate(total=Sum('monto_aprobado'))['total'] or 0
+
+        sueldo_disponible = int(maximo - total_aprobado)
+        if sueldo_disponible < 0:
+            sueldo_disponible = 0
+    else:
+        messages.error(
+            request, "No tienes ficha de ingreso registrada con sueldo base.")
+        # O redirige a otra vista si es necesario
+        return redirect('dashboard:index')
+
+    # Bloquear si ya tiene solicitud aprobada este mes
+    adelanto_mes = SolicitudAdelanto.objects.filter(
+        trabajador=usuario,
+        estado='aprobada',
+        fecha_solicitud__month=hoy.month,
+        fecha_solicitud__year=hoy.year
+    ).exists()
+
+    if request.method == 'POST':
+        form = SolicitudAdelantoForm(
+            request.POST, trabajador=usuario, monto_maximo=sueldo_disponible)
+        # form = SolicitudAdelantoForm(request.POST, trabajador=usuario)
+        if form.is_valid():
+            monto_solicitado = form.cleaned_data['monto_solicitado']
+
+            solicitud = form.save(commit=False)
+            solicitud.trabajador = usuario
+            solicitud.estado = 'pendiente_pm'
+            solicitud.save()
+
+            if monto_solicitado > sueldo_disponible:
+                request.session['adelanto_supera_monto'] = True
+            else:
+                messages.success(request, "Solicitud enviada correctamente.")
+
+            return redirect('rrhh:listar_adelantos_usuario')
+    else:
+        # form = SolicitudAdelantoForm(trabajador=usuario)
+        form = SolicitudAdelantoForm(
+            trabajador=usuario, monto_maximo=sueldo_disponible)
+
+    if request.session.pop('adelanto_supera_monto', False):
+        messages.warning(
+            request,
+            "El monto solicitado supera el disponible. Tu solicitud quedará sujeta a aprobación."
+        )
+
+    solicitudes = SolicitudAdelanto.objects.filter(
+        trabajador=usuario).order_by('-fecha_solicitud')
+
+    return render(request, 'rrhh/listar_adelantos_usuario.html', {
+        'form': form,
+        'sueldo_disponible': sueldo_disponible,
+        'solicitudes': solicitudes,
+        'bloqueado': adelanto_mes,
+    })
+
+
+@staff_member_required
+@rol_requerido('pm', 'admin')
+def aprobar_adelanto_pm(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+
+    if solicitud.estado != 'pendiente_pm':
+        messages.warning(
+            request, "Esta solicitud ya fue gestionada por el PM.")
+        return redirect('rrhh:listar_adelanto_admin')
+
+    solicitud.estado = 'pendiente_rrhh'
+    solicitud.aprobado_por_pm = request.user
+    solicitud.save()
+
+    messages.success(
+        request, "Solicitud aprobada correctamente y enviada a RRHH.")
+    return redirect('rrhh:listar_adelanto_admin')
+
+
+@staff_member_required
+@rol_requerido('pm', 'rrhh', 'admin')
+def rechazar_adelanto_pm(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+
+    if request.method == 'POST':
+        motivo = request.POST.get('motivo_rechazo', '').strip()
+
+        if not motivo:
+            messages.error(request, "Debes indicar un motivo de rechazo.")
+            return redirect(request.META.get('HTTP_REFERER', 'rrhh:listar_adelanto_admin'))
+
+        if solicitud.estado == 'pendiente_pm':
+            solicitud.estado = 'rechazada_pm'
+        elif solicitud.estado == 'pendiente_rrhh':
+            solicitud.estado = 'rechazada_rrhh'
+
+        solicitud.motivo_rechazo = motivo
+        solicitud.save()
+        messages.success(request, "Solicitud rechazada correctamente.")
+        return redirect('rrhh:listar_adelanto_admin')
+
+
+@staff_member_required
+@rol_requerido('rrhh', 'admin')
+def aprobar_adelanto_rrhh(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+
+    if request.method == 'POST':
+        form = AprobacionAdelantoForm(request.POST, request.FILES)
+        if form.is_valid():
+            monto_final = form.cleaned_data['monto_aprobado']
+            comprobante = form.cleaned_data['comprobante']
+
+            solicitud.comprobante_transferencia = comprobante
+            solicitud.monto_aprobado = monto_final
+            solicitud.estado = 'aprobada'
+            solicitud.aprobado_por_rrhh = request.user
+            solicitud.motivo_rechazo = ''  # ✅ Limpiar motivo de rechazo si existía
+
+            try:
+                # ✅ Generar planilla PDF con formato uniforme
+                generar_pdf_solicitud_adelanto(solicitud)
+            except Exception as e:
+                messages.error(
+                    request, f"No se pudo generar la planilla PDF: {e}")
+                return redirect(request.path)
+
+            solicitud.save()
+            messages.success(
+                request, "Solicitud aprobada y planilla generada correctamente.")
+            return redirect('rrhh:listar_adelanto_admin')
+        else:
+            messages.error(request, "Formulario inválido. Revise los campos.")
+    else:
+        form = AprobacionAdelantoForm()
+
+    return render(request, 'rrhh/aprobar_adelanto_rrhh.html', {
+        'solicitud': solicitud,
+        'form': form,
+    })
+
+
+@staff_member_required
+@rol_requerido('admin', 'rrhh', 'pm')
+def listar_adelanto_admin(request):
+    solicitudes = SolicitudAdelanto.objects.select_related('trabajador')
+
+    busqueda = request.GET.get('busqueda')
+    mes = request.GET.get('mes')
+    año = request.GET.get('año')
+
+    if busqueda:
+        solicitudes = solicitudes.filter(
+            Q(trabajador__nombres__icontains=busqueda) |
+            Q(trabajador__identidad__icontains=busqueda)
+        )
+    if mes:
+        solicitudes = solicitudes.filter(fecha_solicitud__month=mes)
+    if año:
+        solicitudes = solicitudes.filter(fecha_solicitud__year=año)
+
+    solicitudes = solicitudes.order_by('-fecha_solicitud')
+    meses = [
+        (1, 'enero'), (2, 'febrero'), (3, 'marzo'), (4, 'abril'),
+        (5, 'mayo'), (6, 'junio'), (7, 'julio'), (8, 'agosto'),
+        (9, 'septiembre'), (10, 'octubre'), (11, 'noviembre'), (12, 'diciembre')
+    ]
+    años = SolicitudAdelanto.objects.dates('fecha_solicitud', 'year').distinct(
+    ).values_list('fecha_solicitud__year', flat=True)
+
+    return render(request, 'rrhh/listar_adelanto_admin.html', {
+        'solicitudes': solicitudes,
+        'meses': meses,
+        'años': años,
+    })
+
+
+@staff_member_required
+@rol_requerido('admin', 'rrhh')
+def eliminar_adelanto_admin(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+
+    if request.user.rol == 'rrhh' and not solicitud.puede_editar_rrhh:
+        messages.error(
+            request, "No tienes permiso para eliminar esta solicitud.")
+        return redirect('rrhh:listar_adelanto_admin')
+
+    if request.method == 'POST':
+        solicitud.delete()
+        messages.success(request, "Solicitud eliminada correctamente.")
+        return redirect('rrhh:listar_adelanto_admin')
+
+    return render(request, 'rrhh/eliminar_adelanto_admin.html', {'solicitud': solicitud})
+
+
+@staff_member_required
+@rol_requerido('admin', 'rrhh')
+def editar_adelanto_admin(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+
+    if request.user.rol == 'rrhh' and not solicitud.puede_editar_rrhh:
+        messages.error(
+            request, "No tienes permiso para editar esta solicitud.")
+        return redirect('rrhh:listar_adelanto_admin')
+
+    monto_anterior = solicitud.monto_solicitado
+
+    if request.method == 'POST':
+        form = SolicitudAdelantoAdminForm(
+            request.POST,
+            request.FILES,
+            instance=solicitud,
+            trabajador=solicitud.trabajador,
+            usuario_actual=request.user
+        )
+
+        reemplazar_comprobante = 'comprobante_transferencia' in request.FILES
+
+        if form.is_valid():
+            solicitud_editada = form.save(commit=False)
+
+            nuevo_monto = solicitud_editada.monto_solicitado
+
+            solicitud_editada.estado = 'pendiente_pm'
+            solicitud_editada.monto_aprobado = None
+            solicitud_editada.aprobado_por_pm = None
+            solicitud_editada.aprobado_por_rrhh = None
+
+            if nuevo_monto != monto_anterior and solicitud.planilla_pdf:
+                if solicitud.planilla_pdf.storage.exists(solicitud.planilla_pdf.name):
+                    solicitud.planilla_pdf.delete(save=False)
+                solicitud_editada.planilla_pdf = None
+            elif nuevo_monto == monto_anterior:
+                solicitud_editada.planilla_pdf = solicitud.planilla_pdf
+
+            if reemplazar_comprobante and solicitud.comprobante_transferencia:
+                if solicitud.comprobante_transferencia.storage.exists(solicitud.comprobante_transferencia.name):
+                    solicitud.comprobante_transferencia.delete(save=False)
+
+            solicitud_editada.save()
+
+            messages.success(
+                request, "Solicitud editada correctamente. Requiere nueva aprobación.")
+            return redirect('rrhh:listar_adelanto_admin')
+    else:
+        form = SolicitudAdelantoAdminForm(
+            instance=solicitud,
+            trabajador=solicitud.trabajador,
+            usuario_actual=request.user
+        )
+
+    return render(request, 'rrhh/editar_adelanto.html', {
+        'form': form,
+        'solicitud': solicitud
+    })
+
+
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
+def eliminar_adelanto_usuario(request, pk):
+    solicitud = get_object_or_404(
+        SolicitudAdelanto, pk=pk, trabajador=request.user)
+
+    if request.method == 'POST':
+        solicitud.delete()
+        messages.success(request, "Solicitud eliminada correctamente.")
+        return redirect('rrhh:listar_adelantos_usuario')
+
+    return render(request, 'rrhh/eliminar_adelanto_usuario.html', {'solicitud': solicitud})
+
+
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
+def editar_adelanto_usuario(request, pk):
+    solicitud = get_object_or_404(
+        SolicitudAdelanto, pk=pk, trabajador=request.user
+    )
+
+    # ✅ Permitimos editar si está en pendiente o ha sido rechazada en cualquier etapa
+    estados_permitidos = ['pendiente_pm', 'rechazada_pm',
+                          'rechazada_rrhh', 'rechazada_usuario']
+    if solicitud.estado not in estados_permitidos:
+        messages.error(
+            request,
+            "Solo puedes editar solicitudes en estado 'pendiente por aprobación PM' o que hayan sido rechazadas."
+        )
+        return redirect('rrhh:listar_adelantos_usuario')
+
+    if request.method == 'POST':
+        form = SolicitudAdelantoForm(request.POST, instance=solicitud)
+        if form.is_valid():
+            solicitud_editada = form.save(commit=False)
+
+            # ✅ Si fue rechazada, borramos el motivo
+            if solicitud.estado in ['rechazada_pm', 'rechazada_rrhh', 'rechazada_usuario']:
+                solicitud_editada.motivo_rechazo = ""
+
+            # Reiniciar el flujo
+            solicitud_editada.estado = 'pendiente_pm'  # Reinicia el flujo
+            solicitud_editada.monto_aprobado = None
+            solicitud_editada.aprobado_por_pm = None
+            solicitud_editada.aprobado_por_rrhh = None
+            solicitud_editada.planilla_pdf = None
+            solicitud_editada.comprobante_transferencia = None
+
+            solicitud_editada.save()
+
+            messages.success(
+                request, "Solicitud editada correctamente. Vuelve a revisión del PM."
+            )
+            return redirect('rrhh:listar_adelantos_usuario')
+    else:
+        form = SolicitudAdelantoForm(instance=solicitud)
+
+    return render(request, 'rrhh/editar_adelanto_usuario.html', {
+        'form': form,
+        'solicitud': solicitud
+    })
+
+
+@staff_member_required
+@rol_requerido('rrhh', 'admin')
+def rechazar_adelanto_rrhh(request, solicitud_id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=solicitud_id)
+    if request.method == 'POST':
+        motivo = request.POST.get('motivo_rechazo', '')
+        solicitud.estado = 'rechazada_rrhh'
+        solicitud.motivo_rechazo = motivo
+        solicitud.save()
+        messages.success(request, "Solicitud rechazada por RRHH.")
+    return redirect('rrhh:listar_adelanto_admin')
+
+
+@staff_member_required
+@rol_requerido('admin')
+def activar_edicion_rrhh(request, id):
+    solicitud = get_object_or_404(SolicitudAdelanto, id=id)
+    solicitud.puede_editar_rrhh = not solicitud.puede_editar_rrhh
+    solicitud.save()
+    estado = "activada" if solicitud.puede_editar_rrhh else "desactivada"
+    messages.success(request, f"Edición para RRHH {estado} correctamente.")
+    return redirect('rrhh:listar_adelanto_admin')

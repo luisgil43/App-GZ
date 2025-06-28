@@ -1,0 +1,47 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+{% load humanize %}
+{% block content %}
+
+<div class="bg-white max-w-3xl mx-auto rounded-2xl shadow-md p-6 mt-4">
+
+  <!-- Título -->
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    <i class="lucide lucide-pencil-line text-yellow-600"></i>
+    Editar Solicitud de Adelanto de Sueldo
+  </h2>
+
+  <!-- Información de la solicitud -->
+  <div class="mb-6 text-sm text-gray-700 space-y-1 bg-gray-50 rounded-xl p-4 border border-gray-200">
+    <p><strong>Fecha original:</strong> {{ solicitud.fecha_solicitud|date:"d \d\e F \d\e Y" }}</p>
+    <p><strong>Monto solicitado:</strong> ${{ solicitud.monto_solicitado|intcomma }}</p>
+    <p><strong>Estado actual:</strong> {{ solicitud.get_estado_display }}</p>
+  </div>
+
+  <!-- Formulario -->
+  <form method="post" class="space-y-6">
+    {% csrf_token %}
+
+    <div>
+      <label for="monto_solicitado" class="block font-semibold text-gray-700 mb-1">Monto a solicitar</label>
+      {{ form.monto_solicitado }}
+      {% if form.monto_solicitado.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.monto_solicitado.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex justify-between items-center">
+  <a href="{% url 'rrhh:listar_adelantos_usuario' %}"
+   class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-xl transition inline-block text-center">
+  Cancelar
+</a>
+      <button type="submit"
+              class="bg-yellow-600 hover:bg-yellow-700 text-white font-semibold px-6 py-2 rounded-xl transition">
+        Guardar Cambios
+      </button>
+    </div>
+  </form>
+
+</div>
+
+{% endblock %}

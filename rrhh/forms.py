@@ -1,3 +1,4 @@
+from rrhh.models import SolicitudAdelanto
 import re
 from rrhh.models import CronogramaPago
 from .models import CronogramaPago
@@ -12,6 +13,8 @@ from .models import Feriado
 from .models import TipoDocumento
 from datetime import date
 from django.core.exceptions import ValidationError
+from decimal import Decimal
+from django.db.models import Sum
 
 
 class ContratoTrabajoForm(forms.ModelForm):
@@ -452,3 +455,147 @@ class CronogramaPagoForm(forms.ModelForm):
             for field in CronogramaPago._meta.fields
             if 'fecha' in field.name
         }
+
+
+class SolicitudAdelantoForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        self.trabajador = kwargs.pop('trabajador', None)
+        self.monto_maximo = kwargs.pop(
+            'monto_maximo', None)  # ✅ definido correctamente
+        super().__init__(*args, **kwargs)
+
+        # Eliminamos el campo trabajador porque se asigna en la vista
+        if 'trabajador' in self.fields:
+            del self.fields['trabajador']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        monto = cleaned_data.get('monto_solicitado')
+
+        if self.monto_maximo is not None and monto is not None:
+            if monto > self.monto_maximo:
+                self.add_error(
+                    'monto_solicitado',
+                    f"El monto solicitado supera el disponible (${self.monto_maximo:,.0f}). Ingresa un monto menor."
+                )
+
+        return cleaned_data
+
+    class Meta:
+        model = SolicitudAdelanto
+        fields = ['monto_solicitado']
+
+
+class SolicitudAdelantoAdminForm(forms.ModelForm):
+    class Meta:
+        model = SolicitudAdelanto
+        fields = ['monto_solicitado', 'comprobante_transferencia']
+        widgets = {
+            'monto_solicitado': forms.NumberInput(attrs={
+                'placeholder': 'Ej. 200000',
+                'class': 'w-full border px-4 py-2 rounded-xl shadow-sm'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.trabajador = kwargs.pop('trabajador', None)
+        self.usuario_actual = kwargs.pop('usuario_actual', None)
+        super().__init__(*args, **kwargs)
+
+        if not self.trabajador and self.instance and self.instance.trabajador:
+            self.trabajador = self.instance.trabajador
+
+        self.tiene_pendiente = False
+        self.ficha = None
+        self.maximo = 0
+
+        if self.trabajador:
+            self.tiene_pendiente = self.trabajador.solicitudes_adelanto.filter(
+                estado__in=['pendiente_pm', 'pendiente_rrhh']
+            ).exclude(id=self.instance.id).exists()
+
+            # Solo deshabilita si NO es admin/RRHH
+            if self.tiene_pendiente and not (self.usuario_actual and self.usuario_actual.is_staff):
+                self.fields['monto_solicitado'].disabled = True
+                self.fields['monto_solicitado'].help_text = "Ya tienes una solicitud pendiente."
+                return
+
+            self.ficha = FichaIngreso.objects.filter(
+                usuario__identidad=self.trabajador.identidad
+            ).first()
+
+            if self.ficha and self.ficha.sueldo_base:
+                sueldo_base = self.ficha.sueldo_base
+                maximo_base = sueldo_base * Decimal('0.5')
+
+                hoy = date.today()
+                total_aprobado = self.trabajador.solicitudes_adelanto.filter(
+                    estado='aprobada',
+                    fecha_solicitud__month=hoy.month,
+                    fecha_solicitud__year=hoy.year
+                ).aggregate(total=Sum('monto_aprobado'))['total'] or 0
+
+                self.maximo = int(maximo_base - total_aprobado)
+                if self.maximo < 0:
+                    self.maximo = 0
+
+                self.fields[
+                    'monto_solicitado'].help_text = f"Máximo disponible este mes: ${self.maximo:,}"
+            else:
+                self.fields['monto_solicitado'].help_text = "⚠️ No se encontró sueldo base registrado."
+
+        self.fields['monto_solicitado'].widget.attrs['data-maximo'] = str(
+            self.maximo)
+
+    def clean_monto_solicitado(self):
+        if self.tiene_pendiente and not (self.usuario_actual and self.usuario_actual.is_staff):
+            raise forms.ValidationError("Ya tienes una solicitud pendiente.")
+
+        monto = self.cleaned_data.get('monto_solicitado')
+
+        if monto is None:
+            raise forms.ValidationError("Debe ingresar un monto válido.")
+        if monto <= 0:
+            raise forms.ValidationError(
+                "El monto solicitado debe ser mayor a cero.")
+        if not self.ficha:
+            raise forms.ValidationError("No se encontró una ficha de ingreso.")
+
+        if monto > self.maximo:
+            # Solo permite superar el máximo si es RRHH o admin
+            if not (self.usuario_actual and self.usuario_actual.is_staff):
+                raise forms.ValidationError(
+                    f"El monto solicitado supera tu saldo disponible (${self.maximo:,}). "
+                    "Para montos mayores, contacta a RR.HH."
+                )
+
+        return monto
+
+
+class AprobacionAdelantoForm(forms.Form):
+    monto_aprobado = forms.IntegerField(
+        min_value=1,
+        label="Monto aprobado",
+        widget=forms.NumberInput(attrs={
+            'class': 'w-full border px-4 py-2 rounded-xl shadow-sm',
+            'placeholder': 'Monto aprobado en pesos'
+        })
+    )
+
+    comprobante = forms.FileField(
+        label="Comprobante de transferencia (PDF)",
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'w-full border px-4 py-2 rounded-xl shadow-sm',
+        })
+    )
+
+    def clean_comprobante(self):
+        archivo = self.cleaned_data.get('comprobante')
+        if archivo:
+            if not archivo.name.lower().endswith('.pdf'):
+                raise forms.ValidationError(
+                    "El comprobante debe estar en formato PDF.")
+            if archivo.content_type != 'application/pdf':
+                raise forms.ValidationError(
+                    "El archivo debe ser un PDF válido.")
+        return archivo

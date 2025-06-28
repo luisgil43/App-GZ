@@ -1,0 +1,166 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+{% load formatos %}
+{% block content %}
+
+<div class="bg-white rounded-2xl shadow-md max-w-5xl mx-auto p-6">
+ {% if request.session.adelanto_supera_monto %}
+  <div class="bg-yellow-100 border border-yellow-300 text-yellow-800 text-sm p-4 rounded-xl mb-6">
+    <strong>Atención:</strong> El monto solicitado supera el disponible. Tu solicitud quedará sujeta a aprobación.
+  </div>
+{% endif %}
+
+  <!-- Título -->
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    <i class="lucide lucide-banknote text-green-600"></i>
+    Solicitudes de Adelanto de Sueldo
+  </h2>
+
+  <!-- Monto disponible -->
+  <div class="bg-green-50 border border-green-200 p-4 rounded-xl mb-6">
+    <p class="text-lg font-semibold text-green-800">
+      Monto disponible para adelanto: <span class="font-bold">${{ sueldo_disponible|punto_miles }}</span>
+    </p>
+  </div>
+
+  <!-- Formulario de solicitud -->
+  <div class="bg-gray-50 p-6 rounded-xl shadow-sm mb-10">
+    <h3 class="text-xl font-semibold text-gray-700 mb-4">Solicitar Adelanto</h3>
+
+   {% if sueldo_disponible == 0 %}
+  <div class="bg-red-100 border border-red-300 text-red-800 text-sm p-4 rounded-xl mb-4">
+    <strong>No tienes monto disponible para solicitar un adelanto este mes.</strong><br>
+    Si necesitas más apoyo, por favor contacta al equipo de RR.HH.
+  </div>
+{% endif %}
+
+    <form method="post" class="grid grid-cols-1 sm:grid-cols-2 gap-4" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div class="sm:col-span-2">
+        <label for="id_monto_solicitado" class="block font-medium mb-1">Monto a solicitar:</label>
+        {{ form.monto_solicitado }}
+        {% if form.monto_solicitado.help_text %}
+          <p class="text-sm text-gray-500 mt-1">{{ form.monto_solicitado.help_text }}</p>
+        {% endif %}
+        {% if form.monto_solicitado.errors %}
+          <p class="text-red-600 text-sm mt-1">{{ form.monto_solicitado.errors.0 }}</p>
+        {% endif %}
+      </div>
+
+      {% if form.non_field_errors %}
+        <div class="sm:col-span-2">
+          <p class="text-red-600 text-sm mt-2 font-semibold">{{ form.non_field_errors.0 }}</p>
+        </div>
+      {% endif %}
+
+      <div class="sm:col-span-2">
+        <button type="submit"
+  class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-xl transition w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
+  {% if sueldo_disponible == 0 %}disabled{% endif %}>
+  Solicitar Adelanto
+</button>
+
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabla de solicitudes -->
+  <h3 class="text-xl font-semibold text-gray-700 mb-2">Historial de Solicitudes</h3>
+  <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm text-left text-gray-700 border border-gray-200 rounded-xl overflow-hidden">
+      <thead class="bg-gray-100 text-gray-800 font-semibold">
+        <tr>
+          <th class="px-4 py-2">Identidad</th>
+          <th class="px-4 py-2">Nombre</th>
+          <th class="px-4 py-2">Monto solicitado</th>
+          <th class="px-4 py-2">Monto aprobado</th>
+          <th class="px-4 py-2">Estado</th>
+          <th class="px-4 py-2">Motivo</th>
+          <th class="px-4 py-2">Planilla</th>
+          <th class="px-4 py-2">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200">
+        {% for solicitud in solicitudes %}
+        <tr>
+          <td class="px-4 py-2">{{ solicitud.trabajador.identidad }}</td>
+          <td class="px-4 py-2">{{ solicitud.trabajador.get_full_name }}</td>
+          <td class="px-4 py-2">${{ solicitud.monto_solicitado|punto_miles }}</td>
+          <td class="px-4 py-2">
+            {% if solicitud.monto_aprobado %}
+              ${{ solicitud.monto_aprobado|punto_miles }}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="px-4 py-2 align-top text-sm">
+  <div class="flex flex-col gap-1 leading-tight">
+    {% if solicitud.estado == 'aprobada' %}
+      <span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">
+        ✅ Aprobada por:
+      </span>
+      <ul class="list-disc list-inside text-gray-800 ml-2 text-xs">
+        {% if solicitud.aprobado_por_pm %}
+          <li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>
+        {% endif %}
+        {% if solicitud.aprobado_por_rrhh %}
+          <li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>
+        {% endif %}
+      </ul>
+    {% elif solicitud.estado|slice:":9" == "rechazada" %}
+      <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">
+        ❌ {{ solicitud.get_estado_display }}
+      </span>
+    {% elif solicitud.estado == 'pendiente_pm' %}
+      <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
+        ⏳ En revisión del PM
+      </span>
+    {% elif solicitud.estado == 'pendiente_rrhh' %}
+      <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
+        ✅ PM: {{ solicitud.aprobado_por_pm.get_full_name }}<br>
+        ⏳ En revisión de RRHH
+      </span>
+    {% else %}
+      <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
+        {{ solicitud.get_estado_display }}
+      </span>
+    {% endif %}
+  </div>
+</td>
+          <td class="px-4 py-2 text-red-600 italic text-xs">{{ solicitud.motivo_rechazo|default:"—" }}</td>
+
+          <td class="px-4 py-2">
+            <div class="flex flex-col gap-1 text-sm">
+              {% if solicitud.planilla_pdf %}
+                <a href="{{ solicitud.planilla_pdf.url }}" class="text-blue-700 font-semibold hover:underline" target="_blank">📄 Planilla PDF</a>
+              {% endif %}
+              {% if solicitud.comprobante_transferencia %}
+                <a href="{{ solicitud.comprobante_transferencia.url }}" class="text-green-700 font-semibold hover:underline" target="_blank">💸 Comprobante</a>
+              {% endif %}
+            </div>
+          </td>
+
+          <td class="px-4 py-2">
+            {% if request.user == solicitud.trabajador and solicitud.estado == 'pendiente_pm' %}
+              <a href="{% url 'rrhh:editar_adelanto_usuario' solicitud.id %}" class="text-yellow-600 hover:underline text-sm">Editar</a><br>
+              <a href="{% url 'rrhh:eliminar_adelanto_usuario' solicitud.id %}" class="text-red-600 hover:underline text-sm">Eliminar</a>
+            {% elif request.user == solicitud.trabajador and solicitud.estado|slice:":9" == "rechazada" %}
+              <a href="{% url 'rrhh:editar_adelanto_usuario' solicitud.id %}" class="text-yellow-600 hover:underline text-sm">Editar</a><br>
+              <a href="{% url 'rrhh:eliminar_adelanto_usuario' solicitud.id %}" class="text-red-600 hover:underline text-sm">Eliminar</a>
+            {% else %}
+              <span class="text-gray-400 text-sm">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="px-4 py-3 text-center text-gray-500">No hay solicitudes registradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

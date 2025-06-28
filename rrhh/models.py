@@ -62,6 +62,7 @@ class FichaIngreso(models.Model):
     # Relacionales
     usuario = models.ForeignKey(
         CustomUser, on_delete=models.CASCADE, null=True, blank=True, related_name="fichas")
+    # usuario = models.OneToOneField(CustomUser, on_delete=models.CASCADE, related_name='fichaingreso')
     creado_por = models.ForeignKey(
         CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name="fichas_creadas")
     pm = models.ForeignKey(CustomUser, on_delete=models.SET_NULL,
@@ -378,3 +379,88 @@ class CronogramaPago(models.Model):
 
     def __str__(self):
         return "Cronograma General de Pagos"
+
+
+ESTADOS_SOLICITUD = [
+    ('pendiente_pm', 'Pendiente aprobación PM'),
+    ('rechazada_pm', 'Rechazada por PM'),
+    ('pendiente_rrhh', 'Pendiente aprobación RRHH'),
+    ('rechazada_rrhh', 'Rechazada por RRHH'),
+    ('aprobada', 'Aprobada'),
+]
+
+
+def ruta_archivos_adelanto(instance, filename):
+    return instance.ruta_archivo_completo(filename)
+
+
+class SolicitudAdelanto(models.Model):
+    trabajador = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='solicitudes_adelanto'
+    )
+    monto_solicitado = models.PositiveIntegerField()
+    monto_aprobado = models.PositiveIntegerField(null=True, blank=True)
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS_SOLICITUD,
+        default='pendiente_pm'
+    )
+    motivo_rechazo = models.TextField(blank=True, null=True)
+
+    aprobado_por_pm = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adelantos_aprobados_como_pm'
+    )
+    aprobado_por_rrhh = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adelantos_aprobados_como_rrhh'
+    )
+
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+
+    comprobante_transferencia = models.FileField(
+        upload_to=ruta_archivos_adelanto,
+        storage=cloudinary_storage,
+        null=True, blank=True
+    )
+    planilla_pdf = models.FileField(
+        upload_to=ruta_archivos_adelanto,
+        storage=cloudinary_storage,
+        null=True, blank=True
+    )
+
+    puede_editar_rrhh = models.BooleanField(default=False)  # ✅ NUEVO CAMPO
+
+    def __str__(self):
+        return f"{self.trabajador.get_full_name()} - {self.estado}"
+
+    def ruta_base(self):
+        mes = self.fecha_solicitud.strftime('%B')
+        identidad = self.trabajador.identidad or f"usuario_{self.trabajador.id}"
+        identidad_limpia = identidad.replace('.', '').replace('-', '')
+        return f"media/Solicitud de adelanto de sueldo/{mes}/{identidad_limpia}"
+
+    def numero_consecutivo(self):
+        return SolicitudAdelanto.objects.filter(
+            trabajador=self.trabajador,
+            fecha_solicitud__month=self.fecha_solicitud.month,
+            fecha_solicitud__year=self.fecha_solicitud.year
+        ).exclude(id=self.id).count() + 1
+
+    def carpeta_consecutiva(self):
+        return f"{self.ruta_base()}/solicitud_{self.numero_consecutivo()}/"
+
+    def ruta_archivo_completo(self, filename):
+        return f"{self.carpeta_consecutiva()}{filename}"
+
+    def ruta_cloudinary(self):
+        return self.carpeta_consecutiva()
