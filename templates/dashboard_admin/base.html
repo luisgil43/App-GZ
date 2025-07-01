@@ -96,22 +96,15 @@
     {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
       <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas de ingresos</a></li>
       <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos trabajadores</a></li>
- 
-  <li>
-   <a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">
-  Cronograma de pago
-</a>
-</li>
+      <li><a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">Cronograma de pago</a></li>
       <li><a href="{% url 'rrhh:listar_adelanto_admin' %}" class="hover:text-emerald-400">Avances de sueldos</a></li>
       <li><a href="{% url 'dashboard_admin:listar_feriados' %}" class="hover:text-emerald-400">Feriados</a></li>
-      <li>
-  <a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de firmas</a>
-</li>
+      <li><a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de firmas</a></li>
+      <li><a href="{% url 'usuarios:subir_firma_representante' %}" class="hover:text-emerald-400">Subir Firma Representante Legal</a></li>
     {% endif %}
   </ul>
 </li>
 {% endif %}
-
 		{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
 <li class="group">
     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
