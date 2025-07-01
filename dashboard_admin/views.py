@@ -278,10 +278,6 @@ def crear_usuario_view(request, identidad=None):
     }
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
 
-    # @login_required(login_url='dashboard_admin:login')
-    # def index(request):
-    #    return render(request, 'dashboard_admin/index.html')
-
 
 @login_required(login_url='dashboard_admin:login')
 @rol_requerido('admin', 'pm', 'rrhh')

@@ -126,33 +126,3 @@ class CustomUser(AbstractUser):
     def __str__(self):
         nombre = self.get_full_name() or self.username
         return f"{self.identidad or 'Sin RUT'} - {nombre}"
-
-
-"""
-    def calcular_dias_habiles(self, inicio, fin):
-
-        if not inicio or not fin:
-            return 0
-
-        feriados = set(Feriado.objects.values_list('fecha', flat=True))
-        dias_habiles = 0
-        dia_actual = inicio
-
-        while dia_actual <= fin:
-            if dia_actual.weekday() < 5 and dia_actual not in feriados:  # 0 = lunes, 6 = domingo
-                dias_habiles += 1
-            dia_actual += timedelta(days=1)
-
-        return dias_habiles
-
-    def calcular_dias_habiles(self, inicio, fin):
-        from rrhh.models import Feriado
-        feriados = set(Feriado.objects.values_list('fecha', flat=True))
-
-        dias = 0
-        actual = inicio
-        while actual <= fin:
-            if actual.weekday() < 5 and actual not in feriados:
-                dias += 1
-            actual += timedelta(days=1)
-        return dias"""
