@@ -34,4 +34,5 @@ urlpatterns = [
     path('feriados/eliminar/<int:pk>/',
          admin_views.eliminar_feriado, name='eliminar_feriado'),
 
+
 ]

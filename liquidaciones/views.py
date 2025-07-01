@@ -1,3 +1,4 @@
+from usuarios.models import FirmaRepresentanteLegal
 from django.urls import NoReverseMatch
 import logging
 from urllib.parse import urljoin
@@ -105,8 +106,7 @@ def firmar_liquidacion(request, pk):
     liquidacion = get_object_or_404(Liquidacion, pk=pk, tecnico=usuario)
 
     if not usuario.firma_digital or not usuario.firma_digital.name:
-        messages.warning(
-            request, "Debes registrar tu firma digital primero para poder firmar.")
+        messages.warning(request, "Debes registrar tu firma digital primero.")
         return redirect('liquidaciones:registrar_firma')
 
     try:
@@ -114,70 +114,86 @@ def firmar_liquidacion(request, pk):
     except Exception as e:
         logger.warning(f"[firmar_liquidacion] Firma digital no accesible: {e}")
         messages.warning(
-            request, "Tu firma registrada ya no está disponible. Por favor, vuelve a subirla.")
+            "Tu firma ya no está disponible. Vuelve a registrarla.")
         return redirect('liquidaciones:registrar_firma')
 
     if request.method == 'POST':
         try:
             if not liquidacion.archivo_pdf_liquidacion or not liquidacion.archivo_pdf_liquidacion.name:
-                logger.warning(
-                    f"[firmar_liquidacion] PDF no encontrado para liquidación {liquidacion.pk}")
-                return HttpResponseBadRequest("No se encontró el archivo PDF.")
+                return HttpResponseBadRequest("No se encontró el PDF.")
 
-            # Leer PDF original
+            # 1. Leer PDF original
             with liquidacion.archivo_pdf_liquidacion.open('rb') as f:
                 original_pdf = BytesIO(f.read())
 
-            # Leer firma
+            # 2. Firma del usuario
             with usuario.firma_digital.open('rb') as f:
-                firma_data = BytesIO(f.read())
+                firma_usuario_io = BytesIO(f.read())
 
-            img = Image.open(firma_data)
-            if img.format not in ['PNG', 'JPEG']:
-                raise ValueError("Formato de imagen no compatible")
+            # 3. Firma del representante legal (desde modelo en Cloudinary)
+            firma_representante = FirmaRepresentanteLegal.objects.order_by(
+                '-fecha_subida').first()
+            if not firma_representante or not firma_representante.archivo:
+                return HttpResponseBadRequest("No se encontró la firma del representante legal.")
 
-            firma_img_io = BytesIO()
-            img.save(firma_img_io, format='PNG')
-            firma_img_io.seek(0)
+            url_representante = firma_representante.archivo.url
+            response = requests.get(url_representante)
+            if response.status_code != 200:
+                raise Exception(
+                    "No se pudo descargar la firma del representante legal.")
+            firma_representante_io = BytesIO(response.content)
 
-            # Insertar imagen en PDF
+            # 4. Convertir firmas a PNG
+            img_usuario = Image.open(firma_usuario_io).convert("RGBA")
+            img_representante = Image.open(
+                firma_representante_io).convert("RGBA")
+
+            output_usuario = BytesIO()
+            img_usuario.save(output_usuario, format='PNG')
+            output_usuario.seek(0)
+
+            output_representante = BytesIO()
+            img_representante.save(output_representante, format='PNG')
+            output_representante.seek(0)
+
+            # 5. Insertar firmas en PDF
             doc = fitz.open(stream=original_pdf, filetype='pdf')
             page = doc[-1]
-            rect = fitz.Rect(400, 700, 550, 750)
-            page.insert_image(rect, stream=firma_img_io)
 
+            # Firma del usuario
+            page.insert_image(fitz.Rect(425, 710, 575, 760),
+                              stream=output_usuario)
+
+            # Firma del representante legal
+            page.insert_image(fitz.Rect(100, 710, 250, 760),
+                              stream=output_representante)
+
+            # 6. Guardar PDF firmado
             pdf_firmado_io = BytesIO()
             doc.save(pdf_firmado_io)
             doc.close()
             pdf_firmado_io.seek(0)
 
-            # ✅ Usar mismo nombre base del PDF original
             nombre_base = Path(liquidacion.archivo_pdf_liquidacion.name).name
-            nombre_firmado = nombre_base
-
             content = ContentFile(pdf_firmado_io.read())
-            liquidacion.pdf_firmado.save(nombre_firmado, content, save=False)
+            liquidacion.pdf_firmado.save(nombre_base, content, save=False)
 
             liquidacion.firmada = True
             liquidacion.fecha_firma = now()
             liquidacion.save()
 
-            print("✅ Ruta final del PDF firmado en Cloudinary:",
-                  liquidacion.pdf_firmado.name)
-
-            messages.success(
-                request, "La liquidación fue firmada correctamente. Puedes descargarla ahora.")
+            messages.success(request, "Liquidación firmada correctamente.")
             return redirect('liquidaciones:listar')
 
         except Exception as e:
-            logger.error(f"[firmar_liquidacion] Error general al firmar: {e}")
-            return HttpResponseBadRequest(f"Error al firmar el PDF: {e}")
+            logger.error(f"[firmar_liquidacion] Error: {e}")
+            return HttpResponseBadRequest(f"Error al firmar: {e}")
 
     return render(request, 'liquidaciones/firmar.html', {
         'liquidacion': liquidacion,
         'tecnico': usuario,
-        'solo_lectura': True,  # esto ya lo estás usando
-        'firmar_documento': True  # 🔧 esto es lo que faltaba
+        'solo_lectura': True,
+        'firmar_documento': True
     })
 
 
