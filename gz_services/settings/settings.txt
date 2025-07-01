@@ -43,7 +43,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'mv_construcciones.urls'
+ROOT_URLCONF = 'gz_services.urls'
 
 TEMPLATES = [
     {
@@ -61,7 +61,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'mv_construcciones.wsgi.application'
+WSGI_APPLICATION = 'gz_services.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -102,7 +102,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = f"MV Construcciones <{EMAIL_HOST_USER}>"
+DEFAULT_FROM_EMAIL = f"GZ Services <{EMAIL_HOST_USER}>"
 
 # HTTPS en Render (muy recomendable)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')

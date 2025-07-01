@@ -15,6 +15,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.db.models import Sum
+from rrhh.utils import calcular_dias_habiles
 
 
 class ContratoTrabajoForm(forms.ModelForm):
@@ -263,7 +264,7 @@ class SolicitudVacacionesForm(forms.ModelForm):
             )
 
         if self.usuario and inicio and fin:
-            dias_solicitados = self.usuario.calcular_dias_habiles(inicio, fin)
+            dias_solicitados = calcular_dias_habiles(inicio, fin)
             dias_disponibles = self.usuario.obtener_dias_vacaciones_disponibles()
 
             if dias_solicitados > dias_disponibles:
@@ -486,6 +487,7 @@ class SolicitudAdelantoForm(forms.ModelForm):
         fields = ['monto_solicitado']
 
 
+"""
 class SolicitudAdelantoAdminForm(forms.ModelForm):
     class Meta:
         model = SolicitudAdelanto
@@ -568,6 +570,62 @@ class SolicitudAdelantoAdminForm(forms.ModelForm):
                     f"El monto solicitado supera tu saldo disponible (${self.maximo:,}). "
                     "Para montos mayores, contacta a RR.HH."
                 )
+
+        return monto
+"""
+
+
+class SolicitudAdelantoAdminForm(forms.ModelForm):
+    class Meta:
+        model = SolicitudAdelanto
+        fields = ['monto_aprobado', 'comprobante_transferencia']
+        widgets = {
+            'monto_aprobado': forms.NumberInput(attrs={
+                'placeholder': 'Ej. 200000',
+                'class': 'w-full border px-4 py-2 rounded-xl shadow-sm'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.trabajador = kwargs.pop('trabajador', None)
+        self.usuario_actual = kwargs.pop('usuario_actual', None)
+        super().__init__(*args, **kwargs)
+
+        # Opcionalmente podrías validar máximo aprobado si deseas
+        if self.instance and self.instance.trabajador:
+            self.trabajador = self.instance.trabajador
+
+            self.ficha = FichaIngreso.objects.filter(
+                usuario__identidad=self.trabajador.identidad
+            ).first()
+
+            if self.ficha and self.ficha.sueldo_base:
+                sueldo_base = self.ficha.sueldo_base
+                maximo_base = sueldo_base * Decimal('0.5')
+
+                hoy = date.today()
+                total_aprobado = self.trabajador.solicitudes_adelanto.filter(
+                    estado='aprobada',
+                    fecha_solicitud__month=hoy.month,
+                    fecha_solicitud__year=hoy.year
+                ).exclude(id=self.instance.id).aggregate(total=Sum('monto_aprobado'))['total'] or 0
+
+                self.maximo = int(maximo_base - total_aprobado)
+                if self.maximo < 0:
+                    self.maximo = 0
+
+                self.fields['monto_aprobado'].help_text = f"Máximo recomendado: ${self.maximo:,}"
+            else:
+                self.fields['monto_aprobado'].help_text = "⚠️ No se encontró sueldo base registrado."
+
+    def clean_monto_aprobado(self):
+        monto = self.cleaned_data.get('monto_aprobado')
+
+        if monto is None:
+            raise forms.ValidationError("Debe ingresar un monto válido.")
+        if monto <= 0:
+            raise forms.ValidationError(
+                "El monto aprobado debe ser mayor a cero.")
 
         return monto
 

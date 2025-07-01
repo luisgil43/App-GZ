@@ -20,14 +20,11 @@
   <form method="post" enctype="multipart/form-data" class="space-y-6">
     {% csrf_token %}
 
-    <!-- Monto solicitado -->
+    <!-- Monto aprobado -->
     <div>
-      <label for="id_monto_solicitado" class="block text-sm font-medium text-gray-700">Monto solicitado</label>
-      {{ form.monto_solicitado|add_class:"w-full border px-4 py-2 rounded-xl" }}
-      {% if form.monto_solicitado.help_text %}
-        <p class="text-sm text-gray-500 mt-1">{{ form.monto_solicitado.help_text }}</p>
-      {% endif %}
-      {% for error in form.monto_solicitado.errors %}
+      <label for="id_monto_aprobado" class="block text-sm font-medium text-gray-700">Monto aprobado</label>
+      {{ form.monto_aprobado|add_class:"w-full border px-4 py-2 rounded-xl" }}
+      {% for error in form.monto_aprobado.errors %}
         <p class="text-sm text-red-600">{{ error }}</p>
       {% endfor %}
     </div>

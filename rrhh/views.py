@@ -77,6 +77,7 @@ import calendar
 from django.db.models import Sum
 from .forms import SolicitudAdelantoForm
 from rrhh.utils import generar_pdf_solicitud_adelanto
+from .utils import generar_pdf_solicitud_adelanto
 User = get_user_model()
 
 
@@ -733,20 +734,14 @@ def mis_vacaciones(request):
     if request.method == 'POST':
         form = SolicitudVacacionesForm(request.POST, usuario=usuario)
         if form.is_valid():
-            dias_solicitados = usuario.calcular_dias_habiles(
-                form.cleaned_data['fecha_inicio'],
-                form.cleaned_data['fecha_fin']
-            )
-            if dias_solicitados > dias_disponibles:
-                form.add_error(
-                    None, "Los días solicitados superan los días disponibles.")
-            else:
-                solicitud = form.save(commit=False)
-                solicitud.usuario = usuario
-                solicitud.dias_solicitados = dias_solicitados
-                solicitud.save()
-                messages.success(request, "Solicitud enviada correctamente.")
-                return redirect('rrhh:mis_vacaciones')
+            solicitud = form.save(commit=False)
+            solicitud.usuario = usuario
+            solicitud.dias_solicitados = form.cleaned_data.get(
+                'dias_solicitados', 0)
+            solicitud.save()
+            messages.success(request, "Solicitud enviada correctamente.")
+            return redirect('rrhh:mis_vacaciones')
+
     else:
         form = SolicitudVacacionesForm(usuario=usuario)
 
@@ -1055,8 +1050,7 @@ def aprobar_vacacion_supervisor(request, pk):
     return redirect('rrhh:revisar_supervisor')
 
 
-@rol_requerido('pm'
-               'admin')
+@rol_requerido('pm', 'admin')
 def aprobar_vacacion_pm(request, pk):
     solicitud = get_object_or_404(SolicitudVacaciones, pk=pk)
     if solicitud.estatus == 'pendiente_pm':
@@ -1750,17 +1744,36 @@ def aprobar_adelanto_rrhh(request, id):
     if request.method == 'POST':
         form = AprobacionAdelantoForm(request.POST, request.FILES)
         if form.is_valid():
+            trabajador = solicitud.trabajador
+            pm = solicitud.aprobado_por_pm
+            rrhh = request.user
+
+            # 🔒 Validar firmas
+            errores = []
+            if not trabajador.firma_digital:
+                errores.append(
+                    f"El trabajador {trabajador.get_full_name()} no tiene firma registrada.")
+            if not pm or not pm.firma_digital:
+                errores.append("El PM responsable no tiene firma registrada.")
+            if not rrhh.firma_digital:
+                errores.append("Tú como RRHH no tienes firma registrada.")
+
+            if errores:
+                for error in errores:
+                    messages.error(request, error)
+                return redirect(request.path)
+
+            # ✅ Si todos tienen firma, continuar con la aprobación
             monto_final = form.cleaned_data['monto_aprobado']
             comprobante = form.cleaned_data['comprobante']
 
             solicitud.comprobante_transferencia = comprobante
             solicitud.monto_aprobado = monto_final
             solicitud.estado = 'aprobada'
-            solicitud.aprobado_por_rrhh = request.user
-            solicitud.motivo_rechazo = ''  # ✅ Limpiar motivo de rechazo si existía
+            solicitud.aprobado_por_rrhh = rrhh
+            solicitud.motivo_rechazo = ''  # Limpiar motivo anterior
 
             try:
-                # ✅ Generar planilla PDF con formato uniforme
                 generar_pdf_solicitud_adelanto(solicitud)
             except Exception as e:
                 messages.error(
@@ -1828,11 +1841,21 @@ def eliminar_adelanto_admin(request, id):
         return redirect('rrhh:listar_adelanto_admin')
 
     if request.method == 'POST':
+        # 🧹 Eliminar archivos de Cloudinary si existen
+        if solicitud.comprobante_transferencia and solicitud.comprobante_transferencia.name:
+            solicitud.comprobante_transferencia.delete(save=False)
+
+        if solicitud.planilla_pdf and solicitud.planilla_pdf.name:
+            solicitud.planilla_pdf.delete(save=False)
+
         solicitud.delete()
-        messages.success(request, "Solicitud eliminada correctamente.")
+        messages.success(
+            request, "Solicitud y archivos eliminados correctamente.")
         return redirect('rrhh:listar_adelanto_admin')
 
-    return render(request, 'rrhh/eliminar_adelanto_admin.html', {'solicitud': solicitud})
+    return render(request, 'rrhh/eliminar_adelanto_admin.html', {
+        'solicitud': solicitud
+    })
 
 
 @staff_member_required
@@ -1845,7 +1868,7 @@ def editar_adelanto_admin(request, id):
             request, "No tienes permiso para editar esta solicitud.")
         return redirect('rrhh:listar_adelanto_admin')
 
-    monto_anterior = solicitud.monto_solicitado
+    monto_anterior = solicitud.monto_aprobado
 
     if request.method == 'POST':
         form = SolicitudAdelantoAdminForm(
@@ -1860,30 +1883,45 @@ def editar_adelanto_admin(request, id):
 
         if form.is_valid():
             solicitud_editada = form.save(commit=False)
+            nuevo_monto = solicitud_editada.monto_aprobado
 
-            nuevo_monto = solicitud_editada.monto_solicitado
+            # ✅ Mantener estado y aprobadores actuales
+            solicitud_editada.estado = solicitud.estado
+            solicitud_editada.aprobado_por_pm = solicitud.aprobado_por_pm
+            solicitud_editada.aprobado_por_rrhh = solicitud.aprobado_por_rrhh
 
-            solicitud_editada.estado = 'pendiente_pm'
-            solicitud_editada.monto_aprobado = None
-            solicitud_editada.aprobado_por_pm = None
-            solicitud_editada.aprobado_por_rrhh = None
+            # 🧾 Reemplazar comprobante si se subió uno nuevo
+            if reemplazar_comprobante:
+                if solicitud.comprobante_transferencia and solicitud.comprobante_transferencia.storage.exists(solicitud.comprobante_transferencia.name):
+                    solicitud.comprobante_transferencia.delete(save=False)
 
-            if nuevo_monto != monto_anterior and solicitud.planilla_pdf:
-                if solicitud.planilla_pdf.storage.exists(solicitud.planilla_pdf.name):
+                solicitud_editada.comprobante_transferencia = request.FILES.get(
+                    'comprobante_transferencia')
+
+            # 🧾 Verificar si el monto cambió y debe regenerarse PDF
+            regenerar_pdf = nuevo_monto != monto_anterior
+
+            if regenerar_pdf:
+                if solicitud.planilla_pdf and solicitud.planilla_pdf.storage.exists(solicitud.planilla_pdf.name):
                     solicitud.planilla_pdf.delete(save=False)
                 solicitud_editada.planilla_pdf = None
-            elif nuevo_monto == monto_anterior:
-                solicitud_editada.planilla_pdf = solicitud.planilla_pdf
-
-            if reemplazar_comprobante and solicitud.comprobante_transferencia:
-                if solicitud.comprobante_transferencia.storage.exists(solicitud.comprobante_transferencia.name):
-                    solicitud.comprobante_transferencia.delete(save=False)
 
             solicitud_editada.save()
 
-            messages.success(
-                request, "Solicitud editada correctamente. Requiere nueva aprobación.")
+            if regenerar_pdf:
+                try:
+                    generar_pdf_solicitud_adelanto(solicitud_editada)
+                    messages.success(
+                        request, "PDF regenerado con el nuevo monto.")
+                except Exception as e:
+                    messages.warning(
+                        request, f"El nuevo PDF no pudo generarse: {e}"
+                    )
+
+            messages.success(request, "Solicitud actualizada correctamente.")
             return redirect('rrhh:listar_adelanto_admin')
+        else:
+            messages.error(request, "Formulario inválido.")
     else:
         form = SolicitudAdelantoAdminForm(
             instance=solicitud,

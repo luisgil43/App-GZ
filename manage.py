@@ -12,7 +12,7 @@ if os.environ.get("DJANGO_DEVELOPMENT") == "true":
 if __name__ == '__main__':
     os.environ.setdefault(
         'DJANGO_SETTINGS_MODULE',
-        os.getenv('DJANGO_SETTINGS_MODULE', 'mv_construcciones.settings.dev')
+        os.getenv('DJANGO_SETTINGS_MODULE', 'gz_services.settings.dev')
     )
     try:
         from django.core.management import execute_from_command_line

@@ -3,7 +3,7 @@ import os
 import django
 
 # 1. Configurar variable de entorno para settings
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mv_construcciones.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gz_services.settings')
 
 # 2. Inicializar Django
 django.setup()

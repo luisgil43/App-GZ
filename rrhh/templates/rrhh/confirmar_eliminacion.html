@@ -1,0 +1,21 @@
+{% extends "dashboard/base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-10 bg-white p-6 rounded-xl shadow-md">
+  <h2 class="text-2xl font-bold text-gray-800 mb-4">Confirmar Eliminación</h2>
+  <p class="text-gray-700 mb-6">
+    Estás a punto de eliminar tu solicitud de vacaciones del <strong>{{ solicitud.fecha_inicio }}</strong>
+    al <strong>{{ solicitud.fecha_fin }}</strong>. Esta acción no se puede deshacer.
+  </p>
+
+  <form method="post" class="flex flex-col sm:flex-row gap-4">
+    {% csrf_token %}
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded-xl">
+      Sí, eliminar solicitud
+    </button>
+    <a href="{% url 'rrhh:mis_vacaciones' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl text-center">
+      Cancelar
+    </a>
+  </form>
+</div>
+{% endblock %}
