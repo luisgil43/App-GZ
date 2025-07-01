@@ -27,7 +27,7 @@
                 ☰
             </button>
             <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-9">
-            <strong class="text-gray-800 text-sm md:text-base">GZ SERVICES AND BUSINESS SPA</strong>
+            <strong class="text-gray-800 text-sm md:text-base">SERVICES AND BUSINESS</strong>
         </div>
         <div class="flex items-center gap-4 text-sm md:text-base">
             <span>{{ request.user.get_full_name|default:request.user.username }}</span>
@@ -81,53 +81,59 @@
                     </ul>
                 </li>
                 {% endif %}
-{% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🧑‍💼 RR.HH</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
-  <ul class="ml-4 submenu space-y-1 hidden">
-    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
-      <li><a href="{% url 'liquidaciones:admin_lista' %}" class="hover:text-emerald-400">Liquidaciones</a></li>
-      <li><a href="{% url 'rrhh:contratos_trabajo' %}" class="hover:text-emerald-400">Contratos de trabajo</a></li>
-    {% endif %}
-    <li><a href="{% url 'dashboard_admin:vacaciones_admin' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
-    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
-      <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas de ingresos</a></li>
-      <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos trabajadores</a></li>
- 
-  <li>
-   <a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">
-  Cronograma de pago
-</a>
-</li>
-      <li><a href="{% url 'rrhh:listar_adelanto_admin' %}" class="hover:text-emerald-400">Avances de sueldos</a></li>
-      <li><a href="{% url 'dashboard_admin:listar_feriados' %}" class="hover:text-emerald-400">Feriados</a></li>
-      <li>
-  <a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de firmas</a>
-</li>
-    {% endif %}
-  </ul>
-</li>
-{% endif %}
+                {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or
+                request.user.es_supervisor %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">🧑‍💼 RR.HH</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+                        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+                        <li><a href="{% url 'liquidaciones:admin_lista' %}"
+                                class="hover:text-emerald-400">Liquidaciones</a></li>
+                        <li><a href="{% url 'rrhh:contratos_trabajo' %}" class="hover:text-emerald-400">Contratos de
+                                trabajo</a></li>
+                        {% endif %}
+                        <li><a href="{% url 'dashboard_admin:vacaciones_admin' %}"
+                                class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+                        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+                        <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas
+                                de ingresos</a></li>
+                        <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos
+                                trabajadores</a></li>
+                        <li><a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">Cronograma
+                                de pago</a></li>
+                        <li><a href="{% url 'rrhh:listar_adelanto_admin' %}" class="hover:text-emerald-400">Avances de
+                                sueldos</a></li>
+                        <li><a href="{% url 'dashboard_admin:listar_feriados' %}"
+                                class="hover:text-emerald-400">Feriados</a></li>
+                        <li><a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de
+                                firmas</a></li>
+                        {% endif %}
+                    </ul>
+                </li>
+                {% endif %}
 
-		{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
-        <span class="flex items-center gap-2">🤝 Subcontrato</span>
-        <span class="flecha transition-transform duration-200">▶</span>
-    </div>
-    <ul class="ml-4 submenu space-y-1 hidden">
-        <li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
-        <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Contratos de servicios</a></li>
-    </ul>
-</li>
-{% endif %}
+                {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or
+                request.user.es_pm or request.user.es_supervisor %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">🤝 Subcontrato</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+                        <li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li>
+                        <li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
+                        <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
+                        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>
+                        <li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
+                        <li><a href="#" class="hover:text-emerald-400">Contratos de servicios</a></li>
+                    </ul>
+                </li>
+                {% endif %}
 
                 {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm %}
                 <li class="group">
@@ -169,7 +175,7 @@
                         <li><a href="#" class="hover:text-emerald-400">Convenios disponibles</a></li>
                     </ul>
                 </li>
-{% endif %}
+                {% endif %}
 
                 {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
                 <li class="group">
@@ -189,8 +195,8 @@
         </nav>
 
         <!-- Contenido -->
-       <main class="md:ml-72 flex-1 p-6 z-10 bg-gray-100">
-{% block dashboard_content %}{% endblock %}
+        <main class="md:ml-72 flex-1 p-6 z-10 bg-gray-100">
+            {% block dashboard_content %}{% endblock %}
         </main>
     </div>
     <!-- Scripts -->
@@ -220,7 +226,7 @@
             <span>{{ message }}</span>
             <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
         </div>
-        {% endfor %}
+        {% endif %}
     </div>
 
     <script>

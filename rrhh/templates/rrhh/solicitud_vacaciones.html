@@ -18,12 +18,13 @@
   <!-- Formulario de solicitud -->
   <div class="bg-gray-50 p-6 rounded-xl shadow-sm mb-10">
     <h3 class="text-xl font-semibold text-gray-700 mb-4">Solicitud de Vacaciones</h3>
-<div class="flex items-center gap-2 text-sm text-gray-700 mb-4">
-    <div class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-semibold shadow">
-      15
+    <div class="flex items-center gap-2 text-sm text-gray-700 mb-4">
+      <div
+        class="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-xs font-semibold shadow">
+        15
+      </div>
+      <span>Los días marcados en azul en el calendario corresponden a <strong>feriados</strong>.</span>
     </div>
-    <span>Los días marcados en azul en el calendario corresponden a <strong>feriados</strong>.</span>
-  </div>
     <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-4">
       {% csrf_token %}
       <div>
@@ -81,127 +82,159 @@
         </tr>
       </thead>
       <tbody class="divide-y divide-gray-200">
-        {% for solicitud in solicitudes %}
-        <tr>
-          <td class="px-4 py-2">{{ solicitud.usuario.identidad }}</td>
-          <td class="px-4 py-2">{{ solicitud.usuario.get_full_name }}</td>
-          <td class="px-4 py-2">{{ solicitud.fecha_inicio }}</td>
-          <td class="px-4 py-2">{{ solicitud.fecha_fin }}</td>
-          <td class="px-4 py-2">{{ solicitud.dias_solicitados }}</td>
+  {% if solicitudes %}
+    {% for solicitud in solicitudes %}
+      <tr>
+        <td class="px-4 py-2">{{ solicitud.usuario.identidad }}</td>
+        <td class="px-4 py-2">{{ solicitud.usuario.get_full_name }}</td>
+        <td class="px-4 py-2">{{ solicitud.fecha_inicio }}</td>
+        <td class="px-4 py-2">{{ solicitud.fecha_fin }}</td>
+        <td class="px-4 py-2">{{ solicitud.dias_solicitados }}</td>
 
-          <!-- Estatus -->
-          <td class="px-4 py-2 align-top text-sm">
-            <div class="flex flex-col gap-1 leading-tight">
-              {% if solicitud.estatus == 'aprobada' %}
+        <!-- Estatus -->
+        <td class="px-4 py-2 align-top text-sm">
+          <div class="flex flex-col gap-1 leading-tight">
+            {% if solicitud.estatus == 'aprobada' %}
               <span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">
                 ✅ Aprobada por:
               </span>
               <ul class="list-disc list-inside text-gray-800 ml-2 text-xs">
-                {% if solicitud.aprobado_por_supervisor %}<li>Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}</li>{% endif %}
-                {% if solicitud.aprobado_por_pm %}<li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>{% endif %}
-                {% if solicitud.aprobado_por_rrhh %}<li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>{% endif %}
+                {% if solicitud.aprobado_por_supervisor %}
+                  <li>Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}</li>
+                {% endif %}
+                {% if solicitud.aprobado_por_pm %}
+                  <li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>
+                {% endif %}
+                {% if solicitud.aprobado_por_rrhh %}
+                  <li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>
+                {% endif %}
               </ul>
-              {% elif solicitud.estatus|slice:":9" == 'rechazada' %}
-  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">
-    ❌ {{ solicitud.get_estatus_display }}
-  </span>
-  <ul class="text-xs text-gray-800 list-inside list-disc mt-1 ml-2">
-    {% if solicitud.aprobado_por_supervisor %}<li>Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}</li>{% endif %}
-    {% if solicitud.aprobado_por_pm %}<li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>{% endif %}
-    {% if solicitud.aprobado_por_rrhh %}<li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>{% endif %}
-  </ul>
 
-              {% elif solicitud.estatus == 'pendiente_supervisor' %}
+            {% elif solicitud.estatus|slice:":9" == 'rechazada' %}
+              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">
+                ❌ {{ solicitud.get_estatus_display }}
+              </span>
+              <ul class="text-xs text-gray-800 list-inside list-disc mt-1 ml-2">
+                {% if solicitud.aprobado_por_supervisor %}
+                  <li>Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}</li>
+                {% endif %}
+                {% if solicitud.aprobado_por_pm %}
+                  <li>PM: {{ solicitud.aprobado_por_pm.get_full_name }}</li>
+                {% endif %}
+                {% if solicitud.aprobado_por_rrhh %}
+                  <li>RRHH: {{ solicitud.aprobado_por_rrhh.get_full_name }}</li>
+                {% endif %}
+              </ul>
+
+            {% elif solicitud.estatus == 'pendiente_supervisor' %}
               <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
                 ⏳ En revisión del Supervisor
               </span>
-              {% elif solicitud.estatus == 'pendiente_pm' %}
+
+            {% elif solicitud.estatus == 'pendiente_pm' %}
               <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
                 ✅ Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}<br>
                 ⏳ En revisión del PM
               </span>
-              {% elif solicitud.estatus == 'pendiente_rrhh' %}
+
+            {% elif solicitud.estatus == 'pendiente_rrhh' %}
               <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
                 ✅ Supervisor: {{ solicitud.aprobado_por_supervisor.get_full_name }}<br>
                 ✅ PM: {{ solicitud.aprobado_por_pm.get_full_name }}<br>
                 ⏳ En revisión de RRHH
               </span>
-              {% else %}
+
+            {% else %}
               <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
                 Estatus desconocido
               </span>
-              {% endif %}
-            </div>
-          </td>
-
-          <!-- Motivo -->
-          <td class="px-4 py-2 text-xs text-red-600 italic">
-            {% if solicitud.estatus|slice:":9" == 'rechazada' and solicitud.observacion %}
-              {{ solicitud.observacion }}
             {% endif %}
-          </td>
+          </div>
+        </td>
 
-          <!-- Acciones -->
-          <td class="px-4 py-2">
-  <div class="flex flex-col gap-1">
-    {% if solicitud.archivo_pdf %}
-      <a href="{{ solicitud.archivo_pdf.url }}" target="_blank" class="text-blue-600 hover:underline text-sm">
-        📄 Descargar
-      </a>
-    {% endif %}
-    <a href="{% url 'rrhh:editar_solicitud' solicitud.id %}" class="text-blue-600 hover:underline text-sm">Editar</a>
-    <a href="{% url 'rrhh:eliminar_solicitud' solicitud.id %}" class="text-red-600 hover:underline text-sm">Eliminar</a>
-  </div>
-</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" class="px-4 py-4 text-center text-gray-500">No hay solicitudes registradas.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
+        <!-- Motivo -->
+        <td class="px-4 py-2 text-xs text-red-600 italic">
+          {% if solicitud.estatus|slice:":9" == 'rechazada' and solicitud.observacion %}
+            {{ solicitud.observacion }}
+          {% endif %}
+        </td>
+
+        <!-- Acciones -->
+        <td class="px-4 py-2">
+          <div class="flex flex-col gap-1">
+            {% if solicitud.archivo_pdf %}
+              <a href="{{ solicitud.archivo_pdf.url }}" target="_blank" class="text-blue-600 hover:underline text-sm">
+                📄 Descargar
+              </a>
+            {% endif %}
+            <a href="{% url 'rrhh:editar_solicitud' solicitud.id %}" class="text-blue-600 hover:underline text-sm">
+              Editar
+            </a>
+            <a href="{% url 'rrhh:eliminar_solicitud' solicitud.id %}" class="text-red-600 hover:underline text-sm">
+              Eliminar
+            </a>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+  {% else %}
+    <tr>
+      <td colspan="8" class="px-4 py-4 text-center text-gray-500">No hay solicitudes registradas.</td>
+    </tr>
+  {% endif %}
+</tbody>
     </table>
   </div>
 </div>
 
 <!-- Script para cálculo de días hábiles -->
 <script>
-const feriados = JSON.parse('{{ feriados_json|safe }}');
+  const feriados = JSON.parse('{{ feriados_json|safe }}');
 
-function contarDiasHabiles(inicio, fin) {
-  const start = new Date(inicio);
-  const end = new Date(fin);
-  let count = 0;
+  function contarDiasHabiles(inicioStr, finStr) {
+    const [a1, m1, d1] = inicioStr.split('-').map(Number);
+    const [a2, m2, d2] = finStr.split('-').map(Number);
+    const start = new Date(a1, m1 - 1, d1);
+    const end = new Date(a2, m2 - 1, d2);
+    let count = 0;
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    const esFinDeSemana = (d.getDay() === 0 || d.getDay() === 6);
-    const esFeriado = feriados.includes(d.toISOString().split('T')[0]);
-    if (!esFinDeSemana && !esFeriado) {
-      count++;
+    let actual = new Date(start);
+    while (actual <= end) {
+      const day = actual.getDay(); // 0 = domingo, 6 = sábado
+      const iso = actual.toISOString().split('T')[0];
+      const esFeriado = feriados.includes(iso);
+      if (day !== 0 && day !== 6 && !esFeriado) {
+        count++;
+      }
+      actual.setDate(actual.getDate() + 1);
+    }
+
+    return count;
+  }
+
+  function actualizarDias() {
+    const inicio = document.getElementById("id_fecha_inicio").value;
+    const fin = document.getElementById("id_fecha_fin").value;
+    const contador = document.getElementById("contador-dias");
+
+    if (inicio && fin && inicio <= fin) {
+      const dias = contarDiasHabiles(inicio, fin);
+      contador.textContent = dias;
+    } else {
+      contador.textContent = '0';
     }
   }
-  return count;
-}
 
-const inicioInput = document.getElementById("id_fecha_inicio");
-const finInput = document.getElementById("id_fecha_fin");
-const contadorDias = document.getElementById("contador-dias");
+  document.addEventListener("DOMContentLoaded", function () {
+    const inicio = document.getElementById("id_fecha_inicio");
+    const fin = document.getElementById("id_fecha_fin");
 
-function actualizarDias() {
-  const inicio = inicioInput.value;
-  const fin = finInput.value;
-  if (inicio && fin && inicio <= fin) {
-    const dias = contarDiasHabiles(inicio, fin);
-    contadorDias.textContent = dias;
-  } else {
-    contadorDias.textContent = 0;
-  }
-}
-
-if (inicioInput && finInput) {
-  inicioInput.addEventListener("change", actualizarDias);
-  finInput.addEventListener("change", actualizarDias);
-}
+    if (inicio && fin) {
+      inicio.addEventListener("change", actualizarDias);
+      fin.addEventListener("change", actualizarDias);
+      actualizarDias(); // ✅ Calcula al cargar
+    }
+  });
 </script>
 
 <!-- Flatpickr -->
@@ -210,35 +243,35 @@ if (inicioInput && finInput) {
 <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
 
 <style>
-.flatpickr-day.feriado {
-  background-color: #3b82f6 !important;
-  color: white !important;
-  border-radius: 50% !important;
-}
+  .flatpickr-day.feriado {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    border-radius: 50% !important;
+  }
 </style>
 
 <script>
-flatpickr("#id_fecha_inicio", {
-locale: "es",
-  dateFormat: "Y-m-d",
-  disableMobile: true,
-  onDayCreate: function (_, __, ___, dayElem) {
-    const fecha = dayElem.dateObj.toISOString().split('T')[0];
-    if (feriados.includes(fecha)) {
-      dayElem.classList.add("feriado");
+  flatpickr("#id_fecha_inicio", {
+    locale: "es",
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    onDayCreate: function (_, __, ___, dayElem) {
+      const fecha = dayElem.dateObj.toISOString().split('T')[0];
+      if (feriados.includes(fecha)) {
+        dayElem.classList.add("feriado");
+      }
     }
-  }
-});
-flatpickr("#id_fecha_fin", {
-locale: "es",
-  dateFormat: "Y-m-d",
-  disableMobile: true,
-  onDayCreate: function (_, __, ___, dayElem) {
-    const fecha = dayElem.dateObj.toISOString().split('T')[0];
-    if (feriados.includes(fecha)) {
-      dayElem.classList.add("feriado");
+  });
+  flatpickr("#id_fecha_fin", {
+    locale: "es",
+    dateFormat: "Y-m-d",
+    disableMobile: true,
+    onDayCreate: function (_, __, ___, dayElem) {
+      const fecha = dayElem.dateObj.toISOString().split('T')[0];
+      if (feriados.includes(fecha)) {
+        dayElem.classList.add("feriado");
+      }
     }
-  }
-});
+  });
 </script>
 {% endblock %}

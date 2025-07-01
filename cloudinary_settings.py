@@ -1,8 +1,8 @@
 import cloudinary
 
 cloudinary.config(
-    cloud_name='diamfsyzn',
-    api_key='665636734579392',
-    api_secret='GWMLFidwQ-Imcb7WH-wglZqdajY',
+    cloud_name='dm6gqg4fb',
+    api_key='246778338374567',
+    api_secret='nC_y5gSK6ZkMTPLvhRcKljIRejc',
     secure=True
 )

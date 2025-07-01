@@ -1,5 +1,5 @@
 # liquidaciones/admin.py
-from mv_construcciones.custom_admin import custom_admin_site
+from gz_services.custom_admin import custom_admin_site
 from django.contrib import admin
 from django.contrib.admin import ModelAdmin
 

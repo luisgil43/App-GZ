@@ -11,7 +11,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -89,7 +89,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -167,7 +167,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 54, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -245,7 +245,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 75, in ver_pdf_liquidacion
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 75, in ver_pdf_liquidacion
     tecnico = request.user.tecnico
               ^^^^^^^^^^^^^^^^^^^^
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\utils\functional.py", line 253, in inner
@@ -268,7 +268,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -346,7 +346,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -424,7 +424,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     return render(request, 'liquidaciones/admin_lista.html', {
         'liquidaciones': liquidaciones,
     ...<3 lines>...
@@ -530,7 +530,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 69, in listar_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 69, in listar_liquidaciones
     return render(request, 'liquidaciones/listar.html', {
         'liquidaciones': liquidaciones
     })
@@ -631,14 +631,14 @@ django.urls.exceptions.NoReverseMatch: Reverse for 'descargar_pdf' with argument
 2025-06-06 16:03:39,918 [WARNING] django.server - "GET /static/css/styles.css HTTP/1.1" 404 1969
 2025-06-06 16:03:39,923 [WARNING] django.request - Not Found: /media/firmas/9ffb99fc-22d8-4b24-b065-75614febdfb1.png
 2025-06-06 16:03:39,924 [WARNING] django.server - "GET /media/firmas/9ffb99fc-22d8-4b24-b065-75614febdfb1.png HTTP/1.1" 404 5146
-2025-06-06 16:03:43,883 [ERROR] liquidaciones.views - [firmar_liquidacion] Error cargando firma: [Errno 2] No such file or directory: 'C:\\Users\\luisg\\OneDrive\\Escritorio\\APP\\mv_construcciones\\media\\firmas\\9ffb99fc-22d8-4b24-b065-75614febdfb1.png'
+2025-06-06 16:03:43,883 [ERROR] liquidaciones.views - [firmar_liquidacion] Error cargando firma: [Errno 2] No such file or directory: 'C:\\Users\\luisg\\OneDrive\\Escritorio\\APP\\gz_services\\media\\firmas\\9ffb99fc-22d8-4b24-b065-75614febdfb1.png'
 2025-06-06 16:03:43,883 [WARNING] django.request - Bad Request: /liquidaciones/firmar/28/
 2025-06-06 16:03:43,884 [WARNING] django.server - "POST /liquidaciones/firmar/28/ HTTP/1.1" 400 186
 2025-06-06 16:05:45,193 [WARNING] django.server - "GET /static/css/styles.css HTTP/1.1" 404 1969
 2025-06-06 16:06:26,674 [WARNING] django.server - "GET /static/css/styles.css HTTP/1.1" 404 1969
 2025-06-06 16:06:26,680 [WARNING] django.request - Not Found: /media/firmas/9ffb99fc-22d8-4b24-b065-75614febdfb1.png
 2025-06-06 16:06:26,681 [WARNING] django.server - "GET /media/firmas/9ffb99fc-22d8-4b24-b065-75614febdfb1.png HTTP/1.1" 404 5146
-2025-06-06 16:06:32,464 [ERROR] liquidaciones.views - [firmar_liquidacion] Error cargando firma: [Errno 2] No such file or directory: 'C:\\Users\\luisg\\OneDrive\\Escritorio\\APP\\mv_construcciones\\media\\firmas\\9ffb99fc-22d8-4b24-b065-75614febdfb1.png'
+2025-06-06 16:06:32,464 [ERROR] liquidaciones.views - [firmar_liquidacion] Error cargando firma: [Errno 2] No such file or directory: 'C:\\Users\\luisg\\OneDrive\\Escritorio\\APP\\gz_services\\media\\firmas\\9ffb99fc-22d8-4b24-b065-75614febdfb1.png'
 2025-06-06 16:06:32,464 [WARNING] django.request - Bad Request: /liquidaciones/firmar/28/
 2025-06-06 16:06:32,465 [WARNING] django.server - "POST /liquidaciones/firmar/28/ HTTP/1.1" 400 186
 2025-06-06 16:31:45,137 [WARNING] django.server - "GET /static/css/styles.css HTTP/1.1" 404 1969
@@ -651,7 +651,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 192, in firmar_liquidacion
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 192, in firmar_liquidacion
     if not default_storage.exists(usuario.firma_digital.name):
            ^^^^^^^^^^^^^^^
 NameError: name 'default_storage' is not defined
@@ -665,7 +665,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 192, in firmar_liquidacion
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 192, in firmar_liquidacion
     if not default_storage.exists(usuario.firma_digital.name):
            ^^^^^^^^^^^^^^^
 NameError: name 'default_storage' is not defined
@@ -702,7 +702,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     montos = sorted(set(l.monto for l in liquidaciones))
 TypeError: '<' not supported between instances of 'NoneType' and 'decimal.Decimal'
 2025-06-06 17:33:00,025 [ERROR] django.server - "GET /liquidaciones/admin/ HTTP/1.1" 500 75333
@@ -715,7 +715,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     montos = sorted(set(l.monto for l in liquidaciones))
 TypeError: '<' not supported between instances of 'NoneType' and 'decimal.Decimal'
 2025-06-06 17:41:22,615 [ERROR] django.server - "GET /liquidaciones/admin/ HTTP/1.1" 500 74929
@@ -729,7 +729,7 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 55, in admin_lista_liquidaciones
     montos = sorted(set(l.monto for l in liquidaciones))
 TypeError: '<' not supported between instances of 'NoneType' and 'decimal.Decimal'
 2025-06-06 17:41:40,659 [ERROR] django.server - "GET /liquidaciones/admin/ HTTP/1.1" 500 74929
@@ -751,9 +751,9 @@ Traceback (most recent call last):
     response = wrapped_callback(request, *callback_args, **callback_kwargs)
   File "C:\Users\luisg\AppData\Local\Programs\Python\Python313\Lib\site-packages\django\contrib\auth\decorators.py", line 59, in _view_wrapper
     return view_func(request, *args, **kwargs)
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\views.py", line 515, in crear_liquidacion
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\views.py", line 515, in crear_liquidacion
     form = LiquidacionForm()
-  File "C:\Users\luisg\OneDrive\Escritorio\APP\mv_construcciones\liquidaciones\forms.py", line 74, in __init__
+  File "C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\liquidaciones\forms.py", line 74, in __init__
     self.fields['monto'].required = True
     ^^^^^^^^^^^
 AttributeError: 'LiquidacionForm' object has no attribute 'fields'

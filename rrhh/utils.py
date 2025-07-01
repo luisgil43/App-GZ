@@ -1,3 +1,5 @@
+from .models import Feriado
+from datetime import timedelta
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 import io
 import os
@@ -147,7 +149,7 @@ def generar_pdf_solicitud_vacaciones(solicitud):
     elements.append(
         Paragraph("FORMULARIO SOLICITUD DE VACACIONES LEGALES", titulo_style))
     elements.append(
-        Paragraph("INGENIERÍA Y CONSTRUCCIÓN MV LIMITADA", subtitulo_style))
+        Paragraph("GZ SERVICES AND BUSINESS SPA", subtitulo_style))
 
     # Datos principales
     datos = [
@@ -235,7 +237,7 @@ def generar_ficha_ingreso_pdf(ficha):
     elements.append(
         Paragraph("FICHA DE INGRESO DE PERSONAL NUEVO", titulo_style))
     elements.append(
-        Paragraph("INGENIERÍA Y CONSTRUCCIÓN MV LIMITADA", subtitulo_style))
+        Paragraph("GZ SERVICES AND BUSINESS SPA", subtitulo_style))
 
     datos = [
 
@@ -441,7 +443,7 @@ def generar_pdf_solicitud_adelanto(solicitud):
 
     elements = [
         Paragraph("FORMULARIO SOLICITUD DE ADELANTO", titulo_style),
-        Paragraph("INGENIERÍA Y CONSTRUCCIÓN MV LIMITADA", subtitulo_style)
+        Paragraph("GZ SERVICES AND BUSINESS SPA", subtitulo_style)
     ]
 
     datos = [
@@ -502,3 +504,19 @@ def generar_pdf_solicitud_adelanto(solicitud):
 
     solicitud.planilla_pdf.save(nombre_archivo, content, save=True)
     print("✅ Planilla de adelanto guardada:", nombre_archivo)
+
+
+def calcular_dias_habiles(inicio, fin):
+    if not inicio or not fin:
+        return 0
+
+    feriados = set(Feriado.objects.values_list('fecha', flat=True))
+    dias_habiles = 0
+    dia_actual = inicio
+
+    while dia_actual <= fin:
+        if dia_actual.weekday() < 5 and dia_actual not in feriados:
+            dias_habiles += 1
+        dia_actual += timedelta(days=1)
+
+    return dias_habiles

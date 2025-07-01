@@ -1,9 +1,10 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
-    <title>Iniciar Sesión - ADMINISTRACIÓN MV</title>
+    <title>Iniciar Sesión - ADMINISTRACIÓN GZ</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <style>
@@ -26,24 +27,27 @@
             background-color: white;
             padding: 2rem;
             border-radius: 12px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
             width: 100%;
             max-width: 400px;
             text-align: center;
         }
 
-     .login-container img {
-    max-width: 102%;
-    height: auto;
-    margin-bottom: 2px;  /* Antes: 10px */
-}
+        .login-container img {
+            max-width: 102%;
+            height: auto;
+            margin-bottom: 2px;
+            /* Antes: 10px */
+        }
 
-.login-container h2 {
-    margin-top: 0px;     /* Agregado */
-    margin-bottom: 12px; /* Puedes ajustar según tu gusto */
-    color: #2a2a2a;
-    font-weight: 700;
-}
+        .login-container h2 {
+            margin-top: 0px;
+            /* Agregado */
+            margin-bottom: 12px;
+            /* Puedes ajustar según tu gusto */
+            color: #2a2a2a;
+            font-weight: 700;
+        }
 
         .errorlist {
             color: red;
@@ -78,7 +82,8 @@
         button {
             width: 100%;
             padding: 12px;
-            background-color: #1e73be; /* Azul corporativo */
+            background-color: #1e73be;
+            /* Azul corporativo */
             color: white;
             border: none;
             border-radius: 8px;
@@ -123,29 +128,30 @@
         }
     </style>
 </head>
+
 <body>
     <div class="login-container">
-        <img src="{% static 'images/logo.png' %}" alt="Logo MV Construcciones">
-        <h2>ADMINISTRACIÓN MV INGENIERÍA & CONSTRUCCIÓN</h2>
+        <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+        <h2>ADMINISTRACIÓN GZ SERVICES AND BUSINESS</h2>
 
-     {% if form.non_field_errors %}
-    <ul class="errorlist">
-        {% for error in form.non_field_errors %}
+        {% if form.non_field_errors %}
+        <ul class="errorlist">
+            {% for error in form.non_field_errors %}
             <li>{{ error }}</li>
-        {% endfor %}
-    </ul>
-{% endif %}
+            {% endfor %}
+        </ul>
+        {% endif %}
 
         <form method="post">
             {% csrf_token %}
             <p>
-    <label for="{{ form.username.id_for_label }}">Nombre de usuario:</label>
-    {{ form.username }}
-</p>
-<p>
-    <label for="{{ form.password.id_for_label }}">Contraseña:</label>
-    {{ form.password }}
-</p>
+                <label for="{{ form.username.id_for_label }}">Nombre de usuario:</label>
+                {{ form.username }}
+            </p>
+            <p>
+                <label for="{{ form.password.id_for_label }}">Contraseña:</label>
+                {{ form.password }}
+            </p>
             <button type="submit">Iniciar sesión</button>
         </form>
 
@@ -154,4 +160,5 @@
         </div>
     </div>
 </body>
+
 </html>
