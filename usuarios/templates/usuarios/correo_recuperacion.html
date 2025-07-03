@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .boton {
+      display: inline-block;
+      padding: 12px 24px;
+      background-color: #059669;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .boton:hover {
+      background-color: #047857;
+    }
+    .contenedor {
+      max-width: 600px;
+      margin: auto;
+      background-color: #ffffff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .footer {
+      font-size: 12px;
+      color: #888;
+      margin-top: 40px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body style="background-color: #f4f6f8; padding: 20px;">
+  <div class="contenedor">
+    <img src="https://res.cloudinary.com/diamfsyzn/image/upload/v1717798091/media/logo.png" alt="Logo Planix" style="max-width: 180px; margin-bottom: 20px;">
+    <h2>Hola {{ usuario.get_full_name|default:usuario.username }},</h2>
+    <p>Recibimos una solicitud para restablecer tu contraseña en la plataforma de <strong>GZ Services and Business</strong>.</p>
+    <p>Haz clic en el siguiente botón para crear una nueva contraseña:</p>
+
+    <a href="{{ reset_url }}" class="boton" target="_blank">Crear nueva contraseña</a>
+
+    <p style="margin-top: 30px;">Si tú no solicitaste esto, puedes ignorar este mensaje.</p>
+
+    <div class="footer">
+      Enviado automáticamente por el sistema Planix. No responder a este correo.
+    </div>
+  </div>
+</body>
+</html>

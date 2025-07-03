@@ -1,0 +1,52 @@
+{% extends "dashboard/base.html" %}
+{% load static %}
+
+{% block title %}Crear nueva contraseña{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-white p-6 rounded-xl shadow-lg mt-10">
+
+  <h2 class="text-xl font-bold text-center mb-4 text-gray-800">Crear nueva contraseña</h2>
+
+  <p class="text-sm text-gray-600 text-center mb-6">
+    Escribe una nueva contraseña para tu cuenta.
+  </p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 p-3 rounded-xl text-sm font-medium 
+        {% if message.tags == 'error' %}
+          bg-red-100 text-red-700
+        {% elif message.tags == 'success' %}
+          bg-green-100 text-green-700
+        {% else %}
+          bg-blue-100 text-blue-700
+        {% endif %}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Nueva contraseña:</label>
+      <input type="password" name="nueva" required minlength="8"
+             class="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+             placeholder="••••••••">
+    </div>
+
+    <div>
+      <label class="block text-gray-700 font-medium mb-1">Confirmar contraseña:</label>
+      <input type="password" name="confirmar" required minlength="8"
+             class="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+             placeholder="••••••••">
+    </div>
+
+    <button type="submit"
+            class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-xl transition">
+      Guardar nueva contraseña
+    </button>
+  </form>
+</div>
+{% endblock %}
