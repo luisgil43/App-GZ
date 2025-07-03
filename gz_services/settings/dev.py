@@ -3,7 +3,7 @@ import os
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '172.20.10.2', '192.168.1.82']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '172.20.10.2', '192.168.1.83']
 
 # Opcional: permite mostrar errores detallados en el navegador
 INTERNAL_IPS = ['127.0.0.1']
