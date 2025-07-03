@@ -12,7 +12,9 @@
     {% csrf_token %}
     <div class="mb-6">
       <label class="block text-sm font-medium text-gray-700 mb-2">Firma:</label>
-      <canvas id="canvas" width="400" height="150" class="border border-gray-300 rounded-md shadow-sm bg-white"></canvas>
+      <div class="w-full border border-gray-300 rounded-md bg-white overflow-hidden">
+        <canvas id="canvas" class="w-full h-[150px] touch-none"></canvas>
+      </div>
     </div>
 
     <input type="hidden" name="firma_digital" id="firma_digital">
@@ -30,9 +32,23 @@
 
 <script>
   const canvas = document.getElementById('canvas');
+  const firmaInput = document.getElementById('firma_digital');
   const ctx = canvas.getContext('2d');
   let dibujando = false;
 
+  // Ajusta el ancho del canvas al contenedor
+  function ajustarCanvas() {
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = 150;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+  }
+
+  window.addEventListener('resize', ajustarCanvas);
+  window.addEventListener('load', ajustarCanvas);
+
+  // Eventos para mouse
   canvas.addEventListener('mousedown', e => {
     dibujando = true;
     ctx.beginPath();
@@ -46,17 +62,36 @@
     }
   });
 
-  canvas.addEventListener('mouseup', () => {
-    dibujando = false;
-  });
+  canvas.addEventListener('mouseup', () => dibujando = false);
+  canvas.addEventListener('mouseleave', () => dibujando = false);
+
+  // Eventos para pantallas táctiles
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.beginPath();
+    ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    dibujando = true;
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!dibujando) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    ctx.stroke();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => dibujando = false);
 
   function limpiarFirma() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
   function guardarFirma() {
-    const dataURL = canvas.toDataURL('image/png');
-    document.getElementById('firma_digital').value = dataURL;
+    firmaInput.value = canvas.toDataURL('image/png');
   }
 </script>
 {% endblock %}

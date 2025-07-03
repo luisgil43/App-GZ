@@ -8,26 +8,30 @@
     Registrar Firma Digital
   </h2>
 
-
   <!-- Canvas -->
-  <div class="overflow-x-auto">
-    <canvas id="canvas" width="400" height="150" class="w-full max-w-xs md:max-w-md border border-gray-300 rounded"></canvas>
+  <div class="mb-6">
+    <label class="block text-sm font-medium text-gray-700 mb-2">Firma:</label>
+    <div class="w-full border border-gray-300 rounded-md bg-white overflow-hidden">
+      <canvas id="canvas" class="w-full h-[150px] touch-none"></canvas>
+    </div>
   </div>
 
-  <!-- Botón limpiar -->
-  <button type="button" onclick="clearCanvas()" class="mt-2 text-blue-600 hover:underline">🧽 Limpiar</button>
-
   <!-- Formulario de firma -->
-  <form method="post" id="firmaForm" class="mt-4" action="?next={{ request.GET.next|urlencode }}">
+  <form method="post" id="firmaForm" action="?next={{ request.GET.next|urlencode }}">
     {% csrf_token %}
     <input type="hidden" name="firma_digital" id="firmaInput">
-    <button type="submit" class="mt-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-      💾 Guardar Firma
-    </button>
+    <div class="flex gap-4">
+      <button type="submit" onclick="guardarFirma()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow">
+        💾 Guardar Firma
+      </button>
+      <button type="button" onclick="limpiarFirma()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg shadow">
+        🧽 Limpiar
+      </button>
+    </div>
   </form>
 
   <!-- Formulario de eliminación -->
-  <form method="post" action="" class="mt-3">
+  <form method="post" action="" class="mt-4">
     {% csrf_token %}
     <button type="submit" name="eliminar_firma" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
       🗑️ Eliminar Firma
@@ -45,101 +49,68 @@
   </div>
 </div>
 
-<!-- Script -->
+<!-- Script mejorado -->
 <script>
   const canvas = document.getElementById('canvas');
   const ctx = canvas.getContext('2d');
-  let painting = false;
-  let hasDrawn = false;
+  const firmaInput = document.getElementById('firmaInput');
+  let dibujando = false;
 
-  function resizeCanvas() {
-    const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    const width = canvas.offsetWidth;
-    const height = canvas.offsetHeight;
-
-    canvas.width = width * ratio;
-    canvas.height = height * ratio;
-    canvas.style.width = width + "px";
-    canvas.style.height = height + "px";
-    ctx.scale(ratio, ratio);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
-
-  window.addEventListener('load', resizeCanvas);
-
-  function startPosition(e) {
-    painting = true;
-    draw(e);
-  }
-
-  function endPosition() {
-    painting = false;
-    ctx.beginPath();
-  }
-
-  function draw(e) {
-    if (!painting) return;
-    hasDrawn = true;
-
+  function ajustarCanvas() {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    canvas.width = rect.width;
+    canvas.height = 150;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+  }
 
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#000000';
+  window.addEventListener('resize', ajustarCanvas);
+  window.addEventListener('load', ajustarCanvas);
 
-    ctx.lineTo(x, y);
-    ctx.stroke();
+  // Mouse
+  canvas.addEventListener('mousedown', e => {
+    dibujando = true;
     ctx.beginPath();
-    ctx.moveTo(x, y);
+    ctx.moveTo(e.offsetX, e.offsetY);
+  });
 
-    e.preventDefault();
-  }
-
-  function clearCanvas() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    hasDrawn = false;
-  }
-
-  document.getElementById('firmaForm').addEventListener('submit', function (e) {
-    if (!hasDrawn) {
-      alert("Por favor dibuja tu firma antes de guardar.");
-      e.preventDefault();
-      return;
-    }
-
-    try {
-      const dataURL = canvas.toDataURL('image/png');
-      document.getElementById('firmaInput').value = dataURL;
-    } catch (error) {
-      alert("Error al procesar la firma: " + error);
-      e.preventDefault();
+  canvas.addEventListener('mousemove', e => {
+    if (dibujando) {
+      ctx.lineTo(e.offsetX, e.offsetY);
+      ctx.stroke();
     }
   });
 
-  canvas.addEventListener('mousedown', startPosition);
-  canvas.addEventListener('mouseup', endPosition);
-  canvas.addEventListener('mousemove', draw);
+  canvas.addEventListener('mouseup', () => dibujando = false);
+  canvas.addEventListener('mouseleave', () => dibujando = false);
 
-  canvas.addEventListener('touchstart', startPosition, { passive: false });
-  canvas.addEventListener('touchend', endPosition, { passive: false });
-  canvas.addEventListener('touchmove', draw, { passive: false });
-
-  document.addEventListener("touchstart", function (e) {
-    if (e.target.closest("canvas")) {
-      document.body.style.overflow = "hidden";
-    }
+  // Táctil
+  canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.beginPath();
+    ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    dibujando = true;
   }, { passive: false });
 
-  document.addEventListener("touchend", function (e) {
-    document.body.style.overflow = "";
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!dibujando) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    ctx.stroke();
   }, { passive: false });
+
+  canvas.addEventListener('touchend', () => dibujando = false);
+
+  function limpiarFirma() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function guardarFirma() {
+    firmaInput.value = canvas.toDataURL('image/png');
+  }
 </script>
 {% endblock %}
