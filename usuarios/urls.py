@@ -19,5 +19,8 @@ urlpatterns = [
     path('no-autorizado/', no_autorizado_view, name='no_autorizado'),
     path('firma-representante/subir/', views.subir_firma_representante,
          name='subir_firma_representante'),
+    path('recuperar/', views.recuperar_contraseña, name='recuperar_contraseña'),
+    path('reset/<int:usuario_id>/<str:token>/',
+         views.resetear_contraseña, name='resetear_contraseña'),
 
 ]
