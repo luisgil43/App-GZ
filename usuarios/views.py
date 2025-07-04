@@ -150,7 +150,8 @@ def resetear_contraseña(request, usuario_id, token):
         if nueva_contraseña != confirmar_contraseña:
             messages.error(request, "Las contraseñas no coinciden.")
         else:
-            usuario.password = make_password(nueva_contraseña)
+            # ✅ Aquí el cambio importante
+            usuario.set_password(nueva_contraseña)
             usuario.save()
             cache.delete(f"token_recuperacion_{usuario_id}")
             messages.success(
