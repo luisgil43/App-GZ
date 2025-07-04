@@ -144,8 +144,8 @@ def resetear_contraseña(request, usuario_id, token):
         return redirect('usuarios:recuperar_contraseña')
 
     if request.method == 'POST':
-        nueva_contraseña = request.POST.get('password1')
-        confirmar_contraseña = request.POST.get('password2')
+        nueva_contraseña = request.POST.get('nueva')
+        confirmar_contraseña = request.POST.get('confirmar')
 
         if nueva_contraseña != confirmar_contraseña:
             messages.error(request, "Las contraseñas no coinciden.")
