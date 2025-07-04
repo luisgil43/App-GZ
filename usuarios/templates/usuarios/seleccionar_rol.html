@@ -1,0 +1,12 @@
+{% extends "usuarios/base_publica.html" %}
+
+{% block content %}
+<div class="bg-white p-6 rounded-xl max-w-md mx-auto mt-20 shadow-md text-center">
+  <h2 class="text-xl font-bold mb-4 text-gray-800">¿Cómo deseas ingresar?</h2>
+  <form method="post">
+    {% csrf_token %}
+    <button name="opcion" value="usuario" class="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl">Entrar como Usuario</button>
+    <button name="opcion" value="admin" class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2 rounded-xl">Entrar como Administrador</button>
+  </form>
+</div>
+{% endblock %}

@@ -7,11 +7,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Cargar variables de entorno desde .env (solo en desarrollo)
-"""
-if os.environ.get("DJANGO_DEVELOPMENT") == "true":
-    load_dotenv()"""
-
 # Ruta base del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -37,7 +32,7 @@ LOGIN_URL = '/usuarios/login/'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/usuarios/login/'
 # Si usas login personalizado para admin
-ADMIN_LOGIN_URL = '/dashboard_admin/login/'  # opcional, para referencia
+# ADMIN_LOGIN_URL = '/dashboard_admin/login/'  # opcional, para referencia
 AUTH_USER_MODEL = 'usuarios.CustomUser'
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'clave-insegura')

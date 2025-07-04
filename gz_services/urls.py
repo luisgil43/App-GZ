@@ -10,7 +10,6 @@ from django.http import HttpResponse
 from django.views.generic.base import RedirectView
 from django.shortcuts import redirect
 from dashboard import views as dashboard_views
-from usuarios.views import UsuarioLoginView  # ✅ NUEVO IMPORT CORRECTO
 
 
 def health_check(request):
@@ -21,13 +20,9 @@ urlpatterns = [
     # Health check
     path('healthz', health_check),
 
-    # Login unificado con nueva vista de la app 'usuarios'
-    path('login/', UsuarioLoginView.as_view(), name='login'),
+
     path('logout/', LogoutView.as_view(next_page='/usuarios/login/'), name='logout'),
 
-    # Redirigir login admin a login unificado
-    path('admin/login/', lambda request: redirect('/login/'),
-         name='admin_login_redirect'),
 
     # Panel de administración personalizado
     path('dashboard_admin/', include(('dashboard_admin.urls',
@@ -61,6 +56,9 @@ urlpatterns = [
     # Contratos de trabajos
     path('rrhh/', include('rrhh.urls', namespace='rrhh')),
     path('admin/', admin.site.urls),
+    path('dashboard_admin/login/',
+         RedirectView.as_view(url='/usuarios/login/', permanent=False)),
+
 ]
 
 # Archivos estáticos y media (solo en DEBUG)

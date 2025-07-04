@@ -17,6 +17,7 @@ from django.utils import timezone
 from datetime import date
 import os
 import tempfile
+from django.contrib.auth import authenticate, login
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
@@ -104,7 +105,7 @@ def logout_view(request):
     logout(request)
     if user.is_superuser:  # o podrías usar `if user.rol == 'admin'` si agregas ese campo
         return redirect('/admin/login/')
-    return redirect('/usuarios/login/')
+    return redirect('usuarios:login')
 
 
 @login_required
@@ -145,3 +146,7 @@ def registrar_firma_usuario(request):
         'tecnico': user,
         'solo_lectura': False
     })
+
+
+def index(request):
+    return render(request, 'dashboard/index.html')

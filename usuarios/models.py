@@ -9,8 +9,7 @@ from django.core.exceptions import ImproperlyConfigured
 from datetime import timedelta, date
 from django.db.models import Sum
 from django.core.files.storage import default_storage
-# from decimal import Decimal
-# from rrhh.models import Feriado
+
 
 # ✅ Firma en Cloudinary
 
