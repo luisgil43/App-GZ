@@ -135,28 +135,3 @@ class CargaMasivaLiquidacionesForm(forms.Form):
                 "El mes debe ser un número válido entre 1 y 12.")
 
         return cleaned_data
-
-
-"""
-class CargaMasivaLiquidacionesForm(forms.Form):
-    mes = forms.CharField(label="Mes", max_length=20)
-    año = forms.IntegerField(label="Año")
-    archivos = forms.FileField(
-        label="Seleccionar archivos PDF",
-        required=True
-        # NO se especifica widget aquí para evitar errores
-    )
-
-    def clean(self):
-        cleaned_data = super().clean()
-        archivos = self.files.getlist('archivos')
-
-        if not archivos:
-            raise forms.ValidationError("Debes subir al menos un archivo.")
-
-        for archivo in archivos:
-            if not archivo.name.lower().endswith('.pdf'):
-                raise forms.ValidationError(
-                    f"El archivo '{archivo.name}' no es PDF.")
-        return cleaned_data
-"""

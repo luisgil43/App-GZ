@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}Planix{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #f4f6f8;
+      font-family: 'Segoe UI', sans-serif;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center px-4">
+  {% block content %}
+  {% endblock %}
+</body>
+</html>

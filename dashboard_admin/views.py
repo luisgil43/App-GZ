@@ -1,3 +1,4 @@
+from django.shortcuts import render
 from django.shortcuts import get_object_or_404, render, redirect
 from usuarios.models import CustomUser, Rol
 from django.contrib.auth import get_user_model
@@ -24,24 +25,24 @@ import re
 User = get_user_model()
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 def admin_dashboard_view(request):
     # Cargar datos para la plantilla principal del admin dashboard
     return render(request, 'dashboard_admin/base.html')
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 def logout_view(request):
     logout(request)
-    return redirect('dashboard_admin:login')
+    return redirect('usuarios:login')
 
 
-@staff_member_required(login_url='/dashboard_admin/login/')
+@staff_member_required(login_url='usuarios:login')
 def inicio_admin(request):
     return render(request, 'dashboard_admin/inicio_admin.html')
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'supervisor')
 def produccion_tecnico(request):
     produccion = ProduccionTecnico.objects.filter(tecnico__user=request.user)
@@ -50,7 +51,7 @@ def produccion_tecnico(request):
     })
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def grupos_view(request):
     if request.method == 'POST':
@@ -85,31 +86,7 @@ def grupos_view(request):
     return render(request, 'dashboard_admin/grupos.html', {'grupos': grupos})
 
 
-class UsuarioLoginView(LoginView):
-    template_name = 'dashboard_usuario/login.html'
-    authentication_form = AuthenticationForm
-
-    def form_valid(self, form):
-        user = form.get_user()
-
-        if user.is_staff:
-            # Si es staff, redirige directamente al panel admin
-            return redirect('dashboard_admin:index')
-
-        login(self.request, user)
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        # Redirige a `next` si es válido
-        redirect_to = self.request.GET.get('next')
-        if redirect_to and url_has_allowed_host_and_scheme(redirect_to, self.request.get_host()):
-            return redirect_to
-
-        # Fallback
-        return reverse_lazy('dashboard_usuario:home')
-
-
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def editar_usuario_view(request, user_id):
     usuario = get_object_or_404(User, id=user_id)
@@ -160,29 +137,7 @@ def editar_usuario_view(request, user_id):
     })
 
 
-class AdminLoginView(LoginView):
-    template_name = 'dashboard_admin/login.html'
-    authentication_form = AuthenticationForm
-
-    def form_valid(self, form):
-        user = form.get_user()
-
-        if not user.is_staff:
-            raise PermissionDenied(
-                "No tienes permiso para acceder al área de administración.")
-
-        login(self.request, user)
-        return super().form_valid(form)
-
-    def get_success_url(self):
-        redirect_to = self.request.GET.get('next')
-        if redirect_to and url_has_allowed_host_and_scheme(redirect_to, self.request.get_host()):
-            return redirect_to
-
-        return reverse_lazy('dashboard_admin:inicio_admin')
-
-
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def crear_usuario_view(request, identidad=None):
     grupos = Group.objects.all()
@@ -279,7 +234,7 @@ def crear_usuario_view(request, identidad=None):
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_usuarios(request):
     if request.method == "POST" and "delete_user" in request.POST:
@@ -310,7 +265,7 @@ def listar_usuarios(request):
     })
 
 
-@login_required(login_url='dashboard_admin:login')
+@login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def eliminar_usuario_view(request, user_id):
     usuario = get_object_or_404(User, id=user_id)
@@ -370,3 +325,7 @@ def eliminar_feriado(request, pk):
     messages.success(
         request, f'El feriado "{feriado.nombre}" fue eliminado con éxito.')
     return redirect('dashboard_admin:listar_feriados')
+
+
+def redirigir_a_login_unificado(request):
+    return redirect('usuarios:login')

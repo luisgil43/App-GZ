@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Correo enviado</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- Redirección a login después de 4 segundos -->
+  <meta http-equiv="refresh" content="4; URL={% url 'usuarios:login' %}">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-8 rounded-xl shadow-xl max-w-md w-full text-center">
+    
+    {% if messages %}
+      {% for message in messages %}
+        <div class="bg-green-100 border border-green-300 text-green-800 text-sm p-4 rounded mb-4">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <p class="text-gray-700">Serás redirigido automáticamente al inicio de sesión...</p>
+
+    <a href="{% url 'usuarios:login' %}" 
+       class="inline-block mt-6 bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+      Ir al login
+    </a>
+    
+  </div>
+</body>
+</html>

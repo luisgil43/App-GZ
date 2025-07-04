@@ -17,8 +17,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ObjectDoesNotExist
-# Asegúrate de que esta importación sea correcta
-# from django.db import models
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
@@ -27,30 +25,6 @@ from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
-
-
-class UsuarioLoginView(LoginView):
-    template_name = 'dashboard/login.html'
-    redirect_authenticated_user = True
-
-    def get_success_url(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return reverse_lazy('dashboard:inicio')
-        logout(self.request)
-        return reverse_lazy('usuarios:login')
-
-
-class AdminLoginView(LoginView):
-    template_name = 'dashboard_admin/login.html'
-    redirect_authenticated_user = True
-
-    def get_success_url(self):
-        user = self.request.user
-        if user.is_authenticated and user.is_staff:
-            return reverse_lazy('admin:index')
-        logout(self.request)
-        return reverse_lazy('usuarios:admin_login')
 
 
 def no_autorizado_view(request):
@@ -98,11 +72,14 @@ User = get_user_model()
 
 
 def recuperar_contraseña(request):
+    es_admin_param = request.GET.get('admin') == 'true'
+
     if request.method == 'POST':
         email = request.POST.get('email')
         usuario = User.objects.filter(email=email).first()
 
         if usuario:
+            es_admin = usuario.is_staff or usuario.is_superuser or es_admin_param
             token = get_random_string(64)
             cache.set(f"token_recuperacion_{usuario.id}", token, timeout=3600)
 
@@ -112,7 +89,6 @@ def recuperar_contraseña(request):
             ).replace("127.0.0.1:8000", "app-gz.onrender.com")
 
             asunto = 'Recuperación de contraseña - Plataforma GZ'
-
             text_content = f"""
 Hola {usuario.get_full_name() or usuario.username},
 
@@ -123,9 +99,6 @@ Haz clic en el siguiente enlace para crear una nueva:
 {reset_url}
 
 Si no solicitaste este correo, simplemente ignóralo.
-
-Saludos,
-Equipo Planix GZ
 """
 
             html_content = render_to_string('usuarios/correo_recuperacion.html', {
@@ -134,9 +107,6 @@ Equipo Planix GZ
             })
 
             try:
-                print(f"Preparando correo para: {email}")
-                print("Enlace de recuperación:", reset_url)
-
                 resultado = enviar_correo_manual(
                     destinatario=email,
                     asunto=asunto,
@@ -146,15 +116,15 @@ Equipo Planix GZ
 
                 if resultado:
                     messages.success(
-                        request, 'Te hemos enviado un correo con instrucciones.')
+                        request, 'Te hemos enviado un enlace a tu correo registrado para cambiar la clave.')
+
+                    return redirect(f"{reverse('usuarios:confirmacion_envio')}?es_admin={str(es_admin).lower()}")
                 else:
                     messages.error(
                         request, 'No se pudo enviar el correo. Intenta más tarde.')
 
             except Exception as e:
-                print(f"Error al enviar correo: {e}")
                 messages.error(request, f'Error al enviar correo: {str(e)}')
-
         else:
             messages.error(
                 request, 'No se encontró un usuario con ese correo.')
@@ -188,3 +158,33 @@ def resetear_contraseña(request, usuario_id, token):
             return redirect('usuarios:login')
 
     return render(request, 'usuarios/resetear_contraseña.html', {'usuario': usuario})
+
+
+def login_unificado(request):
+    form = AuthenticationForm(request, data=request.POST or None)
+
+    if request.method == 'POST':
+        if form.is_valid():
+            user = form.get_user()
+            login(request, user)
+
+            if user.rol == 'usuario':
+                return redirect('dashboard:index')
+            else:
+                return redirect('usuarios:seleccionar_rol')
+        else:
+            messages.error(request, "Credenciales inválidas.")
+
+    return render(request, 'usuarios/login.html', {'form': form})
+
+
+@login_required
+def seleccionar_rol(request):
+    if request.method == 'POST':
+        opcion = request.POST.get('opcion')
+        if opcion == 'usuario':
+            return redirect('dashboard:index')
+        else:
+            return redirect('dashboard_admin:index')
+
+    return render(request, 'usuarios/seleccionar_rol.html')
