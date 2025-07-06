@@ -1,3 +1,5 @@
+from django.shortcuts import get_object_or_404, redirect
+from .models import Notificacion
 from gz_services.utils.email_utils import enviar_correo_manual
 from email.utils import formataddr
 from django.core.mail import EmailMultiAlternatives
@@ -189,3 +191,24 @@ def seleccionar_rol(request):
             return redirect('dashboard_admin:index')
 
     return render(request, 'usuarios/seleccionar_rol.html')
+
+
+@login_required
+def marcar_notificacion_como_leida(request, pk):
+    notificacion = get_object_or_404(Notificacion, pk=pk, usuario=request.user)
+    notificacion.leido = True
+    notificacion.save()
+
+    if notificacion.url:
+        return redirect(notificacion.url)
+
+    # Todos los roles de administración redirigen a dashboard_admin
+    if request.user.is_superuser or request.user.roles.filter(
+        nombre__in=[
+            'admin', 'rrhh', 'pm', 'prevencion', 'logistica', 'flota', 'subcontrato', 'facturacion'
+        ]
+    ).exists():
+        return redirect('dashboard_admin:inicio_admin')
+
+    # Técnicos normales
+    return redirect('dashboard:inicio_tecnico')

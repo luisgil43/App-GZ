@@ -81,8 +81,7 @@ urlpatterns = [
     # views.firmar_ficha_ingreso_trabajador, name='firmar_ficha_trabajador'),
     path('fichas/<int:ficha_id>/rechazar-pm/',
          views.rechazar_ficha_ingreso_pm, name='rechazar_ficha_pm'),
-    path('fichas/<int:ficha_id>/revisar-pm/',
-         views.revisar_ficha_pm, name='revisar_ficha_pm'),
+    # path('fichas/<int:ficha_id>/revisar-pm/', views.revisar_ficha_pm, name='revisar_ficha_pm'),
     path('fichas/<int:ficha_id>/firmar-pm/',
          views.firmar_ficha_pm, name='firmar_ficha_pm'),
     path('fichas/<int:ficha_id>/rechazar-pm/',
@@ -132,5 +131,6 @@ urlpatterns = [
          views.rechazar_adelanto_rrhh, name='rechazar_adelanto_rrhh'),
     path('adelanto/activar-edicion/<int:id>/',
          views.activar_edicion_rrhh, name='activar_edicion_rrhh'),
+
 
 ]

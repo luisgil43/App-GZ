@@ -1,3 +1,5 @@
+from usuarios.models import CustomUser  # Asegúrate de importar esto
+from usuarios.utils import crear_notificacion
 from reportlab.lib.pagesizes import A4
 from rrhh.forms import AprobacionAdelantoForm
 from collections import Counter
@@ -161,6 +163,14 @@ def crear_contrato(request):
             contrato.archivo = archivo
             contrato.save()
 
+            crear_notificacion(
+                usuario=contrato.tecnico,
+                mensaje='Se ha generado un nuevo contrato de trabajo. Puedes revisarlo y firmarlo en la plataforma.',
+                # Ajusta la URL si es distinta
+                url=reverse('rrhh:mis_contratos'),
+                tipo='info'
+            )
+
             messages.success(request, '✅ Contrato creado correctamente.')
             return redirect('rrhh:contratos_trabajo')
         else:
@@ -290,11 +300,29 @@ def crear_ficha_ingreso(request):
                     identidad__icontains=rut_limpio)
                 ficha.usuario = usuario
             except CustomUser.DoesNotExist:
+                ficha.usuario = None
                 messages.warning(
-                    request, "⚠️ No se encontró ningún usuario con el RUT ingresado. Se guardará sin asignación de usuario.")
+                    request, "⚠️ No se encontró ningún usuario con el RUT ingresado. Se guardará sin asignación de usuario."
+                )
 
             ficha.save()
             generar_ficha_ingreso_pdf(ficha)
+
+            # Notificar al PM solo si hay usuario asignado
+            if ficha.usuario:
+                nombre_usuario = ficha.usuario.get_full_name()
+            else:
+                nombre_usuario = "un trabajador sin asignación"
+
+            pms = CustomUser.objects.filter(roles__nombre='pm', is_active=True)
+            for pm in pms:
+                crear_notificacion(
+                    usuario=pm,
+                    mensaje=f"Debes revisar la nueva ficha de ingreso de {nombre_usuario}",
+                    url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                    tipo='info'
+                )
+
             messages.success(
                 request, "Ficha de ingreso guardada exitosamente.")
             return redirect('rrhh:listar_fichas_ingreso_admin')
@@ -310,24 +338,34 @@ def crear_ficha_ingreso(request):
 @rol_requerido('admin', 'pm', 'rrhh')
 def editar_ficha_ingreso(request, pk):
     ficha = get_object_or_404(FichaIngreso, pk=pk)
+    estado_anterior = ficha.estado  # 👈 capturamos el estado antes de guardar
 
     if request.method == 'POST':
         form = FichaIngresoForm(request.POST, request.FILES, instance=ficha)
         if form.is_valid():
             ficha = form.save(commit=False)
+            ficha_modificada = False
 
-            # Si la ficha ya estaba firmada o rechazada, al editarla se reinicia
+            # Si estaba firmada o rechazada, se reinicia
             if ficha.estado in ['rechazada_pm', 'rechazada_usuario', 'aprobada']:
                 ficha.estado = 'pendiente_pm'
                 ficha.firma_rrhh = None
                 ficha.firma_pm = None
                 ficha.firma_trabajador = None
-                ficha.pm = None  # para que se asigne nuevamente el nuevo aprobador
+                ficha_modificada = True
 
             ficha.save()
-
-            # Regenerar el PDF limpio sin firmas
             generar_ficha_ingreso_pdf(ficha)
+
+            # 🔔 Notificar al PM si corresponde
+            if ficha.pm:
+                print("🔔 Enviando notificación al PM...")
+                crear_notificacion(
+                    usuario=ficha.pm,
+                    mensaje=f"La ficha de ingreso de {ficha.usuario.get_full_name()} ha sido modificada y requiere tu revisión.",
+                    url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                    tipo='info'
+                )
 
             messages.success(
                 request, "Ficha actualizada correctamente y reiniciada para aprobación.")
@@ -357,11 +395,19 @@ def rechazar_ficha_ingreso_pm(request, ficha_id):
         ficha.motivo_rechazo_pm = motivo
         ficha.save()
 
+        # 🔔 Notificar a RRHH (quien creó la ficha)
+        if ficha.creado_por:
+            crear_notificacion(
+                usuario=ficha.creado_por,
+                mensaje=f"La ficha de ingreso para {ficha.usuario.get_full_name()} fue rechazada por el PM. Motivo: {motivo}",
+                url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                tipo='warning'
+            )
+
         messages.warning(
             request, "❌ Has rechazado la ficha correctamente. RRHH ha sido notificado.")
         return redirect('rrhh:listar_fichas_ingreso_admin')
 
-    # Si no es POST, redirecciona sin acción
     return redirect('rrhh:listar_fichas_ingreso_admin')
 
 
@@ -383,8 +429,27 @@ def aprobar_ficha_ingreso_trabajador(request, ficha_id):
     ficha.estado = 'completada'
     ficha.save()
 
-    # Reemplaza el PDF con las tres firmas insertadas
+    # ✅ Generar nuevo PDF con las tres firmas
     generar_ficha_ingreso_pdf(ficha)
+
+    # 🔔 Notificar a RRHH
+    rrhh_usuarios = CustomUser.objects.filter(roles__nombre='rrhh')
+    for rrhh in rrhh_usuarios:
+        crear_notificacion(
+            usuario=rrhh,
+            mensaje=f"El trabajador {request.user.get_full_name()} ha firmado su ficha de ingreso.",
+            url=reverse('rrhh:listar_fichas_ingreso_admin', args=[ficha.id]),
+            tipo='success'
+        )
+
+    # 🔔 Notificar al PM asignado
+    if ficha.pm:
+        crear_notificacion(
+            usuario=ficha.pm,
+            mensaje=f"{request.user.get_full_name()} ha firmado su ficha de ingreso.",
+            url=reverse('rrhh:revisar_ficha_pm', args=[ficha.id]),
+            tipo='info'
+        )
 
     messages.success(request, "✅ Has aprobado y firmado tu ficha de ingreso.")
     return redirect('dashboard:mis_fichas_ingreso')
@@ -407,6 +472,19 @@ def rechazar_ficha_ingreso_trabajador(request, ficha_id):
         ficha.motivo_rechazo_usuario = motivo
         ficha.save()
 
+        # 🔔 Notificar a RRHH
+        rrhh_usuarios = CustomUser.objects.filter(
+            is_active=True, is_staff=True)
+
+        for rrhh in rrhh_usuarios:
+            crear_notificacion(
+                usuario=rrhh,
+                mensaje=f"El trabajador {request.user.get_full_name()} ha rechazado su ficha de ingreso.",
+                # ✅ Sin argumentos
+                url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                tipo='warning'
+            )
+
         messages.warning(
             request, "❌ Has rechazado la ficha correctamente. RRHH ha sido notificado.")
         return redirect('rrhh:mis_fichas_ingreso')
@@ -422,16 +500,41 @@ def revisar_ficha_pm(request, ficha_id):
         accion = request.POST.get('accion')
 
         if accion == 'aprobar':
-            ficha.estado = 'pendiente'  # pasa a validación del trabajador
+            ficha.estado = 'pendiente_usuario'  # ahora espera la aprobación del trabajador
             ficha.save()
+
+            # 🔔 Notificar al trabajador
+            if ficha.usuario:
+                crear_notificacion(
+                    usuario=ficha.usuario,
+                    mensaje="Tu ficha de ingreso ha sido aprobada por el PM. Ahora debes revisarla y firmarla.",
+                    url=reverse('rrhh:listar_fichas_ingreso_usuario'),
+                    tipo='info'
+                )
+
             messages.success(
                 request, "Ficha aprobada y enviada al trabajador para su validación.")
+
         elif accion == 'rechazar':
-            ficha.estado = 'rechazada'
+            ficha.estado = 'rechazada_pm'
             ficha.save()
+
+            # 🔔 Notificar a RRHH
+            rrhh_usuarios = CustomUser.objects.filter(
+                rol='rrhh')  # o usa es_rrhh=True
+            for rrhh in rrhh_usuarios:
+                crear_notificacion(
+                    usuario=rrhh,
+                    mensaje=f"La ficha de {ficha.usuario.get_full_name()} fue rechazada por el PM.",
+                    # Ajusta si tienes detalle de ficha
+                    url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                    tipo='warning'
+                )
+
             messages.warning(
                 request, "Ficha rechazada. Recursos Humanos ha sido notificado.")
-        return redirect('rrhh:listar_fichas_pm')  # o a donde desees redirigir
+
+        return redirect('rrhh:listar_fichas_ingreso_admin')
 
     return render(request, 'rrhh/revision_ficha_pm.html', {
         'ficha': ficha
@@ -473,6 +576,15 @@ def firmar_ficha_pm(request, ficha_id):
     ficha.motivo_rechazo = None  # Limpiar rechazo anterior si lo hubo
     ficha.save()
 
+    # 🔔 Notificar al trabajador que debe revisar y firmar
+    if ficha.usuario:
+        crear_notificacion(
+            usuario=ficha.usuario,
+            mensaje="Tu ficha de ingreso ha sido firmada por el PM. Revisa y firma para completar el proceso.",
+            url=reverse('rrhh:mis_fichas_ingreso'),
+            tipo='info'
+        )
+
     messages.success(
         request, "✅ Ficha firmada correctamente. Ahora debe revisarla el trabajador.")
     return redirect('rrhh:listar_fichas_ingreso_admin')
@@ -504,7 +616,6 @@ def firmar_ficha_ingreso(request, ficha_id):
         for e in errores:
             messages.error(request, e)
 
-        # Reenviar fichas a la misma plantilla con errores
         fichas = FichaIngreso.objects.filter(
             usuario=request.user).order_by('-id')
         return render(request, 'rrhh/listar_fichas_ingreso_usuario.html', {'fichas': fichas})
@@ -521,6 +632,16 @@ def firmar_ficha_ingreso(request, ficha_id):
 
             ficha.estado = 'aprobada'
             ficha.save()
+
+            # 🔔 Notificar a RRHH que el trabajador firmó
+            rrhh_usuarios = CustomUser.objects.filter(roles__nombre='rrhh')
+            for rrhh in rrhh_usuarios:
+                crear_notificacion(
+                    usuario=rrhh,
+                    mensaje=f"La ficha de ingreso de {request.user.get_full_name()} ha sido firmada por el trabajador.",
+                    url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                    tipo='info'
+                )
 
             messages.success(request, "✅ Ficha firmada correctamente.")
         except Exception as e:
@@ -540,11 +661,22 @@ def rechazar_ficha_ingreso(request, ficha_id):
     if ficha.firma_pm and not ficha.firma_trabajador:
         ficha.estado = 'rechazada_usuario'
         ficha.save()
+
+        # 🔔 Notificar a RRHH
+        rrhh_usuarios = CustomUser.objects.filter(roles__nombre='rrhh')
+        for rrhh in rrhh_usuarios:
+            crear_notificacion(
+                usuario=rrhh,
+                mensaje=f"La ficha de ingreso de {request.user.get_full_name()} fue rechazada por el trabajador.",
+                url=reverse('rrhh:listar_fichas_ingreso_admin'),
+                tipo='warning'
+            )
+
         messages.warning(
-            request, "Has rechazado la ficha. Será revisada nuevamente por RRHH.")
+            request, "❌ Has rechazado la ficha. RRHH ha sido notificado.")
     else:
         messages.error(
-            request, "No puedes rechazar esta ficha en su estado actual.")
+            request, "⚠️ No puedes rechazar esta ficha en su estado actual.")
 
     return redirect('rrhh:listar_fichas_ingreso_usuario')
 
@@ -739,6 +871,26 @@ def mis_vacaciones(request):
             solicitud.dias_solicitados = form.cleaned_data.get(
                 'dias_solicitados', 0)
             solicitud.save()
+
+            # Notificar a todos los supervisores si no hay uno asignado
+            if usuario.supervisor:
+                crear_notificacion(
+                    usuario=usuario.supervisor,
+                    mensaje=f"{usuario.get_full_name()} ha solicitado vacaciones.",
+                    url=reverse('rrhh:revisar_supervisor'),
+                    tipo='info'
+                )
+            else:
+                supervisores = CustomUser.objects.filter(
+                    roles__nombre='supervisor').distinct()
+                for supervisor in supervisores:
+                    crear_notificacion(
+                        usuario=supervisor,
+                        mensaje=f"{usuario.get_full_name()} ha solicitado vacaciones.",
+                        url=reverse('rrhh:revisar_supervisor'),
+                        tipo='info'
+                    )
+
             messages.success(request, "Solicitud enviada correctamente.")
             return redirect('rrhh:mis_vacaciones')
 
@@ -967,7 +1119,8 @@ def revisar_solicitud(request, solicitud_id):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')  # ✅ RRHH añadido
+# ✅ Solo admin general y RRHH pueden acceder
+@rol_requerido('admin', 'rrhh')
 def revisar_todas_vacaciones(request):
     if not request.user.es_admin_general and not request.user.es_rrhh:
         return HttpResponseForbidden("No tienes permiso para ver esta vista.")
@@ -1001,6 +1154,7 @@ def rechazar_solicitud_vacaciones(request):
         else:
             return HttpResponseForbidden("Rol no válido para esta acción.")
 
+        # Definir estatus de rechazo
         estatus_rechazo = {
             'supervisor': 'rechazada_supervisor',
             'pm': 'rechazada_pm',
@@ -1011,7 +1165,7 @@ def rechazar_solicitud_vacaciones(request):
         solicitud.estatus = estatus_rechazo
         solicitud.observacion = observacion
 
-        # ✅ Asignar quién rechazó la solicitud según el rol
+        # Registrar quién rechazó
         if rol_usuario == 'supervisor':
             solicitud.aprobado_por_supervisor = request.user
         elif rol_usuario == 'pm':
@@ -1020,6 +1174,14 @@ def rechazar_solicitud_vacaciones(request):
             solicitud.aprobado_por_rrhh = request.user
 
         solicitud.save()
+
+        # 🔔 Notificar al trabajador del rechazo
+        crear_notificacion(
+            usuario=solicitud.usuario,
+            mensaje=f"❌ Tu solicitud de vacaciones fue rechazada por {rol_usuario.upper()}. Motivo: {observacion}",
+            url=reverse('rrhh:mis_vacaciones'),
+            tipo='error'
+        )
 
         messages.success(
             request, f"Solicitud rechazada por {rol_usuario.upper()}.")
@@ -1039,27 +1201,83 @@ def rechazar_solicitud_vacaciones(request):
 @rol_requerido('supervisor', 'admin')
 def aprobar_vacacion_supervisor(request, pk):
     solicitud = get_object_or_404(SolicitudVacaciones, pk=pk)
+
     if solicitud.estatus == 'pendiente_supervisor':
         solicitud.estatus = 'pendiente_pm'
-        solicitud.aprobado_por_supervisor = request.user  # Guarda quién aprobó
+        solicitud.aprobado_por_supervisor = request.user
         solicitud.save()
+
+        # 🔔 Notificar al PM (si hay uno asignado, o a todos los PM)
+        mensaje_pm = f"{solicitud.usuario.get_full_name()} realizó una solicitud de vacaciones la cual está pendiente por ti."
+        url_pm = reverse('rrhh:revisar_pm')
+
+        if solicitud.usuario.pm:
+            crear_notificacion(
+                usuario=solicitud.usuario.pm,
+                mensaje=mensaje_pm,
+                url=url_pm,
+                tipo='info'
+            )
+        else:
+            pms = CustomUser.objects.filter(roles__nombre='pm').distinct()
+            for pm in pms:
+                crear_notificacion(
+                    usuario=pm,
+                    mensaje=mensaje_pm,
+                    url=url_pm,
+                    tipo='info'
+                )
+
+        # 🔔 Notificar al trabajador que avanzó al siguiente paso
+        crear_notificacion(
+            usuario=solicitud.usuario,
+            mensaje="Tu solicitud de vacaciones fue aprobada por el Supervisor y está pendiente por aprobación del PM.",
+            url=reverse('rrhh:mis_vacaciones'),
+            tipo='success'
+        )
+
         messages.success(request, "Solicitud aprobada y enviada al PM.")
     else:
         messages.warning(
             request, "La solicitud no está pendiente para Supervisor.")
+
     return redirect('rrhh:revisar_supervisor')
 
 
 @rol_requerido('pm', 'admin')
 def aprobar_vacacion_pm(request, pk):
     solicitud = get_object_or_404(SolicitudVacaciones, pk=pk)
+
     if solicitud.estatus == 'pendiente_pm':
         solicitud.estatus = 'pendiente_rrhh'
-        solicitud.aprobado_por_pm = request.user  # Guarda quién aprobó
+        solicitud.aprobado_por_pm = request.user
         solicitud.save()
+
+        # 🔔 Notificar a todos los usuarios con rol 'rrhh'
+        mensaje_rrhh = f"{solicitud.usuario.get_full_name()} realizó una solicitud de vacaciones la cual está pendiente por ti."
+        url_rrhh = reverse('rrhh:revisar_rrhh')
+
+        rrhhs = CustomUser.objects.filter(roles__nombre='rrhh').distinct()
+        for rrhh in rrhhs:
+            crear_notificacion(
+                usuario=rrhh,
+                mensaje=mensaje_rrhh,
+                url=url_rrhh,
+                tipo='info'
+            )
+
+        # 🔔 Notificar al trabajador
+        crear_notificacion(
+            usuario=solicitud.usuario,
+            mensaje="Tu solicitud de vacaciones fue aprobada por el PM y está pendiente por RRHH.",
+            url=reverse('rrhh:mis_vacaciones'),
+            tipo='success'
+        )
+
         messages.success(request, "Solicitud aprobada y enviada a RRHH.")
     else:
         messages.warning(request, "La solicitud no está pendiente para PM.")
+
     return redirect('rrhh:revisar_pm')
 
 
@@ -1105,6 +1323,14 @@ def aprobar_vacacion_rrhh(request, pk):
         messages.warning(
             request, f"Solicitud aprobada, pero hubo un error al generar el documento PDF: {e}")
 
+    # 🔔 Notificar al trabajador
+    crear_notificacion(
+        usuario=trabajador,
+        mensaje="🎉 Tu solicitud de vacaciones fue aprobada por RRHH.",
+        url=reverse('rrhh:mis_vacaciones'),
+        tipo='success'
+    )
+
     return redirect('rrhh:revisar_rrhh')
 
 
@@ -1148,9 +1374,13 @@ def subir_documento_trabajador(request):
             fecha_emision = form.cleaned_data['fecha_emision']
             fecha_vencimiento = form.cleaned_data['fecha_vencimiento']
 
+            url = reverse('rrhh:mis_documentos')
+
             # Verificar si ya existe
             existente = DocumentoTrabajador.objects.filter(
-                trabajador=trabajador, tipo_documento=tipo).first()
+                trabajador=trabajador, tipo_documento=tipo
+            ).first()
+
             if existente:
                 # Reemplazar el archivo
                 existente.archivo = archivo
@@ -1159,9 +1389,21 @@ def subir_documento_trabajador(request):
                 existente.save()
                 messages.success(
                     request, '📄 Documento reemplazado correctamente.')
+
+                crear_notificacion(
+                    usuario=trabajador,
+                    mensaje=f"Se ha reemplazado tu documento '{tipo}'.",
+                    url=url
+                )
             else:
                 form.save()
                 messages.success(request, '📄 Documento subido correctamente.')
+
+                crear_notificacion(
+                    usuario=trabajador,
+                    mensaje=f"Se ha subido un nuevo documento '{tipo}' a tu perfil.",
+                    url=url
+                )
 
             return redirect('rrhh:listado_documentos')
     else:
@@ -1187,7 +1429,7 @@ def calcular_estado_documento(doc):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def listado_documentos_trabajador(request):
     filtro_nombre = request.GET.get('trabajador', '').strip()
     filtro_tipo = request.GET.get('tipo', '')
@@ -1251,7 +1493,7 @@ def listado_documentos_trabajador(request):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def crear_tipo_documento(request):
     tipo_id = request.GET.get('editar')
     tipo_a_editar = None
@@ -1280,7 +1522,7 @@ def crear_tipo_documento(request):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def reemplazar_documento(request, documento_id):
     documento = get_object_or_404(DocumentoTrabajador, pk=documento_id)
 
@@ -1320,7 +1562,7 @@ def reemplazar_documento(request, documento_id):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def exportar_documentos_excel(request):
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1391,7 +1633,7 @@ def mis_documentos(request):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def eliminar_documento(request, id):
     documento = get_object_or_404(DocumentoTrabajador, id=id)
 
@@ -1414,7 +1656,7 @@ def eliminar_documento(request, id):
 
 
 @staff_member_required
-@rol_requerido('admin', 'rrhh')
+@rol_requerido('admin', 'rrhh', 'pm')
 def eliminar_tipo_documento(request, pk):
     tipo = get_object_or_404(TipoDocumento, pk=pk)
 
@@ -1432,14 +1674,14 @@ def eliminar_tipo_documento(request, pk):
 
 
 @staff_member_required
-@rol_requerido('rrhh', 'admin')
+@rol_requerido('rrhh', 'admin', 'pm')
 def listar_firmas(request):
     usuarios = CustomUser.objects.all()
     return render(request, 'rrhh/listar_firmas.html', {'usuarios': usuarios})
 
 
 @staff_member_required
-@rol_requerido('rrhh', 'admin')
+@rol_requerido('rrhh', 'admin', 'pm')
 def eliminar_firma(request, user_id):
     user = get_object_or_404(CustomUser, id=user_id)
 

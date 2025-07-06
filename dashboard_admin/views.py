@@ -20,6 +20,7 @@ from django.core.exceptions import PermissionDenied
 from usuarios.models import CustomUser as User
 from usuarios.decoradores import rol_requerido
 import re
+from usuarios.models import Notificacion
 
 
 User = get_user_model()
@@ -37,9 +38,16 @@ def logout_view(request):
     return redirect('usuarios:login')
 
 
-@staff_member_required(login_url='usuarios:login')
 def inicio_admin(request):
-    return render(request, 'dashboard_admin/inicio_admin.html')
+    queryset = Notificacion.objects.filter(
+        usuario=request.user).order_by('leido', '-fecha')
+    notificaciones = queryset[:10]
+    no_leidas = queryset.filter(leido=False).count()
+
+    return render(request, 'dashboard_admin/inicio_admin.html', {
+        'notificaciones': notificaciones,
+        'notificaciones_no_leidas': no_leidas,
+    })
 
 
 @login_required(login_url='usuarios:login')
@@ -160,6 +168,23 @@ def crear_usuario_view(request, identidad=None):
         identidad_post = request.POST.get('identidad')
         roles_ids = request.POST.getlist('roles')
 
+        # Campos jerárquicos
+        def get_user_or_none(uid):
+            return CustomUser.objects.filter(id=uid).first() if uid else None
+
+        supervisor = get_user_or_none(request.POST.get('supervisor'))
+        pm = get_user_or_none(request.POST.get('pm'))
+        rrhh_encargado = get_user_or_none(request.POST.get('rrhh_encargado'))
+        prevencionista = get_user_or_none(request.POST.get('prevencionista'))
+        logistica_encargado = get_user_or_none(
+            request.POST.get('logistica_encargado'))
+        encargado_flota = get_user_or_none(request.POST.get('encargado_flota'))
+        encargado_subcontrato = get_user_or_none(
+            request.POST.get('encargado_subcontrato'))
+        encargado_facturacion = get_user_or_none(
+            request.POST.get('encargado_facturacion'))
+
+        # Validaciones
         if password1 or password2:
             if password1 != password2:
                 messages.error(request, 'Las contraseñas no coinciden.')
@@ -171,6 +196,7 @@ def crear_usuario_view(request, identidad=None):
             return redirect(request.path)
 
         if usuario:
+            # Edición
             usuario.username = username
             usuario.email = email
             usuario.first_name = first_name
@@ -180,12 +206,24 @@ def crear_usuario_view(request, identidad=None):
             usuario.is_superuser = is_superuser
             usuario.identidad = identidad_post
             usuario.groups.set(grupo_ids)
+            usuario.roles.set(roles_ids)
+
+            # Actualizar jerarquías
+            usuario.supervisor = supervisor
+            usuario.pm = pm
+            usuario.rrhh_encargado = rrhh_encargado
+            usuario.prevencionista = prevencionista
+            usuario.logistica_encargado = logistica_encargado
+            usuario.encargado_flota = encargado_flota
+            usuario.encargado_subcontrato = encargado_subcontrato
+            usuario.encargado_facturacion = encargado_facturacion
+
             if password1:
                 usuario.set_password(password1)
             usuario.save()
-            usuario.roles.set(roles_ids)
             messages.success(request, 'Usuario actualizado correctamente.')
         else:
+            # Creación
             if User.objects.filter(username=username).exists():
                 messages.error(request, 'El nombre de usuario ya existe.')
                 return redirect('dashboard_admin:crear_usuario')
@@ -205,10 +243,17 @@ def crear_usuario_view(request, identidad=None):
                 is_staff=is_staff,
                 is_superuser=is_superuser,
                 identidad=identidad_post,
+                supervisor=supervisor,
+                pm=pm,
+                rrhh_encargado=rrhh_encargado,
+                prevencionista=prevencionista,
+                logistica_encargado=logistica_encargado,
+                encargado_flota=encargado_flota,
+                encargado_subcontrato=encargado_subcontrato,
+                encargado_facturacion=encargado_facturacion
             )
             usuario.groups.set(grupo_ids)
             usuario.roles.set(roles_ids)
-            usuario.save()
             messages.success(request, 'Usuario creado exitosamente.')
 
         return redirect('dashboard_admin:listar_usuarios')
@@ -224,12 +269,16 @@ def crear_usuario_view(request, identidad=None):
         'id', flat=True) if usuario else []
     roles_seleccionados = [str(id) for id in roles_seleccionados]
 
+    usuarios_activos = CustomUser.objects.filter(
+        is_active=True).order_by('first_name', 'last_name')
+
     contexto = {
         'grupos': grupos,
         'grupo_ids_post': grupo_ids_post,
         'usuario': usuario,
         'roles': roles_disponibles,
         'roles_seleccionados': roles_seleccionados,
+        'usuarios': usuarios_activos,  # para los selects
     }
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
 
