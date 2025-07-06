@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+import sys
 
 
 class UsuariosConfig(AppConfig):
@@ -6,5 +7,8 @@ class UsuariosConfig(AppConfig):
     name = 'usuarios'
 
     def ready(self):
-        # Solo activamos las señales, el resto va en signals.py
-        import usuarios.signals
+        import usuarios.signals  # Señales
+        # Iniciar el scheduler SOLO si el servidor está corriendo
+        if 'runserver' in sys.argv or 'gunicorn' in sys.argv:
+            from . import schedulers
+            schedulers.iniciar_scheduler()

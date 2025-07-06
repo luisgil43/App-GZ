@@ -1,3 +1,9 @@
+from liquidaciones.models import Liquidacion
+from liquidaciones.forms import CargaMasivaLiquidacionesForm
+# 👈 Asegúrate de que esté bien importado
+from usuarios.utils import crear_notificacion
+from django.shortcuts import render
+import calendar
 from usuarios.models import FirmaRepresentanteLegal
 from django.urls import NoReverseMatch
 import logging
@@ -39,7 +45,10 @@ from django.utils.http import urlencode
 from django.urls import reverse
 from .forms import CargaMasivaLiquidacionesForm
 from usuarios.models import CustomUser
+from usuarios.utils import crear_notificacion
+from django.urls import reverse
 import os
+import calendar
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -429,6 +438,13 @@ def confirmar_reemplazo(request):
     })
 
 
+MESES_ESPANOL = {
+    1: "Enero", 2: "Febrero", 3: "Marzo", 4: "Abril",
+    5: "Mayo", 6: "Junio", 7: "Julio", 8: "Agosto",
+    9: "Septiembre", 10: "Octubre", 11: "Noviembre", 12: "Diciembre"
+}
+
+
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
 def carga_masiva_liquidaciones(request):
@@ -459,12 +475,20 @@ def carga_masiva_liquidaciones(request):
                     errores.append(f"{rut} (usuario no existe)")
                     continue
 
-                # Sobrescribir si ya existe
                 liquidacion, creada = Liquidacion.objects.update_or_create(
                     tecnico=usuario,
                     mes=mes,
                     año=año,
                     defaults={'archivo_pdf_liquidacion': archivo}
+                )
+
+                # 🔔 Notificación por usuario
+                nombre_mes = MESES_ESPANOL.get(int(mes), "Mes inválido")
+                crear_notificacion(
+                    usuario=usuario,
+                    mensaje=f"Se ha cargado una nueva liquidación correspondiente a {nombre_mes} de {año}.",
+                    url=reverse('liquidaciones:listar'),
+                    tipo='info'
                 )
 
                 cargadas += 1
@@ -475,14 +499,12 @@ def carga_masiva_liquidaciones(request):
             }
 
             messages.success(request, "Carga finalizada")
-            form = CargaMasivaLiquidacionesForm()  # resetea el form
+            form = CargaMasivaLiquidacionesForm()  # Resetear formulario
 
         else:
-            # Mostrar mensajes de error individuales del formulario
             for campo, errores in form.errors.items():
                 for error in errores:
                     messages.error(request, f"{campo.capitalize()}: {error}")
-
     else:
         form = CargaMasivaLiquidacionesForm()
 
@@ -500,7 +522,16 @@ def crear_liquidacion(request):
         form = LiquidacionForm(request.POST, request.FILES)
         if form.is_valid():
             # fields=(tecnico;mes;año;monto;archivo_pdf_liquidacion;pdf_firmado;fecha_firma;firmada)
-            form.save()
+            liquidacion = form.save()
+
+            crear_notificacion(
+                usuario=liquidacion.tecnico,
+                mensaje="Tienes una nueva liquidación pendiente por firmar.",
+                # Ajusta si tu URL se llama diferente
+                url=reverse('liquidaciones:listar'),
+                tipo='info'
+            )
+
             messages.success(request, "Liquidación creada con éxito.")
             # return redirect('liquidaciones:lista_liquidaciones')
             return redirect('liquidaciones:admin_lista')

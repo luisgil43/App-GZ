@@ -20,23 +20,56 @@
 <body class="bg-gray-100 text-gray-900 min-h-screen">
 
     <!-- Header fijo -->
-    <header class="bg-white shadow-md fixed top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-4">
-        <div class="flex items-center gap-3">
-            <!-- Botón hamburguesa solo visible en móviles -->
-            <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">
-                ☰
-            </button>
-            <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-9">
-            <strong class="text-gray-800 text-sm md:text-base">GZ SERVICES AND BUSINESS SPA</strong>
-        </div>
-        <div class="flex items-center gap-4 text-sm md:text-base">
-            <span>{{ request.user.get_full_name|default:request.user.username }}</span>
-            <form method="post" action="{% url 'dashboard_admin:logout' %}">
-                {% csrf_token %}
-                <button type="submit" class="text-red-600 font-semibold hover:text-red-800">Cerrar Sesión</button>
-            </form>
-        </div>
-    </header>
+ <header class="bg-white shadow-md fixed top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-4">
+  <div class="flex items-center gap-3">
+    <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
+    <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
+    <strong class="text-gray-800 text-sm md:text-base">PLATAFORMA DE MILTEL</strong>
+  </div>
+
+  <div class="flex items-center gap-4 text-sm md:text-base">
+    <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+
+    <form method="post" action="{% url 'dashboard_admin:logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+        Cerrar Sesión
+      </button>
+    </form>
+
+    <!-- Campanita de notificaciones -->
+    <div class="relative">
+      <button onclick="toggleNotifications()" class="relative text-gray-700">
+        <i data-lucide="bell" class="w-6 h-6"></i>
+        {% if notificaciones_no_leidas > 0 %}
+          <span
+            class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {{ notificaciones_no_leidas }}
+          </span>
+        {% endif %}
+      </button>
+
+    <!-- Panel de notificaciones -->
+<div id="notification-panel"
+     class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
+  <div class="p-2 max-h-80 overflow-y-auto">
+    {% for n in notificaciones_recientes %}
+      <div id="notificacion-{{ n.id }}">
+       <a href="{% url 'usuarios:leer_notificacion' n.id %}"
+   class="block p-2 text-sm border-b w-full text-left {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
+  {{ n.mensaje }}
+</a>
+
+      </div>
+    {% empty %}
+  <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
+{% endfor %}
+  </div>
+</div>
+    </div>
+  </div>
+</header>
+
 
     <!-- Contenedor principal -->
     <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
@@ -92,7 +125,17 @@
       <li><a href="{% url 'liquidaciones:admin_lista' %}" class="hover:text-emerald-400">Liquidaciones</a></li>
       <li><a href="{% url 'rrhh:contratos_trabajo' %}" class="hover:text-emerald-400">Contratos de trabajo</a></li>
     {% endif %}
-    <li><a href="{% url 'dashboard_admin:vacaciones_admin' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+
+    {% if request.user.es_supervisor %}
+      <li><a href="{% url 'rrhh:revisar_supervisor' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_pm %}
+      <li><a href="{% url 'rrhh:revisar_pm' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_rrhh %}
+      <li><a href="{% url 'rrhh:revisar_rrhh' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_admin_general %}
+      <li><a href="{% url 'rrhh:revisar_todas_vacaciones' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% endif %}
+
     {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
       <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas de ingresos</a></li>
       <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos trabajadores</a></li>
@@ -105,6 +148,7 @@
   </ul>
 </li>
 {% endif %}
+
 		{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
 <li class="group">
     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
@@ -182,7 +226,7 @@
 <!-- Contenedor inferior del menú -->
 <div class="mt-10 text-center text-gray-400 text-xs">
   <p class="mb-1">Desarrollado por</p>
-  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-6 mx-auto max-w-[100px] object-contain">
+  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-12 mx-auto max-w-[100px] object-contain">
 </div>
         </nav>
 
@@ -208,26 +252,70 @@
         }
     </script>
     {% if messages %}
-    <div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
-        {% for message in messages %}
-        <div class="flex items-center justify-between p-4 rounded-md shadow text-white
-                  {% if message.tags == 'success' %}bg-green-600
-                  {% elif message.tags == 'error' %}bg-red-600
-                  {% elif message.tags == 'warning' %}bg-yellow-500
-                  {% else %}bg-blue-600{% endif %}">
-            <span>{{ message }}</span>
-            <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
-        </div>
-        {% endfor %}
+<div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
+  {% for message in messages %}
+    <div class="flex items-center justify-between p-4 rounded-md shadow text-white
+      {% if message.tags == 'success' %}bg-green-600
+      {% elif message.tags == 'error' %}bg-red-600
+      {% elif message.tags == 'warning' %}bg-yellow-500
+      {% else %}bg-blue-600{% endif %}">
+      <span>{{ message }}</span>
+      <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
     </div>
+  {% endfor %}
+</div>
 
-    <script>
-        setTimeout(() => {
-            const mensajes = document.getElementById('mensajes');
-            if (mensajes) mensajes.remove();
-        }, 5000);
-    </script>
-    {% endif %}
+<script>
+  setTimeout(() => {
+    const mensajes = document.getElementById('mensajes');
+    if (mensajes) mensajes.remove();
+  }, 5000);
+</script>
+{% endif %}
+
+
+<script>
+// Marcar notificación como leída y redirigir
+function leerNotificacion(id, urlDestino) {
+  fetch(`/usuarios/notificacion/${id}/leer/`)
+    .then(response => {
+      if (response.ok) {
+        // Eliminar la notificación del DOM
+        const item = document.getElementById(`notificacion-${id}`);
+        if (item) item.remove();
+
+        // Actualizar contador del badge
+        const badge = document.querySelector('.relative .bg-red-500');
+        if (badge) {
+          let count = parseInt(badge.innerText);
+          if (count > 1) {
+            badge.innerText = count - 1;
+          } else {
+            badge.remove();
+          }
+        }
+
+        // Redirigir a la URL de la notificación
+        window.location.href = urlDestino;
+      }
+    });
+}
+
+// Mostrar u ocultar el panel de notificaciones
+function toggleNotifications() {
+  const panel = document.getElementById('notification-panel');
+  if (panel) {
+    panel.classList.toggle('hidden');
+  }
+}
+</script>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  lucide.createIcons();
+</script>
+
+
 </body>
-
 </html>
+

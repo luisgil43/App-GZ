@@ -23,11 +23,18 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect
 from dashboard.models import ProduccionTecnico
 from usuarios.models import CustomUser
+from usuarios.models import Notificacion
 
 
 @login_required
 def inicio(request):
-    return render(request, 'dashboard/inicio.html')
+    notificaciones = Notificacion.objects.filter(
+        usuario=request.user
+    ).order_by('leido', '-fecha')[:10]
+
+    return render(request, 'dashboard/inicio.html', {
+        'notificaciones': notificaciones
+    })
 
 
 @login_required

@@ -24,28 +24,55 @@
 
 <body class="bg-gray-100 text-gray-900">
 
-  <!-- Header igual que el admin -->
-  <header
-    class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0">
-    <div class="flex items-center gap-3">
-      <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
-      <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-9 shrink-0">
-      <strong class="text-gray-800 text-sm md:text-base">GZ SERVICES AND BUSINESS SPA</strong>
-    </div>
+    <!-- Header fijo -->
+ <header class="bg-white shadow-md fixed top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-4">
+  <div class="flex items-center gap-3">
+    <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
+    <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
+    <strong class="text-gray-800 text-sm md:text-base">PLATAFORMA DE MILTEL</strong>
+  </div>
 
-    <div
-      class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm md:text-base text-left max-w-xs sm:max-w-full overflow-hidden">
-      <span class="text-gray-800 break-words leading-tight">
-        {{ request.user.get_full_name|default:request.user.username }}
-      </span>
-      <form method="post" action="{% url 'logout' %}" class="mt-1 sm:mt-0">
-        {% csrf_token %}
-        <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-          Cerrar Sesión
+  <div class="flex items-center gap-4 text-sm md:text-base">
+    <span>{{ request.user.get_full_name|default:request.user.username }}</span>
+
+    <form method="post" action="{% url 'dashboard_admin:logout' %}">
+      {% csrf_token %}
+      <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+        Cerrar Sesión
+      </button>
+    </form>
+
+    <!-- Campanita de notificaciones -->
+    <div class="relative">
+      <button onclick="toggleNotifications()" class="relative text-gray-700">
+        <i data-lucide="bell" class="w-6 h-6"></i>
+        {% if notificaciones_no_leidas > 0 %}
+          <span
+            class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {{ notificaciones_no_leidas }}
+          </span>
+        {% endif %}
+      </button>
+
+    <!-- Panel de notificaciones -->
+<div id="notification-panel"
+     class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
+  <div class="p-2 max-h-80 overflow-y-auto">
+    {% for n in notificaciones_recientes %}
+      <div id="notificacion-{{ n.id }}">
+        <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
+                class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
+          {{ n.mensaje }}
         </button>
-      </form>
+      </div>
+    {% empty %}
+  <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
+{% endfor %}
+  </div>
+</div>
     </div>
-  </header>
+  </div>
+</header>
 
   <!-- Contenedor principal -->
   <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
@@ -53,7 +80,7 @@
     <!-- Menú lateral con animación -->
     <nav id="side-nav"
       class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
-      <h2 class="text-2xl font-bold mb-4">Menú</h2>
+      <h2 class="text-2xl font-bold mb-8">Menú</h2>
       <ul class="space-y-4 text-base">
         <li>
           <a href="{% url 'dashboard:inicio_tecnico' %}" class="font-bold flex items-center hover:text-emerald-400">🏠
@@ -148,7 +175,7 @@
 <!-- Contenedor inferior del menú -->
 <div class="mt-10 text-center text-gray-400 text-xs">
   <p class="mb-1">Desarrollado por</p>
-  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-6 mx-auto max-w-[100px] object-contain">
+  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-14 mx-auto max-w-[100px] object-contain">
 </div>
     </nav>
 
@@ -204,6 +231,46 @@
     }, 5000);
   </script>
   {% endif %}
+<script>
+// Marcar notificación como leída y redirigir
+function leerNotificacion(id, urlDestino) {
+  fetch(`/usuarios/notificacion/${id}/leer/`)
+    .then(response => {
+      if (response.ok) {
+        // Eliminar la notificación del DOM
+        const item = document.getElementById(`notificacion-${id}`);
+        if (item) item.remove();
+
+        // Actualizar contador del badge
+        const badge = document.querySelector('.relative .bg-red-500');
+        if (badge) {
+          let count = parseInt(badge.innerText);
+          if (count > 1) {
+            badge.innerText = count - 1;
+          } else {
+            badge.remove();
+          }
+        }
+
+        // Redirigir a la URL de la notificación
+        window.location.href = urlDestino;
+      }
+    });
+}
+
+// Mostrar u ocultar el panel de notificaciones
+function toggleNotifications() {
+  const panel = document.getElementById('notification-panel');
+  if (panel) {
+    panel.classList.toggle('hidden');
+  }
+}
+</script>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  lucide.createIcons();
+</script>
 </body>
 
 </html>
