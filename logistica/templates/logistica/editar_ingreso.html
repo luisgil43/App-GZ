@@ -1,0 +1,209 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Editar Ingreso{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6">✏️ Editar Ingreso de Material</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="bg-{{ message.tags }}-100 text-{{ message.tags }}-700 p-3 rounded mb-4">
+      {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if form.non_field_errors %}
+    <div class="bg-red-100 text-red-700 p-3 rounded mb-4">
+      {{ form.non_field_errors }}
+    </div>
+    {% endif %}
+
+    {% if formset.non_form_errors %}
+    <div class="bg-red-100 text-red-700 p-3 rounded mb-4">
+      {{ formset.non_form_errors }}
+    </div>
+    {% endif %}
+
+    <!-- Datos del ingreso -->
+    <div class="grid md:grid-cols-3 gap-4">
+      <div>
+        <label class="block font-semibold mb-1">Tipo de Documento</label>
+        {{ form.tipo_documento|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% for error in form.tipo_documento.errors %}
+        <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        <label class="block font-semibold mb-1">Número de Documento</label>
+        {{ form.numero_documento|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% for error in form.numero_documento.errors %}
+        <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+        {% endfor %}
+      </div>
+      <div>
+        <label class="block font-semibold mb-1">bodega</label>
+        {{ form.bodega|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% for error in form.bodega.errors %}
+        <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Materiales -->
+    <div class="mt-6">
+      <h3 class="font-semibold text-lg mb-2">Materiales</h3>
+      <div id="formset-materiales">
+
+        {% for subform in formset %}
+        <div class="grid md:grid-cols-2 gap-4 mb-3 material-form border p-4 rounded-xl">
+          {% if subform.non_field_errors %}
+          <div class="col-span-2 bg-red-100 text-red-700 p-2 rounded mb-2">
+            {{ subform.non_field_errors }}
+          </div>
+          {% endif %}
+          <div>
+            {{ subform.material.label_tag }}
+            {{ subform.material|add_class:"w-full border rounded-xl px-3 py-2" }}
+            {% for error in subform.material.errors %}
+            <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+            {% endfor %}
+          </div>
+          <div>
+            {{ subform.cantidad.label_tag }}
+            {{ subform.cantidad|add_class:"w-full border rounded-xl px-3 py-2" }}
+            {% for error in subform.cantidad.errors %}
+            <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+            {% endfor %}
+          </div>
+          {{ subform.id }}
+          {% if subform.DELETE %}
+          <div class="col-span-2 mt-1">
+            <label class="inline-flex items-center">
+              {{ subform.DELETE }} <span class="ml-2 text-red-600 text-sm">Eliminar este material</span>
+            </label>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <button type="button" onclick="agregarFormulario()"
+        class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl">
+        + Agregar
+      </button>
+    </div>
+
+    <!-- PDF -->
+    <div class="mt-6">
+      <label class="block font-semibold mb-1">PDF de respaldo:</label>
+      {{ form.archivo_documento|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% for error in form.archivo_documento.errors %}
+      <p class="text-sm text-red-600 mt-1">{{ error }}</p>
+      {% endfor %}
+      <p class="text-sm text-gray-500 mt-1">Solo se aceptan archivos .PDF</p>
+    </div>
+
+    <!-- Botones -->
+    <div class="flex justify-between mt-6">
+      <a href="{% url 'logistica:listar_ingresos' %}"
+        class="bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300">
+        ← Volver
+      </a>
+      <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded-xl hover:bg-emerald-700">
+        Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Formulario vacío para clonar -->
+<div id="empty-form-template" class="hidden">
+  <div class="grid md:grid-cols-2 gap-4 mb-3 material-form border p-4 rounded-xl">
+    <div>
+      <label for="id_detalles-__prefix__-material">Material</label>
+      <select name="detalles-__prefix__-material" id="id_detalles-__prefix__-material"
+        class="w-full border rounded-xl px-3 py-2">
+        {% for material in formset_empty.fields.material.queryset %}
+        <option value="{{ material.pk }}">{{ material }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="id_detalles-__prefix__-cantidad">Cantidad</label>
+      <input type="number" name="detalles-__prefix__-cantidad" id="id_detalles-__prefix__-cantidad"
+        class="w-full border rounded-xl px-3 py-2" min="1" />
+    </div>
+    <input type="hidden" name="detalles-__prefix__-id" id="id_detalles-__prefix__-id" />
+    <div class="col-span-2 mt-1">
+      <label class="inline-flex items-center">
+        <input type="checkbox" name="detalles-__prefix__-DELETE" id="id_detalles-__prefix__-DELETE" />
+        <span class="ml-2 text-red-600 text-sm">Eliminar este material</span>
+      </label>
+    </div>
+  </div>
+</div>
+
+<script>
+  function agregarFormulario() {
+    const totalForms = document.getElementById('id_detalles-TOTAL_FORMS');
+    const currentCount = parseInt(totalForms.value);
+    const formsetDiv = document.getElementById('formset-materiales');
+
+    const template = document.getElementById('empty-form-template').innerHTML;
+    const newFormHtml = template.replace(/__prefix__/g, currentCount);
+
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = newFormHtml;
+
+    // Añadir el evento al select nuevo
+    const nuevoSelect = wrapper.querySelector(`select[name="detalles-${currentCount}-material"]`);
+    if (nuevoSelect) {
+      nuevoSelect.addEventListener('change', actualizarOpcionesMateriales);
+    }
+
+    formsetDiv.appendChild(wrapper);
+    totalForms.value = currentCount + 1;
+
+    actualizarOpcionesMateriales();
+  }
+</script>
+<script>
+  function actualizarOpcionesMateriales() {
+    const selects = document.querySelectorAll('select[name$="-material"]');
+    const seleccionados = Array.from(selects)
+      .map(select => select.value)
+      .filter(val => val !== "");
+
+    selects.forEach(select => {
+      const valorActual = select.value;
+      const opciones = select.querySelectorAll('option');
+
+      opciones.forEach(op => {
+        if (op.value === "" || op.value === valorActual) {
+          op.style.display = "";
+        } else if (seleccionados.includes(op.value)) {
+          op.style.display = "none";
+        } else {
+          op.style.display = "";
+        }
+      });
+    });
+  }
+
+  // Evento inicial
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('select[name$="-material"]').forEach(select => {
+      select.addEventListener('change', actualizarOpcionesMateriales);
+    });
+    actualizarOpcionesMateriales();
+  });
+</script>
+{% endblock %}

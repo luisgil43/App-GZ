@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load humanize %}
 <html lang="es">
 
 <head>
@@ -62,7 +63,10 @@
       <div id="notificacion-{{ n.id }}">
         <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
                 class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
-          {{ n.mensaje }}
+          <div class="flex flex-col">
+  <span>{{ n.mensaje }}</span>
+  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
+</div>
         </button>
       </div>
     {% empty %}

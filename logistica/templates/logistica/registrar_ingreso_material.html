@@ -1,0 +1,172 @@
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Registrar Ingreso de Material{% endblock %}
+
+{% block dashboard_content %}
+<div class="w-full mx-auto bg-white px-10 py-20 rounded-2xl shadow-lg mt-16 mb-16 min-h-[85vh]">
+
+  <h2 class="text-2xl font-bold mb-6 text-gray-800 flex items-center gap-2">
+    <i class="lucide lucide-box"></i>
+    Registrar Ingreso de Material
+  </h2>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-6" id="form-ingreso">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    <!-- Datos del documento -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div>
+        <label class="block font-semibold text-gray-700 mb-1">Tipo de Documento</label>
+        {{ form.tipo_documento|add_class:"w-full border-gray-300 rounded-xl shadow-sm" }}
+      </div>
+      <div>
+        <label class="block font-semibold text-gray-700 mb-1">Número de Documento</label>
+        {{ form.numero_documento|add_class:"w-full border-gray-300 rounded-xl shadow-sm" }}
+      </div>
+      <div>
+        <label class="block font-semibold text-gray-700 mb-1">Bodega</label>
+        {{ form.bodega|add_class:"w-full border-gray-300 rounded-xl shadow-sm" }}
+      </div>
+    </div>
+
+    <hr class="my-4 border-t border-gray-200">
+
+    <h3 class="text-lg font-semibold text-gray-700">Materiales</h3>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm border border-gray-300 rounded-xl" id="tabla-materiales">
+        <thead class="bg-gray-100 text-gray-700 text-left">
+          <tr>
+            <th class="px-3 py-2 border-b w-2/3">Material</th>
+            <th class="px-3 py-2 border-b w-1/6">Cantidad</th>
+            <th class="px-3 py-2 border-b w-1/6 text-right">
+              <button type="button" onclick="agregarFila()"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">
+                + Agregar
+              </button>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="materiales-container">
+          {% for form_material in formset %}
+          <tr class="material-item">
+            <td class="px-3 py-2">
+              {{ form_material.material|add_class:"w-full border-gray-300 rounded-xl shadow-sm" }}
+              {% for error in form_material.material.errors %}
+              <p class="text-sm text-red-600">{{ error }}</p>
+              {% endfor %}
+            </td>
+            <td class="px-3 py-2">
+              {{ form_material.cantidad|add_class:"w-full border-gray-300 rounded-xl shadow-sm" }}
+              {% for error in form_material.cantidad.errors %}
+              <p class="text-sm text-red-600">{{ error }}</p>
+              {% endfor %}
+            </td>
+            <td class="px-3 py-2 text-right">
+              {% if not forloop.first %}
+              <button type="button" onclick="this.closest('tr').remove(); actualizarOpcionesMateriales();"
+                class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">
+                Eliminar
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <hr class="my-4 border-t border-gray-200">
+
+    <div>
+      <label class="block font-semibold text-gray-700 mb-1">PDF de Guía o Factura</label>
+      {{ form.archivo_documento|add_class:"w-full border border-gray-300 rounded-xl p-2" }}
+      <p class="text-sm text-gray-500 mt-1">Solo se aceptan archivos .PDF</p>
+    </div>
+
+    <div class="flex justify-between items-center mt-6">
+      <a href="{% url 'logistica:listar_ingresos' %}"
+        class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-6 py-2 rounded-xl">
+        &larr; Volver
+      </a>
+      <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl">
+        Registrar
+      </button>
+    </div>
+  </form>
+</div>
+<script>
+  function agregarFila() {
+    const container = document.getElementById('materiales-container');
+    const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+    const currentFormCount = parseInt(totalForms.value);
+
+    const formBase = container.querySelector('.material-item');
+    const nuevaFila = formBase.cloneNode(true);
+
+    nuevaFila.querySelectorAll('input, select').forEach(el => {
+      const name = el.name.replace(/-\d+-/, `-${currentFormCount}-`);
+      const id = `id_${name}`;
+      el.name = name;
+      el.id = id;
+      el.value = '';
+    });
+
+    // Elimina errores y mensajes
+    nuevaFila.querySelectorAll('.text-red-600').forEach(e => e.remove());
+
+    // Reasignar eventos
+    nuevaFila.querySelectorAll('select[name$="-material"]').forEach(select => {
+      select.addEventListener('change', actualizarOpcionesMateriales);
+    });
+
+    // Asegurar que tenga botón de eliminar
+    nuevaFila.querySelector('td:last-child').innerHTML = `
+    <button type="button"
+      onclick="this.closest('tr').remove(); actualizarOpcionesMateriales();"
+      class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-4 py-2 rounded-xl">
+      Eliminar
+    </button>
+  `;
+
+    container.appendChild(nuevaFila);
+    totalForms.value = currentFormCount + 1;
+
+    actualizarOpcionesMateriales();
+  }
+</script>
+
+<script>
+  function actualizarOpcionesMateriales() {
+    const selects = document.querySelectorAll('select[name$="-material"]');
+    const seleccionados = Array.from(selects)
+      .map(select => select.value)
+      .filter(v => v !== "");  // excluir vacíos
+
+    selects.forEach(select => {
+      const valorActual = select.value;
+      const opciones = select.querySelectorAll('option');
+
+      opciones.forEach(op => {
+        if (op.value === "" || op.value === valorActual) {
+          op.style.display = "";
+        } else if (seleccionados.includes(op.value)) {
+          op.style.display = "none";
+        } else {
+          op.style.display = "";
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('select[name$="-material"]').forEach(select => {
+      select.addEventListener('change', actualizarOpcionesMateriales);
+    });
+
+    actualizarOpcionesMateriales();  // Ejecutar al cargar
+  });
+</script>
+{% endblock %}
