@@ -58,6 +58,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('dashboard_admin/login/',
          RedirectView.as_view(url='/usuarios/login/', permanent=False)),
+    path('logistica/', include('logistica.urls', namespace='logistica')),
 
 ]
 

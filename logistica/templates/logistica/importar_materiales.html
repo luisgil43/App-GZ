@@ -1,0 +1,40 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Importar Materiales{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    <i class="lucide lucide-file-spreadsheet"></i> Importar Materiales desde Excel
+  </h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="mb-4">
+      <label for="archivo_excel" class="block font-medium mb-1">Selecciona el archivo Excel</label>
+      {{ form_excel.archivo_excel|add_class:"w-full border rounded-xl px-4 py-2" }}
+      {{ form_excel.archivo_excel.errors }}
+    </div>
+
+    <div class="flex justify-between items-center mt-6">
+      <a href="{% url 'logistica:crear_material' %}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-6 py-2 rounded-xl">
+        ← Volver
+      </a>
+
+      <div class="flex items-center gap-4">
+        <a href="{% static 'formato_materiales_importacion.xlsx' %}"
+           class="text-sm text-blue-600 underline" download>
+          📥 Descargar formato
+        </a>
+        <button type="submit"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl">
+          Importar
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

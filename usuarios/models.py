@@ -63,6 +63,8 @@ class CustomUser(AbstractUser):
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='prevencionistas')
     logistica_encargado = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='logisticas')
+    es_bodeguero_encargado = models.ForeignKey(
+        'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='bodeguero')
     encargado_flota = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='flotas')
     encargado_subcontrato = models.ForeignKey(
@@ -101,6 +103,10 @@ class CustomUser(AbstractUser):
     @property
     def es_logistica(self): return self.tiene_rol(
         'logistica') or self.is_superuser
+
+    @property
+    def es_bodeguero(self): return self.tiene_rol(
+        'bodeguero') or self.is_superuser
 
     @property
     def es_flota(self): return self.tiene_rol('flota') or self.is_superuser

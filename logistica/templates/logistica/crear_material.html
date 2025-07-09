@@ -1,0 +1,148 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Crear Material{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-6">
+
+ <!-- Título y botones -->
+<div class="flex flex-col md:flex-row md:justify-between md:items-center mb-6 gap-4">
+  <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+    <i class="lucide lucide-box"></i> Crear Material
+  </h2>
+
+  <div class="flex gap-2">
+    <a href="{% url 'logistica:exportar_materiales' %}"
+       class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">
+      📥 Exportar Stock
+    </a>
+    <a href="{% url 'logistica:importar_materiales' %}"
+       class="bg-yellow-500 text-white px-4 py-2 rounded-xl hover:bg-yellow-600">
+      📤 Importar desde Excel
+    </a>
+  </div>
+</div>
+
+  <!-- Formulario manual -->
+<div class="mb-8">
+  <h3 class="text-lg font-semibold text-gray-700 mb-4">Registrar manualmente</h3>
+  <form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="crear_manual" value="1">
+
+  <!-- Código Interno + Nombre -->
+  <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium mb-1">Código Interno</label>
+      {{ form_material.codigo_interno|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {{ form_material.codigo_interno.errors }}
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Nombre</label>
+      {{ form_material.nombre|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {{ form_material.nombre.errors }}
+    </div>
+  </div>
+
+  <!-- Código Externo + Bodega -->
+  <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium mb-1">Código Externo</label>
+      {{ form_material.codigo_externo|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Bodega</label>
+      {{ form_material.bodega|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+  </div>
+
+  <!-- Stock Actual + Stock Mínimo -->
+  <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium mb-1">Stock Actual</label>
+      {{ form_material.stock_actual|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Stock Mínimo</label>
+      {{ form_material.stock_minimo|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+  </div>
+
+  <!-- Unidad de Medida -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">Unidad de Medida</label>
+    {{ form_material.unidad_medida|add_class:"w-full border rounded-xl px-3 py-2" }}
+  </div>
+
+  <!-- Descripción -->
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">Descripción</label>
+    {{ form_material.descripcion|add_class:"w-full border rounded-xl px-3 py-2 min-h-[40px] max-h-[140px] resize-y" }}
+  </div>
+
+  <!-- Botones -->
+  <div class="flex justify-between items-center mt-6">
+    <a href="{% url 'logistica:listar_ingresos' %}"
+       class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-6 py-2 rounded-xl">
+      ← Volver
+    </a>
+    <button type="submit"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl">
+      Guardar Material
+    </button>
+  </div>
+</form>
+</div>
+
+    <!-- Columna vacía para mantener el diseño -->
+    <div></div>
+  </div>
+
+  <!-- Tabla de Materiales Registrados -->
+  <div class="mt-10">
+    <h3 class="text-lg font-semibold text-gray-800 mb-4">Materiales Registrados</h3>
+
+    <div class="overflow-x-auto rounded-xl border">
+      <table class="min-w-full text-sm text-left">
+      <thead class="bg-gray-100 text-gray-700">
+  <tr>
+    <th class="p-3">Nombre</th>
+    <th class="p-3">Código Interno</th>
+    <th class="p-3">Código Externo</th> <!-- NUEVO -->
+    <th class="p-3">Bodega</th>           <!-- NUEVO -->
+    <th class="p-3">Stock Actual</th>
+    <th class="p-3">Stock Mínimo</th>
+<th class="p-3">Unidad de Medida</th>
+    <th class="p-3 text-center">Acciones</th>
+  </tr>
+</thead>
+<tbody>
+  {% for material in materiales %}
+  <tr class="border-t {% cycle 'bg-white' 'bg-gray-50' %}">
+    <td class="p-3">{{ material.nombre }}</td>
+    <td class="p-3">{{ material.codigo_interno }}</td>
+    <td class="p-3">{{ material.codigo_externo }}</td> <!-- NUEVO -->
+    <td class="p-3">{{ material.bodega }}</td>           <!-- NUEVO -->
+    <td class="p-3">{{ material.stock_actual }}</td>
+    <td class="p-3">{{ material.stock_minimo }}</td>
+<td class="p-3">{{ material.unidad_medida }}</td>
+    <td class="p-3 text-center">
+      <a href="{% url 'logistica:editar_material' material.id %}"
+         class="text-blue-600 hover:underline font-medium">Editar</a>
+      <a href="{% url 'logistica:eliminar_material' material.id %}"
+         class="text-red-600 hover:text-red-800 font-medium ml-2">Eliminar</a>
+    </td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="8" class="p-4 text-center text-gray-500">No hay materiales registrados.</td>
+  </tr>
+  {% endfor %}
+</tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

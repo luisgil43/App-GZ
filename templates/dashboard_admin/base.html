@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 {% load static %}
+{% load humanize %}
 <html lang="es">
 
 <head>
@@ -57,7 +58,10 @@
       <div id="notificacion-{{ n.id }}">
        <a href="{% url 'usuarios:leer_notificacion' n.id %}"
    class="block p-2 text-sm border-b w-full text-left {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
-  {{ n.mensaje }}
+ <div class="flex flex-col">
+  <span>{{ n.mensaje }}</span>
+  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
+</div>
 </a>
 
       </div>
@@ -156,12 +160,12 @@
         <span class="flecha transition-transform duration-200">▶</span>
     </div>
     <ul class="ml-4 submenu space-y-1 hidden">
-        <li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
-        <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
         <li><a href="#" class="hover:text-emerald-400">Contratos de servicios</a></li>
+<li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
+<li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
+<li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li> 
+   <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
+        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>     
     </ul>
 </li>
 {% endif %}
@@ -174,10 +178,12 @@
                         <span class="flecha transition-transform duration-200">▶</span>
                     </div>
                     <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Materiales Solicitados</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Materiales devueltos</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Guías de despachos</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Asignación de equipos</a></li>
+<li><a href="#" class="hover:text-emerald-400">Asignación de equipos</a></li>
+<li><a href="#" class="hover:text-emerald-400">Devolución de Materiales</a></li>
+ <li><a href="#" class="hover:text-emerald-400">Salida de Materiales</a></li>
+<li><a href="#" class="hover:text-emerald-400">Traspaso de Materiales</a></li>
+                        <li><a href="{% url 'logistica:listar_ingresos' %}" class="hover:text-emerald-400">Ingreso de Materiales</a></li>   
+			
                     </ul>
                 </li>
                 {% endif %}

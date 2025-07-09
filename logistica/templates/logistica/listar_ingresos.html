@@ -1,0 +1,185 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load widget_tweaks %}
+
+{% block title %}Listado de Ingresos{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-6">
+
+  <!-- Encabezado y botones -->
+  <div class="mb-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="lucide lucide-truck"></i> Ingresos de Materiales
+      </h2>
+
+<div class="flex gap-3 flex-wrap">
+  <a href="{% url 'logistica:crear_bodega' %}"
+    class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-xl">
+    ➕ Bodega
+  </a>
+  <a href="{% url 'logistica:crear_material' %}"
+    class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-xl">
+    ➕ Crear Material
+  </a>
+  <a href="{% url 'logistica:registrar_ingreso' %}"
+    class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+    ➕ Nuevo Ingreso
+  </a>
+  <a href="?exportar=1" class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+    📥 Exportar a Excel
+  </a>
+</div>
+    </div>
+
+    <!-- Filtros -->
+    <form method="get" class="flex flex-wrap gap-4 mt-4">
+      <div>
+        <label class="text-sm font-semibold">Mes:</label>
+        {{ form_filtro.mes|add_class:"border rounded-xl px-3 py-2" }}
+      </div>
+      <div>
+        <label class="text-sm font-semibold">Año:</label>
+        {{ form_filtro.anio|add_class:"border rounded-xl px-3 py-2" }}
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">
+          Filtrar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabla -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+      <thead class="bg-gray-100 text-gray-700 text-left">
+        <tr>
+          <th class="p-2 border"></th>
+          <th class="p-2 border">Fecha</th>
+          <th class="p-2 border">bodega</th>
+          <th class="p-2 border">Tipo Doc</th>
+          <th class="p-2 border">N° Documento</th>
+          <th class="p-2 border">Registrado por</th>
+          <th class="p-2 border">PDF</th>
+          <th class="p-2 border text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ingreso in ingresos %}
+        <tr class="{% cycle 'bg-white' 'bg-gray-50' %} border-t">
+          <td class="p-2 text-center">
+            <button onclick="toggleDetalles({{ ingreso.id }})" id="icono-{{ ingreso.id }}"
+              class="rotate-icon">⏷</button>
+          </td>
+          <td class="p-2">{{ ingreso.fecha_ingreso|date:"d/m/Y" }}</td>
+          <td class="p-2">{{ ingreso.bodega }}</td>
+          <td class="p-2">{{ ingreso.get_tipo_documento_display }}</td>
+          <td class="p-2">{{ ingreso.numero_documento }}</td>
+          <td class="p-2">{{ ingreso.registrado_por.get_full_name|default:"-" }}</td>
+          <td class="p-2">
+            {% if ingreso.archivo_documento %}
+            <a href="{{ ingreso.archivo_documento.url }}" target="_blank" class="text-blue-600 underline">Ver PDF</a>
+            {% else %}
+            <span class="text-gray-400 italic">No adjunto</span>
+            {% endif %}
+          </td>
+          <td class="p-2 text-center space-x-2">
+            <a href="{% url 'logistica:editar_ingreso' ingreso.id %}" class="text-yellow-600 hover:underline">✏️
+              Editar</a>
+            <button type="button" data-url="{% url 'logistica:eliminar_ingreso' ingreso.id %}"
+              onclick="abrirModal(this, '{{ ingreso.fecha_ingreso|date:" d/m/Y" }}', '{{ ingreso.numero_documento }}' )"
+              class="text-red-600 hover:underline">🗑 Eliminar</button>
+          </td>
+        </tr>
+
+        <!-- Detalle de materiales -->
+        <tr id="detalles-{{ ingreso.id }}" class="hidden bg-gray-50">
+          <td colspan="8" class="p-4">
+            <strong class="block mb-2">Materiales:</strong>
+            <table class="w-full text-sm text-left border rounded-lg overflow-hidden">
+              <thead class="bg-gray-100 text-gray-700">
+                <tr>
+                  <th class="p-2 border">Material</th>
+                  <th class="p-2 border">Cantidad</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for detalle in ingreso.detalles.all %}
+                <tr class="{% cycle 'bg-white' 'bg-gray-50' %}">
+                  <td class="p-2 border">{{ detalle.material }}</td>
+                  <td class="p-2 border">{{ detalle.cantidad }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="2" class="p-2 text-gray-500 italic text-center">No hay materiales registrados.</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="p-4 text-center text-gray-500">No hay ingresos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal de Confirmación -->
+<div id="modalEliminar" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <h2 class="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
+      <i class="lucide lucide-trash-2"></i> Confirmar Eliminación
+    </h2>
+    <p class="text-gray-800 mb-6" id="mensajeModal">
+      ¿Estás seguro que deseas eliminar este ingreso?
+    </p>
+    <form id="formEliminar" method="post" class="flex justify-end gap-4">
+      {% csrf_token %}
+      <button type="button" onclick="cerrarModal()"
+        class="px-4 py-2 bg-gray-200 text-gray-800 rounded-xl hover:bg-gray-300">
+        Cancelar
+      </button>
+      <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700">
+        Sí, eliminar
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  function toggleDetalles(id) {
+    const fila = document.getElementById('detalles-' + id);
+    const icono = document.getElementById('icono-' + id);
+
+    if (fila.classList.contains('hidden')) {
+      fila.classList.remove('hidden');
+      icono.style.transform = 'rotate(180deg)';
+    } else {
+      fila.classList.add('hidden');
+      icono.style.transform = 'rotate(0deg)';
+    }
+  }
+
+  function abrirModal(boton, fecha, numero) {
+    const modal = document.getElementById('modalEliminar');
+    const mensaje = document.getElementById('mensajeModal');
+    const form = document.getElementById('formEliminar');
+    const url = boton.getAttribute('data-url');
+
+    modal.classList.remove('hidden');
+    mensaje.innerHTML = `¿Estás seguro que deseas eliminar el ingreso del <strong>${fecha}</strong> con número de documento <strong>${numero}</strong>?`;
+    form.action = url;
+  }
+
+  function cerrarModal() {
+    const modal = document.getElementById('modalEliminar');
+    modal.classList.add('hidden');
+  }
+</script>
+{% endblock %}
