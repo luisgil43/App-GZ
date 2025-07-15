@@ -1,0 +1,93 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Listado de Sitios Móviles{% endblock %}
+
+{% block dashboard_content %}
+<div class="overflow-x-auto bg-white shadow rounded-xl p-6 mt-6">
+
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+      📋 Listado de Sitios Móviles
+    </h2>
+    <a href="{% url 'importar_sitios' %}"
+       class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
+      📥 Importar Sitios
+    </a>
+  </div>
+
+  <!-- Filtro por ID Claro -->
+  <form method="get" class="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
+    <input type="text" name="id_claro" placeholder="Buscar por ID Claro"
+           value="{{ id_claro }}"
+           class="w-full sm:w-64 border rounded-xl p-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <button type="submit"
+            class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
+      🔍 Filtrar
+    </button>
+    <a href="{% url 'listar_sitios' %}"
+       class="bg-gray-200 px-4 py-2 rounded-xl hover:bg-gray-300 text-sm">
+      ❌ Limpiar
+    </a>
+  </form>
+
+  <table class="min-w-full border text-sm text-gray-800">
+    <thead class="bg-gray-100 text-xs uppercase font-semibold text-center">
+      <tr>
+        <th class="p-2 border">ID Sites</th>
+        <th class="p-2 border">ID Claro</th>
+        <th class="p-2 border">ID NEW</th>
+        <th class="p-2 border">Región</th>
+        <th class="p-2 border">Nombre</th>
+        <th class="p-2 border">Dirección</th>
+        <th class="p-2 border">Latitud</th>
+        <th class="p-2 border">Longitud</th>
+        <th class="p-2 border">Comuna</th>
+        <th class="p-2 border">Construcción</th>
+        <th class="p-2 border">Altura</th>
+        <th class="p-2 border">Candado BT</th>
+        <th class="p-2 border">Acceso</th>
+        <th class="p-2 border">Claves</th>
+        <th class="p-2 border">Llaves</th>
+        <th class="p-2 border">Cantidad Llaves</th>
+        <th class="p-2 border">Observaciones</th>
+        <th class="p-2 border">Zonas Conflictivas</th>
+        <th class="p-2 border">Alarmas</th>
+        <th class="p-2 border">Guardias</th>
+        <th class="p-2 border">Nivel</th>
+        <th class="p-2 border">Descripción</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sitio in sitios %}
+      <tr class="hover:bg-gray-50 text-center">
+        <td class="p-2 border">{{ sitio.id_sites }}</td>
+        <td class="p-2 border">{{ sitio.id_claro }}</td>
+        <td class="p-2 border">{{ sitio.id_sites_new }}</td>
+        <td class="p-2 border">{{ sitio.region }}</td>
+        <td class="p-2 border">{{ sitio.nombre }}</td>
+        <td class="p-2 border">{{ sitio.direccion }}</td>
+        <td class="p-2 border">{{ sitio.latitud }}</td>
+        <td class="p-2 border">{{ sitio.longitud }}</td>
+        <td class="p-2 border">{{ sitio.comuna }}</td>
+        <td class="p-2 border">{{ sitio.tipo_construccion }}</td>
+        <td class="p-2 border">{{ sitio.altura }}</td>
+        <td class="p-2 border">{{ sitio.candado_bt }}</td>
+        <td class="p-2 border">{{ sitio.condiciones_acceso }}</td>
+        <td class="p-2 border">{{ sitio.claves }}</td>
+        <td class="p-2 border">{{ sitio.llaves }}</td>
+        <td class="p-2 border">{{ sitio.cantidad_llaves }}</td>
+        <td class="p-2 border">{{ sitio.observaciones_generales }}</td>
+        <td class="p-2 border">{{ sitio.zonas_conflictivas }}</td>
+        <td class="p-2 border">{{ sitio.alarmas }}</td>
+        <td class="p-2 border">{{ sitio.guardias }}</td>
+        <td class="p-2 border">{{ sitio.nivel }}</td>
+        <td class="p-2 border">{{ sitio.descripcion }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="22" class="text-center text-gray-500 p-4">No hay sitios registrados.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

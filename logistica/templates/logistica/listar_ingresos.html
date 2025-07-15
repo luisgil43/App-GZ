@@ -33,23 +33,25 @@
 </div>
     </div>
 
-    <!-- Filtros -->
-    <form method="get" class="flex flex-wrap gap-4 mt-4">
-      <div>
-        <label class="text-sm font-semibold">Mes:</label>
-        {{ form_filtro.mes|add_class:"border rounded-xl px-3 py-2" }}
-      </div>
-      <div>
-        <label class="text-sm font-semibold">Año:</label>
-        {{ form_filtro.anio|add_class:"border rounded-xl px-3 py-2" }}
-      </div>
-      <div class="flex items-end">
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">
-          Filtrar
-        </button>
-      </div>
-    </form>
+ <!-- Filtros -->
+<form method="get" class="flex flex-wrap gap-4 mt-4">
+  <div>
+    <label class="text-sm font-semibold">Mes:</label>
+    {{ form_filtro.mes|add_class:"border rounded-xl px-3 py-2" }}
   </div>
+  <div>
+    <label class="text-sm font-semibold">Año:</label>
+    {{ form_filtro.anio|add_class:"border rounded-xl px-3 py-2" }}
+  </div>
+  <div class="flex items-end gap-2">
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">
+      Filtrar
+    </button>
+    <a href="{% url 'logistica:listar_ingresos' %}" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300">
+      Limpiar filtros
+    </a>
+  </div>
+</form>
 
   <!-- Tabla -->
   <div class="overflow-x-auto">
@@ -58,7 +60,7 @@
         <tr>
           <th class="p-2 border"></th>
           <th class="p-2 border">Fecha</th>
-          <th class="p-2 border">bodega</th>
+          <th class="p-2 border">Bodega</th>
           <th class="p-2 border">Tipo Doc</th>
           <th class="p-2 border">N° Documento</th>
           <th class="p-2 border">Registrado por</th>

@@ -153,3 +153,18 @@ DEFAULT_FROM_EMAIL = 'planix@grupogzs.com'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ====================================
+# Datos de la empresa emisora del DTE
+# ====================================
+
+EMPRESA_RUT = "77084679-K"
+EMPRESA_NOMBRE = "GZ SERVICES AND BUSINESS SPA"
+EMPRESA_GIRO = "Servicio de Ingenieria de Telecomunicaciones y Construcciones"
+EMPRESA_DIR = "Cerro el plomo 5931 Of 1011 PS 10"
+EMPRESA_COMUNA = "Las Condes"
+EMPRESA_CIUDAD = "Santiago"
+EMPRESA_ACTIVIDAD_ECONOMICA = "123456"  # Código del SII
+EMPRESA_FECHA_RESOLUCION = "2020-01-01"
+EMPRESA_NUMERO_RESOLUCION = "80"

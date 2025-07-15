@@ -1,0 +1,27 @@
+<!-- logistica/templates/logistica/importar_caf.html -->
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}Importar CAF{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold mb-4 text-gray-800">📂 Importar Archivo CAF</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <!-- Botones alineados a la derecha -->
+    <div class="flex justify-end gap-4 mt-6">
+      <a href="{% url 'logistica:listar_caf' %}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl">
+        <--- Volver
+      </a>
+      <button type="submit"
+              class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+        📤 Importar
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

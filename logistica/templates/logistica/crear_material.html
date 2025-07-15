@@ -68,14 +68,20 @@
       <label class="block text-sm font-medium mb-1">Stock Mínimo</label>
       {{ form_material.stock_minimo|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
-  </div>
+  
 
   <!-- Unidad de Medida -->
-  <div class="mb-4">
+<div>
     <label class="block text-sm font-medium mb-1">Unidad de Medida</label>
     {{ form_material.unidad_medida|add_class:"w-full border rounded-xl px-3 py-2" }}
   </div>
 
+<!-- Valor Unitario -->
+<div>
+  <label class="block text-sm font-medium mb-1">Valor Unitario ($)</label>
+  {{ form_material.valor_unitario|add_class:"w-full border rounded-xl px-3 py-2" }}
+</div>
+</div>
   <!-- Descripción -->
   <div class="mb-4">
     <label class="block text-sm font-medium mb-1">Descripción</label>
@@ -115,6 +121,7 @@
     <th class="p-3">Stock Actual</th>
     <th class="p-3">Stock Mínimo</th>
 <th class="p-3">Unidad de Medida</th>
+<th class="p-3">Valor Unitario</th>
     <th class="p-3 text-center">Acciones</th>
   </tr>
 </thead>
@@ -128,6 +135,7 @@
     <td class="p-3">{{ material.stock_actual }}</td>
     <td class="p-3">{{ material.stock_minimo }}</td>
 <td class="p-3">{{ material.unidad_medida }}</td>
+<td class="p-3">${{ material.valor_unitario|floatformat:0 }}</td>
     <td class="p-3 text-center">
       <a href="{% url 'logistica:editar_material' material.id %}"
          class="text-blue-600 hover:underline font-medium">Editar</a>

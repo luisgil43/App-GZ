@@ -25,6 +25,20 @@ urlpatterns = [
     path('bodegas/<int:pk>/editar/', views.editar_bodega, name='editar_bodega'),
     path('bodegas/<int:pk>/eliminar/',
          views.eliminar_bodega, name='eliminar_bodega'),
+    path('importar-caf/', views.importar_caf, name='importar_caf'),
+    path('salidas/', views.listar_salidas_material, name='listar_salidas'),
+    path('salidas/registrar/', views.registrar_salida, name='registrar_salida'),
+    path('caf/', views.listar_caf, name='listar_caf'),
+    path('caf/<int:pk>/eliminar/', views.eliminar_caf, name='eliminar_caf'),
+    path('certificados/', views.importar_certificado,
+         name='importar_certificado'),
+    path('certificados/<int:pk>/eliminar/',
+         views.eliminar_certificado, name='eliminar_certificado'),
+    path('salidas/<int:pk>/eliminar/',
+         views.eliminar_salida, name='eliminar_salida'),
+    path('salidas/firmar/<int:pk>/', views.firmar_salida, name='firmar_salida'),
+    path('ajax/material/', views.obtener_datos_material,
+         name='obtener_datos_material'),
 
 
 

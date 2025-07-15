@@ -97,8 +97,11 @@
                         <span class="flecha transition-transform duration-200">▶</span>
                     </div>
                     <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Producciones</a></li>
+
+                        
                         <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
+<li><a href="{% url 'listar_sitios' %}" class="hover:text-emerald-400">Listar Sitios Móviles</a></li>
+<li><a href="#" class="hover:text-emerald-400">Producciones</a></li>
                         <li><a href="#" class="hover:text-emerald-400">Rendiciones</a></li>
                     </ul>
                 </li>
@@ -179,8 +182,10 @@
                     </div>
                     <ul class="ml-4 submenu space-y-1 hidden">
 <li><a href="#" class="hover:text-emerald-400">Asignación de equipos</a></li>
+<li><a href="{% url 'logistica:importar_certificado' %}" class="hover:text-emerald-400">Cargar Certificado Digital</a></li>
 <li><a href="#" class="hover:text-emerald-400">Devolución de Materiales</a></li>
- <li><a href="#" class="hover:text-emerald-400">Salida de Materiales</a></li>
+<li><a href="{% url 'logistica:listar_caf' %}" class="hover:text-emerald-400">Importador de CAF</a></li>
+ <li><a href="{% url 'logistica:listar_salidas' %}" class="hover:text-emerald-400">Salida de Materiales</a></li>
 <li><a href="#" class="hover:text-emerald-400">Traspaso de Materiales</a></li>
                         <li><a href="{% url 'logistica:listar_ingresos' %}" class="hover:text-emerald-400">Ingreso de Materiales</a></li>   
 			
