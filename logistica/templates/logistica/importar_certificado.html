@@ -1,0 +1,155 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+
+{% block title %}Importar Certificado Digital{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-4xl mx-auto mt-10 bg-white shadow-xl rounded-xl p-6">
+  <h2 class="text-2xl font-bold mb-6 text-gray-800">🔐 Importar Certificado Digital</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <!-- Subir archivo -->
+      <div class="md:col-span-2">
+        <label for="id_archivo_certificado" class="block mb-2 text-sm font-medium text-gray-700">Archivo .PFX</label>
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-emerald-500">
+          <input type="file" name="archivo" id="id_archivo_certificado"
+       accept=".pfx" class="hidden" required>
+          <label for="id_archivo_certificado" class="cursor-pointer text-emerald-600 font-medium">
+            Buscar archivo
+          </label>
+          <p id="nombre-archivo" class="text-sm mt-2 text-gray-500">Aún no se ha seleccionado ningún archivo.</p>
+        </div>
+      </div>
+
+      <!-- Contraseña -->
+      <div>
+        <label for="id_clave_certificado" class="block mb-2 text-sm font-medium text-gray-700">Contraseña</label>
+        <div class="relative">
+          <input type="password" name="clave_certificado" id="id_clave_certificado"
+                 class="w-full px-4 py-2 border rounded-xl focus:ring-emerald-500 focus:outline-none"
+                 placeholder="Clave del .pfx" required>
+          <button type="button" onclick="togglePassword()" class="absolute right-3 top-2.5 text-gray-600">👁️</button>
+        </div>
+
+        <label for="id_rut_emisor" class="block mt-4 mb-2 text-sm font-medium text-gray-700">
+          RUT del emisor (sin guión)
+        </label>
+        <input type="text" name="rut_emisor" id="id_rut_emisor"
+               class="w-full px-4 py-2 border rounded-xl focus:ring-emerald-500 focus:outline-none"
+               placeholder="Ej: 123456789" required>
+      </div>
+    </div>
+
+    <div class="flex justify-end mt-8">
+      <button type="submit" class="bg-emerald-600 text-white px-6 py-2 rounded-xl hover:bg-emerald-700">
+        Guardar certificado
+      </button>
+    </div>
+  </form>
+{% if form.errors %}
+  <div class="bg-red-100 text-red-700 p-3 rounded-xl mb-4 text-sm">
+    <strong>Errores en el formulario:</strong>
+    <ul class="list-disc ml-4">
+      {% for field, errors in form.errors.items %}
+        <li><strong>{{ field }}:</strong> {{ errors|join:", " }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+{% endif %}
+
+</div>
+
+<!-- Tabla -->
+<div class="max-w-5xl mx-auto mt-10 bg-white shadow-xl rounded-xl p-6">
+  <h3 class="text-xl font-bold text-gray-800 mb-4">📄 Listado de certificados</h3>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 text-sm">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">Nombre</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">Tamaño</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">Tipo</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">Fecha inicio</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">ID Usuario</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700">Estado</th>
+          <th class="px-4 py-3 text-left font-semibold text-gray-700 text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for certificado in certificados %}
+        <tr>
+          <td class="px-4 py-2 text-gray-700">{{ certificado.archivo.name|slice:"-30:" }}</td>
+          <td class="px-4 py-2 text-gray-700">
+  <a href="{{ certificado.archivo.url }}" target="_blank" class="text-blue-600 hover:underline">
+    Ver archivo
+  </a>
+</td>
+
+          <td class="px-4 py-2 text-gray-700">.pfx</td>
+          <td class="px-4 py-2 text-gray-700">{{ certificado.fecha_inicio|date:"d/m/Y" }}</td>
+          <td class="px-4 py-2 text-gray-700">{{ certificado.usuario.get_full_name }}</td>
+          <td class="px-4 py-2">
+            {% if certificado.activo %}
+              <span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-medium">Activo</span>
+            {% else %}
+              <span class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-medium">Inactivo</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2 text-center">
+            <button onclick="abrirModal('{{ certificado.id }}')" class="text-red-600 hover:text-red-800 font-bold">🗑️Eliminar</button>
+          </td>
+        </tr>
+
+        <!-- Modal -->
+        <div id="modal-{{ certificado.id }}" class="fixed inset-0 z-50 hidden bg-black bg-opacity-50 flex items-center justify-center">
+          <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">¿Eliminar certificado?</h3>
+            <p class="text-sm text-gray-600 mb-6">Esta acción no se puede deshacer. ¿Deseas continuar?</p>
+            <form method="post" action="{% url 'logistica:eliminar_certificado' certificado.id %}">
+              {% csrf_token %}
+              <div class="flex justify-end gap-4">
+                <button type="button" onclick="cerrarModal('{{ certificado.id }}')" class="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-100">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700">Eliminar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center text-gray-500 py-4">No hay certificados cargados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const fileInput = document.getElementById('id_archivo_certificado');
+  const fileLabel = document.getElementById('nombre-archivo');
+
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files.length > 0) {
+      const file = fileInput.files[0];
+      fileLabel.textContent = `Archivo seleccionado: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+    }
+  });
+
+  function togglePassword() {
+    const input = document.getElementById("id_clave_certificado");
+    input.type = input.type === "password" ? "text" : "password";
+  }
+
+  function abrirModal(id) {
+    document.getElementById('modal-' + id).classList.remove('hidden');
+  }
+
+  function cerrarModal(id) {
+    document.getElementById('modal-' + id).classList.add('hidden');
+  }
+</script>
+{% endblock %}

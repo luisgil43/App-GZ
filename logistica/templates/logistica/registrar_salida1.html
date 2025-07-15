@@ -1,0 +1,273 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Registrar Guía de Despacho{% endblock %}
+
+{% block dashboard_content %}
+<style>
+  .campo-requerido {
+    border: 2px solid #000;
+    background-color: #fffbea;
+    transition: all 0.2s ease-in-out;
+  }
+  .campo-requerido:focus {
+    border-color: #facc15;
+    background-color: #fef08a;
+    outline: none;
+  }
+</style>
+
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <!-- Encabezado estilo SII -->
+  <div class="bg-white border border-gray-300 p-4 rounded-xl mb-4">
+    <div class="flex flex-col md:flex-row justify-between items-start mb-4">
+      <!-- Información de la empresa -->
+      <div class="w-full md:w-2/3 mb-4 md:mb-0">
+        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-14 mb-2">
+        <h1 class="text-xl font-bold text-gray-800">GZ SERVICES AND BUSINESS SPA</h1>
+        <p class="text-sm text-gray-600">SERVICIOS DE INGENIERIA DE TELECOMUNICACIONES Y CONSTRUCCIÓN</p>
+        <p class="text-sm text-gray-600">CERRO EL PLOMO 5931 OF 1011 PS 10 LAS CONDES</p>
+        <p class="text-sm text-gray-600">SANTIAGO</p>
+      </div>
+
+      <!-- Información del DTE -->
+      <div class="w-full md:w-1/3 border-2 border-red-600 p-3 rounded-xl text-center">
+        <p class="text-sm font-semibold text-red-700">R.U.T.: 77.084.679-K</p>
+        <p class="text-lg font-bold text-red-700 mt-1 leading-tight">GUÍA DE DESPACHO<br>ELECTRÓNICA</p>
+        <p class="text-sm font-bold text-red-700 mt-2">Nº {{ salida.numero_documento }}</p>
+        <p class="text-xs mt-2 font-medium text-gray-700">S.I.I. - SANTIAGO CENTRO</p>
+      </div>
+    </div>
+
+  <!-- Fecha emisión automática alineada a la derecha -->
+<div class="flex justify-end mt-2 mb-4">
+  <p class="text-sm font-semibold text-gray-800">
+    Fecha Emisión: {{ fecha_emision }}
+  </p>
+</div>
+
+    <!-- Datos del receptor y transporte -->
+    <div class="border border-gray-400 rounded-md text-sm text-gray-800 p-3 space-y-2">
+      <div class="grid grid-cols-2 gap-4">
+  <div>
+    <label class="font-semibold block text-sm mb-1">Señor(es):</label>
+    {{ form.nombre_receptor|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">R.U.T.:</label>
+    {{ form.rut_receptor|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Dirección:</label>
+    {{ form.direccion_receptor|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Comuna:</label>
+    {{ form.comuna_receptor|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Ciudad:</label>
+    {{ form.ciudad_receptor|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Chofer:</label>
+    {{ form.chofer|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">RUT Transportista:</label>
+    {{ form.rut_transportista|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+  <div>
+    <label class="block text-sm mb-1">Patente:</label>
+    {{ form.patente|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+<div>
+    <label class="block text-sm mb-1">Bodega:</label>
+    {{ form.bodega|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+<div>
+    <label class="block text-sm mb-1">ID Proyecto:</label>
+    {{ form.id_proyecto|add_class:"campo-requerido w-full rounded-md text-sm" }}
+  </div>
+</div>
+    </div>
+  </div>
+
+  <!-- Formulario -->
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+   <!-- Tabla de Materiales -->
+<h3 class="text-lg font-semibold text-gray-700 mb-2">📦 Materiales Transportados</h3>
+<div class="overflow-auto rounded-xl shadow ring-1 ring-gray-300">
+  <table class="min-w-full divide-y divide-gray-300 text-sm text-left">
+    <thead class="bg-gray-100 text-gray-700 font-semibold">
+      <tr>
+        <th class="px-4 py-2">Código</th>
+        <th class="px-4 py-2">Descripción</th>
+        <th class="px-4 py-2 text-center">Cantidad</th>
+        <th class="px-4 py-2 text-center">Valor Unitario</th>
+        <th class="px-4 py-2 text-center">Descto.</th>
+        <th class="px-4 py-2 text-right">Valor</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody id="formset-materiales" class="divide-y divide-gray-200">
+      {{ formset.management_form }}
+      {% for form in formset %}
+      <tr class="bg-white">
+        <td class="px-4 py-2">
+          {{ form.material }}
+          {% if form.material.errors %}
+            <p class="text-red-500 text-xs">{{ form.material.errors.0 }}</p>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2">
+  {{ form.material|add_class:"codigo-externo-select campo-requerido w-full rounded-md text-sm" }}
+</td>
+        <td class="px-4 py-2 text-center">
+          {{ form.cantidad }}
+        </td>
+        <td class="px-4 py-2 text-center">
+          {{ form.valor_unitario }}
+        </td>
+        <td class="px-4 py-2 text-center">
+          {{ form.descuento }}
+        </td>
+        <td class="px-4 py-2 text-right font-semibold">
+          $<span class="valor_total">0</span>
+        </td>
+        <td class="px-4 py-2 text-center">
+          <button type="button" class="text-red-600 hover:underline" onclick="eliminarFila(this)">❌</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+
+    <!-- Botón agregar material -->
+    <div class="flex justify-end mt-4 mb-6">
+      <button type="button" onclick="agregarFormulario()" class="text-sm text-blue-600 hover:underline">
+        ➕ Agregar otro material
+      </button>
+    </div>
+
+    <!-- Totales y observaciones -->
+    <div class="grid md:grid-cols-3 gap-6 mt-6 items-start">
+      <!-- Código de barras -->
+      <div class="col-span-1 flex justify-center items-center">
+        <img src="{% static 'images/codigo_barras.png' %}" alt="Código de barras" class="h-24">
+      </div>
+
+      <!-- Observaciones -->
+      <div class="col-span-1">
+        <p class="text-sm font-semibold mb-1">TRASLADO: Otros traslados No Venta</p>
+        <label for="observaciones" class="block text-sm text-gray-700 mb-1">Observaciones:</label>
+        <textarea name="observaciones" rows="4" class="w-full border rounded-xl p-2 text-sm"></textarea>
+      </div>
+
+      <!-- Totales -->
+      <div class="col-span-1 text-sm text-gray-800">
+        <div class="flex justify-between border-b py-1">
+          <span>Neto:</span>
+          <span>$ 0</span>
+        </div>
+        <div class="flex justify-between border-b py-1">
+          <span>19% I.V.A.:</span>
+          <span>$ 0</span>
+        </div>
+        <div class="flex justify-between font-bold py-1">
+          <span>Total:</span>
+          <span>$ 0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="flex justify-end mt-10 gap-4">
+      <a href="{% url 'logistica:listar_salidas' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl">
+        🔙 Cancelar
+      </a>
+      <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-semibold">
+        💾 Registrar Guía
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- JS -->
+<script>
+function agregarFormulario() {
+  const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+  const formset = document.getElementById('formset-materiales');
+  const currentFormCount = parseInt(totalForms.value);
+
+  const emptyForm = formset.querySelector('tr');
+  const newFormHtml = emptyForm.outerHTML.replace(/form-(\d+)/g, `form-${currentFormCount}`);
+  formset.insertAdjacentHTML('beforeend', newFormHtml);
+
+  totalForms.value = currentFormCount + 1;
+}
+
+function eliminarFila(button) {
+  const row = button.closest('tr');
+  row.remove();
+  const totalForms = document.getElementById('id_form-TOTAL_FORMS');
+  totalForms.value = document.querySelectorAll('#formset-materiales tr').length;
+}
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const bodegaSelect = document.getElementById("id_bodega");
+
+    function actualizarMaterialesPorBodega(bodegaId) {
+        fetch(`/logistica/ajax/materiales-por-bodega/?bodega_id=${bodegaId}`)
+            .then(response => response.json())
+            .then(data => {
+                const materiales = data.materiales;
+
+                document.querySelectorAll(".codigo-externo-select").forEach(select => {
+                    // Limpiar opciones anteriores
+                    select.innerHTML = '<option value="">---------</option>';
+
+                    materiales.forEach(mat => {
+                        const option = document.createElement("option");
+                        option.value = mat.codigo_externo;
+                        option.text = mat.codigo_externo;
+                        option.dataset.descripcion = mat.descripcion;
+                        option.dataset.valorUnitario = mat.valor_unitario;
+                        select.appendChild(option);
+                    });
+                });
+            });
+    }
+
+    bodegaSelect.addEventListener("change", function () {
+        const bodegaId = this.value;
+        if (bodegaId) {
+            actualizarMaterialesPorBodega(bodegaId);
+        }
+    });
+
+    document.addEventListener("change", function (e) {
+        if (e.target.classList.contains("codigo-externo-select")) {
+            const selectedOption = e.target.selectedOptions[0];
+            const row = e.target.closest("tr");
+
+            if (selectedOption) {
+                const descripcion = selectedOption.dataset.descripcion;
+                const valorUnitario = selectedOption.dataset.valorUnitario;
+
+                row.querySelector(".descripcion-input").value = descripcion || "";
+                row.querySelector(".valor-unitario-input").value = valorUnitario || "";
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

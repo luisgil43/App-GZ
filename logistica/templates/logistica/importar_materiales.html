@@ -10,12 +10,45 @@
     <i class="lucide lucide-file-spreadsheet"></i> Importar Materiales desde Excel
   </h2>
 
+  <!-- Mostrar mensajes -->
+  {% if messages %}
+    {% for message in messages %}
+      <div class="mb-4 p-3 rounded-xl text-sm font-medium 
+                  {% if message.tags == 'success' %}
+                    bg-green-100 text-green-700
+                  {% elif message.tags == 'error' %}
+                    bg-red-100 text-red-700
+                  {% else %}
+                    bg-blue-100 text-blue-700
+                  {% endif %}">
+        {{ message|safe }}
+      </div>
+    {% endfor %}
+  {% endif %}
+
+  <!-- Mostrar bodegas existentes -->
+  <div class="mb-6">
+    <h3 class="text-lg font-semibold text-gray-700 mb-2">🏢 Bodegas disponibles:</h3>
+    {% if bodegas %}
+      <ul class="list-disc list-inside text-sm text-gray-600">
+        {% for bodega in bodegas %}
+          <li>{{ bodega.nombre }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-sm text-gray-500 italic">No hay bodegas registradas.</p>
+    {% endif %}
+  </div>
+
+  <!-- Formulario de importación -->
   <form method="post" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="mb-4">
       <label for="archivo_excel" class="block font-medium mb-1">Selecciona el archivo Excel</label>
       {{ form_excel.archivo_excel|add_class:"w-full border rounded-xl px-4 py-2" }}
-      {{ form_excel.archivo_excel.errors }}
+      {% if form_excel.archivo_excel.errors %}
+        <p class="text-sm text-red-500 mt-1">{{ form_excel.archivo_excel.errors.0 }}</p>
+      {% endif %}
     </div>
 
     <div class="flex justify-between items-center mt-6">

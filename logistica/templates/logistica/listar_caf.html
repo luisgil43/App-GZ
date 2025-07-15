@@ -1,0 +1,125 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Importador de CAF{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-6">
+
+  <!-- Documentos disponibles -->
+  <h3 class="text-lg font-semibold text-gray-700 mb-4">Documentos disponibles</h3>
+  <div class="flex flex-wrap gap-4 mb-6">
+    <div class="bg-gray-100 rounded-xl px-5 py-3 shadow text-center">
+      <div class="text-sm text-gray-600">Factura electrónica</div>
+      <div class="text-lg font-bold text-gray-800">{{ facturas_disponibles }}</div>
+    </div>
+    <div class="bg-gray-100 rounded-xl px-5 py-3 shadow text-center">
+      <div class="text-sm text-gray-600">Guía de despacho</div>
+      <div class="text-lg font-bold text-gray-800">{{ guias_disponibles }}</div>
+    </div>
+    <div class="bg-gray-100 rounded-xl px-5 py-3 shadow text-center">
+      <div class="text-sm text-gray-600">Nota de crédito</div>
+      <div class="text-lg font-bold text-gray-800">{{ notas_disponibles }}</div>
+    </div>
+  </div>
+
+  <!-- Encabezado -->
+  <div class="flex justify-between items-center mb-6 flex-wrap gap-2">
+    <h2 class="text-2xl font-bold text-gray-800">📄 Lista de archivos CAF</h2>
+    <a href="{% url 'logistica:importar_caf' %}"
+       class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">📤 Importar</a>
+  </div>
+
+  <!-- Tabla -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+      <thead class="bg-gray-100 text-gray-700 text-left">
+        <tr>
+          <th class="p-2 border">Nombre</th>
+          <th class="p-2 border">Usuario</th>
+          <th class="p-2 border">Fecha</th>
+          <th class="p-2 border">Tipo</th>
+          <th class="p-2 border">Rango folio</th>
+          <th class="p-2 border">Folios disponibles</th>
+          <th class="p-2 border">Estado</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for caf in archivos %}
+        <tr class="{% cycle 'bg-white' 'bg-gray-50' %} border-t">
+          <td class="p-2">{{ caf.nombre_archivo }}</td>
+          <td class="p-2">
+            {% if caf.usuario %}
+              {{ caf.usuario.get_full_name|default:caf.usuario.username }}
+            {% else %}
+              <span class="text-gray-400 italic">Sin registrar</span>
+            {% endif %}
+          </td>
+          <td class="p-2">{{ caf.fecha_subida|date:"d/m/Y" }}</td>
+          <td class="p-2">
+            {% if caf.tipo_dte == 33 %}Factura electrónica
+            {% elif caf.tipo_dte == 34 %}Factura exenta
+            {% elif caf.tipo_dte == 52 %}Guía de despacho
+            {% elif caf.tipo_dte == 61 %}Nota de crédito
+            {% elif caf.tipo_dte == 56 %}Nota de débito
+            {% else %}Otro ({{ caf.tipo_dte }})
+            {% endif %}
+          </td>
+          <td class="p-2">{{ caf.rango_inicio }} - {{ caf.rango_fin }}</td>
+          <td class="p-2">
+            {{ caf.disponibles }} / {{ caf.total_folios }}
+          </td>
+          <td class="p-2">
+            <span class="text-xs font-semibold px-3 py-1 rounded-full
+              {% if caf.estado == 'activo' %}bg-green-100 text-green-700
+              {% else %}bg-red-100 text-red-700{% endif %}">
+              {{ caf.estado|capfirst }}
+            </span>
+          </td>
+          <td class="p-2">
+            <button onclick="abrirModal('{{ caf.id }}', '{{ caf.nombre_archivo }}')"
+                    class="text-red-600 hover:text-red-800 font-medium text-sm">
+              🗑️ Eliminar
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="p-4 text-center text-gray-500">No hay archivos CAF cargados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Modal de confirmación de eliminación -->
+    <div id="modalEliminar" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">¿Eliminar CAF?</h2>
+        <p class="text-gray-600 mb-6">
+          ¿Estás seguro que deseas eliminar <strong id="nombreArchivo"></strong>?
+        </p>
+        <div class="flex justify-end gap-4">
+          <button type="button" onclick="cerrarModal()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl">Cancelar</button>
+          <form id="formEliminar" method="POST" action="">
+            {% csrf_token %}
+            <button type="submit" class="bg-red-600 text-white hover:bg-red-700 px-4 py-2 rounded-xl">Eliminar</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function abrirModal(id, nombre) {
+    document.getElementById('modalEliminar').classList.remove('hidden');
+    document.getElementById('nombreArchivo').innerText = nombre;
+    document.getElementById('formEliminar').action = `/logistica/caf/${id}/eliminar/`;  // Ajusta esta ruta si tu URL es diferente
+  }
+
+  function cerrarModal() {
+    document.getElementById('modalEliminar').classList.add('hidden');
+  }
+</script>
+{% endblock %}

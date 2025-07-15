@@ -1,0 +1,45 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Importar Sitios Móviles{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-2xl w-full mx-auto mt-6 px-4 sm:px-6 lg:px-8">
+  <div class="bg-white p-6 rounded-xl shadow-md">
+
+    <h2 class="text-2xl font-bold text-gray-800 mb-4">📥 Importar Sitios Móviles</h2>
+
+    {% if messages %}
+      {% for message in messages %}
+        <div class="mb-4 p-4 rounded-xl text-sm font-semibold
+                    {% if message.tags == 'success' %} bg-green-100 text-green-700
+                    {% elif message.tags == 'error' %} bg-red-100 text-red-700
+                    {% else %} bg-blue-100 text-blue-700 {% endif %}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" class="space-y-5">
+      {% csrf_token %}
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">
+          Selecciona el archivo Excel (.xlsx):
+        </label>
+        <input type="file" name="archivo" accept=".xlsx"
+               class="block w-full border border-gray-300 rounded-xl p-2 shadow-sm focus:ring-2 focus:ring-emerald-500">
+      </div>
+
+      <div class="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4">
+        <a href="{% url 'listar_sitios' %}"
+           class="text-center bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300">
+          ← Volver
+        </a>
+        <button type="submit"
+                class="text-center bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+          Importar
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}

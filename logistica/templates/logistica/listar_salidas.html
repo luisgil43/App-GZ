@@ -1,0 +1,104 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load widget_tweaks %}
+
+{% block title %}Listado de Salidas{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow-lg mt-6">
+
+  <!-- Encabezado y botones -->
+  <div class="mb-6">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="lucide lucide-truck"></i> Salidas de Materiales
+      </h2>
+
+      <div class="flex gap-3 flex-wrap">
+        <a href="{% url 'logistica:crear_bodega' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-xl">➕ Bodega</a>
+        <a href="{% url 'logistica:crear_material' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-xl">➕ Crear Material</a>
+        <a href="{% url 'logistica:registrar_salida' %}" class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">➕ Nueva Salida</a>
+        <a href="{% url 'logistica:importar_caf' %}" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">📂 Importar CAF</a>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <form method="get" class="flex flex-wrap gap-4 mt-4">
+      <div>
+        <label class="text-sm font-semibold">Mes:</label>
+        {{ form_filtro.mes|add_class:"border rounded-xl px-3 py-2" }}
+      </div>
+      <div>
+        <label class="text-sm font-semibold">Año:</label>
+        {{ form_filtro.anio|add_class:"border rounded-xl px-3 py-2" }}
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700">Filtrar</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabla -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm border rounded-xl overflow-hidden">
+      <thead class="bg-gray-100 text-gray-700 text-left">
+        <tr>
+          <th class="p-2 border">Fecha</th>
+          <th class="p-2 border">Bodega</th>
+          <th class="p-2 border">ID Proyecto</th>
+          <th class="p-2 border">Tipo Doc</th>
+          <th class="p-2 border">N° Documento</th>
+          <th class="p-2 border">Folio</th>
+          <th class="p-2 border">Estado</th>
+          <th class="p-2 border">Entregado a</th>
+          <th class="p-2 border">Emitida por</th>
+          <th class="p-2 border">PDF</th>
+          <th class="p-2 border text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for salida in salidas %}
+        <tr class="{% cycle 'bg-white' 'bg-gray-50' %} border-t">
+          <td class="p-2">{{ salida.fecha_salida|date:"d/m/Y" }}</td>
+          <td class="p-2">{{ salida.bodega }}</td>
+          <td class="p-2">{{ salida.proyecto.codigo }}</td>
+          <td class="p-2">{{ salida.get_tipo_documento_display }}</td>
+          <td class="p-2">{{ salida.numero_documento }}</td>
+          <td class="p-2">{{ salida.folio_usado|default:"-" }}</td>
+          <td class="p-2">
+            {% if salida.firmada %}
+              <span class="text-green-700 font-semibold">✔️ Firmada</span>
+            {% else %}
+              <span class="text-red-600 font-semibold">⚠️ No firmada</span>
+            {% endif %}
+          </td>
+          <td class="p-2">{{ salida.entregado_a.get_full_name|default:"-" }}</td>
+          <td class="p-2">{{ salida.emitido_por.get_full_name|default:"-" }}</td>
+          <td class="p-2">
+            {% if salida.archivo_pdf %}
+              <a href="{{ salida.archivo_pdf.url }}" target="_blank" class="text-blue-600 underline">Ver PDF</a>
+            {% else %}
+              <span class="text-gray-400 italic">No disponible</span>
+            {% endif %}
+          </td>
+          <td class="p-2 text-center space-y-1 flex flex-col items-center">
+            <a href="#" class="text-yellow-600 hover:underline">✏️ Editar</a>
+            <button type="button"
+              data-url="{% url 'logistica:eliminar_salida' salida.id %}"
+              onclick="abrirModal(this, '{{ salida.fecha_salida|date:"d/m/Y" }}', '{{ salida.numero_documento }}')"
+              class="text-red-600 hover:underline">🗑 Eliminar</button>
+            {% if not salida.firmada %}
+            <a href="{% url 'logistica:firmar_salida' salida.id %}" class="text-indigo-600 hover:underline font-semibold">🔄 Reintentar firma</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="11" class="p-4 text-center text-gray-500">No hay salidas registradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
