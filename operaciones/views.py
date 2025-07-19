@@ -176,6 +176,7 @@ def crear_servicio_cotizado(request):
     if request.method == 'POST':
         form = ServicioCotizadoForm(request.POST)
         if form.is_valid():
+            print(form.cleaned_data)
             servicio = form.save(commit=False)
             servicio.creado_por = request.user
             servicio.estado = 'cotizado'
@@ -426,6 +427,7 @@ def asignar_trabajadores(request, pk):
         form = AsignarTrabajadoresForm(request.POST)
         if form.is_valid():
             trabajadores = form.cleaned_data['trabajadores']
+            print("Trabajadores asignados:", trabajadores)
             cotizacion.trabajadores_asignados.set(trabajadores)
             cotizacion.estado = 'asignado'
             cotizacion.supervisor_asigna = request.user
