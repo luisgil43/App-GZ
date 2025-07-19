@@ -1,0 +1,20 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+
+{% block title %}Asignar Trabajadores{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-xl mx-auto mt-10 bg-white p-6 rounded-xl shadow">
+  <h2 class="text-xl font-bold mb-4 text-gray-800">👷 Asignar Trabajadores</h2>
+  <p class="mb-4">Servicio: <strong>DU{{ cotizacion.id|stringformat:"08d" }}</strong> - {{ cotizacion.detalle_tarea }}</p>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="flex justify-between mt-6">
+      <a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="bg-gray-300 px-4 py-2 rounded-xl hover:bg-gray-400">Volver</a>
+      <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">Asignar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

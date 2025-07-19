@@ -8,7 +8,7 @@
     <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
       📋 Listado de Sitios Móviles
     </h2>
-    <a href="{% url 'importar_sitios' %}"
+    <a href="{% url 'operaciones:importar_sitios' %}"
        class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
       📥 Importar Sitios
     </a>
@@ -23,7 +23,7 @@
             class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
       🔍 Filtrar
     </button>
-    <a href="{% url 'listar_sitios' %}"
+    <a href="{% url 'operaciones:listar_sitios' %}"
        class="bg-gray-200 px-4 py-2 rounded-xl hover:bg-gray-300 text-sm">
       ❌ Limpiar
     </a>

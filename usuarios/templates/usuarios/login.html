@@ -58,6 +58,31 @@
       text-align: left;
     }
 
+    .message-box {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9rem;
+      text-align: left;
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+    }
+
+    .message-box.error {
+      background-color: #fdecea;
+      color: #d93025;
+    }
+
+    .message-box.success {
+      background-color: #e6ffed;
+      color: #188038;
+    }
+
+    .message-box.info {
+      background-color: #e8f0fe;
+      color: #1a73e8;
+    }
+
     form {
       text-align: left;
     }
@@ -77,7 +102,6 @@
       padding: 10px;
       border: 2px solid #ccc;
       border-radius: 8px;
-      box-sizing: border-box;
       font-size: 1rem;
     }
 
@@ -115,17 +139,17 @@
     }
 
     .footer {
-  text-align: center;
-  font-size: 0.75rem;
-  color: #999;
-  margin-top: 2px;
-}
+      text-align: center;
+      font-size: 0.75rem;
+      color: #999;
+      margin-top: 2px;
+    }
 
     .footer img {
-  height: 60px;
-  vertical-align: middle;
-  margin-left: 0px;
-}
+      height: 60px;
+      vertical-align: middle;
+      margin-left: 0px;
+    }
 
     @media (max-width: 500px) {
       .login-container {
@@ -148,6 +172,15 @@
     <!-- Título -->
     <h2>Plataforma de MILTEL</h2>
     <p class="subtexto">Potenciada por <strong>Planix</strong></p>
+
+    <!-- Mensajes del sistema -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="message-box {{ message.tags }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
 
     <!-- Errores -->
     {% if form.non_field_errors %}
@@ -179,10 +212,20 @@
   </div>
 
   <!-- Footer fuera del contenedor -->
- <div class="footer">
-  Desarrollado por
-  <img src="{% static 'images/planixl.png' %}" alt="Planix">
-</div>
+  <div class="footer">
+    Desarrollado por
+    <img src="{% static 'images/planixl.png' %}" alt="Planix">
+  </div>
+
+  <!-- JS para ocultar mensajes -->
+  <script>
+    setTimeout(() => {
+      document.querySelectorAll('.message-box').forEach(el => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+      });
+    }, 4000); // 4 segundos
+  </script>
 
 </body>
 </html>

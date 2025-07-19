@@ -171,10 +171,14 @@ def login_unificado(request):
             user = form.get_user()
             login(request, user)
 
-            if user.rol == 'usuario':
+            # 🚩 Caso 1: solo tiene rol de usuario
+            if user.roles.count() == 1 and user.tiene_rol('usuario'):
+                # o 'dashboard:inicio_usuario'
                 return redirect('dashboard:index')
-            else:
-                return redirect('usuarios:seleccionar_rol')
+
+            # 🚩 Caso 2: tiene más de un rol
+            return redirect('usuarios:seleccionar_rol')
+
         else:
             messages.error(request, "Credenciales inválidas.")
 
@@ -183,14 +187,20 @@ def login_unificado(request):
 
 @login_required
 def seleccionar_rol(request):
+    usuario = request.user
+    roles_usuario = usuario.roles.all()
+
     if request.method == 'POST':
         opcion = request.POST.get('opcion')
         if opcion == 'usuario':
             return redirect('dashboard:index')
-        else:
+        elif opcion in ['admin', 'rrhh', 'supervisor', 'pm', 'facturacion', 'logistica', 'subcontrato', 'flota', 'bodeguero', 'prevencion']:
             return redirect('dashboard_admin:index')
+        else:
+            messages.error(request, "Rol no reconocido.")
+            return redirect('usuarios:seleccionar_rol')
 
-    return render(request, 'usuarios/seleccionar_rol.html')
+    return render(request, 'usuarios/seleccionar_rol.html', {'roles': roles_usuario})
 
 
 @login_required
@@ -212,3 +222,9 @@ def marcar_notificacion_como_leida(request, pk):
 
     # Técnicos normales
     return redirect('dashboard:inicio_tecnico')
+
+
+def csrf_error_view(request, reason=""):
+    messages.error(
+        request, "Tu sesión ha expirado. Por favor, vuelve a iniciar sesión.")
+    return redirect('usuarios:login_unificado')  # o a donde corresponda

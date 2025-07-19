@@ -1,0 +1,25 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% block title %}Importar Cotizaciones{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold mb-4 text-gray-800">📂 Importar Cotizaciones</h2>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input type="file" name="archivo" accept=".csv, .xlsx" required class="block w-full mb-4 border p-2 rounded-lg">
+
+    <div class="flex justify-between items-center">
+      <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-xl">← Volver</a>
+
+      <div class="flex items-center gap-4">
+        <a href="{% static 'importar_cotizaciones.xlsx' %}" class="text-blue-600 text-sm hover:underline flex items-center gap-1">
+          <i class="lucide lucide-download w-4 h-4"></i> 📥Descargar formato
+        </a>
+        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl">Importar</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

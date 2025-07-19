@@ -100,9 +100,11 @@
 
                         
                         <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
-<li><a href="{% url 'listar_sitios' %}" class="hover:text-emerald-400">Listar Sitios Móviles</a></li>
+<li><a href="{% url 'operaciones:listar_sitios' %}" class="hover:text-emerald-400">Lista Sitios Móviles</a></li>
 <li><a href="#" class="hover:text-emerald-400">Producciones</a></li>
                         <li><a href="#" class="hover:text-emerald-400">Rendiciones</a></li>
+<li><a href="{% url 'operaciones:listar_servicios_pm' %}" class="hover:text-emerald-400">Crear Servicios</a></li>
+<li><a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="hover:text-emerald-400">Realizar Asignación</a></li>
                     </ul>
                 </li>
                 {% endif %}
@@ -184,8 +186,8 @@
 <li><a href="#" class="hover:text-emerald-400">Asignación de equipos</a></li>
 <li><a href="{% url 'logistica:importar_certificado' %}" class="hover:text-emerald-400">Cargar Certificado Digital</a></li>
 <li><a href="#" class="hover:text-emerald-400">Devolución de Materiales</a></li>
-<li><a href="{% url 'logistica:listar_caf' %}" class="hover:text-emerald-400">Importador de CAF</a></li>
- <li><a href="{% url 'logistica:listar_salidas' %}" class="hover:text-emerald-400">Salida de Materiales</a></li>
+<li><a href="#" class="hover:text-emerald-400">Importador de CAF</a></li>
+ <li><a href="#' %}" class="hover:text-emerald-400">Salida de Materiales</a></li>
 <li><a href="#" class="hover:text-emerald-400">Traspaso de Materiales</a></li>
                         <li><a href="{% url 'logistica:listar_ingresos' %}" class="hover:text-emerald-400">Ingreso de Materiales</a></li>   
 			

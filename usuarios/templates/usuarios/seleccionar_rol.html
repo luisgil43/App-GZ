@@ -1,12 +1,30 @@
-{% extends "usuarios/base_publica.html" %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Seleccionar Rol</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
 
-{% block content %}
-<div class="bg-white p-6 rounded-xl max-w-md mx-auto mt-20 shadow-md text-center">
-  <h2 class="text-xl font-bold mb-4 text-gray-800">¿Cómo deseas ingresar?</h2>
-  <form method="post">
-    {% csrf_token %}
-    <button name="opcion" value="usuario" class="w-full mb-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl">Entrar como Usuario</button>
-    <button name="opcion" value="admin" class="w-full bg-gray-800 hover:bg-gray-900 text-white py-2 rounded-xl">Entrar como Administrador</button>
-  </form>
-</div>
-{% endblock %}
+  <div class="bg-white p-6 rounded-xl shadow w-full max-w-sm">
+    <h2 class="text-xl font-bold text-center mb-4 text-gray-900">¿Cómo deseas ingresar?</h2>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="space-y-3">
+        <button type="submit" name="opcion" value="usuario"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl">
+          Entrar como Usuario
+        </button>
+        <button type="submit" name="opcion" value="admin"
+          class="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-xl">
+          Entrar como Administrador
+        </button>
+      </div>
+    </form>
+  </div>
+
+</body>
+</html>
