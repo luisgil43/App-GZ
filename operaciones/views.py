@@ -22,6 +22,15 @@ from django.contrib.auth.decorators import login_required
 from usuarios.decoradores import rol_requerido
 from operaciones.forms import AsignarTrabajadoresForm
 
+# Configurar locale para nombres de meses en español
+try:
+    locale.setlocale(locale.LC_TIME, 'es_CL.utf8')
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
+    except locale.Error:
+        locale.setlocale(locale.LC_TIME, '')  # Usa el del sistema
+
 
 @login_required
 def buscar_mi_sitio(request):
@@ -264,10 +273,6 @@ def aprobar_cotizacion(request, pk):
 
     messages.success(request, "Cotización aprobada correctamente.")
     return redirect('operaciones:listar_servicios_pm')
-
-
-# Para nombres de meses en español (ej. "julio")
-locale.setlocale(locale.LC_TIME, 'es_CL.utf8')
 
 
 @login_required
