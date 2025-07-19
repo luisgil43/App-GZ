@@ -143,7 +143,7 @@ class ServicioCotizado(models.Model):
             ultimo_id = ServicioCotizado.objects.aggregate(max_id=Max('id'))[
                 'max_id'] or 0
             self.du = str(ultimo_id + 1).zfill(8)
-        if not self.monto_mmoo:
+        if not self.monto_mmoo and self.monto_cotizado:
             self.monto_mmoo = self.monto_cotizado * Decimal('0.2')
         super().save(*args, **kwargs)
 
