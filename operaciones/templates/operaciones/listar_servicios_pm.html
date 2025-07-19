@@ -1,0 +1,190 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Mis Cotizaciones{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937; /* Borde gris oscuro */
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem; /* text-sm */
+    height: 2.25rem;     /* similar a Tailwind h-9 */
+    width: 100%;
+    max-width: 160px;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+
+  .campo-filtro:focus {
+    border-color: #3b82f6; /* azul */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+
+  .boton-filtrar {
+    height: 2.25rem;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
+    padding: 0 1rem;
+  }
+</style>
+
+
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📋 Lista de Cotizaciones</h2>
+    <div class="flex gap-3">
+      <a href="{% url 'operaciones:importar_cotizaciones' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl">📥 Importar Cotizaciones</a>
+      <a href="{% url 'operaciones:crear_servicio_cotizado' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl">➕ Crear Cotización</a>
+    </div>
+  </div>
+
+<form method="get" class="mb-6">
+  <div class="flex flex-wrap gap-4 items-end">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
+
+    <select name="estado" class="campo-filtro">
+      <option value="">Todos los estados</option>
+      <option value="cotizado" {% if filtros.estado == 'cotizado' %}selected{% endif %}>Cotizado</option>
+      <option value="aprobado_pendiente" {% if filtros.estado == 'aprobado_pendiente' %}selected{% endif %}>Aprobado por PM</option>
+      <option value="asignado" {% if filtros.estado == 'asignado' %}selected{% endif %}>Asignado</option>
+      <option value="en_progreso" {% if filtros.estado == 'en_progreso' %}selected{% endif %}>En ejecución</option>
+      <option value="finalizado_trabajador" {% if filtros.estado == 'finalizado_trabajador' %}selected{% endif %}>Finalizado por Técnico</option>
+      <option value="rechazado_supervisor" {% if filtros.estado == 'rechazado_supervisor' %}selected{% endif %}>Rechazado Supervisor</option>
+      <option value="aprobado_supervisor" {% if filtros.estado == 'aprobado_supervisor' %}selected{% endif %}>Aprobado Supervisor</option>
+      <option value="informe_subido" {% if filtros.estado == 'informe_subido' %}selected{% endif %}>Informe Cargado</option>
+      <option value="finalizado" {% if filtros.estado == 'finalizado' %}selected{% endif %}>Finalizado</option>
+    </select>
+
+    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white boton-filtrar">🔍 Filtrar</button>
+    <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 boton-filtrar text-center">❌ Limpiar</a>
+  </div>
+</form>
+
+
+
+  <div class="overflow-auto rounded-xl border border-gray-200">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2">DU</th>
+          <th class="p-2">ID CLARO</th>
+          <th class="p-2">REGIÓN</th>
+          <th class="p-2">MES PRODUCCIÓN</th>
+          <th class="p-2">ID NEW</th>
+          <th class="p-2 text-left">DETALLE TAREA</th>
+          <th class="p-2">MONTO COTIZADO</th>
+          <th class="p-2">STATUS</th>
+          <th class="p-2">ACCIONES</th>
+        </tr>
+      </thead>
+      <tbody class="text-center">
+        {% for servicio in servicios %}
+        <tr class="border-t">
+          <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+          <td class="p-2">{{ servicio.id_claro }}</td>
+          <td class="p-2">{{ servicio.region }}</td>
+          <td class="p-2">{{ servicio.mes_produccion }}</td>
+          <td class="p-2">{{ servicio.id_new }}</td>
+          <td class="p-2 text-left">{{ servicio.detalle_tarea|truncatechars:40 }}</td>
+          <td class="p-2">UF {{ servicio.monto_cotizado|intcomma }}</td>
+          <td class="p-2 align-top text-sm">
+            <div class="flex flex-col gap-1 leading-tight">
+              {% if servicio.estado == 'cotizado' %}
+                <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
+                  📝 Cotizado (pendiente aprobación)
+                </span>
+              {% elif servicio.estado == 'aprobado_pendiente' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
+                  ✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}
+                </span>
+              {% elif servicio.estado == 'asignado' %}
+                <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium w-fit">
+  ✅ Asignado por Supervisor: {{ servicio.supervisor_asigna.get_full_name }}
+</span>
+              {% elif servicio.estado == 'en_progreso' %}
+                <span class="inline-block bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-medium w-fit">
+                  🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
+                </span>
+              {% elif servicio.estado == 'finalizado_trabajador' %}
+                <span class="bg-yellow-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">
+                  ✔️ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
+                </span>
+              {% elif servicio.estado == 'rechazado_supervisor' %}
+                <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">
+                  ❌ Rechazado por {{ servicio.supervisor_rechazo.get_full_name }}
+                </span>
+                {% if servicio.motivo_rechazo %}
+                  <span class="text-xs text-gray-700 ml-2">Motivo: {{ servicio.motivo_rechazo }}</span>
+                {% endif %}
+              {% elif servicio.estado == 'aprobado_supervisor' %}
+                <span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">
+                  ✅ Aprobado por Supervisor: {{ servicio.supervisor_aprobo.get_full_name }}
+                </span>
+              {% elif servicio.estado == 'informe_subido' %}
+                <span class="inline-block bg-gray-200 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
+  📄 Informe cargado por {{ servicio.usuario_informe.get_full_name }}
+</span>
+              {% elif servicio.estado == 'finalizado' %}
+               <span class="inline-block bg-green-200 text-green-800 px-2 py-1 rounded-full font-medium w-fit">
+  ✅ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
+</span>
+              {% else %}
+                <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">
+                  Estatus desconocido
+                </span>
+              {% endif %}
+            </div>
+          </td>
+          <td class="p-2 space-x-2">
+            {% if servicio.estado == 'cotizado' %}
+              <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}" class="text-blue-600 hover:underline">✏️</a>
+              <button onclick="abrirModal('modal-{{ servicio.pk }}')" class="text-red-600 hover:underline">🗑️</button>
+              <a href="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}" class="text-green-600 hover:underline font-bold">✅</a>
+
+              <!-- Modal Eliminar -->
+              <div id="modal-{{ servicio.pk }}" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                <div class="bg-white p-6 rounded-xl shadow max-w-md w-full">
+                  <h3 class="text-lg font-bold mb-4 text-gray-800">
+                    ¿Eliminar cotización DU{{ servicio.du|stringformat:"08d" }}?
+                  </h3>
+                  <p class="text-sm text-gray-600 mb-6">Esta acción no se puede deshacer.</p>
+                  <div class="flex justify-end space-x-4">
+                    <button onclick="cerrarModal('modal-{{ servicio.pk }}')" class="px-4 py-2 bg-gray-300 rounded-xl hover:bg-gray-400 text-gray-800">Cancelar</button>
+                    <a href="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl">Eliminar</a>
+                  </div>
+                </div>
+              </div>
+            {% elif servicio.estado == 'aprobado_pendiente' %}
+              <span class="text-gray-400 italic">🔒 Bloqueado</span>
+            {% else %}
+              <span class="text-gray-400 italic">Sin acciones</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="p-4 text-center text-gray-500">No hay cotizaciones registradas.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Script para abrir/cerrar modal -->
+<script>
+  function abrirModal(id) {
+    document.getElementById(id).classList.remove('hidden');
+  }
+  function cerrarModal(id) {
+    document.getElementById(id).classList.add('hidden');
+  }
+</script>
+{% endblock %}

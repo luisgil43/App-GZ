@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block dashboard_content %}
-<div class="max-w-2xl mx-auto bg-white p-6 rounded-xl shadow mt-8">
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-xl shadow mt-8">
   <h2 class="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
     <i class="lucide lucide-pencil-line text-blue-600"></i>
     Registrar Firma Digital
@@ -20,7 +20,7 @@
   <form method="post" id="firmaForm" action="?next={{ request.GET.next|urlencode }}">
     {% csrf_token %}
     <input type="hidden" name="firma_digital" id="firmaInput">
-    <div class="flex gap-4">
+    <div class="flex flex-wrap gap-4">
       <button type="submit" onclick="guardarFirma()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow">
         💾 Guardar Firma
       </button>
@@ -49,11 +49,11 @@
   </div>
 </div>
 
-<!-- Script mejorado -->
+<!-- Script -->
 <script>
   const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
   const firmaInput = document.getElementById('firmaInput');
+  const ctx = canvas.getContext('2d');
   let dibujando = false;
 
   function ajustarCanvas() {
@@ -67,7 +67,6 @@
   window.addEventListener('resize', ajustarCanvas);
   window.addEventListener('load', ajustarCanvas);
 
-  // Mouse
   canvas.addEventListener('mousedown', e => {
     dibujando = true;
     ctx.beginPath();
@@ -84,7 +83,6 @@
   canvas.addEventListener('mouseup', () => dibujando = false);
   canvas.addEventListener('mouseleave', () => dibujando = false);
 
-  // Táctil
   canvas.addEventListener('touchstart', e => {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();

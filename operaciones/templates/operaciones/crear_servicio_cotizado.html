@@ -1,0 +1,76 @@
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Crear Cotización{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6">📝 Crear Cotización</h2>
+
+  <form method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">ID CLARO</label>
+        {{ form.id_claro|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_claro" }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Región</label>
+        {{ form.region|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_region" }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Mes Producción</label>
+        {{ form.mes_produccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700">ID NEW</label>
+        {{ form.id_new|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_id_new" }}
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Detalle Tarea</label>
+        {{ form.detalle_tarea|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
+        {{ form.monto_cotizado|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+    </div>
+
+    <div class="mt-6 flex justify-between items-center">
+  <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-xl">
+    ← Volver
+  </a>
+  <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl">
+    💾 Guardar
+  </button>
+</div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const idClaroInput = document.getElementById("id_claro");
+
+    idClaroInput.addEventListener("blur", function () {
+      const id_claro = idClaroInput.value.trim();
+      if (id_claro) {
+        fetch(`/operaciones/ajax/obtener-datos-sitio/?id_claro=${id_claro}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.region && data.id_new) {
+              document.getElementById("id_region").value = data.region;
+              document.getElementById("id_id_new").value = data.id_new;
+            } else {
+              alert("No se encontró información para este ID Claro.");
+            }
+          })
+          .catch(error => {
+            console.error("Error al buscar datos:", error);
+          });
+      }
+    });
+  });
+</script>
+{% endblock %}

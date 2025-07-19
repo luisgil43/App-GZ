@@ -10,6 +10,9 @@ import json
 
 
 def crear_notificacion(usuario, mensaje, url=None, tipo='info', para_roles=None):
+    if url is None:
+        url = reverse('dashboard:index')  # o cualquier otra vista segura
+
     Notificacion.objects.create(
         usuario=usuario,
         mensaje=mensaje,
