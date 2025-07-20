@@ -51,8 +51,7 @@ class ServicioCotizado(models.Model):
         ('finalizado', 'Finalizado'),
     ]
 
-    # Se generará automáticamente
-    du = models.CharField(max_length=20, blank=True)
+    du = models.CharField(max_length=20, blank=True, unique=True)
     id_claro = models.CharField(max_length=100)
     region = models.CharField(max_length=100)
     mes_produccion = models.CharField(max_length=20)
@@ -63,8 +62,7 @@ class ServicioCotizado(models.Model):
         max_digits=12, decimal_places=2, blank=True, null=True)
 
     estado = models.CharField(
-        max_length=50, choices=ESTADOS, default='cotizado'
-    )
+        max_length=50, choices=ESTADOS, default='cotizado')
 
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -138,11 +136,24 @@ class ServicioCotizado(models.Model):
 
     motivo_rechazo = models.TextField(blank=True, null=True)
 
+    class Meta:
+        managed = True
+
     def save(self, *args, **kwargs):
         if not self.du:
-            ultimo_id = ServicioCotizado.objects.aggregate(max_id=Max('id'))[
-                'max_id'] or 0
-            self.du = str(ultimo_id + 1).zfill(8)
+            ultimo = ServicioCotizado.objects.exclude(
+                du='').order_by('-du').first()
+            if ultimo and ultimo.du.isdigit():
+                nuevo = str(int(ultimo.du) + 1).zfill(8)
+            else:
+                nuevo = '00000001'
+
+            # Asegura que no exista el nuevo DU
+            while ServicioCotizado.objects.filter(du=nuevo).exists():
+                nuevo = str(int(nuevo) + 1).zfill(8)
+
+            self.du = nuevo
+
         if not self.monto_mmoo and self.monto_cotizado:
             self.monto_mmoo = self.monto_cotizado * Decimal('0.2')
         super().save(*args, **kwargs)
