@@ -17,6 +17,7 @@ class ServicioCotizadoForm(forms.ModelForm):
         }
 
 
+"""
 User = get_user_model()
 
 
@@ -34,3 +35,4 @@ class AsignarTrabajadoresForm(forms.Form):
             raise forms.ValidationError(
                 "Debes seleccionar uno o dos trabajadores.")
         return trabajadores
+"""

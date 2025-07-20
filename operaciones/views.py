@@ -20,7 +20,7 @@ from django.shortcuts import render
 from .models import SitioMovil
 from django.contrib.auth.decorators import login_required
 from usuarios.decoradores import rol_requerido
-from operaciones.forms import AsignarTrabajadoresForm
+# from operaciones.forms import AsignarTrabajadoresForm
 
 # Configurar locale para nombres de meses en español
 try:
@@ -362,6 +362,7 @@ def importar_cotizaciones(request):
     return render(request, 'operaciones/importar_cotizaciones.html')
 
 
+"""
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion')
 def listar_servicios_supervisor(request):
@@ -604,3 +605,4 @@ def rechazar_asignacion(request, pk):
         messages.error(request, "Acceso inválido al rechazo.")
 
     return redirect('operaciones:listar_servicios_supervisor')
+"""
