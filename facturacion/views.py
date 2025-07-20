@@ -17,12 +17,16 @@ from facturacion.models import OrdenCompraFacturacion
 from facturacion.forms import OrdenCompraFacturacionForm
 
 
+@login_required
+@rol_requerido('facturacion', 'admin')
 def listar_ordenes_compra(request):
     servicios = ServicioCotizado.objects.prefetch_related(
         'ordenes_compra', 'trabajadores_asignados').all().order_by('-fecha_creacion')
     return render(request, 'facturacion/listar_ordenes_compra.html', {'servicios': servicios})
 
 
+@login_required
+@rol_requerido('facturacion', 'admin')
 def importar_orden_compra(request):
     if request.method == 'POST' and request.FILES.get('archivo_pdf'):
         archivo = request.FILES['archivo_pdf']
@@ -110,6 +114,8 @@ def importar_orden_compra(request):
     return render(request, 'facturacion/importar_orden_compra.html')
 
 
+@login_required
+@rol_requerido('facturacion', 'admin')
 def guardar_ordenes_compra(request):
     if request.method == 'POST':
         datos_previsualizados = request.session.get('ordenes_previsualizadas')
@@ -195,6 +201,8 @@ def guardar_ordenes_compra(request):
     return redirect('facturacion:listar_ordenes_compra')
 
 
+@login_required
+@rol_requerido('facturacion', 'admin')
 def editar_orden_compra(request, pk):
     orden = get_object_or_404(OrdenCompraFacturacion, pk=pk)
     if request.method == 'POST':
