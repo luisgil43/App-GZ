@@ -41,32 +41,44 @@
   </div>
 </div>
 
-<form method="get" class="mb-6">
-  <div class="flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-end">
-    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
-    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
-    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
-    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
+<form method="get" class="mb-6 flex items-end gap-2 whitespace-nowrap overflow-x-auto">
+  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
+         class="w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
 
-    <select name="estado" class="campo-filtro">
-      <option value="">Todos los estados</option>
-      <option value="cotizado" {% if filtros.estado == 'cotizado' %}selected{% endif %}>Cotizado</option>
-      <option value="aprobado_pendiente" {% if filtros.estado == 'aprobado_pendiente' %}selected{% endif %}>Aprobado por PM</option>
-      <option value="asignado" {% if filtros.estado == 'asignado' %}selected{% endif %}>Asignado</option>
-      <option value="en_progreso" {% if filtros.estado == 'en_progreso' %}selected{% endif %}>En ejecución</option>
-      <option value="finalizado_trabajador" {% if filtros.estado == 'finalizado_trabajador' %}selected{% endif %}>Finalizado por Técnico</option>
-      <option value="rechazado_supervisor" {% if filtros.estado == 'rechazado_supervisor' %}selected{% endif %}>Rechazado Supervisor</option>
-      <option value="aprobado_supervisor" {% if filtros.estado == 'aprobado_supervisor' %}selected{% endif %}>Aprobado Supervisor</option>
-      <option value="informe_subido" {% if filtros.estado == 'informe_subido' %}selected{% endif %}>Informe Cargado</option>
-      <option value="finalizado" {% if filtros.estado == 'finalizado' %}selected{% endif %}>Finalizado</option>
-    </select>
+  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
+         class="w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
 
-    <div class="flex gap-3 flex-wrap">
-      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white boton-filtrar">🔍 Filtrar</button>
-      <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 boton-filtrar text-center">❌ Limpiar</a>
-    </div>
-  </div>
+  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
+         class="w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+
+  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
+         class="w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+
+  <select name="estado"
+          class="w-[200px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+    <option value="">Todos los estados</option>
+    <option value="cotizado" {% if filtros.estado == 'cotizado' %}selected{% endif %}>Cotizado</option>
+    <option value="aprobado_pendiente" {% if filtros.estado == 'aprobado_pendiente' %}selected{% endif %}>Aprobado por PM</option>
+    <option value="asignado" {% if filtros.estado == 'asignado' %}selected{% endif %}>Asignado</option>
+    <option value="en_progreso" {% if filtros.estado == 'en_progreso' %}selected{% endif %}>En ejecución</option>
+    <option value="finalizado_trabajador" {% if filtros.estado == 'finalizado_trabajador' %}selected{% endif %}>Finalizado por Técnico</option>
+    <option value="rechazado_supervisor" {% if filtros.estado == 'rechazado_supervisor' %}selected{% endif %}>Rechazado Supervisor</option>
+    <option value="aprobado_supervisor" {% if filtros.estado == 'aprobado_supervisor' %}selected{% endif %}>Aprobado Supervisor</option>
+    <option value="informe_subido" {% if filtros.estado == 'informe_subido' %}selected{% endif %}>Informe Cargado</option>
+    <option value="finalizado" {% if filtros.estado == 'finalizado' %}selected{% endif %}>Finalizado</option>
+  </select>
+
+  <button type="submit"
+          class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
+    🔍 Filtrar
+  </button>
+
+  <a href="{% url 'operaciones:listar_servicios_pm' %}"
+     class="flex items-center gap-1 bg-gray-200 text-red-600 text-sm font-medium px-4 py-1.5 rounded-full hover:bg-gray-300 transition">
+    ❌ Limpiar
+  </a>
 </form>
+
 
 <div class="overflow-x-auto rounded-xl border border-gray-200">
   <table class="min-w-[900px] w-full text-sm">
