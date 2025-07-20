@@ -1,5 +1,7 @@
 # operaciones/views.py
 
+from django.http import HttpResponseServerError
+import logging
 import xlwt
 from django.http import HttpResponse
 import csv
@@ -135,6 +137,52 @@ def importar_sitios_excel(request):
     return render(request, 'operaciones/importar_sitios.html')
 
 
+logger = logging.getLogger(__name__)
+
+
+@login_required
+@rol_requerido('pm', 'admin', 'facturacion')
+def listar_servicios_pm(request):
+    try:
+        servicios = ServicioCotizado.objects.all().order_by('-fecha_creacion')
+
+        du = str(request.GET.get('du', '') or '')
+        id_claro = request.GET.get('id_claro', '')
+        id_new = request.GET.get('id_new', '')
+        mes_produccion = request.GET.get('mes_produccion', '')
+        estado = request.GET.get('estado', '')
+
+        if du:
+            du = du.strip().upper().replace("DU", "")
+            servicios = servicios.filter(du__iexact=du)
+        if id_claro:
+            servicios = servicios.filter(id_claro__icontains=id_claro)
+        if mes_produccion:
+            servicios = servicios.filter(
+                mes_produccion__icontains=mes_produccion)
+        if id_new:
+            servicios = servicios.filter(id_new__icontains=id_new)
+        if estado:
+            servicios = servicios.filter(estado=estado)
+
+        return render(request, 'operaciones/listar_servicios_pm.html', {
+            'servicios': servicios,
+            'filtros': {
+                'du': du,
+                'id_claro': id_claro,
+                'mes_produccion': mes_produccion,
+                'id_new': id_new,
+                'estado': estado,
+            }
+        })
+
+    except Exception as e:
+        logger.exception("Error en listar_servicios_pm")
+        # ⚠️ Solo para depurar
+        return HttpResponseServerError("Ocurrió un error interno: " + str(e))
+
+
+"""
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
 def listar_servicios_pm(request):
@@ -168,6 +216,7 @@ def listar_servicios_pm(request):
             'estado': estado,
         }
     })
+"""
 
 
 @login_required
