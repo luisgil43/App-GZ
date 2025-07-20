@@ -362,7 +362,6 @@ def importar_cotizaciones(request):
     return render(request, 'operaciones/importar_cotizaciones.html')
 
 
-"""
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion')
 def listar_servicios_supervisor(request):
@@ -605,4 +604,3 @@ def rechazar_asignacion(request, pk):
         messages.error(request, "Acceso inválido al rechazo.")
 
     return redirect('operaciones:listar_servicios_supervisor')
-"""
