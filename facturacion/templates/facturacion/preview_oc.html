@@ -1,0 +1,61 @@
+{% extends 'dashboard_admin/base.html' %}
+{% block title %}Previsualizar OC{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold mb-4">📄 Previsualización de Datos Extraídos</h2>
+
+  {% if datos %}
+    <div class="overflow-x-auto">
+      <table class="min-w-full border text-sm text-left">
+        <thead class="bg-gray-100 font-semibold">
+          <tr>
+            <th class="border px-2 py-1">OC</th>
+            <th class="border px-2 py-1">POS</th>
+            <th class="border px-2 py-1">Cantidad</th>
+            <th class="border px-2 py-1">UM</th>
+            <th class="border px-2 py-1">Material</th>
+            <th class="border px-2 py-1">Descripción / Sitio</th>
+            <th class="border px-2 py-1">Fecha Entrega</th>
+            <th class="border px-2 py-1">P. Unitario</th>
+            <th class="border px-2 py-1">Monto</th>
+            <th class="border px-2 py-1">ID NEW</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in datos %}
+            <tr class="border-b hover:bg-gray-50">
+              <td class="border px-2 py-1">{{ fila.orden_compra }}</td>
+              <td class="border px-2 py-1">{{ fila.pos }}</td>
+              <td class="border px-2 py-1">{{ fila.cantidad }}</td>
+              <td class="border px-2 py-1">{{ fila.unidad_medida }}</td>
+              <td class="border px-2 py-1">{{ fila.material_servicio }}</td>
+              <td class="border px-2 py-1">{{ fila.descripcion_sitio }}</td>
+              <td class="border px-2 py-1">{{ fila.fecha_entrega }}</td>
+              <td class="border px-2 py-1">{{ fila.precio_unitario }}</td>
+              <td class="border px-2 py-1">{{ fila.monto }}</td>
+              <td class="border px-2 py-1">{{ fila.id_new }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-6 flex gap-4">
+      <a href="{% url 'facturacion:importar_orden_compra' %}" 
+         class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+        <-- Volver
+      </a>
+
+      <form method="post" action="{% url 'facturacion:guardar_ordenes_compra' %}">
+        {% csrf_token %}
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          Guardar en base de datos
+        </button>
+      </form>
+    </div>
+  {% else %}
+    <p class="text-red-500">❌ No se encontraron datos válidos.</p>
+  {% endif %}
+</div>
+{% endblock %}

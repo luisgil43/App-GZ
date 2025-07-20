@@ -40,5 +40,7 @@ urlpatterns = [
          views.aprobar_asignacion, name='aprobar_asignacion'),
     path('servicios/supervisor/exportar/', views.exportar_servicios_supervisor,
          name='exportar_servicios_supervisor'),
+    path('advertencia-duplicados/', views.advertencia_cotizaciones_omitidas,
+         name='advertencia_cotizaciones_omitidas'),
 
 ]

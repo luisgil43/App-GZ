@@ -1,0 +1,29 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Conflictos en Importación{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold text-red-600 mb-4">❗ Conflictos detectados en la importación</h2>
+  <p class="mb-4">Se encontraron cotizaciones existentes en estado diferente a "Cotizado (pendiente aprobación)".</p>
+
+  <ul class="mb-6 list-disc pl-6 text-sm text-gray-800">
+    {% for item in cotizaciones %}
+      <li>
+        Sitio <strong>{{ item.id_claro }}</strong> (ID NEW: <strong>{{ item.id_new }}</strong>) - Mes: <strong>{{ item.mes_produccion }}</strong> → ya existe con DU <strong>{{ item.du }}</strong> en estado: <strong>{{ item.estado }}</strong>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="flex gap-4">
+      <button name="continuar" type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+        ✅ Omitir estos y continuar
+      </button>
+      <button name="cancelar" type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded">
+        ❌ Cancelar importación
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

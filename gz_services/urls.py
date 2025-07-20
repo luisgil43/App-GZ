@@ -60,6 +60,7 @@ urlpatterns = [
          RedirectView.as_view(url='/usuarios/login/', permanent=False)),
     path('logistica/', include('logistica.urls', namespace='logistica')),
     path('operaciones/', include('operaciones.urls')),
+    path('facturacion/', include('facturacion.urls')),
 
 ]
 
