@@ -52,10 +52,10 @@ class ServicioCotizado(models.Model):
     ]
 
     du = models.CharField(max_length=20, blank=True, unique=True)
-    id_claro = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
+    id_claro = models.CharField(max_length=100, blank=True, null=True)
+    region = models.CharField(max_length=100, blank=True, null=True)
     mes_produccion = models.CharField(max_length=20)
-    id_new = models.CharField(max_length=100)
+    id_new = models.CharField(max_length=100, blank=True, null=True)
     detalle_tarea = models.TextField()
     monto_cotizado = models.DecimalField(max_digits=12, decimal_places=2)
     monto_mmoo = models.DecimalField(
