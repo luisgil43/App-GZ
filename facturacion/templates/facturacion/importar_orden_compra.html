@@ -1,0 +1,71 @@
+{% extends 'dashboard_admin/base.html' %} 
+{% block title %}Importar OC{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold mb-6">📥 Importar Orden de Compra (PDF)</h2>
+
+  <!-- Formulario de carga -->
+  <form method="post" enctype="multipart/form-data" class="space-y-4 mb-8">
+    {% csrf_token %}
+    <input type="file" name="archivo_pdf" accept="application/pdf" required class="block w-full border p-2 rounded-lg">
+    
+    <div class="flex gap-4">
+      <a href="{% url 'facturacion:listar_oc_facturacion' %}" 
+         class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+        <-- Volver
+      </a>
+
+      <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+        Importar OC
+      </button>
+    </div>
+  </form>
+
+  {% if datos %}
+  <!-- Tabla de previsualización -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full border border-gray-300 text-sm text-left">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+          <th class="px-3 py-2 border">Orden de Compra</th>
+          <th class="px-3 py-2 border">POS</th>
+          <th class="px-3 py-2 border">Cantidad</th>
+          <th class="px-3 py-2 border">UM</th>
+          <th class="px-3 py-2 border">Material/Servicio</th>
+          <th class="px-3 py-2 border">Descripción/Sitio</th>
+          <th class="px-3 py-2 border">Fecha Entrega</th>
+          <th class="px-3 py-2 border">Precio Unitario</th>
+          <th class="px-3 py-2 border">Monto</th>
+          <th class="px-3 py-2 border">ID NEW</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in datos %}
+        <tr class="hover:bg-gray-50">
+          <td class="px-3 py-1 border">{{ fila.orden_compra }}</td>
+          <td class="px-3 py-1 border">{{ fila.pos }}</td>
+          <td class="px-3 py-1 border">{{ fila.cantidad }}</td>
+          <td class="px-3 py-1 border">{{ fila.unidad_medida }}</td>
+          <td class="px-3 py-1 border">{{ fila.material_servicio }}</td>
+          <td class="px-3 py-1 border">{{ fila.descripcion_sitio }}</td>
+          <td class="px-3 py-1 border">{{ fila.fecha_entrega }}</td>
+          <td class="px-3 py-1 border">{{ fila.precio_unitario }}</td>
+          <td class="px-3 py-1 border">{{ fila.monto }}</td>
+          <td class="px-3 py-1 border text-xs text-gray-700">{{ fila.id_new }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Botón para guardar -->
+  <form method="post" action="{% url 'guardar_ordenes_compra' %}">
+    {% csrf_token %}
+    <button type="submit" class="mt-6 bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+      Guardar Órdenes Importadas
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

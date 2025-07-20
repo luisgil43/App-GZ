@@ -195,7 +195,7 @@
                 </li>
                 {% endif %}
 
-                {% if request.user.es_admin_general or request.user.es_pm %}
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
                 <li class="group">
                     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
                         onclick="toggleMenu(this)">
@@ -203,7 +203,7 @@
                         <span class="flecha transition-transform duration-200">▶</span>
                     </div>
                     <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Facturas</a></li>
+                        <li><a href="{% url 'facturacion:listar_oc_facturacion' %}" class="hover:text-emerald-400">Lista de OC</a></li>
                     </ul>
                 </li>
                 {% endif %}

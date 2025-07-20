@@ -134,6 +134,14 @@ class ServicioCotizado(models.Model):
         related_name='servicios_asignados_como_supervisor'
     )
 
+    usuario_informe = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='informes_cargados',
+        verbose_name='Usuario que cargó el informe'
+    )
+
     motivo_rechazo = models.TextField(blank=True, null=True)
 
     class Meta:

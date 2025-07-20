@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404
 from .models import ServicioCotizado
 from .forms import ServicioCotizadoForm
 import pandas as pd
+from django.db import models
 from django.contrib import messages
 from django.shortcuts import render, redirect
 from django.shortcuts import render
@@ -278,6 +279,7 @@ def aprobar_cotizacion(request, pk):
     return redirect('operaciones:listar_servicios_pm')
 
 
+"""
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
 def importar_cotizaciones(request):
@@ -321,13 +323,19 @@ def importar_cotizaciones(request):
                     region = id_claro.split(
                         '_')[0] if '_' in id_claro else '13'
 
-                # Autocompletar ID NEW
+                # Obtener ID NEW desde SitioMovil si no viene
                 if 'id_new' in row and not pd.isna(row['id_new']):
                     id_new = row['id_new']
                 else:
-                    id_new = f"CL-{region}-CN-{id_claro.replace('_', '')}"
+                    try:
+                        sitio = SitioMovil.objects.get(id_claro=id_claro)
+                        id_new = sitio.id_sites_new  # Asegúrate que este sea el campo correcto
+                    except SitioMovil.DoesNotExist:
+                        messages.warning(
+                            request, f"No se encontró ID NEW para ID CLARO {id_claro}. Se omitió.")
+                        continue
 
-                # Convertir MES PRODUCCION a "julio 2025"
+                # Convertir MES PRODUCCIÓN a "Julio 2025"
                 valor = row['mes_produccion']
                 if isinstance(valor, (datetime, pd.Timestamp)):
                     mes_produccion = valor.strftime('%B %Y').capitalize()
@@ -343,6 +351,7 @@ def importar_cotizaciones(request):
                     except:
                         mes_produccion = str(valor).capitalize()
 
+                # Crear servicio cotizado
                 ServicioCotizado.objects.create(
                     id_claro=id_claro,
                     region=region,
@@ -351,7 +360,7 @@ def importar_cotizaciones(request):
                     detalle_tarea=row['detalle_tarea'],
                     monto_cotizado=row['monto_cotizado'],
                     estado='cotizado',
-                    creado_por=request.user  # ✅ Esta línea permite que se muestren en el listado
+                    creado_por=request.user
                 )
 
             messages.success(request, 'Cotizaciones importadas correctamente.')
@@ -362,6 +371,148 @@ def importar_cotizaciones(request):
             return redirect('operaciones:listar_servicios_pm')
 
     return render(request, 'operaciones/importar_cotizaciones.html')
+
+"""
+
+
+@login_required
+@rol_requerido('pm', 'admin', 'facturacion')
+def importar_cotizaciones(request):
+    if request.method == 'POST' and request.FILES.get('archivo'):
+        archivo = request.FILES['archivo']
+
+        try:
+            # Cargar archivo
+            if archivo.name.endswith('.csv'):
+                df = pd.read_csv(archivo)
+            else:
+                df = pd.read_excel(archivo)
+
+            encabezados_validos = {
+                'ID CLARO': 'id_claro',
+                'Id Claro': 'id_claro',
+                'REGION': 'region',
+                'REGIÓN': 'region',
+                'MES PRODUCCION': 'mes_produccion',
+                'Mes Producción': 'mes_produccion',
+                'ID NEW': 'id_new',
+                'DETALLE TAREA': 'detalle_tarea',
+                'MONTO COTIZADO': 'monto_cotizado',
+            }
+            df.rename(columns=encabezados_validos, inplace=True)
+
+            columnas_requeridas = [
+                'id_claro', 'mes_produccion', 'detalle_tarea', 'monto_cotizado']
+            for col in columnas_requeridas:
+                if col not in df.columns:
+                    messages.error(
+                        request, f'Falta la columna requerida: {col}')
+                    return redirect('operaciones:listar_servicios_pm')
+
+            # Lista para almacenar conflictos
+            cotizaciones_omitidas = []
+            cotizaciones_creadas = []
+
+            for _, row in df.iterrows():
+                id_claro = str(row['id_claro']).strip()
+
+                # REGION
+                region = row['region'] if 'region' in row and not pd.isna(row['region']) else (
+                    id_claro.split('_')[0] if '_' in id_claro else '13'
+                )
+
+                # ID NEW
+                if 'id_new' in row and not pd.isna(row['id_new']):
+                    id_new = row['id_new']
+                else:
+                    try:
+                        sitio = SitioMovil.objects.get(id_claro=id_claro)
+                        id_new = sitio.id_sites_new
+                    except SitioMovil.DoesNotExist:
+                        messages.warning(
+                            request, f"No se encontró ID NEW para ID CLARO {id_claro}. Se omitió.")
+                        continue
+
+                # MES PRODUCCIÓN
+                valor = row['mes_produccion']
+                if isinstance(valor, (datetime, pd.Timestamp)):
+                    mes_produccion = valor.strftime('%B %Y').capitalize()
+                else:
+                    try:
+                        fecha_parseada = pd.to_datetime(
+                            str(valor), dayfirst=True, errors='coerce')
+                        mes_produccion = (
+                            fecha_parseada.strftime('%B %Y').capitalize()
+                            if not pd.isna(fecha_parseada) else str(valor).capitalize()
+                        )
+                    except:
+                        mes_produccion = str(valor).capitalize()
+
+                # Verificar si ya existe cotización
+                existente = ServicioCotizado.objects.filter(
+                    mes_produccion=mes_produccion
+                ).filter(models.Q(id_claro=id_claro) | models.Q(id_new=id_new)).first()
+
+                if existente:
+                    cotizaciones_omitidas.append({
+                        'id_claro': id_claro,
+                        'id_new': id_new,
+                        'mes_produccion': mes_produccion,
+                        'du': existente.du,
+                        'estado': existente.get_estado_display()
+                    })
+                    continue
+
+                # Crear nueva cotización
+                ServicioCotizado.objects.create(
+                    id_claro=id_claro,
+                    region=region,
+                    mes_produccion=mes_produccion,
+                    id_new=id_new,
+                    detalle_tarea=row['detalle_tarea'],
+                    monto_cotizado=row['monto_cotizado'],
+                    estado='cotizado',
+                    creado_por=request.user
+                )
+                cotizaciones_creadas.append(f"{id_claro} - {mes_produccion}")
+
+            # ¿Hay conflictos?
+            if cotizaciones_omitidas:
+                request.session['cotizaciones_omitidas'] = cotizaciones_omitidas
+                messages.warning(
+                    request, "Se detectaron cotizaciones ya registradas.")
+                return redirect('operaciones:advertencia_cotizaciones_omitidas')
+
+            messages.success(
+                request, f'Se importaron correctamente {len(cotizaciones_creadas)} cotizaciones.')
+            return redirect('operaciones:listar_servicios_pm')
+
+        except Exception as e:
+            messages.error(request, f'Error al importar: {e}')
+            return redirect('operaciones:listar_servicios_pm')
+
+    return render(request, 'operaciones/importar_cotizaciones.html')
+
+
+@login_required
+@rol_requerido('pm', 'admin', 'facturacion')
+def advertencia_cotizaciones_omitidas(request):
+    cotizaciones = request.session.get('cotizaciones_omitidas', [])
+
+    if request.method == 'POST':
+        if 'continuar' in request.POST:
+            del request.session['cotizaciones_omitidas']
+            messages.info(
+                request, "Las cotizaciones omitidas fueron ignoradas. Las demás se importaron correctamente.")
+            return redirect('operaciones:listar_servicios_pm')
+        else:
+            del request.session['cotizaciones_omitidas']
+            messages.warning(request, "La importación fue cancelada.")
+            return redirect('operaciones:listar_servicios_pm')
+
+    return render(request, 'operaciones/advertencia_duplicados.html', {
+        'cotizaciones': cotizaciones
+    })
 
 
 @login_required
