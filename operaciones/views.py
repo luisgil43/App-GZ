@@ -512,8 +512,20 @@ def mis_servicios_tecnico(request):
 
     print("Servicios encontrados:", servicios.count())
 
+    # Prepara los montos personalizados
+    servicios_info = []
+    for servicio in servicios:
+        total_mmoo = servicio.monto_mmoo or 0
+        total_tecnicos = servicio.trabajadores_asignados.count()
+        monto_tecnico = total_mmoo / total_tecnicos if total_tecnicos else 0
+
+        servicios_info.append({
+            'servicio': servicio,
+            'monto_tecnico': monto_tecnico
+        })
+
     return render(request, 'operaciones/mis_servicios_tecnico.html', {
-        'servicios': servicios
+        'servicios_info': servicios_info
     })
 
 
