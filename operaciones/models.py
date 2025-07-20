@@ -117,6 +117,12 @@ class ServicioCotizado(models.Model):
         verbose_name="Aprobado por supervisor"
     )
 
+    fecha_aprobacion_supervisor = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Fecha aprobación del supervisor"
+    )
+
     supervisor_rechazo = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,

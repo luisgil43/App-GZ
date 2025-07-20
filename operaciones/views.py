@@ -1,5 +1,6 @@
 # operaciones/views.py
 
+from django.utils.timezone import now
 from django.http import HttpResponseServerError
 import logging
 import xlwt
@@ -36,6 +37,7 @@ except locale.Error:
 
 
 @login_required
+@rol_requerido('usuario')
 def buscar_mi_sitio(request):
     id_sitio = request.GET.get("id")
     sitio = None
@@ -279,102 +281,6 @@ def aprobar_cotizacion(request, pk):
     return redirect('operaciones:listar_servicios_pm')
 
 
-"""
-@login_required
-@rol_requerido('pm', 'admin', 'facturacion')
-def importar_cotizaciones(request):
-    if request.method == 'POST' and request.FILES.get('archivo'):
-        archivo = request.FILES['archivo']
-
-        try:
-            if archivo.name.endswith('.csv'):
-                df = pd.read_csv(archivo)
-            else:
-                df = pd.read_excel(archivo)
-
-            encabezados_validos = {
-                'ID CLARO': 'id_claro',
-                'Id Claro': 'id_claro',
-                'REGION': 'region',
-                'REGIÓN': 'region',
-                'MES PRODUCCION': 'mes_produccion',
-                'Mes Producción': 'mes_produccion',
-                'ID NEW': 'id_new',
-                'DETALLE TAREA': 'detalle_tarea',
-                'MONTO COTIZADO': 'monto_cotizado',
-            }
-            df.rename(columns=encabezados_validos, inplace=True)
-
-            columnas_requeridas = [
-                'id_claro', 'mes_produccion', 'detalle_tarea', 'monto_cotizado']
-            for col in columnas_requeridas:
-                if col not in df.columns:
-                    messages.error(
-                        request, f'Falta la columna requerida: {col}')
-                    return redirect('operaciones:listar_servicios_pm')
-
-            for _, row in df.iterrows():
-                id_claro = str(row['id_claro'])
-
-                # Autocompletar REGION
-                if 'region' in row and not pd.isna(row['region']):
-                    region = row['region']
-                else:
-                    region = id_claro.split(
-                        '_')[0] if '_' in id_claro else '13'
-
-                # Obtener ID NEW desde SitioMovil si no viene
-                if 'id_new' in row and not pd.isna(row['id_new']):
-                    id_new = row['id_new']
-                else:
-                    try:
-                        sitio = SitioMovil.objects.get(id_claro=id_claro)
-                        id_new = sitio.id_sites_new  # Asegúrate que este sea el campo correcto
-                    except SitioMovil.DoesNotExist:
-                        messages.warning(
-                            request, f"No se encontró ID NEW para ID CLARO {id_claro}. Se omitió.")
-                        continue
-
-                # Convertir MES PRODUCCIÓN a "Julio 2025"
-                valor = row['mes_produccion']
-                if isinstance(valor, (datetime, pd.Timestamp)):
-                    mes_produccion = valor.strftime('%B %Y').capitalize()
-                else:
-                    try:
-                        fecha_parseada = pd.to_datetime(
-                            str(valor), dayfirst=True, errors='coerce')
-                        if pd.isna(fecha_parseada):
-                            mes_produccion = str(valor).capitalize()
-                        else:
-                            mes_produccion = fecha_parseada.strftime(
-                                '%B %Y').capitalize()
-                    except:
-                        mes_produccion = str(valor).capitalize()
-
-                # Crear servicio cotizado
-                ServicioCotizado.objects.create(
-                    id_claro=id_claro,
-                    region=region,
-                    mes_produccion=mes_produccion,
-                    id_new=id_new,
-                    detalle_tarea=row['detalle_tarea'],
-                    monto_cotizado=row['monto_cotizado'],
-                    estado='cotizado',
-                    creado_por=request.user
-                )
-
-            messages.success(request, 'Cotizaciones importadas correctamente.')
-            return redirect('operaciones:listar_servicios_pm')
-
-        except Exception as e:
-            messages.error(request, f'Error al importar: {e}')
-            return redirect('operaciones:listar_servicios_pm')
-
-    return render(request, 'operaciones/importar_cotizaciones.html')
-
-"""
-
-
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
 def importar_cotizaciones(request):
@@ -607,7 +513,7 @@ def asignar_trabajadores(request, pk):
 
 
 @login_required
-@rol_requerido('supervisor')
+@rol_requerido('supervisor', 'admin')
 def exportar_servicios_supervisor(request):
     servicios = ServicioCotizado.objects.filter(
         estado__in=[
@@ -728,7 +634,7 @@ def finalizar_servicio(request, servicio_id):
 
 
 @login_required
-@rol_requerido('supervisor')
+@rol_requerido('supervisor', 'admin')
 def aprobar_asignacion(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
@@ -737,6 +643,7 @@ def aprobar_asignacion(request, pk):
     elif servicio.estado == 'finalizado_trabajador':
         servicio.estado = 'aprobado_supervisor'
         servicio.supervisor_aprobo = request.user
+        servicio.fecha_aprobacion_supervisor = now()
     else:
         messages.warning(
             request, "Este servicio no está en un estado aprobable.")
@@ -748,7 +655,7 @@ def aprobar_asignacion(request, pk):
 
 
 @login_required
-@rol_requerido('supervisor')
+@rol_requerido('supervisor', 'admin')
 def rechazar_asignacion(request, pk):
     if request.method == 'POST':
         motivo = request.POST.get('motivo', '').strip()
