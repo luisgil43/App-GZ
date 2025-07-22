@@ -132,10 +132,13 @@ def guardar_ordenes_compra(request):
             if not id_new:
                 continue
 
-            try:
-                servicio = ServicioCotizado.objects.get(id_new=id_new)
-            except ServicioCotizado.DoesNotExist:
+            servicios = ServicioCotizado.objects.filter(id_new=id_new)
+            if not servicios.exists():
                 continue
+            if servicios.count() > 1:
+                print(
+                    f"⚠️ Hay múltiples servicios con el mismo id_new: {id_new}")
+            servicio = servicios.first()
 
             try:
                 cantidad = Decimal(
@@ -153,18 +156,6 @@ def guardar_ordenes_compra(request):
                             fecha_texto, '%d.%m.%Y').date()
                     except ValueError:
                         pass
-
-                # Validar campos obligatorios antes de crear
-                campos_obligatorios = [
-                    item.get('orden_compra'),
-                    item.get('pos'),
-                    item.get('unidad_medida'),
-                    item.get('material_servicio'),
-                    item.get('descripcion_sitio'),
-                ]
-                if not all(campos_obligatorios):
-                    print(f"❌ Datos incompletos en la fila {idx}: {item}")
-                    continue
 
                 # Validación de duplicado por OC + POS + ID_NEW
                 ya_existe = OrdenCompraFacturacion.objects.filter(
@@ -194,8 +185,7 @@ def guardar_ordenes_compra(request):
                 ordenes_guardadas += 1
 
             except Exception as e:
-                print(f"❌ Error al guardar una orden en la fila {idx}: {item}")
-                traceback.print_exc()
+                print(f"❌ Error al guardar una orden: {e}")
                 continue
 
         # Limpia sesión
