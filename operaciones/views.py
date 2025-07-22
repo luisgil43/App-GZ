@@ -197,14 +197,10 @@ def crear_servicio_cotizado(request):
 def editar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
-    if servicio.estado not in ['cotizado', 'aprobado'] and not (request.user.is_superuser or request.user.es_facturacion):
+    # Validar estado permitido
+    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (request.user.is_superuser or request.user.es_facturacion):
         messages.error(
             request, "No puedes editar esta cotización porque ya fue asignada.")
-        return redirect('operaciones:listar_servicios_pm')
-
-    if servicio.creado_por != request.user and not request.user.is_superuser:
-        messages.error(
-            request, "No tienes permisos para editar esta cotización.")
         return redirect('operaciones:listar_servicios_pm')
 
     if request.method == 'POST':
@@ -224,16 +220,10 @@ def editar_servicio_cotizado(request, pk):
 def eliminar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
-    # Solo permitir eliminar si el estado es editable o el usuario es admin o facturación
-    if servicio.estado not in ['cotizado', 'aprobado'] and not (request.user.is_superuser or request.user.es_facturacion):
+    # Validar estado permitido
+    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (request.user.is_superuser or request.user.es_facturacion):
         messages.error(
             request, "No puedes eliminar esta cotización porque ya fue asignada.")
-        return redirect('operaciones:listar_servicios_pm')
-
-    # Solo permitir que el PM elimine su propia cotización
-    if servicio.creado_por != request.user and not request.user.is_superuser:
-        messages.error(
-            request, "No tienes permisos para eliminar esta cotización.")
         return redirect('operaciones:listar_servicios_pm')
 
     servicio.delete()
