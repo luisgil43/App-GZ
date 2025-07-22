@@ -168,8 +168,6 @@ class ServicioCotizado(models.Model):
 
             self.du = nuevo
 
-        if not self.monto_mmoo and self.monto_cotizado:
-            self.monto_mmoo = self.monto_cotizado * Decimal('0.2')
         super().save(*args, **kwargs)
 
     def __str__(self):

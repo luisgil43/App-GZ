@@ -304,6 +304,7 @@ def importar_cotizaciones(request):
                 'ID NEW': 'id_new',
                 'DETALLE TAREA': 'detalle_tarea',
                 'MONTO COTIZADO': 'monto_cotizado',
+                'MONTO MMOO': 'monto_mmoo',
             }
             df.rename(columns=encabezados_validos, inplace=True)
 
@@ -377,6 +378,7 @@ def importar_cotizaciones(request):
                     id_new=id_new,
                     detalle_tarea=row['detalle_tarea'],
                     monto_cotizado=row['monto_cotizado'],
+                    monto_mmoo=row['monto_mmoo'],
                     estado='cotizado',
                     creado_por=request.user
                 )
@@ -422,7 +424,7 @@ def advertencia_cotizaciones_omitidas(request):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'facturacion')
+@rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
     servicios = ServicioCotizado.objects.filter(
         estado__in=[
@@ -478,7 +480,7 @@ def listar_servicios_supervisor(request):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin')
+@rol_requerido('supervisor', 'admin', 'pm')
 def asignar_trabajadores(request, pk):
     cotizacion = get_object_or_404(ServicioCotizado, pk=pk)
 
@@ -513,7 +515,7 @@ def asignar_trabajadores(request, pk):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin')
+@rol_requerido('supervisor', 'admin', 'pm')
 def exportar_servicios_supervisor(request):
     servicios = ServicioCotizado.objects.filter(
         estado__in=[
@@ -634,7 +636,7 @@ def finalizar_servicio(request, servicio_id):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin')
+@rol_requerido('supervisor', 'admin', 'pm')
 def aprobar_asignacion(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
@@ -655,7 +657,7 @@ def aprobar_asignacion(request, pk):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin')
+@rol_requerido('supervisor', 'admin', 'pm')
 def rechazar_asignacion(request, pk):
     if request.method == 'POST':
         motivo = request.POST.get('motivo', '').strip()

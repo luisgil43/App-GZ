@@ -9,12 +9,20 @@ from .models import ServicioCotizado
 class ServicioCotizadoForm(forms.ModelForm):
     class Meta:
         model = ServicioCotizado
-        fields = ['id_claro', 'region', 'mes_produccion',
-                  'id_new', 'detalle_tarea', 'monto_cotizado']
+        fields = [
+            'id_claro', 'region', 'mes_produccion',
+            'id_new', 'detalle_tarea', 'monto_cotizado', 'monto_mmoo'
+        ]
         widgets = {
             'detalle_tarea': forms.Textarea(attrs={'rows': 3}),
             'mes_produccion': forms.TextInput(attrs={'placeholder': 'Ej: Julio 2025'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Hacer todos los campos requeridos (sin modificar el modelo)
+        for field in self.fields.values():
+            field.required = True
 
 
 User = get_user_model()
