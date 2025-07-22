@@ -1,3 +1,4 @@
+import traceback
 from usuarios.decoradores import rol_requerido
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
@@ -153,6 +154,18 @@ def guardar_ordenes_compra(request):
                     except ValueError:
                         pass
 
+                # Validar campos obligatorios antes de crear
+                campos_obligatorios = [
+                    item.get('orden_compra'),
+                    item.get('pos'),
+                    item.get('unidad_medida'),
+                    item.get('material_servicio'),
+                    item.get('descripcion_sitio'),
+                ]
+                if not all(campos_obligatorios):
+                    print(f"❌ Datos incompletos en la fila {idx}: {item}")
+                    continue
+
                 # Validación de duplicado por OC + POS + ID_NEW
                 ya_existe = OrdenCompraFacturacion.objects.filter(
                     orden_compra=item.get('orden_compra'),
@@ -162,7 +175,8 @@ def guardar_ordenes_compra(request):
 
                 if ya_existe:
                     ordenes_duplicadas.append(
-                        f"OC: {item.get('orden_compra')} - POS: {item.get('pos')} - ID: {id_new}")
+                        f"OC: {item.get('orden_compra')} - POS: {item.get('pos')} - ID: {id_new}"
+                    )
                     continue
 
                 OrdenCompraFacturacion.objects.create(
@@ -180,7 +194,8 @@ def guardar_ordenes_compra(request):
                 ordenes_guardadas += 1
 
             except Exception as e:
-                print(f"❌ Error al guardar una orden: {e}")
+                print(f"❌ Error al guardar una orden en la fila {idx}: {item}")
+                traceback.print_exc()
                 continue
 
         # Limpia sesión
