@@ -11,7 +11,7 @@
   </div>
 
   <div class="overflow-auto rounded-xl border border-gray-200">
-    <table class="min-w-full text-sm">
+   <table class="w-full table-auto border border-gray-300 rounded-xl text-sm">
       <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
         <tr>
           <th class="p-2">DU</th>
@@ -43,7 +43,10 @@
           <td class="p-2 font-mono">DU{{ servicio.du }}</td>
           <td class="p-2">{{ servicio.id_claro }}</td>
           <td class="p-2">{{ servicio.id_new }}</td>
-          <td class="p-2">{{ servicio.detalle_tarea }}</td>
+<td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+  {{ servicio.detalle_tarea }}
+</td>
+
           <td class="p-2">
             {% for user in servicio.trabajadores_asignados.all %}
               {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}

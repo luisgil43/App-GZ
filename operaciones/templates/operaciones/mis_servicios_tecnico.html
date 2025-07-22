@@ -7,21 +7,22 @@
 <div class="max-w-7xl mx-auto p-4 bg-white rounded-xl shadow mt-6 overflow-x-auto">
   <h2 class="text-2xl font-bold text-gray-800 mb-4">🛠️ Lista de Actividades Asignadas</h2>
 
-  <table class="min-w-full table-auto border border-gray-300 rounded-xl text-sm">
-    <thead class="bg-gray-100 text-left">
-      <tr>
-        <th class="p-2">DU</th>
-        <th class="p-2">ID CLARO</th>
-        <th class="p-2">REGIÓN</th>
-        <th class="p-2">MES PRODUCCIÓN</th>
-        <th class="p-2">ID NEW</th>
-        <th class="p-2">DETALLE TAREA</th>
-        <th class="p-2">MONTO MMOO</th>
-        <th class="p-2">TÉCNICO QUE ACEPTÓ</th>
-        <th class="p-2">ACCIONES</th>
-        <th class="p-2">STATUS</th>
-      </tr>
-    </thead>
+  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
+  <thead class="bg-gray-100">
+  <tr>
+    <th class="p-2 text-center">DU</th>
+    <th class="p-2 text-center">ID CLARO</th>
+    <th class="p-2 text-center">REGIÓN</th>
+    <th class="p-2 text-center">MES PRODUCCIÓN</th>
+    <th class="p-2 text-center">ID NEW</th>
+    <th class="p-2 text-center">DETALLE TAREA</th>
+    <th class="p-2 text-center">MONTO MMOO</th>
+    <th class="p-2 text-center">TÉCNICO QUE ACEPTÓ</th>
+    <th class="p-2 text-center">ACCIONES</th>
+    <th class="p-2 text-center">STATUS</th>
+  </tr>
+</thead>
+
     <tbody>
       {% if servicios_info %}
         {% for item in servicios_info %}
@@ -32,7 +33,10 @@
             <td class="p-2">{{ servicio.region }}</td>
             <td class="p-2">{{ servicio.mes_produccion }}</td>
             <td class="p-2">{{ servicio.id_new }}</td>
-            <td class="p-2">{{ servicio.detalle_tarea }}</td>
+         <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+  {{ servicio.detalle_tarea }}
+</td>
+
             <td class="p-2 text-right">UF {{ monto|floatformat:0|intcomma }}</td>
             <td class="p-2">
               {% if servicio.tecnico_aceptado %}
@@ -50,8 +54,8 @@
                 <span class="text-gray-400 italic text-xs">Sin acciones</span>
               {% endif %}
             </td>
-            <td class="p-2 align-top text-sm">
-              <div class="flex flex-col gap-1 leading-tight">
+            <td class="p-2 text-sm text-center align-middle">
+  <div class="inline-block">
                 {% if servicio.estado == 'asignado' %}
                   <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">🔶 Pendiente por aceptar trabajador</span>
                 {% elif servicio.estado == 'en_progreso' %}
