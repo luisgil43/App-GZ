@@ -88,17 +88,14 @@
     <!-- Contenedor principal -->
     <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
 
-        <!-- Menú lateral responsive -->
-        <nav id="side-nav"
-            class="bg-sidebar text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
-            <ul class="space-y-4 text-base font-medium">
-
-                <li>
-                    <a href="{% url 'dashboard_admin:inicio_admin' %}"
-                        class="flex items-center gap-2 hover:text-emerald-400">
-                        🏠 Inicio
-                    </a>
-                </li>
+  <!-- Menú lateral con animación -->
+    <nav id="side-nav"
+      class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
+      <h2 class="text-2xl font-bold mb-8">Menú</h2>
+      <ul class="space-y-4 text-base">
+        <li>
+          <a href="{% url 'dashboard_admin:inicio_admin' %}" class="font-bold flex items-center hover:text-emerald-400">🏠 Inicio</a>
+        </li>
                 {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
                 <li class="group">
                     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
