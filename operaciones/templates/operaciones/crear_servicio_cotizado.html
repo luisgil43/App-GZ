@@ -12,31 +12,36 @@
     {{ form.non_field_errors }}
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">ID CLARO</label>
-        {{ form.id_claro|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_claro" }}
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Región</label>
-        {{ form.region|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_region" }}
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Mes Producción</label>
-        {{ form.mes_produccion|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-700">ID NEW</label>
-        {{ form.id_new|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_id_new" }}
-      </div>
-      <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Detalle Tarea</label>
-        {{ form.detalle_tarea|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-      <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
-        {{ form.monto_cotizado|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-    </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">ID CLARO</label>
+    {{ form.id_claro|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_claro"|attr:"required" }}
+  </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Región</label>
+    {{ form.region|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_region"|attr:"required" }}
+  </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">Mes Producción</label>
+    {{ form.mes_produccion|add_class:"w-full border rounded-xl px-3 py-2"|attr:"required" }}
+  </div>
+  <div>
+    <label class="block text-sm font-medium text-gray-700">ID NEW</label>
+    {{ form.id_new|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_id_new"|attr:"required" }}
+  </div>
+  <div class="md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700">Detalle Tarea</label>
+    {{ form.detalle_tarea|add_class:"w-full border rounded-xl px-3 py-2"|attr:"required" }}
+  </div>
+  <div class="md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
+    {{ form.monto_cotizado|add_class:"w-full border rounded-xl px-3 py-2"|attr:"required" }}
+  </div>
+  <div class="md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700">Monto MMOO (UF)</label>
+    {{ form.monto_mmoo|add_class:"w-full border rounded-xl px-3 py-2"|attr:"required" }}
+  </div>
+</div>
+
 
     <div class="mt-6 flex justify-between items-center">
   <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-xl">

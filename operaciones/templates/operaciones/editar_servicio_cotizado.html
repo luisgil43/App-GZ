@@ -5,7 +5,7 @@
 
 {% block dashboard_content %}
 <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
-  <h2 class="text-2xl font-bold text-gray-800 mb-6"✏️ Editar Cotización</h2>
+  <h2 class="text-2xl font-bold text-gray-800 mb-6">✏️ Editar Cotización</h2>
 
   <form method="post">
     {% csrf_token %}
@@ -34,12 +34,18 @@
         <label class="block text-sm font-medium text-gray-700">Monto Cotizado</label>
         {{ form.monto_cotizado|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Monto MMOO</label>
+        {{ form.monto_mmoo|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
     </div>
 
-    <div class="mt-6 flex justify-end gap-4">
-      <a href="{% url 'operaciones:listar_servicios_pm' %}" class="text-gray-600 hover:underline">← Cancelar</a>
-      <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl">
-        💾 Guardar Cambios
+    <div class="mt-6 flex justify-between items-center">
+      <a href="{% url 'operaciones:listar_servicios_pm' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-5 py-2 rounded-xl font-semibold">
+        <-- Volver
+      </a>
+      <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-xl font-semibold">
+        💾 Guardar
       </button>
     </div>
   </form>
