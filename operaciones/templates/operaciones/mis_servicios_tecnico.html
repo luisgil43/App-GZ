@@ -33,7 +33,7 @@
             <td class="p-2">{{ servicio.mes_produccion }}</td>
             <td class="p-2">{{ servicio.id_new }}</td>
             <td class="p-2">{{ servicio.detalle_tarea }}</td>
-            <td class="p-2 text-right">${{ monto|floatformat:0|intcomma }}</td>
+            <td class="p-2 text-right">UF {{ monto|floatformat:0|intcomma }}</td>
             <td class="p-2">
               {% if servicio.tecnico_aceptado %}
                 {{ servicio.tecnico_aceptado.get_full_name }}
