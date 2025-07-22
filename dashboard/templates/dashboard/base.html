@@ -25,62 +25,69 @@
 
 <body class="bg-gray-100 text-gray-900">
 
-    <!-- Header fijo -->
- <header class="bg-white shadow-md fixed top-0 left-0 w-full h-14 z-50 flex items-center justify-between px-4">
-  <div class="flex items-center gap-3">
-    <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
-    <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
-    <strong class="text-gray-800 text-sm md:text-base">PLATAFORMA DE MILTEL</strong>
-  </div>
+<!-- Header fijo -->
+<header class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2">
+  <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
 
-  <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm md:text-base text-right sm:text-left">
-  <span class="font-medium break-words text-gray-800 text-sm text-center sm:text-left leading-tight">
-    {{ request.user.get_full_name|default:request.user.username }}
-  </span>
-
-  <form method="post" action="{% url 'dashboard_admin:logout' %}" class="text-center sm:text-left">
-    {% csrf_token %}
-    <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-      Cerrar Sesión
-    </button>
-  </form>
-</div>
-
-
-    <!-- Campanita de notificaciones -->
-    <div class="relative">
+    <!-- Campana SIEMPRE ARRIBA A LA DERECHA -->
+    <div class="absolute top-3 right-4 z-50">
       <button onclick="toggleNotifications()" class="relative text-gray-700">
         <i data-lucide="bell" class="w-6 h-6"></i>
         {% if notificaciones_no_leidas > 0 %}
-          <span
-            class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+          <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
             {{ notificaciones_no_leidas }}
           </span>
         {% endif %}
       </button>
 
-    <!-- Panel de notificaciones -->
-<div id="notification-panel"
-     class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
-  <div class="p-2 max-h-80 overflow-y-auto">
-    {% for n in notificaciones_recientes %}
-      <div id="notificacion-{{ n.id }}">
-        <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
-                class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
-          <div class="flex flex-col">
-  <span>{{ n.mensaje }}</span>
-  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
-</div>
-        </button>
+      <!-- Panel de notificaciones -->
+      <div id="notification-panel"
+           class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
+        <div class="p-2 max-h-80 overflow-y-auto">
+          {% for n in notificaciones_recientes %}
+            <div id="notificacion-{{ n.id }}">
+              <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
+                      class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
+                <div class="flex flex-col">
+                  <span>{{ n.mensaje }}</span>
+                  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
+                </div>
+              </button>
+            </div>
+          {% empty %}
+            <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
+          {% endfor %}
+        </div>
       </div>
-    {% empty %}
-  <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
-{% endfor %}
-  </div>
-</div>
     </div>
+
+    <!-- CONTENIDO DEL HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full pr-16 gap-2 sm:gap-0 mt-[-6px]">
+
+      <!-- IZQUIERDA: Logo + texto -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="sm:hidden text-gray-800 text-2xl">☰</button>
+        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
+        <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
+      </div>
+
+      <!-- DERECHA: Nombre + cerrar sesión -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-4 items-start text-sm md:text-base text-right leading-tight">
+        <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
+          {{ request.user.get_full_name|default:request.user.username }}
+        </span>
+        <form method="post" action="{% url 'dashboard_admin:logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+            Cerrar Sesión
+          </button>
+        </form>
+      </div>
+    </div>
+
   </div>
 </header>
+
 
   <!-- Contenedor principal -->
   <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
