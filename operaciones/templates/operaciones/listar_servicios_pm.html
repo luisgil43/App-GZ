@@ -81,7 +81,7 @@
 
 
 <div class="overflow-x-auto rounded-xl border border-gray-200">
-  <table class="min-w-[900px] w-full text-sm">
+  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
       <tr>
         <th class="p-2">DU</th>
@@ -89,7 +89,7 @@
         <th class="p-2">REGIÓN</th>
         <th class="p-2">MES PRODUCCIÓN</th>
         <th class="p-2">ID NEW</th>
-        <th class="p-2 text-left">DETALLE TAREA</th>
+        <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">MONTO COTIZADO</th>
 	<th class="p-2">MONTO MMOO</th>
         <th class="p-2">STATUS</th>
@@ -104,11 +104,14 @@
         <td class="p-2">{{ servicio.region }}</td>
         <td class="p-2">{{ servicio.mes_produccion }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
-        <td class="p-2 text-left">{{ servicio.detalle_tarea|truncatechars:40 }}</td>
+   <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+  {{ servicio.detalle_tarea }}
+</td>
+
         <td class="p-2">UF {{ servicio.monto_cotizado|intcomma }}</td>
 	<td class="p-2">UF {{ servicio.monto_mmoo|intcomma }}</td>
-        <td class="p-2 align-top text-sm">
-          <div class="flex flex-col gap-1 leading-tight">
+       <td class="p-2 text-sm text-center align-middle">
+  <div class="inline-block">
             {% if servicio.estado == 'cotizado' %}
               <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">📝 Cotizado (pendiente aprobación)</span>
             {% elif servicio.estado == 'aprobado_pendiente' %}

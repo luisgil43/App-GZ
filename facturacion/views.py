@@ -2,17 +2,13 @@ import traceback
 from usuarios.decoradores import rol_requerido
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
-from .models import OrdenCompraFacturacion, ServicioCotizado
-from django.shortcuts import redirect
 from datetime import datetime
 from decimal import Decimal
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.contrib import messages
-from django.shortcuts import render, redirect
 import re
 import pdfplumber
-from django.shortcuts import render
 from operaciones.models import ServicioCotizado
 from facturacion.models import OrdenCompraFacturacion
 from facturacion.forms import OrdenCompraFacturacionForm
@@ -106,12 +102,25 @@ def importar_orden_compra(request):
 
         request.session['ordenes_previsualizadas'] = datos_extraidos
 
+        # Verificación: detectar ID NEW sin servicio registrado
+        ids_no_encontrados = set()
+        for fila in datos_extraidos:
+            id_new = fila.get('id_new')
+            if not id_new:
+                ids_no_encontrados.add("SIN_ID")
+                continue
+
+            existe = ServicioCotizado.objects.filter(id_new=id_new).exists()
+            if not existe:
+                ids_no_encontrados.add(id_new)
+
         return render(request, 'facturacion/preview_oc.html', {
             'datos': datos_extraidos,
             'nombre_archivo': nombre_archivo,
+            'ids_no_encontrados': ids_no_encontrados,
         })
 
-    # ✅ Importante: manejar GET o caso donde no se subió archivo
+    # 🔁 Este return es fundamental para evitar el ValueError en peticiones GET
     return render(request, 'facturacion/importar_orden_compra.html')
 
 
@@ -125,21 +134,35 @@ def guardar_ordenes_compra(request):
             return redirect('facturacion:importar_orden_compra')
 
         ordenes_guardadas = 0
-        ordenes_duplicadas = []
+        ordenes_sin_oc_libre = []
+        ordenes_sin_servicio = []
 
-        for idx, item in enumerate(datos_previsualizados, start=1):
+        for item in datos_previsualizados:
             id_new = item.get('id_new')
             if not id_new:
                 continue
 
-            servicios = ServicioCotizado.objects.filter(id_new=id_new)
-            if not servicios.exists():
-                continue
-            if servicios.count() > 1:
-                print(
-                    f"⚠️ Hay múltiples servicios con el mismo id_new: {id_new}")
-            servicio = servicios.first()
+            # Buscar todos los servicios con ese ID_NEW (sin considerar el mes)
+            servicios = ServicioCotizado.objects.filter(
+                id_new=id_new).order_by('du')
 
+            if not servicios.exists():
+                ordenes_sin_servicio.append(f"ID NEW: {id_new}")
+                continue
+
+            # Buscar el primer servicio sin OC ya registrada (usando relación inversa)
+            servicio_sin_oc = None
+            for s in servicios:
+                if not s.ordenes_compra.exists():
+                    servicio_sin_oc = s
+                    break
+
+            if not servicio_sin_oc:
+                ordenes_sin_oc_libre.append(
+                    f"ID NEW: {id_new} - POS: {item.get('pos')}")
+                continue
+
+            # Rellenar y guardar nueva OC
             try:
                 cantidad = Decimal(
                     str(item.get('cantidad') or '0').replace(',', '.'))
@@ -157,21 +180,9 @@ def guardar_ordenes_compra(request):
                     except ValueError:
                         pass
 
-                # Validación de duplicado por OC + POS + ID_NEW
-                ya_existe = OrdenCompraFacturacion.objects.filter(
-                    orden_compra=item.get('orden_compra'),
-                    pos=item.get('pos'),
-                    du__id_new=id_new
-                ).exists()
-
-                if ya_existe:
-                    ordenes_duplicadas.append(
-                        f"OC: {item.get('orden_compra')} - POS: {item.get('pos')} - ID: {id_new}"
-                    )
-                    continue
-
+                # Crear nueva OC asociada
                 OrdenCompraFacturacion.objects.create(
-                    du=servicio,
+                    du=servicio_sin_oc,
                     orden_compra=item.get('orden_compra'),
                     pos=item.get('pos'),
                     cantidad=cantidad,
@@ -182,24 +193,36 @@ def guardar_ordenes_compra(request):
                     precio_unitario=precio_unitario,
                     monto=monto,
                 )
+
                 ordenes_guardadas += 1
 
             except Exception as e:
-                print(f"❌ Error al guardar una orden: {e}")
+                print(f"❌ Error al guardar datos de OC: {e}")
                 continue
 
-        # Limpia sesión
-        if 'ordenes_previsualizadas' in request.session:
-            del request.session['ordenes_previsualizadas']
+        # Limpiar la sesión
+        request.session.pop('ordenes_previsualizadas', None)
 
-        # Mensajes
         if ordenes_guardadas > 0:
             messages.success(
-                request, f"{ordenes_guardadas} órdenes de compra fueron guardadas correctamente.")
-        if ordenes_duplicadas:
-            mensaje = "Se omitieron las siguientes órdenes por ser duplicadas:<br>" + \
-                "<br>".join(ordenes_duplicadas)
-            messages.error(request, mensaje)
+                request,
+                f"{ordenes_guardadas} líneas de la orden de compra fueron guardadas correctamente."
+            )
+
+        if ordenes_sin_oc_libre:
+            messages.warning(
+                request,
+                "Se omitieron las siguientes líneas porque ya no hay servicios disponibles sin OC para asociar:<br>" +
+                "<br>".join(ordenes_sin_oc_libre)
+            )
+
+        if ordenes_sin_servicio:
+            messages.error(
+                request,
+                "Las siguientes líneas no se pudieron asociar porque no existe un servicio creado para esos ID NEW:<br>" +
+                "<br>".join(set(ordenes_sin_servicio)) +
+                "<br><br>Comunícate con el PM para que cree el servicio y vuelve a importar la OC."
+            )
 
         return redirect('facturacion:importar_orden_compra')
 

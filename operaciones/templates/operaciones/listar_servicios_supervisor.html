@@ -59,7 +59,7 @@
 
 
   <div class="overflow-auto rounded-xl border border-gray-200">
-    <table class="min-w-full text-sm">
+    <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
       <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
         <tr>
           <th class="p-2">DU</th>
@@ -82,7 +82,9 @@
           <td class="p-2">{{ servicio.region }}</td>
           <td class="p-2">{{ servicio.mes_produccion }}</td>
           <td class="p-2">{{ servicio.id_new }}</td>
-          <td class="p-2 text-left">{{ servicio.detalle_tarea|truncatechars:40 }}</td>
+          <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+  {{ servicio.detalle_tarea }}
+</td>
           <td class="p-2 font-semibold text-emerald-700">UF {{ servicio.monto_mmoo|floatformat:2|intcomma }}</td>
           <td class="p-2 text-left">
             {% for tecnico in servicio.trabajadores_asignados.all %}
@@ -91,8 +93,8 @@
               <span class="italic text-gray-400">Sin asignar</span>
             {% endfor %}
           </td>
-          <td class="p-2 align-top text-sm">
-            <div class="flex flex-col gap-1 leading-tight">
+         <td class="p-2 text-sm text-center align-middle">
+  <div class="inline-block">
               {% if servicio.estado == 'aprobado_pendiente' %}
                 <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
                   ✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}
