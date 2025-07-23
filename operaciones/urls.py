@@ -42,5 +42,8 @@ urlpatterns = [
          name='exportar_servicios_supervisor'),
     path('advertencia-duplicados/', views.advertencia_cotizaciones_omitidas,
          name='advertencia_cotizaciones_omitidas'),
+    path('produccion/', views.produccion_tecnico, name='produccion_tecnico'),
+    path('produccion/exportar-pdf/', views.exportar_produccion_pdf,
+         name='exportar_produccion_pdf'),
 
 ]

@@ -171,3 +171,7 @@ EMPRESA_NUMERO_RESOLUCION = "80"
 
 
 CSRF_FAILURE_VIEW = 'usuarios.views.csrf_error_view'
+
+
+LANGUAGE_CODE = 'es-cl'
+USE_L10N = True

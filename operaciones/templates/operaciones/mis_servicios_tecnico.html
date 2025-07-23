@@ -1,5 +1,6 @@
 {% extends "dashboard/base.html" %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Mis Servicios Asignados{% endblock %}
 
@@ -37,7 +38,9 @@
   {{ servicio.detalle_tarea }}
 </td>
 
-            <td class="p-2 font-semibold text-emerald-700">UF {{ monto|floatformat:2|intcomma }}</td>
+ <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+    $ {{ monto|miles }} CLP
+</td>
             <td class="p-2">
               {% if servicio.tecnico_aceptado %}
                 {{ servicio.tecnico_aceptado.get_full_name }}

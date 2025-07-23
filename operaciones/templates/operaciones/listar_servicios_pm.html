@@ -1,5 +1,6 @@
 {% extends "dashboard_admin/base.html" %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Mis Cotizaciones{% endblock %}
 
@@ -30,6 +31,13 @@
     font-size: 0.875rem;
     border-radius: 0.75rem;
     padding: 0 1rem;
+  }
+
+  /* Ajuste scroll */
+  .tabla-scroll {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
   }
 </style>
 
@@ -79,9 +87,8 @@
   </a>
 </form>
 
-
-<div class="overflow-x-auto rounded-xl border border-gray-200">
-  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
+<div class="rounded-xl border border-gray-200">
+  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm tabla-scroll">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
       <tr>
         <th class="p-2">DU</th>
@@ -91,50 +98,54 @@
         <th class="p-2">ID NEW</th>
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">MONTO COTIZADO</th>
-	<th class="p-2">MONTO MMOO</th>
+        <th class="p-2">MONTO MMOO</th>
         <th class="p-2">STATUS</th>
         <th class="p-2">ACCIONES</th>
       </tr>
     </thead>
     <tbody class="text-center">
-      {% for servicio in servicios %}
+      {% for servicio in pagina %}
       <tr class="border-t">
         <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
         <td class="p-2">{{ servicio.region }}</td>
         <td class="p-2">{{ servicio.mes_produccion }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
-   <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
-  {{ servicio.detalle_tarea }}
-</td>
-
+        <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
         <td class="p-2 font-semibold text-emerald-700">UF {{ servicio.monto_cotizado|intcomma }}</td>
-	<td class="p-2 font-semibold text-emerald-700">UF {{ servicio.monto_mmoo|intcomma }}</td>
-       <td class="p-2 text-sm text-center align-middle">
-  <div class="flex flex-col items-center gap-1">
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
+        <td class="p-2 text-sm">
+          <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+            {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
+            {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+            {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+            {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+            {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+            {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+            {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+            {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
+            {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">
             {% if servicio.estado == 'cotizado' %}
-              <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">📝 Cotizado (pendiente aprobación)</span>
+              📝 Cotizado (pendiente aprobación)
             {% elif servicio.estado == 'aprobado_pendiente' %}
-              <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}</span>
+              ✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}
             {% elif servicio.estado == 'asignado' %}
-              <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium w-fit">✅ Asignado por Supervisor: {{ servicio.supervisor_asigna.get_full_name }}</span>
+              ✅ Asignado por Supervisor: {{ servicio.supervisor_asigna.get_full_name }}
             {% elif servicio.estado == 'en_progreso' %}
-              <span class="inline-block bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full font-medium w-fit">🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})</span>
+              🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
             {% elif servicio.estado == 'finalizado_trabajador' %}
-              <span class="bg-yellow-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">✔️ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}</span>
+              ✔️ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
             {% elif servicio.estado == 'rechazado_supervisor' %}
-              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium w-fit">❌ Rechazado por {{ servicio.supervisor_rechazo.get_full_name }}</span>
-              {% if servicio.motivo_rechazo %}
-                <span class="text-xs text-gray-700 ml-2">Motivo: {{ servicio.motivo_rechazo }}</span>
-              {% endif %}
+              ❌ Rechazado por {{ servicio.supervisor_rechazo.get_full_name }}{% if servicio.motivo_rechazo %} - Motivo: {{ servicio.motivo_rechazo }}{% endif %}
             {% elif servicio.estado == 'aprobado_supervisor' %}
-              <span class="inline-block bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full font-medium w-fit">✅ Aprobado por Supervisor: {{ servicio.supervisor_aprobo.get_full_name }}</span>
+              ✅ Aprobado por Supervisor: {{ servicio.supervisor_aprobo.get_full_name }}
             {% elif servicio.estado == 'informe_subido' %}
-              <span class="inline-block bg-gray-200 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">📄 Informe cargado por {{ servicio.usuario_informe.get_full_name }}</span>
+              📄 Informe cargado por {{ servicio.usuario_informe.get_full_name }}
             {% elif servicio.estado == 'finalizado' %}
-              <span class="inline-block bg-green-200 text-green-800 px-2 py-1 rounded-full font-medium w-fit">✅ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}</span>
+              ✅ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
             {% else %}
-              <span class="inline-block bg-gray-100 text-gray-800 px-2 py-1 rounded-full font-medium w-fit">Estatus desconocido</span>
+              Estatus desconocido
             {% endif %}
           </div>
         </td>
@@ -143,32 +154,10 @@
             <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}" class="text-blue-600 hover:underline">✏️</a>
             <button onclick="abrirModal('modal-{{ servicio.pk }}')" class="text-red-600 hover:underline">🗑️</button>
             <a href="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}" class="text-green-600 hover:underline font-bold">✅</a>
-
-            <div id="modal-{{ servicio.pk }}" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-              <div class="bg-white p-6 rounded-xl shadow max-w-md w-full">
-                <h3 class="text-lg font-bold mb-4 text-gray-800">¿Eliminar cotización DU{{ servicio.du }}?</h3>
-                <p class="text-sm text-gray-600 mb-6">Esta acción no se puede deshacer.</p>
-                <div class="flex justify-end space-x-4">
-                  <button onclick="cerrarModal('modal-{{ servicio.pk }}')" class="px-4 py-2 bg-gray-300 rounded-xl hover:bg-gray-400 text-gray-800">Cancelar</button>
-                  <a href="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl">Eliminar</a>
-                </div>
-              </div>
-            </div>
           {% elif servicio.estado in 'aprobado_pendiente asignado en_progreso finalizado_trabajador aprobado_supervisor informe_subido finalizado' %}
             {% if request.user.is_superuser or request.user.es_admin_general %}
               <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}" class="text-blue-600 hover:underline">✏️</a>
               <button onclick="abrirModal('modal-{{ servicio.pk }}')" class="text-red-600 hover:underline">🗑️</button>
-
-              <div id="modal-{{ servicio.pk }}" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div class="bg-white p-6 rounded-xl shadow max-w-md w-full">
-                  <h3 class="text-lg font-bold mb-4 text-gray-800">¿Eliminar cotización DU{{ servicio.du }}?</h3>
-                  <p class="text-sm text-gray-600 mb-6">Esta acción no se puede deshacer.</p>
-                  <div class="flex justify-end space-x-4">
-                    <button onclick="cerrarModal('modal-{{ servicio.pk }}')" class="px-4 py-2 bg-gray-300 rounded-xl hover:bg-gray-400 text-gray-800">Cancelar</button>
-                    <a href="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl">Eliminar</a>
-                  </div>
-                </div>
-              </div>
             {% else %}
               <span class="text-gray-400 italic">🔒 Bloqueado</span>
             {% endif %}
@@ -183,6 +172,36 @@
     </tbody>
   </table>
 </div>
+
+<!-- Selector de cantidad -->
+<form method="get" class="mt-4 flex items-center gap-2">
+  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+  </select>
+  <input type="hidden" name="du" value="{{ filtros.du }}">
+  <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
+  <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
+  <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
+  <input type="hidden" name="estado" value="{{ filtros.estado }}">
+</form>
+
+<!-- Paginación -->
+<div class="mt-4 flex justify-center gap-2 text-sm">
+  {% if pagina.has_previous %}
+    <a href="?page=1&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+
 </div>
 
 <script>
