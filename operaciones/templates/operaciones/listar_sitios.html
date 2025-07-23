@@ -2,39 +2,61 @@
 {% block title %}Listado de Sitios Móviles{% endblock %}
 
 {% block dashboard_content %}
-<div class="overflow-x-auto bg-white shadow rounded-xl p-6 mt-6">
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
 
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
-    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-      📋 Listado de Sitios Móviles
-    </h2>
-    <a href="{% url 'operaciones:importar_sitios' %}"
-       class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
-      📥 Importar Sitios
-    </a>
-  </div>
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    height: 2.25rem;
+    width: 100%;
+    max-width: 160px;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+  .campo-filtro:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+  .boton-filtrar {
+    height: 2.25rem;
+    font-size: 0.875rem;
+    border-radius: 0.75rem;
+    padding: 0 1rem;
+  }
+  .tabla-scroll {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+</style>
 
-  <!-- Filtro por ID Claro e ID NEW -->
-<form method="get" class="mb-4 flex flex-col sm:flex-row sm:items-center gap-3">
-  <input type="text" name="id_claro" placeholder="Buscar por ID Claro"
-         value="{{ id_claro }}"
-         class="w-full sm:w-64 border rounded-xl p-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
-  
-  <input type="text" name="id_new" placeholder="Buscar por ID NEW"
-         value="{{ id_new }}"
-         class="w-full sm:w-64 border rounded-xl p-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
+  <h2 class="text-2xl font-bold text-gray-800">📋 Listado de Sitios Móviles</h2>
+  <a href="{% url 'operaciones:importar_sitios' %}" class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-emerald-700 transition">
+    📥 Importar Sitios
+  </a>
+</div>
 
-  <button type="submit"
-          class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700 text-sm">
+<!-- Filtros -->
+<form method="get" class="mb-6 flex items-end gap-2 whitespace-nowrap overflow-x-auto">
+  <input type="text" name="id_claro" value="{{ id_claro }}" placeholder="Buscar por ID Claro" class="campo-filtro">
+  <input type="text" name="id_new" value="{{ id_new }}" placeholder="Buscar por ID NEW" class="campo-filtro">
+
+  <button type="submit" class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
     🔍 Filtrar
   </button>
-  <a href="{% url 'operaciones:listar_sitios' %}"
-     class="bg-gray-200 px-4 py-2 rounded-xl hover:bg-gray-300 text-sm">
+  <a href="{% url 'operaciones:listar_sitios' %}" class="flex items-center gap-1 bg-gray-200 text-red-600 text-sm font-medium px-4 py-1.5 rounded-full hover:bg-gray-300 transition">
     ❌ Limpiar
   </a>
 </form>
 
-  <table class="min-w-full border text-sm text-gray-800">
+<!-- Tabla con scroll -->
+<div class="rounded-xl border border-gray-200 tabla-scroll">
+  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
     <thead class="bg-gray-100 text-xs uppercase font-semibold text-center">
       <tr>
         <th class="p-2 border">ID Sites</th>
@@ -94,5 +116,33 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+<!-- Selector de cantidad -->
+<form method="get" class="mt-4 flex items-center gap-2">
+  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+  </select>
+  <input type="hidden" name="id_claro" value="{{ id_claro }}">
+  <input type="hidden" name="id_new" value="{{ id_new }}">
+</form>
+
+<!-- Paginación -->
+<div class="mt-4 flex justify-center gap-2 text-sm">
+  {% if pagina.has_previous %}
+    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+
 </div>
 {% endblock %}

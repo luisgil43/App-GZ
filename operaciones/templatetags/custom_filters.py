@@ -10,3 +10,27 @@ def miles(value):
         return f"{value:,}".replace(",", ".")
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def decimal_coma(value):
+    """Convierte un número decimal con punto a formato con coma."""
+    try:
+        return str(value).replace('.', ',')
+    except (ValueError, TypeError):
+        return value
+
+
+@register.filter
+def miles_decimales(value):
+    """
+    Formatea decimales con separador de miles y coma como separador decimal.
+    Ejemplo: 3065.5 -> 3.065,50
+    """
+    try:
+        valor = float(value)
+        entero, decimal = f"{valor:.2f}".split(".")
+        entero_con_miles = f"{int(entero):,}".replace(",", ".")
+        return f"{entero_con_miles},{decimal}"
+    except (ValueError, TypeError):
+        return value

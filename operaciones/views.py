@@ -86,6 +86,8 @@ def buscar_mi_sitio(request):
 def listar_sitios(request):
     id_claro = request.GET.get("id_claro", "")
     id_new = request.GET.get("id_new", "")
+    cantidad = request.GET.get("cantidad", "10")  # Cantidad por página
+    page_number = request.GET.get("page", 1)
 
     sitios = SitioMovil.objects.all()
 
@@ -94,10 +96,20 @@ def listar_sitios(request):
     if id_new:
         sitios = sitios.filter(id_sites_new__icontains=id_new)
 
+    # Si selecciona "todos", mostramos todo
+    if cantidad == "todos":
+        paginator = Paginator(sitios, sitios.count() or 1)
+    else:
+        paginator = Paginator(sitios, int(cantidad))
+
+    pagina = paginator.get_page(page_number)
+
     return render(request, 'operaciones/listar_sitios.html', {
-        'sitios': sitios,
+        'sitios': pagina,
         'id_claro': id_claro,
-        'id_new': id_new
+        'id_new': id_new,
+        'cantidad': cantidad,
+        'pagina': pagina
     })
 
 
@@ -240,7 +252,7 @@ def crear_servicio_cotizado(request):
 def editar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
-    # Validar estado permitido
+    # Validar que el estado permita edición
     if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (request.user.is_superuser or request.user.es_facturacion):
         messages.error(
             request, "No puedes editar esta cotización porque ya fue asignada.")
@@ -251,7 +263,7 @@ def editar_servicio_cotizado(request, pk):
         if form.is_valid():
             servicio = form.save(commit=False)
 
-            # Buscar datos del sitio y actualizar automáticamente
+            # Buscar datos del sitio automáticamente si existe el ID Claro
             if servicio.id_claro:
                 sitio = SitioMovil.objects.filter(
                     id_claro=servicio.id_claro).first()
@@ -262,10 +274,15 @@ def editar_servicio_cotizado(request, pk):
             servicio.save()
             messages.success(request, "Cotización actualizada correctamente.")
             return redirect('operaciones:listar_servicios_pm')
+        else:
+            messages.error(request, "Corrige los errores en el formulario.")
     else:
         form = ServicioCotizadoForm(instance=servicio)
 
-    return render(request, 'operaciones/editar_servicio_cotizado.html', {'form': form})
+    return render(request, 'operaciones/editar_servicio_cotizado.html', {
+        'form': form,
+        'servicio': servicio
+    })
 
 
 @login_required
