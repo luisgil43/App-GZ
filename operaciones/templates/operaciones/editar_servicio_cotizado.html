@@ -1,5 +1,6 @@
 {% extends "dashboard_admin/base.html" %}
 {% load widget_tweaks %}
+{% load custom_filters %}
 
 {% block title %}Editar Cotización{% endblock %}
 
@@ -30,14 +31,29 @@
         <label class="block text-sm font-medium text-gray-700">Detalle Tarea</label>
         {{ form.detalle_tarea|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
-      <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Monto Cotizado</label>
-        {{ form.monto_cotizado|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-      <div class="md:col-span-2">
-        <label class="block text-sm font-medium text-gray-700">Monto MMOO (CLP)</label>
-        {{ form.monto_mmoo|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
+
+      <!-- Monto Cotizado (UF) -->
+   <div class="md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
+    <input type="text"
+           name="monto_cotizado"
+           value="{{ form.data.monto_cotizado|default:servicio.monto_cotizado|stringformat:'.2f'|default:'' }}"
+           class="w-full border rounded-xl px-3 py-2">
+    {% if form.errors.monto_cotizado %}
+        <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_cotizado.0 }}</p>
+    {% endif %}
+</div>
+
+<div class="md:col-span-2">
+    <label class="block text-sm font-medium text-gray-700">Monto MMOO (CLP)</label>
+    <input type="text"
+           name="monto_mmoo"
+           value="{{ form.data.monto_mmoo|default:servicio.monto_mmoo|default:'' }}"
+           class="w-full border rounded-xl px-3 py-2">
+    {% if form.errors.monto_mmoo %}
+        <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_mmoo.0 }}</p>
+    {% endif %}
+</div>
     </div>
 
     <div class="mt-6 flex justify-between items-center">
@@ -54,7 +70,6 @@
 <script>
   document.addEventListener("DOMContentLoaded", function () {
     const idClaroInput = document.getElementById("id_claro");
-
     idClaroInput.addEventListener("blur", function () {
       const id_claro = idClaroInput.value.trim();
       if (id_claro) {
@@ -68,9 +83,7 @@
               alert("No se encontró información para este ID Claro.");
             }
           })
-          .catch(error => {
-            console.error("Error al buscar datos:", error);
-          });
+          .catch(error => console.error("Error al buscar datos:", error));
       }
     });
   });
