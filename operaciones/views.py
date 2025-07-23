@@ -784,13 +784,13 @@ def produccion_tecnico(request):
     id_new = request.GET.get("id_new", "")
     mes_produccion = request.GET.get("mes_produccion", "")
 
-    # Forzar el locale a español
-    try:
-        locale.setlocale(locale.LC_TIME, "es_ES.UTF-8")
-    except:
-        locale.setlocale(locale.LC_TIME, "es_ES")
-
-    mes_actual = datetime.now().strftime("%B %Y").capitalize()  # -> "Julio 2025"
+    # Traducción manual de meses
+    meses_es = [
+        "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    now = datetime.now()
+    mes_actual = f"{meses_es[now.month]} {now.year}"  # -> "Julio 2025"
 
     # Base queryset
     servicios = ServicioCotizado.objects.filter(
@@ -806,8 +806,7 @@ def produccion_tecnico(request):
     def prioridad(servicio):
         try:
             mes_nombre, año = servicio.mes_produccion.split()
-            numero_mes = list(calendar.month_name).index(
-                mes_nombre.capitalize())
+            numero_mes = meses_es.index(mes_nombre.capitalize())
             fecha_servicio = datetime(int(año), numero_mes, 1)
             hoy = datetime.now().replace(day=1)
             if fecha_servicio == hoy:
@@ -841,7 +840,7 @@ def produccion_tecnico(request):
         produccion_info.append(
             {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)})
 
-    # Ahora sí: total del mes actual
+    # Total solo mes actual
     total_acumulado = Decimal("0.0")
     for servicio in servicios:
         if servicio.mes_produccion and servicio.mes_produccion.lower() == mes_actual.lower():
@@ -854,7 +853,6 @@ def produccion_tecnico(request):
         'produccion_info': produccion_info,
         'id_new': id_new,
         'mes_produccion': mes_produccion,
-        # ahora sí da el total real del mes actual
         'total_estimado': round(total_acumulado, 0),
         'mes_actual': mes_actual,
         'paginador': paginador,
