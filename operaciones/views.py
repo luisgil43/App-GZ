@@ -938,14 +938,6 @@ def exportar_produccion_pdf(request):
         styles.add(ParagraphStyle(name="CenterTitle",
                    alignment=1, fontSize=16, spaceAfter=20))
 
-        # Logo
-        try:
-            logo = Image(f"{settings.STATIC_ROOT}/img/logo.png",
-                         width=120, height=40)
-            elements.append(logo)
-        except Exception as e:
-            logger.warning(f"No se pudo cargar el logo: {e}")
-
         # Títulos
         elements.append(Paragraph(
             f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
