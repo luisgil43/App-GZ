@@ -94,7 +94,7 @@
             {% endfor %}
           </td>
          <td class="p-2 text-sm text-center align-middle">
-  <div class="inline-block">
+  <div class="flex flex-col items-center gap-1">
               {% if servicio.estado == 'aprobado_pendiente' %}
                 <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium w-fit">
                   ✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}
