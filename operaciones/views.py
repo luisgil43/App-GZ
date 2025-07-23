@@ -869,16 +869,19 @@ def exportar_produccion_pdf(request):
     mes_produccion = request.GET.get("mes_produccion", "")
     filtro_pdf = request.GET.get("filtro_pdf", "mes_actual")
 
-    # Traducción del filtro a texto (con mes)
-    from datetime import datetime
-    mes_actual = datetime.now().strftime("%B %Y")
+    # Traducción manual de meses
+    meses_es = [
+        "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ]
+    now = datetime.now()
+    mes_actual = f"{meses_es[now.month]} {now.year}"  # -> "Julio 2025"
+
+    # Texto de filtro
     if filtro_pdf == "mes_actual":
         filtro_seleccionado = f"Solo mes actual: {mes_actual}"
     elif filtro_pdf == "filtro_actual":
-        if mes_produccion:
-            filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}"
-        else:
-            filtro_seleccionado = "Con filtros aplicados"
+        filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}" if mes_produccion else "Con filtros aplicados"
     else:
         filtro_seleccionado = "Toda la producción"
 
@@ -896,13 +899,9 @@ def exportar_produccion_pdf(request):
             servicios = servicios.filter(
                 mes_produccion__icontains=mes_produccion)
     elif filtro_pdf == "mes_actual":
-        from datetime import datetime
-        mes_actual = datetime.now().strftime("%B %Y")
         servicios = servicios.filter(mes_produccion__iexact=mes_actual)
-    # Si es "todos" no filtramos más
 
     # Datos PDF
-    from decimal import Decimal
     produccion_data = []
     total_produccion = Decimal("0.0")
     for servicio in servicios:
@@ -940,7 +939,6 @@ def exportar_produccion_pdf(request):
             pass
 
     # Títulos
-    from datetime import datetime
     elements.append(Paragraph(
         f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
     elements.append(Paragraph(
