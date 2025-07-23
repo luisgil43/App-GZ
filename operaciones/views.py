@@ -864,120 +864,130 @@ def produccion_tecnico(request):
     })
 
 
+logger = logging.getLogger(__name__)
+
+
 @login_required
 @rol_requerido('usuario')
 def exportar_produccion_pdf(request):
-    usuario = request.user
-    id_new = request.GET.get("id_new", "")
-    mes_produccion = request.GET.get("mes_produccion", "")
-    filtro_pdf = request.GET.get("filtro_pdf", "mes_actual")
+    try:
+        usuario = request.user
+        id_new = request.GET.get("id_new", "")
+        mes_produccion = request.GET.get("mes_produccion", "")
+        filtro_pdf = request.GET.get("filtro_pdf", "mes_actual")
 
-    # Traducción manual de meses
-    meses_es = [
-        "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-    ]
-    now = datetime.now()
-    mes_actual = f"{meses_es[now.month]} {now.year}"  # -> "Julio 2025"
+        # Traducción manual de meses
+        meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+        now = datetime.now()
+        mes_actual = f"{meses_es[now.month]} {now.year}"
 
-    # Texto de filtro
-    if filtro_pdf == "mes_actual":
-        filtro_seleccionado = f"Solo mes actual: {mes_actual}"
-    elif filtro_pdf == "filtro_actual":
-        filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}" if mes_produccion else "Con filtros aplicados"
-    else:
-        filtro_seleccionado = "Toda la producción"
+        # Texto de filtro
+        if filtro_pdf == "mes_actual":
+            filtro_seleccionado = f"Solo mes actual: {mes_actual}"
+        elif filtro_pdf == "filtro_actual":
+            filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}" if mes_produccion else "Con filtros aplicados"
+        else:
+            filtro_seleccionado = "Toda la producción"
 
-    # Base queryset
-    servicios = ServicioCotizado.objects.filter(
-        trabajadores_asignados=usuario,
-        estado='aprobado_supervisor'
-    )
+        # Query base
+        servicios = ServicioCotizado.objects.filter(
+            trabajadores_asignados=usuario,
+            estado='aprobado_supervisor'
+        )
 
-    # Filtro según selección
-    if filtro_pdf == "filtro_actual":
-        if id_new:
-            servicios = servicios.filter(id_new__icontains=id_new)
-        if mes_produccion:
-            servicios = servicios.filter(
-                mes_produccion__icontains=mes_produccion)
-    elif filtro_pdf == "mes_actual":
-        servicios = servicios.filter(mes_produccion__iexact=mes_actual)
+        # Filtro según selección
+        if filtro_pdf == "filtro_actual":
+            if id_new:
+                servicios = servicios.filter(id_new__icontains=id_new)
+            if mes_produccion:
+                servicios = servicios.filter(
+                    mes_produccion__icontains=mes_produccion)
+        elif filtro_pdf == "mes_actual":
+            servicios = servicios.filter(mes_produccion__iexact=mes_actual)
 
-    # Datos PDF
-    produccion_data = []
-    total_produccion = Decimal("0.0")
-    for servicio in servicios:
-        total_mmoo = servicio.monto_mmoo or Decimal("0.0")
-        total_tecnicos = servicio.trabajadores_asignados.count()
-        monto_tecnico = total_mmoo / \
-            total_tecnicos if total_tecnicos else Decimal("0.0")
+        # Si no hay datos, lanzamos excepción
+        if not servicios.exists():
+            raise ValueError("No hay datos para exportar.")
 
-        produccion_data.append([
-            f"DU{force_str(servicio.du or '')}",
-            force_str(servicio.id_new or "-"),
-            Paragraph(escape(force_str(servicio.detalle_tarea or "")), ParagraphStyle(
-                'detalle_style', fontSize=9, leading=11, alignment=0)),
-            f"{monto_tecnico:,.0f}".replace(",", ".")
-        ])
+        # Datos PDF
+        produccion_data = []
+        total_produccion = Decimal("0.0")
+        for servicio in servicios:
+            total_mmoo = servicio.monto_mmoo or Decimal("0.0")
+            total_tecnicos = servicio.trabajadores_asignados.count()
+            monto_tecnico = total_mmoo / \
+                total_tecnicos if total_tecnicos else Decimal("0.0")
 
-        total_produccion += monto_tecnico
+            produccion_data.append([
+                f"DU{servicio.du}",
+                servicio.id_new or "-",
+                Paragraph(servicio.detalle_tarea or "-", ParagraphStyle(
+                    'detalle_style', fontSize=9, leading=11, alignment=0)),
+                f"{monto_tecnico:,.0f}".replace(",", ".")
+            ])
 
-    # Generación PDF
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50)
-    elements = []
-    styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CenterTitle",
-               alignment=1, fontSize=16, spaceAfter=20))
+            total_produccion += monto_tecnico
 
-    # Logo
-    logo_path = getattr(settings, "STATIC_ROOT", None)
-    if logo_path:
+        # Generación PDF
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4,
+                                topMargin=50, bottomMargin=50)
+        elements = []
+        styles = getSampleStyleSheet()
+        styles.add(ParagraphStyle(name="CenterTitle",
+                   alignment=1, fontSize=16, spaceAfter=20))
+
+        # Logo
         try:
             logo = Image(f"{settings.STATIC_ROOT}/img/logo.png",
                          width=120, height=40)
             elements.append(logo)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"No se pudo cargar el logo: {e}")
 
-    # Títulos
-    elements.append(Paragraph(
-        f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
-    elements.append(Paragraph(
-        f"<b>Total Producción:</b> ${total_produccion:,.0f} CLP".replace(",", "."), styles["Normal"]))
-    elements.append(Paragraph(
-        f"<i>El total corresponde a la selección:</i> {filtro_seleccionado}.", styles["Normal"]))
-    elements.append(Paragraph(
-        f"<b>Fecha de generación:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
+        # Títulos
+        elements.append(Paragraph(
+            f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
+        elements.append(Paragraph(
+            f"<b>Total Producción:</b> ${total_produccion:,.0f} CLP".replace(",", "."), styles["Normal"]))
+        elements.append(Paragraph(
+            f"<i>El total corresponde a la selección:</i> {filtro_seleccionado}.", styles["Normal"]))
+        elements.append(Paragraph(
+            f"<b>Fecha de generación:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
 
-    # Tabla
-    data = [["DU", "ID NEW", "Detalle", "Producción (CLP)"]] + produccion_data
-    table = Table(data, colWidths=[70, 100, 300, 80])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 11),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-         [colors.whitesmoke, colors.lightgrey]),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
-    ]))
-    elements.append(table)
+        # Tabla
+        data = [["DU", "ID NEW", "Detalle",
+                 "Producción (CLP)"]] + produccion_data
+        table = Table(data, colWidths=[70, 100, 300, 80])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 11),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+             [colors.whitesmoke, colors.lightgrey]),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
+        ]))
+        elements.append(table)
 
-    # Firma
-    elements.append(Spacer(1, 40))
-    elements.append(Paragraph("<b>Firma del Técnico:</b>", styles["Normal"]))
-    elements.append(Spacer(1, 20))
-    elements.append(Paragraph(
-        f"__________________________<br/>{usuario.get_full_name()}", styles["Normal"]))
+        # Firma
+        elements.append(Spacer(1, 40))
+        elements.append(
+            Paragraph("<b>Firma del Técnico:</b>", styles["Normal"]))
+        elements.append(Spacer(1, 20))
+        elements.append(Paragraph(
+            f"__________________________<br/>{usuario.get_full_name()}", styles["Normal"]))
 
-    # Exportar
-    doc.build(elements)
-    buffer.seek(0)
-    response = HttpResponse(buffer, content_type='application/pdf')
-    response['Content-Disposition'] = 'attachment; filename="produccion.pdf"'
-    return response
+        doc.build(elements)
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="produccion.pdf"'
+        return response
+
+    except Exception as e:
+        logger.error(f"Error exportando PDF: {e}")
+        return HttpResponse(f"Error generando PDF: {e}", status=500)
