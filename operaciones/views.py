@@ -783,8 +783,16 @@ def produccion_tecnico(request):
     usuario = request.user
     id_new = request.GET.get("id_new", "")
     mes_produccion = request.GET.get("mes_produccion", "")
-    mes_actual = datetime.now().strftime("%B %Y")
 
+    # Forzar el locale a español
+    try:
+        locale.setlocale(locale.LC_TIME, "es_ES.UTF-8")
+    except:
+        locale.setlocale(locale.LC_TIME, "es_ES")
+
+    mes_actual = datetime.now().strftime("%B %Y").capitalize()  # -> "Julio 2025"
+
+    # Base queryset
     servicios = ServicioCotizado.objects.filter(
         trabajadores_asignados=usuario,
         estado='aprobado_supervisor'
@@ -794,7 +802,7 @@ def produccion_tecnico(request):
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
 
-    # --- ORDEN PERSONALIZADO ---
+    # Orden personalizado
     def prioridad(servicio):
         try:
             mes_nombre, año = servicio.mes_produccion.split()
@@ -803,17 +811,17 @@ def produccion_tecnico(request):
             fecha_servicio = datetime(int(año), numero_mes, 1)
             hoy = datetime.now().replace(day=1)
             if fecha_servicio == hoy:
-                return (0, fecha_servicio)  # Mes actual primero
+                return (0, fecha_servicio)
             elif fecha_servicio > hoy:
-                return (1, fecha_servicio)  # Futuro después
+                return (1, fecha_servicio)
             else:
-                return (2, fecha_servicio)  # Pasado al final
+                return (2, fecha_servicio)
         except:
-            return (3, datetime.min)  # Por si falla el parseo
+            return (3, datetime.min)
 
     servicios = sorted(servicios, key=prioridad)
 
-    # --- PAGINACIÓN ---
+    # Paginación
     cantidad = request.GET.get('cantidad', 10)
     if cantidad == 'todos':
         paginador = Paginator(servicios, len(servicios))
@@ -822,7 +830,7 @@ def produccion_tecnico(request):
     pagina = request.GET.get('page')
     servicios_paginados = paginador.get_page(pagina)
 
-    # --- PRODUCCIÓN ---
+    # Producción
     produccion_info = []
     total_produccion = Decimal("0.0")
     for servicio in servicios_paginados:
@@ -833,14 +841,21 @@ def produccion_tecnico(request):
         produccion_info.append(
             {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)})
 
+    # Ahora sí: total del mes actual
+    total_acumulado = Decimal("0.0")
+    for servicio in servicios:
         if servicio.mes_produccion and servicio.mes_produccion.lower() == mes_actual.lower():
-            total_produccion += monto_tecnico
+            total_mmoo = servicio.monto_mmoo or Decimal("0.0")
+            total_tecnicos = servicio.trabajadores_asignados.count()
+            total_acumulado += total_mmoo / \
+                total_tecnicos if total_tecnicos else Decimal("0.0")
 
     return render(request, 'operaciones/produccion_tecnico.html', {
         'produccion_info': produccion_info,
         'id_new': id_new,
         'mes_produccion': mes_produccion,
-        'total_estimado': round(total_produccion, 0),
+        # ahora sí da el total real del mes actual
+        'total_estimado': round(total_acumulado, 0),
         'mes_actual': mes_actual,
         'paginador': paginador,
         'cantidad': cantidad,
