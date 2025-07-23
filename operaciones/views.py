@@ -1,5 +1,5 @@
 # operaciones/views.py
-
+from django.db.models import Case, When, Value, IntegerField
 from django.utils.timezone import now
 from django.http import HttpResponseServerError
 import logging
@@ -66,19 +66,23 @@ def buscar_mi_sitio(request):
     })
 
 
-# operaciones/views.py
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion', 'supervisor')
 def listar_sitios(request):
     id_claro = request.GET.get("id_claro", "")
+    id_new = request.GET.get("id_new", "")
+
     sitios = SitioMovil.objects.all()
 
     if id_claro:
         sitios = sitios.filter(id_claro__icontains=id_claro)
+    if id_new:
+        sitios = sitios.filter(id_sites_new__icontains=id_new)
 
     return render(request, 'operaciones/listar_sitios.html', {
         'sitios': sitios,
-        'id_claro': id_claro
+        'id_claro': id_claro,
+        'id_new': id_new
     })
 
 
@@ -143,8 +147,21 @@ def importar_sitios_excel(request):
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
 def listar_servicios_pm(request):
-    servicios = ServicioCotizado.objects.all().order_by('-fecha_creacion')
+    # Definir prioridad: 1 = cotizado, 2 = en_ejecucion, 3 = pendiente_por_asignar, 4 = otros
+    estado_prioridad = Case(
+        When(estado='cotizado', then=Value(1)),
+        When(estado='en_ejecucion', then=Value(2)),
+        # pendiente por asignar
+        When(estado='aprobado_pendiente', then=Value(3)),
+        default=Value(4),
+        output_field=IntegerField()
+    )
 
+    servicios = ServicioCotizado.objects.annotate(
+        prioridad=estado_prioridad
+    ).order_by('prioridad', '-fecha_creacion')
+
+    # Filtros
     du = request.GET.get('du', '')
     id_claro = request.GET.get('id_claro', '')
     id_new = request.GET.get('id_new', '')
@@ -416,6 +433,21 @@ def advertencia_cotizaciones_omitidas(request):
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
+    # Orden de prioridad:
+    # 1 = pendiente por asignar
+    # 2 = en ejecución
+    # 3 = en revisión supervisor
+    # 4 = finalizados
+    estado_prioridad = Case(
+        When(estado='aprobado_pendiente', then=Value(1)),
+        When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
+        When(estado='en_revision_supervisor', then=Value(3)),
+        When(estado__in=['finalizado_trabajador', 'informe_subido', 'finalizado',
+             'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
+        default=Value(5),
+        output_field=IntegerField()
+    )
+
     servicios = ServicioCotizado.objects.filter(
         estado__in=[
             'aprobado_pendiente',
@@ -428,7 +460,9 @@ def listar_servicios_supervisor(request):
             'informe_subido',
             'finalizado'
         ]
-    )
+    ).annotate(
+        prioridad=estado_prioridad
+    ).order_by('prioridad', '-du')
 
     # Filtros
     du = request.GET.get('du', '')
@@ -438,23 +472,16 @@ def listar_servicios_supervisor(request):
     estado = request.GET.get('estado', '')
 
     if du:
-        # Elimina el prefijo DU y ceros a la izquierda innecesarios
         du = du.strip().upper().replace('DU', '')
         servicios = servicios.filter(du__iexact=du)
-
     if id_claro:
         servicios = servicios.filter(id_claro__icontains=id_claro)
-
     if id_new:
         servicios = servicios.filter(id_new__icontains=id_new)
-
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
-
     if estado:
         servicios = servicios.filter(estado=estado)
-
-    servicios = servicios.order_by('-du')
 
     return render(request, 'operaciones/listar_servicios_supervisor.html', {
         'servicios': servicios,
@@ -555,22 +582,41 @@ def exportar_servicios_supervisor(request):
 def mis_servicios_tecnico(request):
     usuario = request.user
 
+    # Orden personalizado:
+    # 1 = aceptado, 2 = en_ejecucion, 3 = finalizado, 4 = pendiente_aceptar, 5 = otros
+    estado_prioridad = Case(
+        When(estado='aceptado', then=Value(1)),
+        When(estado='en_ejecucion', then=Value(2)),
+        When(estado='finalizado', then=Value(3)),
+        When(estado='pendiente_aceptar', then=Value(4)),
+        default=Value(5),
+        output_field=IntegerField()
+    )
+
+    # Filtrar: excluir cotizado y aprobado_supervisor
     servicios = ServicioCotizado.objects.filter(
         trabajadores_asignados=usuario
-    ).exclude(estado='cotizado').order_by('-du')
+    ).exclude(
+        estado__in=['cotizado', 'aprobado_supervisor']
+    ).annotate(
+        prioridad=estado_prioridad
+    ).order_by('prioridad', '-du')
 
     print("Servicios encontrados:", servicios.count())
 
-    # Prepara los montos personalizados
+    # Prepara los montos personalizados (manteniendo la lógica de MMOO dividido entre técnicos)
     servicios_info = []
     for servicio in servicios:
-        total_mmoo = servicio.monto_mmoo or 0
+        total_mmoo = servicio.monto_mmoo or 0  # Monto total de mano de obra
+        # Número de técnicos asignados
         total_tecnicos = servicio.trabajadores_asignados.count()
-        monto_tecnico = total_mmoo / total_tecnicos if total_tecnicos else 0
+        monto_tecnico = total_mmoo / \
+            total_tecnicos if total_tecnicos else 0  # División proporcional
 
         servicios_info.append({
             'servicio': servicio,
-            'monto_tecnico': monto_tecnico
+            # Redondeamos a 2 decimales
+            'monto_tecnico': round(monto_tecnico, 2)
         })
 
     return render(request, 'operaciones/mis_servicios_tecnico.html', {
