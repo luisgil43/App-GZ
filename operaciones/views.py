@@ -1,4 +1,7 @@
 # operaciones/views.py
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from django.utils.html import escape
+from django.utils.encoding import force_str
 from django.core.paginator import Paginator
 import calendar
 from operaciones.models import SitioMovil
@@ -911,9 +914,9 @@ def exportar_produccion_pdf(request):
             total_tecnicos if total_tecnicos else Decimal("0.0")
 
         produccion_data.append([
-            f"DU{servicio.du}",
-            servicio.id_new or "-",
-            Paragraph(servicio.detalle_tarea, ParagraphStyle(
+            f"DU{force_str(servicio.du or '')}",
+            force_str(servicio.id_new or "-"),
+            Paragraph(escape(force_str(servicio.detalle_tarea or "")), ParagraphStyle(
                 'detalle_style', fontSize=9, leading=11, alignment=0)),
             f"{monto_tecnico:,.0f}".replace(",", ".")
         ])
