@@ -1,4 +1,19 @@
 # operaciones/views.py
+from django.core.paginator import Paginator
+import calendar
+from operaciones.models import SitioMovil
+from decimal import Decimal
+import requests
+from django.conf import settings
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
+import io
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
+from django.db.models.functions import Coalesce
+from django.db.models import Sum, F, Count, Value, FloatField
 from django.db.models import Case, When, Value, IntegerField
 from django.utils.timezone import now
 from django.http import HttpResponseServerError
@@ -180,8 +195,19 @@ def listar_servicios_pm(request):
     if estado:
         servicios = servicios.filter(estado=estado)
 
+    # Paginación
+    cantidad = request.GET.get("cantidad", "10")
+    if cantidad == "todos":
+        cantidad = 999999
+    else:
+        cantidad = int(cantidad)
+    paginator = Paginator(servicios, cantidad)
+    page_number = request.GET.get("page")
+    pagina = paginator.get_page(page_number)
+
     return render(request, 'operaciones/listar_servicios_pm.html', {
-        'servicios': servicios,
+        'pagina': pagina,
+        'cantidad': request.GET.get("cantidad", "10"),
         'filtros': {
             'du': du,
             'id_claro': id_claro,
@@ -223,7 +249,17 @@ def editar_servicio_cotizado(request, pk):
     if request.method == 'POST':
         form = ServicioCotizadoForm(request.POST, instance=servicio)
         if form.is_valid():
-            form.save()
+            servicio = form.save(commit=False)
+
+            # Buscar datos del sitio y actualizar automáticamente
+            if servicio.id_claro:
+                sitio = SitioMovil.objects.filter(
+                    id_claro=servicio.id_claro).first()
+                if sitio:
+                    servicio.id_new = sitio.id_sites_new
+                    servicio.region = sitio.region
+
+            servicio.save()
             messages.success(request, "Cotización actualizada correctamente.")
             return redirect('operaciones:listar_servicios_pm')
     else:
@@ -433,17 +469,17 @@ def advertencia_cotizaciones_omitidas(request):
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
-    # Orden de prioridad:
-    # 1 = pendiente por asignar
-    # 2 = en ejecución
-    # 3 = en revisión supervisor
-    # 4 = finalizados
     estado_prioridad = Case(
         When(estado='aprobado_pendiente', then=Value(1)),
         When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
         When(estado='en_revision_supervisor', then=Value(3)),
-        When(estado__in=['finalizado_trabajador', 'informe_subido', 'finalizado',
-             'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
+        When(estado__in=[
+            'finalizado_trabajador',
+            'informe_subido',
+            'finalizado',
+            'aprobado_supervisor',
+            'rechazado_supervisor'
+        ], then=Value(4)),
         default=Value(5),
         output_field=IntegerField()
     )
@@ -483,8 +519,19 @@ def listar_servicios_supervisor(request):
     if estado:
         servicios = servicios.filter(estado=estado)
 
+    # Paginación
+    cantidad = request.GET.get("cantidad", "10")
+    if cantidad == "todos":
+        cantidad = 999999
+    else:
+        cantidad = int(cantidad)
+    paginator = Paginator(servicios, cantidad)
+    page_number = request.GET.get("page")
+    pagina = paginator.get_page(page_number)
+
     return render(request, 'operaciones/listar_servicios_supervisor.html', {
-        'servicios': servicios,
+        'pagina': pagina,
+        'cantidad': request.GET.get("cantidad", "10"),
         'filtros': {
             'du': du,
             'id_claro': id_claro,
@@ -610,12 +657,9 @@ def mis_servicios_tecnico(request):
         total_mmoo = servicio.monto_mmoo or 0  # Monto total de mano de obra
         # Número de técnicos asignados
         total_tecnicos = servicio.trabajadores_asignados.count()
-        monto_tecnico = total_mmoo / \
-            total_tecnicos if total_tecnicos else 0  # División proporcional
-
+        monto_tecnico = total_mmoo / total_tecnicos if total_tecnicos else 0
         servicios_info.append({
             'servicio': servicio,
-            # Redondeamos a 2 decimales
             'monto_tecnico': round(monto_tecnico, 2)
         })
 
@@ -714,3 +758,195 @@ def rechazar_asignacion(request, pk):
         messages.error(request, "Acceso inválido al rechazo.")
 
     return redirect('operaciones:listar_servicios_supervisor')
+
+
+@login_required
+@rol_requerido('usuario')
+def produccion_tecnico(request):
+    usuario = request.user
+    id_new = request.GET.get("id_new", "")
+    mes_produccion = request.GET.get("mes_produccion", "")
+    mes_actual = datetime.now().strftime("%B %Y")
+
+    servicios = ServicioCotizado.objects.filter(
+        trabajadores_asignados=usuario,
+        estado='aprobado_supervisor'
+    )
+    if id_new:
+        servicios = servicios.filter(id_new__icontains=id_new)
+    if mes_produccion:
+        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+
+    # --- ORDEN PERSONALIZADO ---
+    def prioridad(servicio):
+        try:
+            mes_nombre, año = servicio.mes_produccion.split()
+            numero_mes = list(calendar.month_name).index(
+                mes_nombre.capitalize())
+            fecha_servicio = datetime(int(año), numero_mes, 1)
+            hoy = datetime.now().replace(day=1)
+            if fecha_servicio == hoy:
+                return (0, fecha_servicio)  # Mes actual primero
+            elif fecha_servicio > hoy:
+                return (1, fecha_servicio)  # Futuro después
+            else:
+                return (2, fecha_servicio)  # Pasado al final
+        except:
+            return (3, datetime.min)  # Por si falla el parseo
+
+    servicios = sorted(servicios, key=prioridad)
+
+    # --- PAGINACIÓN ---
+    cantidad = request.GET.get('cantidad', 10)
+    if cantidad == 'todos':
+        paginador = Paginator(servicios, len(servicios))
+    else:
+        paginador = Paginator(servicios, int(cantidad))
+    pagina = request.GET.get('page')
+    servicios_paginados = paginador.get_page(pagina)
+
+    # --- PRODUCCIÓN ---
+    produccion_info = []
+    total_produccion = Decimal("0.0")
+    for servicio in servicios_paginados:
+        total_mmoo = servicio.monto_mmoo or Decimal("0.0")
+        total_tecnicos = servicio.trabajadores_asignados.count()
+        monto_tecnico = total_mmoo / \
+            total_tecnicos if total_tecnicos else Decimal("0.0")
+        produccion_info.append(
+            {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)})
+
+        if servicio.mes_produccion and servicio.mes_produccion.lower() == mes_actual.lower():
+            total_produccion += monto_tecnico
+
+    return render(request, 'operaciones/produccion_tecnico.html', {
+        'produccion_info': produccion_info,
+        'id_new': id_new,
+        'mes_produccion': mes_produccion,
+        'total_estimado': round(total_produccion, 0),
+        'mes_actual': mes_actual,
+        'paginador': paginador,
+        'cantidad': cantidad,
+        'pagina': servicios_paginados,
+    })
+
+
+@login_required
+@rol_requerido('usuario')
+def exportar_produccion_pdf(request):
+    usuario = request.user
+    id_new = request.GET.get("id_new", "")
+    mes_produccion = request.GET.get("mes_produccion", "")
+    filtro_pdf = request.GET.get("filtro_pdf", "mes_actual")
+
+    # Traducción del filtro a texto (con mes)
+    from datetime import datetime
+    mes_actual = datetime.now().strftime("%B %Y")
+    if filtro_pdf == "mes_actual":
+        filtro_seleccionado = f"Solo mes actual: {mes_actual}"
+    elif filtro_pdf == "filtro_actual":
+        if mes_produccion:
+            filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}"
+        else:
+            filtro_seleccionado = "Con filtros aplicados"
+    else:
+        filtro_seleccionado = "Toda la producción"
+
+    # Base queryset
+    servicios = ServicioCotizado.objects.filter(
+        trabajadores_asignados=usuario,
+        estado='aprobado_supervisor'
+    )
+
+    # Filtro según selección
+    if filtro_pdf == "filtro_actual":
+        if id_new:
+            servicios = servicios.filter(id_new__icontains=id_new)
+        if mes_produccion:
+            servicios = servicios.filter(
+                mes_produccion__icontains=mes_produccion)
+    elif filtro_pdf == "mes_actual":
+        from datetime import datetime
+        mes_actual = datetime.now().strftime("%B %Y")
+        servicios = servicios.filter(mes_produccion__iexact=mes_actual)
+    # Si es "todos" no filtramos más
+
+    # Datos PDF
+    from decimal import Decimal
+    produccion_data = []
+    total_produccion = Decimal("0.0")
+    for servicio in servicios:
+        total_mmoo = servicio.monto_mmoo or Decimal("0.0")
+        total_tecnicos = servicio.trabajadores_asignados.count()
+        monto_tecnico = total_mmoo / \
+            total_tecnicos if total_tecnicos else Decimal("0.0")
+
+        produccion_data.append([
+            f"DU{servicio.du}",
+            servicio.id_new or "-",
+            Paragraph(servicio.detalle_tarea, ParagraphStyle(
+                'detalle_style', fontSize=9, leading=11, alignment=0)),
+            f"{monto_tecnico:,.0f}".replace(",", ".")
+        ])
+
+        total_produccion += monto_tecnico
+
+    # Generación PDF
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=50, bottomMargin=50)
+    elements = []
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="CenterTitle",
+               alignment=1, fontSize=16, spaceAfter=20))
+
+    # Logo
+    logo_path = getattr(settings, "STATIC_ROOT", None)
+    if logo_path:
+        try:
+            logo = Image(f"{settings.STATIC_ROOT}/img/logo.png",
+                         width=120, height=40)
+            elements.append(logo)
+        except:
+            pass
+
+    # Títulos
+    from datetime import datetime
+    elements.append(Paragraph(
+        f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
+    elements.append(Paragraph(
+        f"<b>Total Producción:</b> ${total_produccion:,.0f} CLP".replace(",", "."), styles["Normal"]))
+    elements.append(Paragraph(
+        f"<i>El total corresponde a la selección:</i> {filtro_seleccionado}.", styles["Normal"]))
+    elements.append(Paragraph(
+        f"<b>Fecha de generación:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    # Tabla
+    data = [["DU", "ID NEW", "Detalle", "Producción (CLP)"]] + produccion_data
+    table = Table(data, colWidths=[70, 100, 300, 80])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 11),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+         [colors.whitesmoke, colors.lightgrey]),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
+    ]))
+    elements.append(table)
+
+    # Firma
+    elements.append(Spacer(1, 40))
+    elements.append(Paragraph("<b>Firma del Técnico:</b>", styles["Normal"]))
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph(
+        f"__________________________<br/>{usuario.get_full_name()}", styles["Normal"]))
+
+    # Exportar
+    doc.build(elements)
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="produccion.pdf"'
+    return response

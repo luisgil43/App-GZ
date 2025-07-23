@@ -14,12 +14,57 @@ from facturacion.models import OrdenCompraFacturacion
 from facturacion.forms import OrdenCompraFacturacionForm
 
 
+from django.core.paginator import Paginator
+
+
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_ordenes_compra(request):
+    # Filtros
+    du = request.GET.get('du', '')
+    id_claro = request.GET.get('id_claro', '')
+    id_new = request.GET.get('id_new', '')
+    mes_produccion = request.GET.get('mes_produccion', '')
+    estado = request.GET.get('estado', '')
+
     servicios = ServicioCotizado.objects.prefetch_related(
-        'ordenes_compra', 'trabajadores_asignados').all().order_by('-fecha_creacion')
-    return render(request, 'facturacion/listar_ordenes_compra.html', {'servicios': servicios})
+        'ordenes_compra', 'trabajadores_asignados'
+    ).all().order_by('-fecha_creacion')
+
+    if du:
+        du = du.strip().upper().replace('DU', '')
+        servicios = servicios.filter(du__iexact=du)
+    if id_claro:
+        servicios = servicios.filter(id_claro__icontains=id_claro)
+    if id_new:
+        servicios = servicios.filter(id_new__icontains=id_new)
+    if mes_produccion:
+        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+    if estado:
+        servicios = servicios.filter(estado=estado)
+
+    # Paginación
+    cantidad = request.GET.get("cantidad", "10")
+    if cantidad == "todos":
+        cantidad = 999999
+    else:
+        cantidad = int(cantidad)
+    paginator = Paginator(servicios, cantidad)
+    page_number = request.GET.get("page")
+    pagina = paginator.get_page(page_number)
+
+    return render(request, 'facturacion/listar_ordenes_compra.html', {
+        'pagina': pagina,
+        'cantidad': request.GET.get("cantidad", "10"),
+        'filtros': {
+            'du': du,
+            'id_claro': id_claro,
+            'id_new': id_new,
+            'mes_produccion': mes_produccion,
+            'estado': estado,
+        },
+        'estado_choices': ServicioCotizado.ESTADOS
+    })
 
 
 @login_required

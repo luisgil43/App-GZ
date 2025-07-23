@@ -1,0 +1,172 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Mi Producción{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto p-4 bg-white rounded-xl shadow mt-6 overflow-x-auto">
+  <h2 class="text-2xl font-bold text-gray-800 mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+    <div>
+      📈 Producción Aprobada
+      <p class="text-sm text-gray-600 mt-1">
+        Total acumulado: <span class="font-semibold text-emerald-700">$ {{ total_estimado|miles }} CLP</span>
+      </p>
+    </div>
+
+    <!-- Dropdown bonito + botón exportar -->
+    <div class="flex gap-2 items-center">
+      <div class="relative inline-block text-left">
+        <button id="dropdownButton" type="button"
+          class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+          aria-expanded="true" aria-haspopup="true">
+          Solo mes actual
+          <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+            fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.23 8.27a.75.75 0 01.02-1.06z"
+              clip-rule="evenodd" />
+          </svg>
+        </button>
+
+        <!-- Menú opciones -->
+        <div id="dropdownMenu"
+          class="hidden origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
+          <div class="py-1">
+            <a href="#" data-value="mes_actual"
+              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Solo mes actual</a>
+            <a href="#" data-value="filtro_actual"
+              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Con filtros aplicados</a>
+            <a href="#" data-value="todos"
+              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Toda la producción</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botón exportar -->
+      <button id="exportarPDF" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+        📄 Exportar PDF
+      </button>
+    </div>
+  </h2>
+
+  <!-- Filtros -->
+  <form method="get" class="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-end">
+    <input type="text" name="id_new" value="{{ id_new }}" placeholder="Filtrar por ID NEW"
+           class="border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <input type="text" name="mes_produccion" value="{{ mes_produccion }}" placeholder="Mes de producción"
+           class="border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">
+      🔍 Filtrar
+    </button>
+    <a href="{% url 'operaciones:produccion_tecnico' %}"
+       class="bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300 text-sm">
+      ❌ Limpiar
+    </a>
+  </form>
+
+  <!-- Tabla -->
+  <table class="min-w-[1100px] table-auto border border-gray-300 rounded-xl text-sm">
+    <thead class="bg-gray-100">
+      <tr>
+        <th class="p-2 text-center">DU</th>
+        <th class="p-2 text-center">ID CLARO</th>
+        <th class="p-2 text-center">REGIÓN</th>
+        <th class="p-2 text-center">MES PRODUCCIÓN</th>
+        <th class="p-2 text-center">ID NEW</th>
+        <th class="p-2 text-center">DETALLE TAREA</th>
+        <th class="p-2 text-center">PRODUCCIÓN</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% if produccion_info %}
+        {% for item in produccion_info %}
+          {% with servicio=item.servicio monto=item.monto_tecnico %}
+          <tr class="border-t">
+            <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+            <td class="p-2">{{ servicio.id_claro }}</td>
+            <td class="p-2">{{ servicio.region }}</td>
+            <td class="p-2">{{ servicio.mes_produccion }}</td>
+            <td class="p-2">{{ servicio.id_new }}</td>
+            <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+              {{ servicio.detalle_tarea }}
+            </td>
+            <td class="p-2 text-right font-semibold text-emerald-700">
+              $ {{ monto|miles }} CLP
+            </td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="7" class="text-center p-4 text-gray-500 italic">🔔 No tienes producción aprobada aún.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <!-- Selector de cantidad -->
+  <form method="get" class="mt-4 flex items-center gap-2">
+    <label for="cantidad" class="text-sm">Mostrar:</label>
+    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded px-2 py-1">
+      <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+      <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+    </select>
+    <input type="hidden" name="id_new" value="{{ id_new }}">
+    <input type="hidden" name="mes_produccion" value="{{ mes_produccion }}">
+  </form>
+
+  <!-- Paginación -->
+  <div class="mt-4 flex justify-center gap-2">
+    {% if pagina.has_previous %}
+      <a href="?page=1&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">« Primero</a>
+      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">‹ Anterior</a>
+    {% endif %}
+    <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">Siguiente ›</a>
+      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">Último »</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Script para dropdown -->
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const dropdownButton = document.getElementById("dropdownButton");
+    const dropdownMenu = document.getElementById("dropdownMenu");
+    const exportButton = document.getElementById("exportarPDF");
+    let selectedValue = "mes_actual";
+
+    dropdownButton.addEventListener("click", () => {
+      dropdownMenu.classList.toggle("hidden");
+    });
+
+    document.querySelectorAll(".dropdown-option").forEach(option => {
+      option.addEventListener("click", (e) => {
+        e.preventDefault();
+        selectedValue = option.getAttribute("data-value");
+        dropdownButton.innerHTML = option.innerHTML + `
+          <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+            fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.23 8.27a.75.75 0 01.02-1.06z"
+              clip-rule="evenodd" />
+          </svg>`;
+        dropdownMenu.classList.add("hidden");
+      });
+    });
+
+    exportButton.addEventListener("click", () => {
+      const params = new URLSearchParams({
+        id_new: "{{ id_new }}",
+        mes_produccion: "{{ mes_produccion }}",
+        filtro_pdf: selectedValue
+      });
+      window.location.href = "{% url 'operaciones:exportar_produccion_pdf' %}?" + params.toString();
+    });
+  });
+</script>
+{% endblock %}
