@@ -27,10 +27,30 @@ def listar_ordenes_compra(request):
     mes_produccion = request.GET.get('mes_produccion', '')
     estado = request.GET.get('estado', '')
 
-    servicios = ServicioCotizado.objects.prefetch_related(
-        'ordenes_compra', 'trabajadores_asignados'
-    ).all().order_by('-fecha_creacion')
+    # Estados válidos (de cotizado a finalizado)
+    estados_validos = [
+        'cotizado',
+        'aprobado_pendiente',
+        'asignado',
+        'en_progreso',
+        'finalizado_trabajador',
+        'rechazado_supervisor',
+        'aprobado_supervisor',
+        'informe_subido',
+        'finalizado'
+    ]
 
+    # Traer TODOS los servicios en esos estados (con o sin órdenes)
+    servicios = ServicioCotizado.objects.select_related(
+        'pm_aprueba', 'tecnico_aceptado', 'tecnico_finalizo', 'supervisor_aprobo',
+        'supervisor_rechazo', 'supervisor_asigna', 'usuario_informe'
+    ).prefetch_related(
+        'ordenes_compra', 'trabajadores_asignados'
+    ).filter(
+        estado__in=estados_validos
+    ).order_by('-fecha_creacion')
+
+    # Filtros dinámicos
     if du:
         du = du.strip().upper().replace('DU', '')
         servicios = servicios.filter(du__iexact=du)
@@ -45,10 +65,7 @@ def listar_ordenes_compra(request):
 
     # Paginación
     cantidad = request.GET.get("cantidad", "10")
-    if cantidad == "todos":
-        cantidad = 999999
-    else:
-        cantidad = int(cantidad)
+    cantidad = 999999 if cantidad == "todos" else int(cantidad)
     paginator = Paginator(servicios, cantidad)
     page_number = request.GET.get("page")
     pagina = paginator.get_page(page_number)

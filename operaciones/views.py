@@ -4,7 +4,6 @@ from django.utils.html import escape
 from django.utils.encoding import force_str
 from django.core.paginator import Paginator
 import calendar
-from operaciones.models import SitioMovil
 from decimal import Decimal
 import requests
 from django.conf import settings
@@ -30,7 +29,6 @@ from usuarios.utils import crear_notificacion  # asegúrate de tener esta funci�
 from datetime import datetime
 import locale
 from django.http import JsonResponse
-from operaciones.models import SitioMovil  # Ajusta según tu modelo real
 from django.shortcuts import get_object_or_404
 from .models import ServicioCotizado
 from .forms import ServicioCotizadoForm
@@ -784,7 +782,7 @@ def rechazar_asignacion(request, pk):
 @rol_requerido('usuario')
 def produccion_tecnico(request):
     usuario = request.user
-    id_new = request.GET.get("id_new", "")
+    id_claro = request.GET.get("id_claro", "")
     mes_produccion = request.GET.get("mes_produccion", "")
 
     # Traducción manual de meses
@@ -800,8 +798,8 @@ def produccion_tecnico(request):
         trabajadores_asignados=usuario,
         estado='aprobado_supervisor'
     )
-    if id_new:
-        servicios = servicios.filter(id_new__icontains=id_new)
+    if id_claro:
+        servicios = servicios.filter(id_claro__icontains=id_claro)
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
 
@@ -831,7 +829,8 @@ def produccion_tecnico(request):
         monto_tecnico = total_mmoo / \
             total_tecnicos if total_tecnicos else Decimal("0.0")
         produccion_info.append(
-            {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)})
+            {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)}
+        )
 
     # Paginación sobre produccion_info
     cantidad = request.GET.get('cantidad', 10)
@@ -852,8 +851,8 @@ def produccion_tecnico(request):
                 total_tecnicos if total_tecnicos else Decimal("0.0")
 
     return render(request, 'operaciones/produccion_tecnico.html', {
-        'produccion_info': produccion_info_paginada,  # ahora es la lista paginada
-        'id_new': id_new,
+        'produccion_info': produccion_info_paginada,
+        'id_claro': id_claro,
         'mes_produccion': mes_produccion,
         'total_estimado': round(total_acumulado, 0),
         'mes_actual': mes_actual,
