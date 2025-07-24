@@ -823,25 +823,24 @@ def produccion_tecnico(request):
 
     servicios = sorted(servicios, key=prioridad)
 
-    # Paginación
-    cantidad = request.GET.get('cantidad', 10)
-    if cantidad == 'todos':
-        paginador = Paginator(servicios, len(servicios))
-    else:
-        paginador = Paginator(servicios, int(cantidad))
-    pagina = request.GET.get('page')
-    servicios_paginados = paginador.get_page(pagina)
-
-    # Producción
+    # Producción (antes de paginar)
     produccion_info = []
-    total_produccion = Decimal("0.0")
-    for servicio in servicios_paginados:
+    for servicio in servicios:
         total_mmoo = servicio.monto_mmoo or Decimal("0.0")
         total_tecnicos = servicio.trabajadores_asignados.count()
         monto_tecnico = total_mmoo / \
             total_tecnicos if total_tecnicos else Decimal("0.0")
         produccion_info.append(
             {'servicio': servicio, 'monto_tecnico': round(monto_tecnico, 0)})
+
+    # Paginación sobre produccion_info
+    cantidad = request.GET.get('cantidad', 10)
+    if cantidad == 'todos':
+        paginador = Paginator(produccion_info, len(produccion_info))
+    else:
+        paginador = Paginator(produccion_info, int(cantidad))
+    pagina = request.GET.get('page')
+    produccion_info_paginada = paginador.get_page(pagina)
 
     # Total solo mes actual
     total_acumulado = Decimal("0.0")
@@ -853,14 +852,14 @@ def produccion_tecnico(request):
                 total_tecnicos if total_tecnicos else Decimal("0.0")
 
     return render(request, 'operaciones/produccion_tecnico.html', {
-        'produccion_info': produccion_info,
+        'produccion_info': produccion_info_paginada,  # ahora es la lista paginada
         'id_new': id_new,
         'mes_produccion': mes_produccion,
         'total_estimado': round(total_acumulado, 0),
         'mes_actual': mes_actual,
         'paginador': paginador,
         'cantidad': cantidad,
-        'pagina': servicios_paginados,
+        'pagina': produccion_info_paginada,
     })
 
 
