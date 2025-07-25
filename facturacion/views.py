@@ -1,3 +1,7 @@
+from openpyxl.styles import Font, Alignment, PatternFill
+from django.http import HttpResponse
+from openpyxl.utils import get_column_letter
+import openpyxl
 import traceback
 from usuarios.decoradores import rol_requerido
 from django.contrib.auth.decorators import login_required
@@ -316,3 +320,132 @@ def eliminar_orden_compra(request, pk):
         return redirect('facturacion:listar_oc_facturacion')
 
     return render(request, 'facturacion/eliminar_orden_compra.html', {'orden': orden})
+
+
+@login_required
+@rol_requerido('facturacion', 'admin')
+def exportar_ordenes_compra_excel(request):
+    # Filtros (mismos que en listar)
+    du = request.GET.get('du', '')
+    id_claro = request.GET.get('id_claro', '')
+    id_new = request.GET.get('id_new', '')
+    mes_produccion = request.GET.get('mes_produccion', '')
+    estado = request.GET.get('estado', '')
+
+    estados_validos = [
+        'cotizado',
+        'aprobado_pendiente',
+        'asignado',
+        'en_progreso',
+        'finalizado_trabajador',
+        'rechazado_supervisor',
+        'aprobado_supervisor',
+        'informe_subido',
+        'finalizado'
+    ]
+
+    servicios = ServicioCotizado.objects.select_related(
+        'pm_aprueba', 'tecnico_aceptado', 'tecnico_finalizo', 'supervisor_aprobo',
+        'supervisor_rechazo', 'supervisor_asigna', 'usuario_informe'
+    ).prefetch_related(
+        'ordenes_compra', 'trabajadores_asignados'
+    ).filter(
+        estado__in=estados_validos
+    ).order_by('-fecha_creacion')
+
+    if du:
+        du = du.strip().upper().replace('DU', '')
+        servicios = servicios.filter(du__iexact=du)
+    if id_claro:
+        servicios = servicios.filter(id_claro__icontains=id_claro)
+    if id_new:
+        servicios = servicios.filter(id_new__icontains=id_new)
+    if mes_produccion:
+        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+    if estado:
+        servicios = servicios.filter(estado=estado)
+
+    # Crear libro Excel
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Órdenes de Compra"
+
+    # Encabezados
+    columnas = [
+        "DU", "ID CLARO", "ID NEW", "DETALLE TAREA", "ASIGNADOS",
+        "M. COTIZADO (UF)", "M. MMOO (CLP)", "FECHA FIN", "STATUS",
+        "OC", "POS", "CANT", "UM", "MATERIAL", "DESCRIPCIÓN SITIO",
+        "FECHA ENTREGA", "P. UNITARIO", "MONTO"
+    ]
+    ws.append(columnas)
+
+    # Estilo encabezados
+    header_fill = PatternFill(start_color="D9D9D9",
+                              end_color="D9D9D9", fill_type="solid")
+    for col_num, col_name in enumerate(columnas, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.font = Font(bold=True)
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Datos
+    for servicio in servicios:
+        asignados = ", ".join([u.get_full_name()
+                              for u in servicio.trabajadores_asignados.all()]) or ''
+        if servicio.ordenes_compra.exists():
+            for oc in servicio.ordenes_compra.all():
+                ws.append([
+                    f"DU{servicio.du or ''}",
+                    servicio.id_claro or '',
+                    servicio.id_new or '',
+                    servicio.detalle_tarea or '',
+                    asignados,
+                    servicio.monto_cotizado or 0,
+                    servicio.monto_mmoo or 0,
+                    servicio.fecha_aprobacion_supervisor.strftime(
+                        "%d-%m-%Y") if servicio.fecha_aprobacion_supervisor else '',
+                    servicio.get_estado_display(),
+                    oc.orden_compra or '',
+                    oc.pos or '',
+                    oc.cantidad or '',
+                    oc.unidad_medida or '',
+                    oc.material_servicio or '',
+                    oc.descripcion_sitio or '',
+                    oc.fecha_entrega.strftime(
+                        "%d-%m-%Y") if oc.fecha_entrega else '',
+                    oc.precio_unitario or 0,
+                    oc.monto or 0,
+                ])
+        else:
+            # Si no tiene órdenes, llenar con datos del servicio y vacíos para los campos de OC
+            ws.append([
+                f"DU{servicio.du or ''}",
+                servicio.id_claro or '',
+                servicio.id_new or '',
+                servicio.detalle_tarea or '',
+                asignados,
+                servicio.monto_cotizado or 0,
+                servicio.monto_mmoo or 0,
+                servicio.fecha_aprobacion_supervisor.strftime(
+                    "%d-%m-%Y") if servicio.fecha_aprobacion_supervisor else '',
+                servicio.get_estado_display(),
+                '', '', '', '', '', '', '', '', ''
+            ])
+
+    # Ajustar ancho de columnas automáticamente
+    for col in ws.columns:
+        max_length = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            try:
+                if cell.value and len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = max_length + 2
+
+    # Respuesta HTTP
+    response = HttpResponse(content_type='application/ms-excel')
+    response['Content-Disposition'] = 'attachment; filename="ordenes_compra.xlsx"'
+    wb.save(response)
+    return response

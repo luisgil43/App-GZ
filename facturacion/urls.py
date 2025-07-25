@@ -14,5 +14,7 @@ urlpatterns = [
          views.editar_orden_compra, name='editar_orden_compra'),
     path('ordenes/eliminar/<int:pk>/', views.eliminar_orden_compra,
          name='eliminar_orden_compra'),
+    path('ordenes/exportar/', views.exportar_ordenes_compra_excel,
+         name='exportar_ordenes_compra'),
 
 ]
