@@ -37,9 +37,16 @@
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
   <h2 class="text-2xl font-bold text-gray-800">📄 Órdenes de Compra</h2>
-  <a href="{% url 'facturacion:importar_orden_compra' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm">
-    + Importar OC
-  </a>
+  <div class="flex gap-2">
+    <a href="{% url 'facturacion:importar_orden_compra' %}" 
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm">
+      + Importar OC
+    </a>
+    <a href="{% url 'facturacion:exportar_ordenes_compra' %}?du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm">
+      📥 Exportar Excel
+    </a>
+  </div>
 </div>
 <!-- Filtros -->
 <form method="get" class="mb-6 flex flex-wrap gap-2">
