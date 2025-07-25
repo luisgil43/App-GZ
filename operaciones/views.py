@@ -1,4 +1,6 @@
 # operaciones/views.py
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from django.utils.html import escape
 from django.utils.encoding import force_str
@@ -559,6 +561,19 @@ def listar_servicios_supervisor(request):
         },
         'estado_choices': ServicioCotizado.ESTADOS
     })
+
+
+@login_required
+@rol_requerido('supervisor', 'admin', 'pm')
+@csrf_exempt
+def actualizar_motivo_rechazo(request, pk):
+    if request.method == 'POST':
+        servicio = get_object_or_404(ServicioCotizado, pk=pk)
+        nuevo_motivo = request.POST.get('motivo', '').strip()
+        servicio.motivo_rechazo = nuevo_motivo
+        servicio.save()
+        return JsonResponse({'success': True, 'motivo': nuevo_motivo})
+    return JsonResponse({'success': False}, status=400)
 
 
 @login_required

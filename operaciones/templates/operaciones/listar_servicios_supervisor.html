@@ -98,32 +98,53 @@
           {% endfor %}
         </td>
 <td class="p-2 text-sm">
-  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-    {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-    {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-    {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-    {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-    {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-    {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-    {% else %}bg-gray-100 text-gray-800{% endif %}">
-    {{ servicio.estado }}
+  <div class="flex flex-col gap-1 text-left">
+    <!-- Badge principal -->
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+      {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+      {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
+      {% if servicio.estado == 'aprobado_pendiente' %}
+       ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'asignado' %}
+       ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'en_progreso' %}
+       🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+      {% elif servicio.estado == 'finalizado_trabajador' %}
+       ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'rechazado_supervisor' %}
+       ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'aprobado_supervisor' %}
+       ✅  Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+{% elif servicio.estado == 'informe_subido' %}
+        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'finalizado' %}
+        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% else %}
+        {{ servicio.estado }}
+      {% endif %}
+    </div>
+
+    <!-- Badge secundario cuando está finalizado -->
+    {% if servicio.estado == 'finalizado_trabajador' %}
+      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        📝 Pendiente revisión del supervisor
+      </div>
+    {% endif %}
   </div>
 
-  {% if servicio.estado == 'rechazado_supervisor' %}
-    <div class="mt-2 text-xs text-red-700 bg-red-50 p-2 rounded text-left">
-      {% if servicio.supervisor_rechazo %}
-        <div><strong>Rechazado por:</strong> {{ servicio.supervisor_rechazo.get_full_name }}</div>
-      {% endif %}
-      {% if servicio.fecha_aprobacion_supervisor %}
-        <div><strong>Fecha:</strong> {{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}</div>
-      {% endif %}
-      {% if servicio.motivo_rechazo %}
-        <div class="mt-1"><strong>Motivo:</strong> {{ servicio.motivo_rechazo }}</div>
-      {% endif %}
+  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
+        style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
+        data-id="{{ servicio.id }}">
+      <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
     </div>
   {% endif %}
 </td>
-
       <td class="p-2 space-y-1">
   {% if servicio.estado == 'aprobado_pendiente' %}
     <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">👥 Asignar</a>
@@ -190,4 +211,52 @@
     document.getElementById('modal-rechazo-' + id).classList.add('hidden');
   }
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.editable-motivo').forEach(function(el) {
+    el.addEventListener('dblclick', function() {
+      const span = el.querySelector('.motivo-text');
+      const oldText = span.textContent;
+      const input = document.createElement('textarea');
+      input.value = oldText;
+      input.className = 'w-full border rounded p-1 text-xs';
+      span.replaceWith(input);
+      input.focus();
+
+      // Guardar al perder foco
+      input.addEventListener('blur', function() { guardarCambio(el, input); });
+      // Guardar con Enter
+      input.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); guardarCambio(el, input); }
+      });
+    });
+  });
+
+  function guardarCambio(el, input) {
+    const nuevoTexto = input.value;
+    const servicioId = el.getAttribute('data-id');
+    fetch(`/operaciones/servicios/${servicioId}/actualizar-motivo/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': '{{ csrf_token }}',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({ 'motivo': nuevoTexto })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const newSpan = document.createElement('span');
+        newSpan.className = 'motivo-text';
+        newSpan.textContent = data.motivo;
+        input.replaceWith(newSpan);
+      } else {
+        alert('Error al guardar el motivo.');
+      }
+    })
+    .catch(() => alert('Error en la conexión.'));
+  }
+});
+</script>
+
 {% endblock %}

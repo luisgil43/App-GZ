@@ -33,12 +33,13 @@ class ServicioCotizadoForm(forms.ModelForm):
         for field in self.fields.values():
             field.required = True
 
-        # Forzar como texto para evitar validación HTML5 numérica
+        # Campo monto cotizado como texto con coma
         self.fields['monto_cotizado'].widget = forms.TextInput(
             attrs={'placeholder': 'Ej: 10,00 UF'}
         )
+        # Campo monto MMOO como texto para aceptar miles y coma decimal
         self.fields['monto_mmoo'].widget = forms.TextInput(
-            attrs={'placeholder': 'Ej: 60.000 CLP'}
+            attrs={'placeholder': 'Ej: 632.543,76'}
         )
 
         # Preformatear valores iniciales para edición
@@ -48,16 +49,15 @@ class ServicioCotizadoForm(forms.ModelForm):
                 self.initial['monto_cotizado'] = str(
                     self.instance.monto_cotizado).replace(".", ",")
             if self.instance.monto_mmoo is not None:
-                # Mostrar sin decimales y con puntos de miles
-                self.initial['monto_mmoo'] = f"{int(self.instance.monto_mmoo):,}".replace(
-                    ",", ".")
+                # Mostrar con separador de miles y coma como decimal
+                self.initial['monto_mmoo'] = f"{self.instance.monto_mmoo:,.2f}".replace(
+                    ",", "X").replace(".", ",").replace("X", ".")
 
     def clean_monto_cotizado(self):
         """Convierte UF a Decimal, acepta coma o punto como separador y fuerza 2 decimales."""
         data = self.cleaned_data.get('monto_cotizado')
         if not data:
             raise forms.ValidationError("Este campo es obligatorio.")
-        # Reemplaza coma por punto
         data = data.replace(" ", "").replace(",", ".")
         try:
             value = Decimal(data).quantize(
@@ -70,18 +70,21 @@ class ServicioCotizadoForm(forms.ModelForm):
                 "Ingrese un monto válido en formato 0,00")
 
     def clean_monto_mmoo(self):
-        """Convierte CLP a Decimal eliminando separadores de miles."""
+        """Convierte CLP formateado (1.234.567,89) a Decimal."""
         data = self.cleaned_data.get('monto_mmoo')
         if not data:
             return None
-        data = data.replace(".", "").replace(",", "")
+        # Eliminar espacios, puntos de miles y reemplazar coma por punto
+        data = data.replace(" ", "").replace(".", "").replace(",", ".")
         try:
-            value = Decimal(data)
+            value = Decimal(data).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP)
             if value < 0:
                 raise forms.ValidationError("El monto no puede ser negativo.")
             return value
         except InvalidOperation:
-            raise forms.ValidationError("Ingrese un monto válido en CLP.")
+            raise forms.ValidationError(
+                "Ingrese un monto válido en formato 1.234,56")
 
 
 User = get_user_model()

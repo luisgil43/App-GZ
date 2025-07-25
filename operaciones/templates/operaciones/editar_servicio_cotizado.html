@@ -32,28 +32,30 @@
         {{ form.detalle_tarea|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
 
-      <!-- Monto Cotizado (UF) -->
-   <div class="md:col-span-2">
-    <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
-    <input type="text"
-           name="monto_cotizado"
-           value="{{ form.data.monto_cotizado|default:servicio.monto_cotizado|stringformat:'.2f'|default:'' }}"
-           class="w-full border rounded-xl px-3 py-2">
-    {% if form.errors.monto_cotizado %}
-        <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_cotizado.0 }}</p>
-    {% endif %}
+    <!-- Monto Cotizado (UF) -->
+<div class="md:col-span-2">
+  <label class="block text-sm font-medium text-gray-700">Monto Cotizado (UF)</label>
+  <input type="text"
+         name="monto_cotizado"
+         value="{{ form.monto_cotizado.value|default:'' }}"
+         class="w-full border rounded-xl px-3 py-2">
+  {% if form.errors.monto_cotizado %}
+      <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_cotizado.0 }}</p>
+  {% endif %}
 </div>
 
+<!-- Monto MMOO (CLP) -->
 <div class="md:col-span-2">
-    <label class="block text-sm font-medium text-gray-700">Monto MMOO (CLP)</label>
-    <input type="text"
-           name="monto_mmoo"
-           value="{{ form.data.monto_mmoo|default:servicio.monto_mmoo|default:'' }}"
-           class="w-full border rounded-xl px-3 py-2">
-    {% if form.errors.monto_mmoo %}
-        <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_mmoo.0 }}</p>
-    {% endif %}
+  <label class="block text-sm font-medium text-gray-700">Monto MMOO (CLP)</label>
+  <input type="text"
+         name="monto_mmoo"
+         value="{{ form.monto_mmoo.value|default:'' }}"
+         class="w-full border rounded-xl px-3 py-2">
+  {% if form.errors.monto_mmoo %}
+      <p class="text-red-600 text-sm mt-1">{{ form.errors.monto_mmoo.0 }}</p>
+  {% endif %}
 </div>
+
     </div>
 
     <div class="mt-6 flex justify-between items-center">
