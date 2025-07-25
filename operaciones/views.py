@@ -758,7 +758,7 @@ def aprobar_asignacion(request, pk):
 @rol_requerido('supervisor', 'admin', 'pm')
 def rechazar_asignacion(request, pk):
     if request.method == 'POST':
-        motivo = request.POST.get('motivo', '').strip()
+        motivo = request.POST.get('motivo_rechazo', '').strip()
         servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
         if servicio.estado in ['asignado', 'finalizado_trabajador']:
