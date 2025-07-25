@@ -135,21 +135,21 @@
       {% if servicio.estado == 'cotizado' %}
         📝 Cotizado (pendiente aprobación)
       {% elif servicio.estado == 'aprobado_pendiente' %}
-        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} ({{ servicio.pm_aprueba.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'asignado' %}
-        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} ({{ servicio.supervisor_asigna.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'en_progreso' %}
-        🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} ({{ servicio.tecnico_aceptado.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+        🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
       {% elif servicio.estado == 'finalizado_trabajador' %}
-        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'rechazado_supervisor' %}
-        ❌ Rechazado por {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} ({{ servicio.supervisor_rechazo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ❌ Rechazado por {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'aprobado_supervisor' %}
-        ✅ Aprobado por: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} ({{ servicio.supervisor_aprobo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Aprobado por: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'informe_subido' %}
-        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'finalizado' %}
-        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% else %}
         Estatus desconocido
       {% endif %}
