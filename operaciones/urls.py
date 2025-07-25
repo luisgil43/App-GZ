@@ -45,5 +45,7 @@ urlpatterns = [
     path('produccion/', views.produccion_tecnico, name='produccion_tecnico'),
     path('produccion/exportar-pdf/', views.exportar_produccion_pdf,
          name='exportar_produccion_pdf'),
+    path('servicios/<int:pk>/actualizar-motivo/',
+         views.actualizar_motivo_rechazo, name='actualizar_motivo_rechazo'),
 
 ]

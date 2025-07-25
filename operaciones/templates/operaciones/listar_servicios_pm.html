@@ -118,47 +118,66 @@
         <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
         <td class="p-2 font-semibold text-emerald-700">UF {{ servicio.monto_cotizado|intcomma }}</td>
         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
-        <td class="p-2 text-sm">
-          <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-            {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
-            {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-            {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-            {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-            {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-            {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-            {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-            {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
-            {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
-            {% else %}bg-gray-100 text-gray-800{% endif %}">
-            {% if servicio.estado == 'cotizado' %}
-              📝 Cotizado (pendiente aprobación)
-            {% elif servicio.estado == 'aprobado_pendiente' %}
-              ✅ Aprobado por PM: {{ servicio.pm_aprueba.get_full_name }}
-            {% elif servicio.estado == 'asignado' %}
-              ✅ Asignado por Supervisor: {{ servicio.supervisor_asigna.get_full_name }}
-            {% elif servicio.estado == 'en_progreso' %}
-              🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
-            {% elif servicio.estado == 'finalizado_trabajador' %}
-              ✔️ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
-            {% elif servicio.estado == 'rechazado_supervisor' %}
-              ❌ Rechazado por {{ servicio.supervisor_rechazo.get_full_name }}{% if servicio.motivo_rechazo %} - Motivo: {{ servicio.motivo_rechazo }}{% endif %}
-            {% elif servicio.estado == 'aprobado_supervisor' %}
-              ✅ Aprobado por Supervisor: {{ servicio.supervisor_aprobo.get_full_name }}
-            {% elif servicio.estado == 'informe_subido' %}
-              📄 Informe cargado por {{ servicio.usuario_informe.get_full_name }}
-            {% elif servicio.estado == 'finalizado' %}
-              ✅ Finalizado por {{ servicio.tecnico_finalizo.get_full_name }}
-            {% else %}
-              Estatus desconocido
-            {% endif %}
-          </div>
-        </td>
+<td class="p-2 text-sm text-left">
+  <div class="flex flex-col gap-1">
+    <!-- Badge principal -->
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+      {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
+      {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+      {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+      {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
+      {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
+      {% if servicio.estado == 'cotizado' %}
+        📝 Cotizado (pendiente aprobación)
+      {% elif servicio.estado == 'aprobado_pendiente' %}
+        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} ({{ servicio.pm_aprueba.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'asignado' %}
+        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} ({{ servicio.supervisor_asigna.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'en_progreso' %}
+        🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} ({{ servicio.tecnico_aceptado.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+      {% elif servicio.estado == 'finalizado_trabajador' %}
+        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'rechazado_supervisor' %}
+        ❌ Rechazado por {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} ({{ servicio.supervisor_rechazo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'aprobado_supervisor' %}
+        ✅ Aprobado por: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} ({{ servicio.supervisor_aprobo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'informe_subido' %}
+        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'finalizado' %}
+        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% else %}
+        Estatus desconocido
+      {% endif %}
+    </div>
+
+    <!-- Badge adicional para revisión -->
+    {% if servicio.estado == 'finalizado_trabajador' %}
+      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        📝 Pendiente revisión del supervisor
+      </div>
+    {% endif %}
+  </div>
+
+  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words" 
+         style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+      <strong>Motivo:</strong> {{ servicio.motivo_rechazo }}
+    </div>
+  {% endif %}
+</td>
+
+
         <td class="p-2 space-x-2">
           {% if servicio.estado == 'cotizado' %}
             <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}" class="text-blue-600 hover:underline">✏️</a>
             <button onclick="abrirModal('modal-{{ servicio.pk }}')" class="text-red-600 hover:underline">🗑️</button>
             <a href="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}" class="text-green-600 hover:underline font-bold">✅</a>
-          {% elif servicio.estado in 'aprobado_pendiente asignado en_progreso finalizado_trabajador aprobado_supervisor informe_subido finalizado' %}
+          {% elif servicio.estado in 'aprobado_pendiente asignado en_progreso finalizado_trabajador aprobado_supervisor informe_subido finalizado rechazado_supervisor' %}
             {% if request.user.is_superuser or request.user.es_admin_general %}
               <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}" class="text-blue-600 hover:underline">✏️</a>
               <button onclick="abrirModal('modal-{{ servicio.pk }}')" class="text-red-600 hover:underline">🗑️</button>
