@@ -1,0 +1,62 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% block title %}Importar Conformidades{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
+  <h2 class="text-xl font-bold mb-4 text-gray-800">📂 Importar Conformidades</h2>
+
+  <form method="post" enctype="multipart/form-data" class="mb-6">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="flex justify-between items-center mt-4">
+      <a href="{% url 'facturacion:listar_facturas' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-xl">← Volver</a>
+      <div class="flex items-center gap-4">
+        <a href="{% static 'importar_conformidades.xlsx' %}" class="text-blue-600 text-sm hover:underline flex items-center gap-1">
+          📥 Descargar formato
+        </a>
+        <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl">Previsualizar</button>
+      </div>
+    </div>
+  </form>
+
+  {% if datos %}
+  <!-- Tabla de previsualización -->
+  <div class="overflow-x-auto">
+    <table class="min-w-full border border-gray-300 text-sm text-left">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+	<th class="px-3 py-2 border">ID_CLARO</th>
+          <th class="px-3 py-2 border">OC</th>
+          <th class="px-3 py-2 border">HES</th>
+          <th class="px-3 py-2 border">Valor en CLP</th>
+          <th class="px-3 py-2 border">Conformidad</th>
+          <th class="px-3 py-2 border">N° Factura</th>
+          <th class="px-3 py-2 border">Fecha Facturación</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in datos %}
+        <tr>
+	<td class="px-3 py-1 border">{{ fila.id_claro }}</td>
+          <td class="px-3 py-1 border">{{ fila.oc }}</td>
+          <td class="px-3 py-1 border">{{ fila.hes }}</td>
+          <td class="px-3 py-1 border">{{ fila.valor_en_clp }}</td>
+          <td class="px-3 py-1 border">{{ fila.conformidad }}</td>
+          <td class="px-3 py-1 border">{{ fila.num_factura }}</td>
+          <td class="px-3 py-1 border">{{ fila.fecha_facturacion }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="{% url 'facturacion:guardar_facturas' %}">
+    {% csrf_token %}
+    <button type="submit" class="mt-6 bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+      Guardar Conformidades
+    </button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}Eliminar Factura{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-md mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-xl font-bold text-gray-800 mb-4">🗑️ Eliminar Factura</h2>
+  <p class="text-gray-700">¿Estás seguro que deseas eliminar la factura <strong>{{ factura.num_factura|default:"Sin número" }}</strong> asociada a la OC <strong>{{ factura.orden_compra.orden_compra }}</strong>?</p>
+
+  <form method="post" class="mt-6 flex justify-between">
+    {% csrf_token %}
+    <a href="{% url 'facturacion:listar_facturas' %}" class="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-400">
+      Cancelar
+    </a>
+    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+      Eliminar
+    </button>
+  </form>
+</div>
+{% endblock %}

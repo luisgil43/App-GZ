@@ -34,3 +34,28 @@ def miles_decimales(value):
         return f"{entero_con_miles},{decimal}"
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def formato_clp(value):
+    """
+    Formatea un número como CLP sin decimales y con puntos de miles.
+    Ejemplo: 1324234 -> 1.324.234
+    """
+    try:
+        valor = int(float(value))
+        return f"{valor:,}".replace(",", ".")
+    except (ValueError, TypeError):
+        return value
+
+
+@register.filter
+def formato_uf(value):
+    """Formatea valores en UF con separador de miles y dos decimales."""
+    try:
+        valor = float(value)
+        entero, decimal = f"{valor:.2f}".split(".")
+        entero_con_miles = f"{int(entero):,}".replace(",", ".")
+        return f"{entero_con_miles},{decimal}"
+    except (ValueError, TypeError):
+        return value
