@@ -93,6 +93,7 @@
         <th class="p-2">ASIGNADOS</th>
         <th class="p-2">M. COTIZADO (UF)</th>
         <th class="p-2">M. MMOO (CLP)</th>
+<th class="p-2">MES DE PRODUCCIÓN</th>
         <th class="p-2">FECHA FIN</th>
         <th class="p-2">STATUS SERVICIO</th>
         <th class="p-2">OC</th>
@@ -109,7 +110,7 @@
         <th class="p-2">CONFORMIDAD</th>
         <th class="p-2">N° FACTURA</th>
         <th class="p-2">FECHA FACTURACIÓN</th>
-        <th class="p-2">MES DE PRODUCCIÓN</th>
+        
         <th class="p-2">FACTORIZADO</th>
         <th class="p-2">FECHA FACTORING</th>
         <th class="p-2">STATUS FACTURA</th>
@@ -137,6 +138,7 @@
 <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
     $ {{ factura.orden_compra.du.monto_mmoo|formato_clp }} CLP
 </td>
+<td class="p-2">{{ factura.mes_produccion|default:"—" }}</td>
         <td class="p-2">
     {% if factura.orden_compra.du.fecha_aprobacion_supervisor %}
         {{ factura.orden_compra.du.fecha_aprobacion_supervisor|date:"d/m/Y" }}
@@ -213,7 +215,7 @@
         <td class="p-2">{{ factura.conformidad|default:"—" }}</td>
         <td class="p-2">{{ factura.num_factura|default:"—" }}</td>
         <td class="p-2">{{ factura.fecha_facturacion|date:"Y-m-d"|default:"" }}</td>
-        <td class="p-2">{{ factura.mes_produccion|default:"—" }}</td>
+        
         <td class="p-2">{{ factura.factorizado|yesno:"Sí,No" }}</td>
         <td class="p-2">{{ factura.fecha_factoring|date:"Y-m-d"|default:"—" }}</td>
 
