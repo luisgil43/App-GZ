@@ -80,7 +80,6 @@ class FacturaOCForm(forms.ModelForm):
             'conformidad',
             'num_factura',
             'fecha_facturacion',
-            'mes_produccion',
             'factorizado',
             'fecha_factoring',
             'cobrado',
@@ -95,7 +94,6 @@ class FacturaOCForm(forms.ModelForm):
                 attrs={'type': 'date',
                        'class': 'w-full border rounded-xl px-3 py-2'}
             ),
-            'mes_produccion': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'factorizado': forms.CheckboxInput(attrs={'class': 'h-4 w-4'}),
             'fecha_factoring': forms.DateInput(
                 format='%Y-%m-%d',
