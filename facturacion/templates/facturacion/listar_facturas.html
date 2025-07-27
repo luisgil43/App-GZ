@@ -144,7 +144,57 @@
         —
     {% endif %}
 </td>
-        <td class="p-2">{{ factura.orden_compra.du.estado|capfirst }}</td>
+<td class="p-2 text-sm">
+  <div class="flex flex-col gap-1 text-left">
+    <!-- Badge principal -->
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+      {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+      {% elif factura.orden_compra.du.estado == 'asignado' %}bg-blue-100 text-blue-800
+      {% elif factura.orden_compra.du.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+      {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+      {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+      {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+      {% elif factura.orden_compra.du.estado == 'informe_subido' %}bg-purple-100 text-purple-800
+      {% elif factura.orden_compra.du.estado == 'finalizado' %}bg-green-100 text-green-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
+      {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}
+       ✅ Aprobado por PM: {% if factura.orden_compra.du.pm_aprueba %}{{ factura.orden_compra.du.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'asignado' %}
+       ✅ Asignado por Supervisor: {% if factura.orden_compra.du.supervisor_asigna %}{{ factura.orden_compra.du.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'en_progreso' %}
+       🕓 En ejecución (aceptado por {% if factura.orden_compra.du.tecnico_aceptado %}{{ factura.orden_compra.du.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+      {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}
+       ✔ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}
+       ❌ Rechazado por Supervisor {% if factura.orden_compra.du.supervisor_rechazo %}{{ factura.orden_compra.du.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}
+       ✅  Aprobado por Supervisor: {% if factura.orden_compra.du.supervisor_aprobo %}{{ factura.orden_compra.du.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'informe_subido' %}
+        📄 Informe cargado por {% if factura.orden_compra.du.usuario_informe %}{{ factura.orden_compra.du.usuario_informe.get_full_name }} ({{ factura.orden_compra.du.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif factura.orden_compra.du.estado == 'finalizado' %}
+        ✅ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} ({{ factura.orden_compra.du.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% else %}
+        {{ factura.orden_compra.du.estado }}
+      {% endif %}
+    </div>
+
+    <!-- Badge secundario cuando está finalizado -->
+    {% if factura.orden_compra.du.estado == 'finalizado_trabajador' %}
+      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        📝 Pendiente revisión del supervisor
+      </div>
+    {% endif %}
+  </div>
+
+  {% if factura.orden_compra.du.estado == 'rechazado_supervisor' and factura.orden_compra.du.motivo_rechazo %}
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
+        style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
+        data-id="{{ factura.orden_compra.du.id }}">
+      <strong>Motivo:</strong> <span class="motivo-text">{{ factura.orden_compra.du.motivo_rechazo }}</span>
+    </div>
+  {% endif %}
+</td>
+
 
         <!-- Orden de compra -->
         <td class="p-2">{{ factura.orden_compra.orden_compra }}</td>
