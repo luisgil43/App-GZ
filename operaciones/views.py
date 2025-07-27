@@ -229,7 +229,8 @@ def listar_servicios_pm(request):
             'mes_produccion': mes_produccion,
             'id_new': id_new,
             'estado': estado,
-        }
+        },
+        'estado_choices': ServicioCotizado.ESTADOS
     })
 
 

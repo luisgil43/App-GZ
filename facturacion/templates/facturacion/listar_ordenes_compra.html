@@ -16,6 +16,7 @@
     font-size: 0.875rem;
     height: 2.25rem;
     width: 100%;
+    max-width: 160px;
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
@@ -24,20 +25,17 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  /* Scroll horizontal solo en móviles */
-  .tabla-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  table {
-    white-space: nowrap;
-    min-width: 1100px;
-  }
+  .tabla-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { white-space: nowrap; min-width: 1100px; }
 </style>
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
   <h2 class="text-2xl font-bold text-gray-800">📄 Órdenes de Compra</h2>
   <div class="flex gap-2">
+    <button form="enviar-a-facturacion-form" type="submit"
+          class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-full text-sm">
+      ➡ Enviar a Facturación
+    </button>
     <a href="{% url 'facturacion:importar_orden_compra' %}" 
        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm">
       + Importar OC
@@ -48,42 +46,46 @@
     </a>
   </div>
 </div>
-<!-- Filtros -->
-<form method="get" class="mb-6 flex flex-wrap gap-2">
+
+<!-- Filtros estilo pill -->
+<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
   <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
 
   <select name="estado"
-          class="flex-1 min-w-[160px] md:w-[200px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
     <option value="">Todos los estados</option>
     {% for codigo, nombre in estado_choices %}
       <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
     {% endfor %}
   </select>
 
-  <div class="flex gap-2 w-full md:w-auto">
+  <div class="flex gap-2">
     <button type="submit"
-            class="flex-1 md:flex-none items-center justify-center bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
+            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
       🔍 Filtrar
     </button>
-    <a href="{% url 'facturacion:listar_oc_facturacion' %}"
-       class="flex-1 md:flex-none items-center justify-center bg-gray-200 text-red-600 text-sm font-medium px-4 py-1.5 rounded-full hover:bg-gray-300 transition">
+    <a href="{% url 'facturacion:listar_facturas' %}"
+       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
       ❌ Limpiar
     </a>
   </div>
 </form>
 
-<!-- Tabla responsive -->
+<!-- Formulario que envuelve la tabla -->
+<form id="enviar-a-facturacion-form" method="POST" action="{% url 'facturacion:enviar_a_facturacion' %}">
+{% csrf_token %}
 <div class="rounded-xl border border-gray-200 tabla-responsive">
   <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-      <tr>
+       <tr>
+ <th class="p-2"><input type="checkbox" id="select-all" class="w-4 h-4"></th>
         <th class="p-2">DU</th>
         <th class="p-2">ID CLARO</th>
         <th class="p-2">ID NEW</th>
@@ -109,8 +111,8 @@
   {% for servicio in pagina %}
     {% if servicio.ordenes_compra.exists %}
       {% for oc in servicio.ordenes_compra.all %}
-      <tr class="border-t">
-        <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+ <td class="p-2 text-center"><input type="checkbox" name="seleccionados" value="{{ oc.id }}" class="w-4 h-4"></td>       
+ <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
         <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
@@ -119,8 +121,8 @@
             {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
           {% endfor %}
         </td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|intcomma }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|formato_uf }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|formato_clp }} CLP</td>
         <td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
 <td class="p-2 text-sm">
   <div class="flex flex-col gap-1 text-left">
@@ -170,25 +172,25 @@
     </div>
   {% endif %}
 </td>
-
-
-        <td class="p-2">{{ oc.orden_compra }}</td>
+                <td class="p-2">{{ oc.orden_compra }}</td>
         <td class="p-2">{{ oc.pos }}</td>
         <td class="p-2">{{ oc.cantidad }}</td>
         <td class="p-2">{{ oc.unidad_medida }}</td>
         <td class="p-2">{{ oc.material_servicio }}</td>
         <td class="p-2">{{ oc.descripcion_sitio }}</td>
         <td class="p-2">{{ oc.fecha_entrega }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.precio_unitario|floatformat:0|intcomma }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.monto|floatformat:0|intcomma }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.precio_unitario|formato_uf }}</td>
+	<td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.monto|formato_uf }}</td>
         <td class="p-2">
           <a href="{% url 'facturacion:editar_orden_compra' oc.pk %}" class="text-blue-600 hover:underline text-xs">✏️</a>
           <a href="{% url 'facturacion:eliminar_orden_compra' oc.pk %}" class="text-red-600 hover:underline text-xs">🗑️</a>
         </td>
-      </tr>
+
+ </tr>
       {% endfor %}
     {% else %}
       <tr class="border-t">
+<td class="p-2 text-center">—</td>
         <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
@@ -200,8 +202,9 @@
             <span class="italic text-gray-400">Sin asignar</span>
           {% endfor %}
         </td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|intcomma }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
+         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|formato_uf }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|formato_clp }} CLP</td>
+
         <td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
   <td class="p-2 text-sm">
   <div class="flex flex-col gap-1 text-left">
@@ -252,7 +255,9 @@
   {% endif %}
 </td>
 
-        <td colspan="11" class="p-2 italic text-gray-400">Sin orden de compra</td>
+       
+            <td colspan="7" class="p-2 italic text-gray-400">Sin orden de compra</td>
+           
       </tr>
     {% endif %}
   {% endfor %}
@@ -260,6 +265,8 @@
 
   </table>
 </div>
+
+</form>
 
 <!-- Selector de cantidad -->
 <form method="get" class="mt-4 flex flex-wrap items-center gap-2">
@@ -286,4 +293,9 @@
 </div>
 
 </div>
+<script>
+document.getElementById('select-all').addEventListener('change', function() {
+    document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
+});
+</script>
 {% endblock %}

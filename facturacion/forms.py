@@ -1,3 +1,4 @@
+from .models import FacturaOC
 from django import forms
 from .models import OrdenCompraFacturacion
 
@@ -60,3 +61,52 @@ class OrdenCompraFacturacionForm(forms.ModelForm):
         if self.instance and self.instance.fecha_entrega:
             self.initial['fecha_entrega'] = self.instance.fecha_entrega.strftime(
                 '%Y-%m-%d')
+
+
+class ImportarFacturasForm(forms.Form):
+    archivo = forms.FileField(
+        label="Archivo Excel",
+        widget=forms.ClearableFileInput(
+            attrs={"class": "border rounded-lg px-3 py-2"})
+    )
+
+
+class FacturaOCForm(forms.ModelForm):
+    class Meta:
+        model = FacturaOC
+        fields = [
+            'hes',
+            'valor_en_clp',
+            'conformidad',
+            'num_factura',
+            'fecha_facturacion',
+            'mes_produccion',
+            'factorizado',
+            'fecha_factoring',
+            'cobrado',
+        ]
+        widgets = {
+            'hes': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'valor_en_clp': forms.NumberInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'conformidad': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'num_factura': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'fecha_facturacion': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={'type': 'date',
+                       'class': 'w-full border rounded-xl px-3 py-2'}
+            ),
+            'mes_produccion': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'factorizado': forms.CheckboxInput(attrs={'class': 'h-4 w-4'}),
+            'fecha_factoring': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={'type': 'date',
+                       'class': 'w-full border rounded-xl px-3 py-2'}
+            ),
+            'cobrado': forms.CheckboxInput(attrs={'class': 'h-4 w-4'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Para que Django use el formato correcto en valores iniciales
+        self.fields['fecha_facturacion'].input_formats = ['%Y-%m-%d']
+        self.fields['fecha_factoring'].input_formats = ['%Y-%m-%d']

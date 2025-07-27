@@ -1,0 +1,348 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Lista de Facturación{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    height: 2.25rem;
+    width: 100%;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+  .campo-filtro:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+  .tabla-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    white-space: nowrap;
+    min-width: 1200px;
+  }
+</style>
+
+<!-- Título y botones -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+  <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+    📑 Lista de Facturación
+  </h2>
+  <div class="flex gap-2">
+   <a href="{% url 'facturacion:importar_facturas' %}" 
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+  + Importar Conformidad
+</a>
+   <a href="{% url 'facturacion:exportar_facturacion_excel' %}"  
+   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+   📥 Exportar Excel
+</a>
+  </div>
+</div>
+
+<!-- Filtros estilo pill -->
+<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
+  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+
+  <select name="estado"
+          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+    <option value="">Todos los estados</option>
+    {% for codigo, nombre in estado_choices %}
+      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="flex gap-2">
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
+      🔍 Filtrar
+    </button>
+    <a href="{% url 'facturacion:listar_facturas' %}"
+       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
+      ❌ Limpiar
+    </a>
+  </div>
+</form>
+
+<!-- Tabla responsive -->
+<div class="rounded-xl border border-gray-200 tabla-responsive">
+  <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <tr>
+        <th class="p-2">DU</th>
+        <th class="p-2">ID CLARO</th>
+        <th class="p-2">ID NEW</th>
+        <th class="p-2">DETALLE TAREA</th>
+        <th class="p-2">ASIGNADOS</th>
+        <th class="p-2">M. COTIZADO (UF)</th>
+        <th class="p-2">M. MMOO (CLP)</th>
+        <th class="p-2">FECHA FIN</th>
+        <th class="p-2">STATUS SERVICIO</th>
+        <th class="p-2">OC</th>
+        <th class="p-2">POS</th>
+        <th class="p-2">CANT</th>
+        <th class="p-2">UM</th>
+        <th class="p-2">MATERIAL</th>
+        <th class="p-2">DESCRIPCIÓN SITIO</th>
+        <th class="p-2">FECHA ENTREGA</th>
+        <th class="p-2">P. UNITARIO</th>
+        <th class="p-2">MONTO</th>
+        <th class="p-2">HES</th>
+        <th class="p-2">VALOR EN CLP</th>
+        <th class="p-2">CONFORMIDAD</th>
+        <th class="p-2">N° FACTURA</th>
+        <th class="p-2">FECHA FACTURACIÓN</th>
+        <th class="p-2">MES DE PRODUCCIÓN</th>
+        <th class="p-2">FACTORIZADO</th>
+        <th class="p-2">FECHA FACTORING</th>
+        <th class="p-2">STATUS FACTURA</th>
+        <th class="p-2">ACCIONES</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% for factura in pagina %}
+      <tr class="border-t">
+        <!-- Servicio -->
+        <td class="p-2 font-mono">DU{{ factura.orden_compra.du.du }}</td>
+        <td class="p-2">{{ factura.orden_compra.du.id_claro }}</td>
+        <td class="p-2">{{ factura.orden_compra.du.id_new }}</td>
+        <td class="p-2 text-xs whitespace-pre-line break-words min-w-[200px] max-w-[400px]">{{ factura.orden_compra.du.detalle_tarea }}</td>
+        <td class="p-2">
+          {% for user in factura.orden_compra.du.trabajadores_asignados.all %}
+            {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
+          {% empty %}
+            <span class="italic text-gray-400">Sin asignar</span>
+          {% endfor %}
+        </td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+    UF {{ factura.orden_compra.du.monto_cotizado|formato_uf }}
+</td>
+<td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+    $ {{ factura.orden_compra.du.monto_mmoo|formato_clp }} CLP
+</td>
+        <td class="p-2">
+    {% if factura.orden_compra.du.fecha_aprobacion_supervisor %}
+        {{ factura.orden_compra.du.fecha_aprobacion_supervisor|date:"d/m/Y" }}
+    {% else %}
+        —
+    {% endif %}
+</td>
+        <td class="p-2">{{ factura.orden_compra.du.estado|capfirst }}</td>
+
+        <!-- Orden de compra -->
+        <td class="p-2">{{ factura.orden_compra.orden_compra }}</td>
+        <td class="p-2">{{ factura.orden_compra.pos }}</td>
+        <td class="p-2">{{ factura.orden_compra.cantidad }}</td>
+        <td class="p-2">{{ factura.orden_compra.unidad_medida }}</td>
+        <td class="p-2">{{ factura.orden_compra.material_servicio }}</td>
+        <td class="p-2">{{ factura.orden_compra.descripcion_sitio }}</td>
+        <td class="p-2">{{ factura.orden_compra.fecha_entrega|date:"d/m/Y"|default:"—" }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ factura.orden_compra.precio_unitario|formato_uf }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ factura.orden_compra.monto|formato_uf }}</td>
+
+        <!-- Factura -->
+        <td class="p-2">{{ factura.hes|default:"—" }}</td>
+        <td class="p-2">{{ factura.valor_en_clp|default:0|formato_clp }}</td>
+        <td class="p-2">{{ factura.conformidad|default:"—" }}</td>
+        <td class="p-2">{{ factura.num_factura|default:"—" }}</td>
+        <td class="p-2">{{ factura.fecha_facturacion|date:"Y-m-d"|default:"" }}</td>
+        <td class="p-2">{{ factura.mes_produccion|default:"—" }}</td>
+        <td class="p-2">{{ factura.factorizado|yesno:"Sí,No" }}</td>
+        <td class="p-2">{{ factura.fecha_factoring|date:"Y-m-d"|default:"—" }}</td>
+
+        <!-- Status y acciones -->
+        <td class="p-2">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+            {% if factura.get_status_factura == 'Pendiente por Conformidad' %}bg-yellow-100 text-yellow-800
+            {% elif factura.get_status_factura == 'Pendiente por Facturación' %}bg-orange-100 text-orange-800
+            {% elif factura.get_status_factura == 'Facturado' %}bg-blue-100 text-blue-800
+            {% elif factura.get_status_factura == 'En proceso de Factoring' %}bg-purple-100 text-purple-800
+            {% elif factura.get_status_factura == 'Cobrado' %}bg-green-100 text-green-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">
+            {{ factura.get_status_factura }}
+          </span>
+        </td>
+        <td class="p-2">
+          {% if request.user.is_superuser or request.user.rol == 'admin' %}
+            <a href="{% url 'facturacion:editar_factura' factura.pk %}" class="text-blue-600 hover:underline text-xs">✏️</a>
+            <a href="{% url 'facturacion:eliminar_factura' factura.pk %}" class="text-red-600 hover:underline text-xs">🗑️</a>
+          {% else %}
+            <span class="text-gray-400 text-xs italic">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="28" class="p-4 text-center text-gray-500">No hay facturas registradas</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Selector de cantidad -->
+<form method="get" class="mt-4 flex flex-wrap items-center gap-2">
+  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+  </select>
+</form>
+
+<!-- Paginación -->
+<div class="mt-4 flex flex-wrap justify-center gap-2 text-sm">
+  {% if pagina.has_previous %}
+    <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+
+</div>
+
+<!-- Toast de éxito -->
+<div id="toast" class="hidden fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50"></div>
+
+<script>
+function mostrarToast(mensaje) {
+    const toast = document.getElementById("toast");
+    toast.textContent = mensaje;
+    toast.classList.remove("hidden");
+    setTimeout(() => toast.classList.add("hidden"), 2000);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".editable").forEach(cell => {
+        cell.addEventListener("dblclick", function () {
+            if (this.querySelector("input") || this.querySelector("select")) return;
+
+            const span = this.querySelector(".editable-text");
+            const valorOriginal = span.innerText.trim() === "—" ? "" : span.innerText.trim();
+            const campo = this.dataset.campo;
+            const id = this.dataset.id;
+            const celdaEditable = this; // 🔹 Guardamos referencia al TD
+
+            let input = null;
+            let select = null;
+
+            // Si es factorizado, usar select
+            if (campo === "factorizado") {
+                select = document.createElement("select");
+                select.className = "border rounded px-1 w-full";
+                select.innerHTML = `
+                    <option value="false" ${valorOriginal === "No" ? "selected" : ""}>No</option>
+                    <option value="true" ${valorOriginal === "Sí" ? "selected" : ""}>Sí</option>
+                `;
+                span.replaceWith(select);
+                select.focus();
+                select.addEventListener("blur", guardarCambio);
+                select.addEventListener("change", guardarCambio);
+                return;
+            }
+
+            // Input normal
+            input = document.createElement("input");
+            input.value = valorOriginal;
+            input.className = "border rounded px-1 w-full";
+            if (campo.includes("fecha")) input.type = "date";
+            span.replaceWith(input);
+            input.focus();
+
+            input.addEventListener("blur", guardarCambio);
+            input.addEventListener("keydown", function(e) {
+                if (e.key === "Enter") guardarCambio();
+                if (e.key === "Escape") cancelarCambio();
+            });
+
+            function cancelarCambio(){
+                input.replaceWith(span);
+            }
+
+            function guardarCambio() {
+                const nuevoValor = (campo === "factorizado") ? select.value : input.value.trim();
+                const url = "{% url 'facturacion:actualizar_factura_ajax' 0 %}".replace("0", id);
+
+                fetch(url, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "X-CSRFToken": "{{ csrf_token }}",
+                    },
+                    body: new URLSearchParams({
+                        "campo": campo,
+                        "valor": nuevoValor
+                    })
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error("HTTP " + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        // Actualizar celda editada
+                        const newSpan = document.createElement("span");
+                        newSpan.className = "editable-text";
+                        newSpan.innerText = (campo === "factorizado") 
+                            ? (nuevoValor === "true" ? "Sí" : "No") 
+                            : nuevoValor || "—";
+                        if (input) input.replaceWith(newSpan);
+                        if (select) select.replaceWith(newSpan);
+
+                        // 🔹 Actualizar el badge de estado
+                        if (data.nuevo_status) {
+                            const statusCell = celdaEditable.closest("tr").querySelector('td:nth-last-child(2) span');
+                            if (statusCell) {
+                                statusCell.innerText = data.nuevo_status;
+                                statusCell.className = "inline-block px-3 py-1 rounded-full text-xs font-medium";
+                                if (data.nuevo_status === "Pendiente por Conformidad") statusCell.classList.add("bg-yellow-100","text-yellow-800");
+                                else if (data.nuevo_status === "Pendiente por Facturación") statusCell.classList.add("bg-orange-100","text-orange-800");
+                                else if (data.nuevo_status === "Facturado") statusCell.classList.add("bg-blue-100","text-blue-800");
+                                else if (data.nuevo_status === "En proceso de Factoring") statusCell.classList.add("bg-purple-100","text-purple-800");
+                                else if (data.nuevo_status === "Cobrado") statusCell.classList.add("bg-green-100","text-green-800");
+                                else statusCell.classList.add("bg-gray-100","text-gray-800");
+                            }
+                        }
+
+                        mostrarToast("¡Guardado!");
+                    } else {
+                        alert(data.error || "Error al guardar");
+                        if (input) input.replaceWith(span);
+                        if (select) select.replaceWith(span);
+                    }
+                })
+                .catch(err => {
+                    alert("Error de conexión: " + err.message);
+                    if (input) input.replaceWith(span);
+                    if (select) select.replaceWith(span);
+                });
+            }
+        });
+    });
+});
+</script>
+
+
+
+
+{% endblock %}

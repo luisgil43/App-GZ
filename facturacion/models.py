@@ -33,3 +33,53 @@ class OrdenCompraFacturacion(models.Model):
 
     def __str__(self):
         return f"OC {self.orden_compra} - DU: {self.du.du if self.du else 'Sin DU'}"
+
+
+class FacturaOC(models.Model):
+    orden_compra = models.OneToOneField(
+        OrdenCompraFacturacion,
+        on_delete=models.CASCADE,
+        related_name='factura',
+        verbose_name="Orden de Compra"
+    )
+
+    hes = models.CharField("HES", max_length=50, blank=True, null=True)
+    valor_en_clp = models.DecimalField(
+        "Valor en CLP", max_digits=15, decimal_places=2, blank=True, null=True)
+    conformidad = models.CharField(
+        "Conformidad", max_length=50, blank=True, null=True)
+    num_factura = models.CharField(
+        "Número de Factura", max_length=50, blank=True, null=True)
+    fecha_facturacion = models.DateField(
+        "Fecha de Facturación", blank=True, null=True)
+    mes_produccion = models.CharField(
+        "Mes de Producción", max_length=20, blank=True, null=True)
+    factorizado = models.BooleanField("¿Factorizado?", default=False)
+    fecha_factoring = models.DateField(
+        "Fecha de Factoring", blank=True, null=True)
+    cobrado = models.BooleanField("¿Cobrado?", default=False)
+
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Factura"
+        verbose_name_plural = "Facturas"
+
+    def __str__(self):
+        return f"Factura {self.num_factura or 'Sin número'} - OC {self.orden_compra.orden_compra}"
+
+    # Estado dinámico
+    def get_status_factura(self):
+        if not self.conformidad:
+            return "Pendiente por Conformidad"
+        if not self.num_factura:
+            return "Pendiente por Facturación"
+        if self.num_factura:
+            status = "Facturado"
+            if self.factorizado:
+                status = "En proceso de Factoring"
+            if self.cobrado:
+                status = "Cobrado"
+            return status
+        return "Pendiente"
