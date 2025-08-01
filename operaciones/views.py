@@ -1,4 +1,10 @@
 # operaciones/views.py
+from .forms import validar_rut_chileno, verificar_rut_sii
+from django.db.models import Sum
+from .forms import MovimientoUsuarioForm  # crearemos este form
+from django.shortcuts import redirect
+from facturacion.models import CartolaMovimiento
+from django.db.models import Sum, Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
@@ -997,3 +1003,257 @@ def exportar_produccion_pdf(request):
     except Exception as e:
         logger.error(f"Error exportando PDF: {e}")
         return HttpResponse(f"Error generando PDF: {e}", status=500)
+
+
+@login_required
+def mis_rendiciones(request):
+    user = request.user
+
+    # --- Crear nueva rendición ---
+    if request.method == 'POST':
+        form = MovimientoUsuarioForm(request.POST, request.FILES)
+        if form.is_valid():
+            mov = form.save(commit=False)
+            mov.usuario = user
+            mov.fecha = now()
+            mov.status = 'pendiente_supervisor'
+            mov.comprobante = form.cleaned_data.get(
+                "comprobante")  # Usamos el comprobante validado
+            mov.save()
+            messages.success(request, "Rendición registrada correctamente.")
+            return redirect('operaciones:mis_rendiciones')
+    else:
+        form = MovimientoUsuarioForm()
+
+    # --- Filtros y Paginación ---
+    cantidad = request.GET.get('cantidad', '10')
+    cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
+
+    movimientos = CartolaMovimiento.objects.filter(
+        usuario=user
+    ).order_by('-fecha')
+
+    paginator = Paginator(movimientos, cantidad)
+    page_number = request.GET.get('page')
+    pagina = paginator.get_page(page_number)
+
+    # --- Cálculo de saldos ---
+    # Disponible: abonos aprobados - gastos aprobados por finanzas
+    saldo_disponible = (
+        (movimientos.filter(tipo__categoria="abono", status="aprobado_abono_usuario")
+         .aggregate(total=Sum('abonos'))['total'] or 0)
+        -
+        (movimientos.exclude(tipo__categoria="abono")
+         .filter(status="aprobado_finanzas")
+         .aggregate(total=Sum('cargos'))['total'] or 0)
+    )
+
+    # Pendiente: abonos aún no aprobados por el usuario
+    saldo_pendiente = (
+        movimientos.filter(tipo__categoria="abono")
+        .exclude(status="aprobado_abono_usuario")
+        .aggregate(total=Sum('abonos'))['total'] or 0
+    )
+
+    # Rendido: todo lo que no es abono y no está aprobado por finanzas
+    saldo_rendido = (
+        movimientos.exclude(tipo__categoria="abono")
+        .exclude(status="aprobado_finanzas")
+        .aggregate(total=Sum('cargos'))['total'] or 0
+    )
+
+    return render(request, 'operaciones/mis_rendiciones.html', {
+        'pagina': pagina,
+        'cantidad': request.GET.get('cantidad', '10'),
+        'saldo_disponible': saldo_disponible,
+        'saldo_pendiente': saldo_pendiente,
+        'saldo_rendido': saldo_rendido,
+        'form': form,
+    })
+
+
+@login_required
+def aprobar_abono(request, pk):
+    mov = get_object_or_404(CartolaMovimiento, pk=pk, usuario=request.user)
+    if mov.tipo.categoria == "abono" and mov.status == "pendiente_abono_usuario":
+        mov.status = "aprobado_abono_usuario"
+        mov.save()
+        messages.success(request, "Abono aprobado correctamente.")
+    return redirect('operaciones:mis_rendiciones')
+
+
+@login_required
+def rechazar_abono(request, pk):
+    mov = get_object_or_404(CartolaMovimiento, pk=pk, usuario=request.user)
+    if request.method == "POST":
+        motivo = request.POST.get("motivo", "")
+        mov.status = "rechazado_abono_usuario"
+        mov.motivo_rechazo = motivo
+        mov.save()
+        messages.error(
+            request, "Abono rechazado y enviado a Finanzas para revisión.")
+    return redirect('operaciones:mis_rendiciones')
+
+
+@login_required
+def editar_rendicion(request, pk):
+    rendicion = get_object_or_404(
+        CartolaMovimiento, pk=pk, usuario=request.user
+    )
+
+    if rendicion.status in ['aprobado_abono_usuario', 'aprobado_finanzas']:
+        messages.error(request, "No puedes editar una rendición ya aprobada.")
+        return redirect('operaciones:mis_rendiciones')
+
+    if request.method == 'POST':
+        form = MovimientoUsuarioForm(
+            request.POST, request.FILES, instance=rendicion)
+
+        if form.is_valid():
+            # --- Detectar cambios ---
+            campos_editados = []
+            for field in form.changed_data:
+                # ignoramos campos automáticos como 'status'
+                if field not in ['status', 'actualizado']:
+                    campos_editados.append(field)
+
+            if campos_editados:
+                # Si cambió algo y estaba rechazado, restablecer estado
+                if rendicion.status in ['rechazado_abono_usuario', 'rechazado_supervisor', 'rechazado_pm', 'rechazado_finanzas']:
+                    rendicion.status = 'pendiente_supervisor'  # estado reiniciado
+
+            form.save()
+            messages.success(request, "Rendición actualizada correctamente.")
+            return redirect('operaciones:mis_rendiciones')
+    else:
+        form = MovimientoUsuarioForm(instance=rendicion)
+
+    return render(request, 'operaciones/editar_rendicion.html', {'form': form})
+
+
+@login_required
+def eliminar_rendicion(request, pk):
+    rendicion = get_object_or_404(
+        CartolaMovimiento, pk=pk, usuario=request.user)
+
+    if rendicion.status in ['aprobado_abono_usuario', 'aprobado_finanzas']:
+        messages.error(
+            request, "No puedes eliminar una rendición ya aprobada.")
+        return redirect('operaciones:mis_rendiciones')
+
+    if request.method == 'POST':
+        rendicion.delete()
+        messages.success(request, "Rendición eliminada correctamente.")
+        return redirect('operaciones:mis_rendiciones')
+
+    return render(request, 'operaciones/eliminar_rendicion.html', {'rendicion': rendicion})
+
+
+@login_required
+def vista_rendiciones(request):
+    user = request.user
+
+    if user.is_superuser:
+        movimientos = CartolaMovimiento.objects.all()
+    elif getattr(user, 'es_supervisor', False):
+        movimientos = CartolaMovimiento.objects.filter(
+            Q(status='pendiente_supervisor') | Q(status='rechazado_supervisor')
+        )
+    elif getattr(user, 'es_pm', False):
+        movimientos = CartolaMovimiento.objects.filter(
+            Q(status='aprobado_supervisor') | Q(status='rechazado_pm')
+        )
+    else:
+        movimientos = CartolaMovimiento.objects.none()
+
+    # Orden personalizado
+    movimientos = movimientos.annotate(
+        orden_status=Case(
+            When(status__startswith='pendiente', then=Value(1)),
+            When(status__startswith='rechazado', then=Value(2)),
+            When(status__startswith='aprobado', then=Value(3)),
+            default=Value(4),
+            output_field=IntegerField()
+        )
+    ).order_by('orden_status', '-fecha')
+
+    # Totales
+    total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
+    pendientes = movimientos.filter(status__startswith='pendiente').aggregate(
+        total=Sum('cargos'))['total'] or 0
+    rechazados = movimientos.filter(status__startswith='rechazado').aggregate(
+        total=Sum('cargos'))['total'] or 0
+
+    # Paginación
+    cantidad = request.GET.get('cantidad', '10')
+    cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
+    paginator = Paginator(movimientos, cantidad)
+    page_number = request.GET.get('page')
+    pagina = paginator.get_page(page_number)
+
+    return render(request, 'operaciones/vista_rendiciones.html', {
+        'pagina': pagina,
+        'cantidad': cantidad,
+        'total': total,
+        'pendientes': pendientes,
+        'rechazados': rechazados,
+    })
+
+
+@login_required
+def aprobar_rendicion(request, pk):
+    mov = get_object_or_404(CartolaMovimiento, pk=pk)
+    user = request.user
+
+    if getattr(user, 'es_supervisor', False) and mov.status == 'pendiente_supervisor':
+        mov.status = 'aprobado_supervisor'
+        mov.aprobado_por_supervisor = user
+    elif getattr(user, 'es_pm', False) and mov.status == 'aprobado_supervisor':
+        mov.status = 'aprobado_pm'
+        mov.aprobado_por_pm = user
+    elif getattr(user, 'es_facturacion', False) and mov.status == 'aprobado_pm':
+        mov.status = 'aprobado_finanzas'
+        mov.aprobado_por_finanzas = user  # ← aquí guardamos al usuario de finanzas
+
+    # Limpiamos motivo de rechazo si fue aprobado
+    mov.motivo_rechazo = ''
+    mov.save()
+    messages.success(request, "Movimiento aprobado correctamente.")
+    return redirect('operaciones:vista_rendiciones')
+
+
+@login_required
+def rechazar_rendicion(request, pk):
+    movimiento = get_object_or_404(CartolaMovimiento, pk=pk)
+    if request.method == 'POST':
+        motivo = request.POST.get('motivo_rechazo')
+        if motivo:
+            movimiento.motivo_rechazo = motivo
+            # Detectar quién rechaza y actualizar el estado
+            if request.user.es_supervisor and movimiento.status == 'pendiente_supervisor':
+                movimiento.status = 'rechazado_supervisor'
+                movimiento.aprobado_por_supervisor = request.user
+            elif request.user.es_pm and movimiento.status == 'aprobado_supervisor':
+                movimiento.status = 'rechazado_pm'
+                movimiento.aprobado_por_pm = request.user
+            elif request.user.es_facturacion and movimiento.status == 'aprobado_pm':
+                movimiento.status = 'rechazado_finanzas'
+                # ← aquí guardamos al usuario de finanzas
+                movimiento.aprobado_por_finanzas = request.user
+            movimiento.save()
+            messages.success(request, "Movimiento rechazado correctamente.")
+        else:
+            messages.error(request, "Debe ingresar el motivo del rechazo.")
+    return redirect('operaciones:vista_rendiciones')
+
+
+@csrf_exempt
+def validar_rut_ajax(request):
+    """Valida el RUT desde AJAX y devuelve estado."""
+    rut = request.POST.get("rut", "")
+    if not validar_rut_chileno(rut):
+        return JsonResponse({"ok": False, "error": "El RUT ingresado no es válido."})
+    razon_social = verificar_rut_sii(rut)
+    if not razon_social:
+        return JsonResponse({"ok": False, "error": "El RUT no está registrado en el SII."})
+    return JsonResponse({"ok": True, "mensaje": "RUT válido"})

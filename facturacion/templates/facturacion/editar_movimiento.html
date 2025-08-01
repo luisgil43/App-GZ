@@ -1,0 +1,138 @@
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+{% load custom_filters %}
+{% load humanize %}
+
+{% block title %}Editar Movimiento{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6">✏️ Editar Movimiento</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="bg-red-100 text-red-700 p-2 rounded mb-4">
+        {% for error in form.non_field_errors %}
+          <p>{{ error }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <!-- Usuario -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Usuario</label>
+      {{ form.usuario|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.usuario.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.usuario.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Proyecto -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Proyecto</label>
+      {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.proyecto.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.proyecto.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Tipo (si existe en el formulario) -->
+    {% if form.fields.tipo %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Tipo</label>
+      {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.tipo.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.tipo.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Tipo Documento (si existe en el formulario) -->
+    {% if form.fields.tipo_doc %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Tipo de Documento</label>
+      {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.tipo_doc.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.tipo_doc.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Número Documento (si existe en el formulario) -->
+    {% if form.fields.numero_doc %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Número de Documento</label>
+      {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.numero_doc.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.numero_doc.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Observaciones -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Observaciones</label>
+      {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.observaciones.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.observaciones.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <!-- N° Transferencia -->
+    {% if form.fields.numero_transferencia %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">N° Transferencia</label>
+      {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.numero_transferencia.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.numero_transferencia.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Comprobante -->
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Comprobante</label>
+      {{ form.comprobante|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.comprobante.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.comprobante.errors.0 }}</p>
+      {% endif %}
+      {% if movimiento.comprobante %}
+        <p class="text-xs mt-1">
+          Archivo actual: 
+          <a href="{{ movimiento.comprobante.url }}" target="_blank" class="text-blue-600 underline">
+            Ver Comprobante
+          </a>
+        </p>
+      {% endif %}
+    </div>
+
+    <!-- Cargos (solo si existe en el formulario) -->
+    {% if form.fields.cargos %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Cargos</label>
+      {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.cargos.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.cargos.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Abonos (solo si existe en el formulario) -->
+    {% if form.fields.abonos %}
+    <div class="mb-4">
+      <label class="block text-sm font-medium text-gray-700">Abonos</label>
+      {{ form.abonos|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% if form.abonos.errors %}
+        <p class="text-red-600 text-sm mt-1">{{ form.abonos.errors.0 }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="flex justify-end gap-3 mt-4">
+      <a href="{% url 'facturacion:listar_cartola' %}" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">Cancelar</a>
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl">Guardar</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

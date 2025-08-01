@@ -1,0 +1,119 @@
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Crear Proyecto{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    ➕ Crear Proyecto
+  </h2>
+
+  <!-- Formulario de creación -->
+  <form id="createForm" method="post" class="space-y-4 mb-6">
+    {% csrf_token %}
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Nombre del Proyecto</label>
+      {{ form.nombre|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Mandante</label>
+      {{ form.mandante|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div class="flex justify-end gap-3 pt-4">
+      <a href="{% url 'facturacion:listar_cartola' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-xl">
+        Cancelar
+      </a>
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl">
+        Guardar
+      </button>
+    </div>
+  </form>
+
+  <!-- Tabla de proyectos creados -->
+  <h3 class="text-lg font-bold text-gray-700 mb-3">Proyectos Creados</h3>
+  <div class="overflow-x-auto">
+    <table class="min-w-full table-auto border border-gray-300 rounded-xl text-sm">
+      <thead class="bg-gray-100 text-gray-700">
+        <tr>
+          <th class="p-2 border">ID</th>
+          <th class="p-2 border">Nombre del Proyecto</th>
+          <th class="p-2 border">Mandante</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="proyectosBody">
+        {% for proyecto in proyectos %}
+        <tr class="border-t">
+          <td class="p-2 border text-center">{{ proyecto.id }}</td>
+          <td class="p-2 border text-center">{{ proyecto.nombre }}</td>
+          <td class="p-2 border text-center">{{ proyecto.mandante }}</td>
+          <td class="p-2 border text-center">
+            <a href="{% url 'facturacion:editar_proyecto' proyecto.id %}" class="text-blue-600 hover:underline">✏️ Editar</a> |
+            <button type="button" 
+                    class="text-red-600 hover:underline delete-btn" 
+                    data-url="{% url 'facturacion:eliminar_proyecto' proyecto.id %}" 
+                    data-nombre="{{ proyecto.nombre }}">
+                🗑️ Eliminar
+            </button>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="p-4 text-center text-gray-500">No hay proyectos creados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal de eliminación -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl p-6 max-w-md w-full shadow-lg">
+    <h3 class="text-xl font-bold mb-4">Eliminar Proyecto</h3>
+    <p class="mb-4 text-gray-700">¿Estás seguro que deseas eliminar el proyecto <span id="deleteNombre" class="font-semibold"></span>?</p>
+    <div class="flex justify-end gap-3">
+      <button type="button" id="cancelDelete" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">Cancelar</button>
+      <form id="deleteForm" method="post">
+        {% csrf_token %}
+        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl">Eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const deleteModal = document.getElementById("deleteModal");
+  const deleteForm = document.getElementById("deleteForm");
+  const deleteNombre = document.getElementById("deleteNombre");
+
+  // Abrir modal al dar clic en eliminar
+  document.querySelectorAll(".delete-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const url = btn.getAttribute("data-url");
+      const nombre = btn.getAttribute("data-nombre");
+      deleteForm.setAttribute("action", url);
+      deleteNombre.textContent = nombre;
+      deleteModal.classList.remove("hidden");
+      deleteModal.classList.add("flex");
+    });
+  });
+
+  // Cerrar modal
+  document.getElementById("cancelDelete").addEventListener("click", () => {
+    deleteModal.classList.add("hidden");
+    deleteModal.classList.remove("flex");
+  });
+
+  // Cerrar modal al hacer clic fuera
+  deleteModal.addEventListener("click", (e) => {
+    if (e.target === deleteModal) {
+      deleteModal.classList.add("hidden");
+      deleteModal.classList.remove("flex");
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,485 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+{% load widget_tweaks %}
+
+{% load custom_filters %}
+
+{% block title %}Mis Rendiciones{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+    <!-- Encabezado -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Mis Rendiciones</h2>
+        <a href="#" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+            📥 Exportar Excel
+        </a>
+    </div>
+
+   <!-- Tarjetas de saldos -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="bg-green-50 p-4 rounded-lg shadow">
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Disponible</h3>
+        <p class="text-2xl font-bold text-green-700">
+            ${{ saldo_disponible|floatformat:0|formato_clp }}
+        </p>
+    </div>
+    <div class="bg-yellow-50 p-4 rounded-lg shadow">
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Pendiente de Aprobación</h3>
+        <p class="text-2xl font-bold text-yellow-700">
+            ${{ saldo_pendiente|floatformat:0|formato_clp }}
+        </p>
+    </div>
+    <div class="bg-orange-50 p-4 rounded-lg shadow">
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Rendido</h3>
+        <p class="text-2xl font-bold text-orange-700">
+            ${{ saldo_rendido|floatformat:0|formato_clp }}
+        </p>
+    </div>
+</div>
+
+
+    <h3 class="text-lg font-semibold mb-2">➕ Registrar nueva rendición</h3>
+
+  <!-- Formulario nueva rendición -->
+<div class="mb-6">
+{% if form.errors %}
+<div class="bg-red-100 text-red-700 p-3 rounded mb-3">
+  <ul>
+    {% for field, errors in form.errors.items %}
+      {% if field != '__all__' %}
+        <li><strong>{{ form|field_label:field }}:</strong> {{ errors|join:", " }}</li>
+      {% endif %}
+    {% endfor %}
+    {% for error in form.non_field_errors %}
+      <li><strong>General:</strong> {{ error }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% csrf_token %}
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Proyecto:</label>
+        {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Tipo:</label>
+        {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+  <div class="col-span-1">
+    <label class="block text-sm font-medium text-gray-700">RUT Factura:</label>
+    {{ form.rut_factura|add_class:"w-full border rounded-xl px-3 py-2" }}
+    <small id="razon_social" class="text-xs text-gray-600 italic"></small>
+</div>
+
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Tipo de Documento:</label>
+        {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Número de Documento:</label>
+        {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Monto:</label>
+        {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+    <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
+        {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+        <label class="block text-sm font-medium text-gray-700">Comprobante:</label>
+        <div class="flex gap-2">
+            <!-- Botón cámara -->
+            <label class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+                📷 Tomar foto
+                <input type="file" id="comprobante_foto" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
+            </label>
+
+            <!-- Botón archivo -->
+            <label class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+                📄 Subir archivo
+                <input type="file" id="comprobante_archivo" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
+            </label>
+        </div>
+        <!-- Nombre del archivo -->
+        <span id="nombre_comprobante" class="text-sm text-gray-600 italic mt-1 block"></span>
+        <!-- Vista previa (solo imágenes) -->
+        <img id="preview_comprobante" class="mt-2 max-h-40 rounded shadow hidden">
+    </div>
+
+    <div class="col-span-1 sm:col-span-2">
+        <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow">
+            Guardar Rendición
+        </button>
+    </div>
+</form>
+</div>
+
+
+<!-- Tabla responsive con scroll horizontal -->
+<div class="rounded-xl border border-gray-200 overflow-x-auto">
+  <table class="table-auto border border-gray-300 rounded-xl text-sm w-full min-w-[1200px]" style="white-space: nowrap;">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <tr>
+        <th class="p-2 border">Nombre</th>
+        <th class="p-2 border">Fecha</th>
+        <th class="p-2 border">Proyecto</th>
+        <th class="p-2 border">Tipo</th>
+<th class="p-2 border">RUT Factura</th>
+<th class="p-2 border">Tipo de Documento</th>
+<th class="p-2 border">Número de Documento</th>
+        <th class="p-2 border text-right">Gastos</th>
+        <th class="p-2 border text-right">Abonos</th>
+        <th class="p-2 border">Observaciones</th>
+        <th class="p-2 border">Comprobante</th>
+        <th class="p-2 border">Status</th>
+        <th class="p-2 border">Acciones</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% for mov in pagina %}
+      <tr class="border-t">
+        <td class="p-2 border">{{ mov.usuario.get_full_name }}</td>
+        <td class="p-2 border">{{ mov.fecha|date:"d/m/Y" }}</td>
+        <td class="p-2 border">{{ mov.proyecto }}</td>
+        <td class="p-2 border">{{ mov.tipo }}</td>
+<td class="p-2 border">{{ mov.rut_factura|default:"—" }}</td>
+<td class="p-2 border">{{ mov.tipo_doc|default:"—" }}</td>
+<td class="p-2 border">{{ mov.numero_doc|default:"—" }}</td>
+        <td class="p-2 border text-right">${{ mov.cargos|default:0|floatformat:0|formato_clp }}</td>
+        <td class="p-2 border text-right">${{ mov.abonos|default:0|floatformat:0|formato_clp }}</td>
+        <td class="p-2 border">{{ mov.observaciones }}</td>
+        <td class="p-2 border">
+          {% if mov.comprobante %}
+            <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+          {% else %} — {% endif %}
+        </td>
+
+
+ <td class="p-2 text-sm">
+    <div class="flex flex-col gap-1 text-left leading-tight">
+        {% if mov.status == 'pendiente_supervisor' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ⏳ Pendiente aprobación del Supervisor
+            </span>
+        {% elif mov.status == 'aprobado_supervisor' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ⏳ Pendiente aprobación del PM
+            </span>
+        {% elif mov.status == 'rechazado_supervisor' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por Supervisor
+            </span>
+        {% elif mov.status == 'aprobado_pm' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                ⏳ Pendiente aprobación de Finanzas
+            </span>
+        {% elif mov.status == 'rechazado_pm' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por PM
+            </span>
+        {% elif mov.status == 'aprobado_finanzas' %}
+            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
+            </span>
+        {% elif mov.status == 'rechazado_finanzas' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por Finanzas
+            </span>
+        {% elif mov.status == 'pendiente_abono_usuario' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ⏳ Pendiente aprobación del Usuario
+            </span>
+        {% elif mov.status == 'aprobado_abono_usuario' %}
+            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                ✅ Abono aprobado por Usuario
+            </span>
+        {% elif mov.status == 'rechazado_abono_usuario' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Abono rechazado por Usuario
+            </span>
+        {% else %}
+            {{ mov.get_status_display }}
+        {% endif %}
+
+        {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
+            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
+                 style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+                <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+            </div>
+        {% endif %}
+    </div>
+</td>
+
+
+
+   
+  <!-- Acciones -->
+<td class="p-2 border text-center">
+  {% if mov.tipo.categoria == "abono" %}
+    {% if mov.status == "pendiente_abono_usuario" %}
+      <a href="{% url 'operaciones:aprobar_abono' mov.id %}" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+        ✅ Aprobar
+      </a>
+      <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+        ❌ Rechazar
+      </button>
+    {% endif %}
+  {% else %}
+    {% if mov.status == 'rechazado_supervisor' or mov.status == 'rechazado_pm' or mov.status == 'rechazado_finanzas' %}
+      <a href="{% url 'operaciones:editar_rendicion' mov.id %}" 
+         class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200">
+          ✏️ Editar
+      </a>
+      <a href="{% url 'operaciones:eliminar_rendicion' mov.id %}" 
+         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+          🗑️ Eliminar
+      </a>
+    {% endif %}
+  {% endif %}
+</td>
+
+
+      </tr>
+      {% empty %}
+      <tr><td colspan="10" class="p-4 text-center text-gray-500">No tienes rendiciones registradas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+    <!-- Modal -->
+    <div id="modalRechazo" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+      <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+        <h2 class="text-lg font-bold mb-4">Rechazar Abono</h2>
+        <form id="formRechazo" method="post">
+          {% csrf_token %}
+          <textarea name="motivo" rows="3" class="w-full border rounded-lg p-2" placeholder="Ingrese el motivo del rechazo"></textarea>
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" onclick="cerrarModalRechazo()" class="px-3 py-1 bg-gray-200 rounded">Cancelar</button>
+            <button type="submit" class="px-3 py-1 bg-red-600 text-white rounded">Rechazar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+<script>
+function abrirModalRechazo(id) {
+    document.getElementById('formRechazo').action = `/operaciones/rechazar_abono/${id}/`;
+    document.getElementById('modalRechazo').classList.remove('hidden');
+}
+function cerrarModalRechazo() {
+    document.getElementById('modalRechazo').classList.add('hidden');
+}
+</script>
+
+    <!-- Paginación -->
+    <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
+        <form method="get" class="flex items-center gap-2">
+            <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+            <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+                <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+                <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+                <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+                <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+            </select>
+        </form>
+    </div>
+
+    <div class="mt-2 flex justify-center text-sm">
+        {% if cantidad == 'todos' %}
+            <span>Página 1 de 1</span>
+        {% else %}
+            <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        {% endif %}
+    </div>
+
+    <div class="mt-2 flex justify-center gap-2 text-sm">
+        {% if pagina.has_previous %}
+            <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+            <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+        {% endif %}
+        {% if pagina.has_next %}
+            <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+            <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+        {% endif %}
+    </div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const archivoInput = document.getElementById("comprobante_archivo");
+    const fotoInput = document.getElementById("comprobante_foto");
+    const nombreSpan = document.getElementById("nombre_comprobante");
+    const preview = document.getElementById("preview_comprobante");
+
+    function mostrarArchivo(input) {
+        if (input.files.length > 0) {
+            const archivo = input.files[0];
+            nombreSpan.textContent = "Archivo seleccionado: " + archivo.name;
+
+            if (archivo.type.startsWith("image/")) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    preview.classList.remove("hidden");
+                };
+                reader.readAsDataURL(archivo);
+            } else {
+                preview.classList.add("hidden");
+                preview.src = "";
+            }
+        } else {
+            nombreSpan.textContent = "";
+            preview.classList.add("hidden");
+            preview.src = "";
+        }
+    }
+
+    archivoInput.addEventListener("change", function () {
+        mostrarArchivo(this);
+    });
+
+    fotoInput.addEventListener("change", function () {
+        mostrarArchivo(this);
+    });
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const rutInput = document.getElementById("id_rut_factura");
+    if (rutInput) {
+        rutInput.addEventListener("input", function () {
+            let v = this.value.replace(/\./g, '').replace(/-/g, '').replace(/\s/g, '');
+            if (v.length > 1) {
+                this.value = v.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + '-' + v.slice(-1);
+            }
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const form = document.querySelector("form");
+    const tipoDoc = document.getElementById("id_tipo_doc");
+    const rutInput = document.getElementById("id_rut_factura");
+    const razonSocial = document.getElementById("razon_social");
+    const submitBtn = form.querySelector('button[type="submit"]');
+
+    form.addEventListener("submit", function (e) {
+        const tipo = tipoDoc.value;
+        const rut = rutInput.value.trim();
+
+        if (tipo.toLowerCase() !== "factura") return;
+
+        e.preventDefault();
+
+        // Bloquear botón
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Validando...";
+
+        razonSocial.textContent = "Validando RUT...";
+        razonSocial.classList.remove("text-green-600", "text-red-600");
+        razonSocial.classList.add("text-gray-600");
+
+        fetch("{% url 'operaciones:validar_rut_ajax' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({rut: rut})
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.ok) {
+                razonSocial.textContent = data.error;
+                razonSocial.classList.remove("text-green-600");
+                razonSocial.classList.add("text-red-600");
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Guardar Rendición";
+            } else {
+                razonSocial.textContent = "✔ " + data.razon_social;
+                razonSocial.classList.remove("text-red-600");
+                razonSocial.classList.add("text-green-600");
+                form.submit();
+            }
+        })
+        .catch(err => {
+            razonSocial.textContent = "Error validando el RUT en el SII.";
+            razonSocial.classList.remove("text-green-600");
+            razonSocial.classList.add("text-red-600");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Guardar Rendición";
+            console.error(err);
+        });
+    });
+});
+
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const rutInput = document.getElementById("id_rut_factura");
+    const tipoDoc = document.getElementById("id_tipo_doc");
+    const razonSocial = document.getElementById("razon_social");
+
+    function validarRutLive() {
+        const tipo = tipoDoc.value;
+        const rut = rutInput.value.trim();
+
+        if (tipo.toLowerCase() !== "factura" || rut.length < 7) {
+            razonSocial.textContent = "";
+            return;
+        }
+
+        razonSocial.textContent = "Validando RUT...";
+        razonSocial.classList.remove("text-green-600", "text-red-600");
+        razonSocial.classList.add("text-gray-600");
+
+        fetch("{% url 'operaciones:validar_rut_ajax' %}", {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({rut: rut})
+        })
+        .then(response => response.json())
+.then(data => {
+    if (!data.ok) {
+        razonSocial.textContent = data.error;
+        razonSocial.classList.remove("text-green-600");
+        razonSocial.classList.add("text-red-600");
+    } else {
+        razonSocial.textContent = "✔ " + data.mensaje;  // ← AQUÍ CAMBIA
+        razonSocial.classList.remove("text-red-600");
+        razonSocial.classList.add("text-green-600");
+    }
+})
+        .catch(() => {
+            razonSocial.textContent = "Error validando el RUT.";
+            razonSocial.classList.remove("text-green-600");
+            razonSocial.classList.add("text-red-600");
+        });
+    }
+
+    // Validar automáticamente al dejar el campo o cambiar tipo de documento
+    rutInput.addEventListener("blur", validarRutLive);
+    tipoDoc.addEventListener("change", validarRutLive);
+});
+</script>
+
+
+{% endblock %}
