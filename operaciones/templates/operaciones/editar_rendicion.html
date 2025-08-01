@@ -1,0 +1,78 @@
+{% extends "dashboard/base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}Editar Rendición{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">✏️ Editar Rendición</h2>
+
+  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Proyecto:</label>
+      {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Tipo:</label>
+      {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Tipo de Documento:</label>
+      {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Número de Documento:</label>
+      {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Monto Gasto:</label>
+      {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">N° Transferencia:</label>
+      {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
+      {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div class="sm:col-span-2">
+      <label class="block text-sm font-medium text-gray-700">Comprobante:</label>
+      {% if form.instance.comprobante %}
+        <p class="mb-2 text-sm text-gray-600">
+          Archivo actual: 
+          <a href="{{ form.instance.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver comprobante</a>
+        </p>
+      {% endif %}
+      <div class="flex gap-2">
+        <!-- Botón cámara -->
+        <label class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+          📷 Tomar foto
+          <input type="file" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
+        </label>
+
+        <!-- Botón archivo -->
+        <label class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+          📄 Subir archivo
+          <input type="file" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
+        </label>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">Sube un nuevo archivo solo si deseas reemplazar el actual.</p>
+    </div>
+
+    <div class="sm:col-span-2 flex justify-between gap-2 mt-4">
+      <a href="{% url 'operaciones:mis_rendiciones' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-full">Cancelar</a>
+      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full">Guardar Cambios</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

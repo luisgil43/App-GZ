@@ -109,7 +109,7 @@
                         <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
 <li><a href="{% url 'operaciones:listar_sitios' %}" class="hover:text-emerald-400">Lista Sitios Móviles</a></li>
 <li><a href="#" class="hover:text-emerald-400">Producciones</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Rendiciones</a></li>
+<li><a href="{% url 'operaciones:vista_rendiciones' %}" class="hover:text-emerald-400">Rendiciones</a></li>
 <li><a href="{% url 'operaciones:listar_servicios_pm' %}" class="hover:text-emerald-400">Crear Servicios</a></li>
 <li><a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="hover:text-emerald-400">Realizar Asignación</a></li>
                     </ul>
@@ -206,14 +206,18 @@
                 <li class="group">
                     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
                         onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">📄 Facturación</span>
+                        <span class="flex items-center gap-2">📑 Finanzas</span>
                         <span class="flecha transition-transform duration-200">▶</span>
                     </div>
                     <ul class="ml-4 submenu space-y-1 hidden">
                         <li><a href="{% url 'facturacion:listar_oc_facturacion' %}" class="hover:text-emerald-400">Lista de OC</a></li>
 <li><a href="{% url 'facturacion:listar_facturas' %}" class="hover:text-emerald-400">Lista de Facturas</a></li>
-                    </ul>
-                </li>
+                    
+<li>
+    <a href="{% url 'facturacion:listar_cartola' %}" class="hover:text-emerald-400">Cartola de Movimientos</a></li>
+<a href="{% url 'facturacion:listar_saldos_usuarios' %}" class="hover:text-emerald-400">Saldos Disponibles</a></li>
+
+</ul></li>
                 {% endif %}
 
                 {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}

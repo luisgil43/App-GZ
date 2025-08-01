@@ -1,0 +1,89 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Saldos Disponibles{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+    <!-- Encabezado con icono y botones -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            💰 Saldos Disponibles
+        </h2>
+        <div class="flex gap-2">
+            <a href="#" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+                📥 Exportar Excel
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="rounded-xl border border-gray-200 overflow-hidden">
+        <table class="table-auto w-full text-sm border-collapse">
+            <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                <tr>
+                    <th class="p-2 border">Usuario</th>
+                    <th class="p-2 border text-right">Monto Rendido</th>
+                    <th class="p-2 border text-right">Monto Disponible</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in saldos %}
+                    <tr class="border-t">
+                        <td class="p-2 border">{{ s.usuario__first_name }} {{ s.usuario__last_name }}</td>
+                        <td class="p-2 border text-right">${{ s.monto_rendido|default:0|floatformat:0|intcomma }}</td>
+                        <td class="p-2 border text-right font-bold 
+                            {% if s.monto_disponible > 0 %}text-green-600
+                            {% elif s.monto_disponible < 0 %}text-red-600
+                            {% else %}text-gray-600{% endif %}">
+                            ${{ s.monto_disponible|default:0|floatformat:0|intcomma }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3" class="p-4 text-center text-gray-500">No hay usuarios con saldos disponibles.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+<!-- Controles de paginación -->
+<div class="mt-4 flex flex-wrap justify-between items-center text-sm">
+    <!-- Selector de cantidad -->
+    <form method="get" class="flex items-center gap-2">
+        <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+        <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+            <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+            <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+            <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+            <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+    </form>
+</div>
+
+<!-- Texto centrado de página -->
+<div class="mt-2 flex justify-center text-sm">
+    {% if cantidad == 'todos' %}
+        <span>Página 1 de 1</span>
+    {% else %}
+        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% endif %}
+</div>
+
+<!-- Botones de navegación -->
+<div class="mt-2 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+        <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+    {% if pagina.has_next %}
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+</div>
+    </div>
+</div>
+
+{% endblock %}

@@ -59,3 +59,9 @@ def formato_uf(value):
         return f"{entero_con_miles},{decimal}"
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def field_label(form, field_name):
+    """Obtiene el label de un campo del formulario."""
+    return form.fields[field_name].label
