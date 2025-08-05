@@ -48,9 +48,9 @@
    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
   + Registrar Abono
 </a>
-   <a href="#"  
+ <a href="{% url 'facturacion:exportar_cartola_finanzas' %}" 
    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-   📥 Exportar Excel
+    📥 Export to Excel
 </a>
      </div>  
     </div>
@@ -201,7 +201,7 @@
 
 <td class="p-2 border">
     {% if user.is_superuser %}
-        {# Superusuario: siempre puede editar/eliminar, pero no aprobar/rechazar si está finalizado #}
+        {# Superusuario: puede editar/eliminar siempre #}
         <a href="{% url 'facturacion:editar_movimiento' mov.id %}" 
            class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
            ✏️ Editar
@@ -210,47 +210,57 @@
            class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
            🗑️ Eliminar
         </a>
-        {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,pendiente_abono_usuario,pendiente_pm" %}
+        {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,pendiente_pm,aprobado_pm" %}
             <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
                class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
                ✅ Aprobar gasto
             </a>
-            <a href="#" 
-               onclick="abrirModalRechazo({{ mov.id }})"
+            <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
                class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
                ❌ Rechazar gasto
             </a>
         {% endif %}
     {% else %}
-        {# Facturación / Supervisor / PM: solo si está pendiente #}
-        {% if mov.tipo.categoria == "abono" %}
-            {% if user.es_facturacion and mov.status == 'pendiente_abono_usuario' %}
-                <a href="{% url 'facturacion:editar_movimiento' mov.id %}" 
-                   class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
-                   ✏️ Editar
+        {% if mov.tipo.categoria != "abono" %}
+            {# Supervisor: solo si está pendiente de él #}
+            {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
                 </a>
-                <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}" 
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
                    class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-                   🗑️ Eliminar
+                   ❌ Rechazar gasto
                 </a>
             {% endif %}
-        {% else %}
-            {% if user.es_facturacion or user.es_supervisor or user.es_pm %}
-                {% if mov.status in 'pendiente_supervisor,pendiente_pm,pendiente_abono_usuario,aprobado_pm' %}
-                    <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
-                       class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-                       ✅ Aprobar gasto
-                    </a>
-                    <a href="#" 
-                       onclick="abrirModalRechazo({{ mov.id }})"
-                       class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-                       ❌ Rechazar gasto
-                    </a>
-                {% endif %}
+
+            {# PM: solo si ya lo aprobó el supervisor #}
+            {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                   ❌ Rechazar gasto
+                </a>
+            {% endif %}
+
+            {# Finanzas: solo si ya lo aprobó el PM #}
+            {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                   ❌ Rechazar gasto
+                </a>
             {% endif %}
         {% endif %}
     {% endif %}
 </td>
+
 
 
                 </tr>

@@ -61,6 +61,12 @@ urlpatterns = [
     path('rendiciones/rechazar/<int:pk>/',
          views.rechazar_rendicion, name='rechazar_rendicion'),
     path('validar-rut-ajax/', views.validar_rut_ajax, name='validar_rut_ajax'),
+    path('rendiciones/exportar/', views.exportar_rendiciones_pm,
+         name='exportar_rendiciones_pm'),
+    path('mis-rendiciones/exportar/', views.exportar_mis_rendiciones,
+         name='exportar_mis_rendiciones'),
+
+
 
 
 ]
