@@ -1,3 +1,5 @@
+import xlwt
+from django.utils.timezone import is_aware
 from django.db.models import Q
 from operaciones.forms import MovimientoUsuarioForm
 from django.db.models import Sum, Q
@@ -13,7 +15,6 @@ from .forms import TipoGastoForm
 from .models import TipoGasto
 from .forms import CartolaAbonoForm
 from .forms import CartolaGastoForm
-from .models import CartolaMovimiento
 from django.shortcuts import get_object_or_404
 from django.views.decorators.csrf import csrf_exempt
 from dateutil import parser
@@ -1262,3 +1263,96 @@ def listar_saldos_usuarios(request):
         'pagina': pagina,
         'cantidad': cantidad,
     })
+
+
+@login_required
+@rol_requerido('facturacion', 'admin')
+def exportar_cartola_finanzas(request):
+    # Puedes aplicar los mismos filtros que usas en la vista original
+    movimientos = CartolaMovimiento.objects.all().order_by('-fecha')
+
+    # Crear archivo Excel
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="cartola_finanzas.xls"'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Cartola Finanzas')
+
+    header_style = xlwt.easyxf('font: bold on; align: horiz center')
+    date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
+
+    # Columnas requeridas
+    columns = [
+        "Usuario", "Fecha", "Proyecto", "Categoría", "Tipo", "RUT Factura",
+        "Tipo de Documento", "Número de Documento", "Observaciones",
+        "N° Transferencia", "Cargos", "Abonos", "Status"
+    ]
+    for col_num, column_title in enumerate(columns):
+        ws.write(0, col_num, column_title, header_style)
+
+    # Filas
+    for row_num, mov in enumerate(movimientos, start=1):
+        fecha_excel = mov.fecha
+        if isinstance(fecha_excel, datetime):
+            if is_aware(fecha_excel):
+                fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
+            fecha_excel = fecha_excel.date()
+
+        ws.write(row_num, 0, mov.usuario.get_full_name())
+        ws.write(row_num, 1, fecha_excel, date_style)
+        ws.write(row_num, 2, str(mov.proyecto))
+        ws.write(row_num, 3, mov.tipo.categoria if mov.tipo else "")
+        ws.write(row_num, 4, str(mov.tipo))
+        ws.write(row_num, 5, mov.rut_factura or "")
+        ws.write(row_num, 6, mov.tipo_doc or "")
+        ws.write(row_num, 7, mov.numero_doc or "")
+        ws.write(row_num, 8, mov.observaciones or "")
+        ws.write(row_num, 9, mov.numero_transferencia or "")
+        ws.write(row_num, 10, float(mov.cargos or 0))
+        ws.write(row_num, 11, float(mov.abonos or 0))
+        ws.write(row_num, 12, mov.get_status_display())
+
+    wb.save(response)
+    return response
+
+
+@login_required
+@rol_requerido('admin', 'facturacion')  # Solo Admin y Finanzas
+def exportar_saldos_disponibles(request):
+    # Obtener los mismos datos que usa la vista principal
+    from django.db.models import Sum, F, Value
+    from facturacion.models import CartolaMovimiento
+
+    saldos = (CartolaMovimiento.objects
+              .values('usuario__first_name', 'usuario__last_name')
+              .annotate(
+                  monto_rendido=Sum('cargos', default=0),
+                  monto_disponible=Sum(F('abonos') - F('cargos'), default=0)
+              ).order_by('usuario__first_name'))
+
+    # Crear respuesta como Excel
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="saldos_disponibles.xls"'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Saldos Disponibles')
+
+    header_style = xlwt.easyxf('font: bold on; align: horiz center')
+    currency_style = xlwt.easyxf(num_format_str='#,##0')
+
+    # Cabeceras
+    columns = ["Usuario", "Monto Rendido", "Monto Disponible"]
+    for col_num, column_title in enumerate(columns):
+        ws.write(0, col_num, column_title, header_style)
+
+    # Filas
+    for row_num, s in enumerate(saldos, start=1):
+        usuario = f"{s['usuario__first_name']} {s['usuario__last_name']}"
+        ws.write(row_num, 0, usuario)
+        ws.write(row_num, 1, float(s['monto_rendido'] or 0), currency_style)
+        ws.write(row_num, 2, float(s['monto_disponible'] or 0), currency_style)
+
+    wb.save(response)
+    return response
