@@ -1,4 +1,5 @@
 # operaciones/views.py
+from django.utils.timezone import is_aware
 from .forms import validar_rut_chileno, verificar_rut_sii
 from django.db.models import Sum
 from .forms import MovimientoUsuarioForm  # crearemos este form
@@ -1156,17 +1157,18 @@ def vista_rendiciones(request):
     if user.is_superuser:
         movimientos = CartolaMovimiento.objects.all()
     elif getattr(user, 'es_supervisor', False):
+        # Supervisor: solo pendientes y rechazados, excluyendo abonos
         movimientos = CartolaMovimiento.objects.filter(
-            Q(status='pendiente_supervisor') | Q(status='rechazado_supervisor')
-        )
+            Q(status__startswith='pendiente') | Q(
+                status__startswith='rechazado')
+        ).exclude(tipo__categoria='abono')
     elif getattr(user, 'es_pm', False):
-        movimientos = CartolaMovimiento.objects.filter(
-            Q(status='aprobado_supervisor') | Q(status='rechazado_pm')
-        )
+        # PM: ve todas
+        movimientos = CartolaMovimiento.objects.all()
     else:
         movimientos = CartolaMovimiento.objects.none()
 
-    # Orden personalizado
+    # Orden personalizado: pendientes -> rechazados -> aprobados
     movimientos = movimientos.annotate(
         orden_status=Case(
             When(status__startswith='pendiente', then=Value(1)),
@@ -1257,3 +1259,84 @@ def validar_rut_ajax(request):
     if not razon_social:
         return JsonResponse({"ok": False, "error": "El RUT no está registrado en el SII."})
     return JsonResponse({"ok": True, "mensaje": "RUT válido"})
+
+
+@login_required
+@rol_requerido('pm')  # Solo PM
+def exportar_rendiciones_pm(request):
+    # Traer TODAS las rendiciones que el PM puede ver (sin filtrar por status)
+    movimientos = CartolaMovimiento.objects.all().order_by('-fecha')
+
+    # Crear archivo Excel
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="rendiciones_pm.xls"'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Rendiciones PM')
+
+    header_style = xlwt.easyxf('font: bold on; align: horiz center')
+    date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
+
+    # Columnas
+    columns = ["Nombre", "Fecha", "Proyecto", "Monto", "Estado"]
+    for col_num, column_title in enumerate(columns):
+        ws.write(0, col_num, column_title, header_style)
+
+    # Filas
+    for row_num, mov in enumerate(movimientos, start=1):
+        fecha_excel = mov.fecha
+        if isinstance(fecha_excel, datetime):
+            if is_aware(fecha_excel):
+                fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
+            fecha_excel = fecha_excel.date()
+
+        ws.write(row_num, 0, mov.usuario.get_full_name())
+        ws.write(row_num, 1, fecha_excel, date_style)
+        ws.write(row_num, 2, str(mov.proyecto))
+        ws.write(row_num, 3, float(mov.cargos or 0))
+        ws.write(row_num, 4, mov.get_status_display())
+
+    wb.save(response)
+    return response
+
+
+@login_required
+def exportar_mis_rendiciones(request):
+    user = request.user
+    movimientos = CartolaMovimiento.objects.filter(
+        usuario=user).order_by('-fecha')
+
+    # Crear archivo Excel
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="mis_rendiciones.xls"'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Mis Rendiciones')
+
+    header_style = xlwt.easyxf('font: bold on; align: horiz center')
+    date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
+
+    # Columnas
+    columns = ["Nombre", "Fecha", "Proyecto", "Monto", "Estado"]
+    for col_num, column_title in enumerate(columns):
+        ws.write(0, col_num, column_title, header_style)
+
+    # Filas
+    for row_num, mov in enumerate(movimientos, start=1):
+        # Fecha naive
+        fecha_excel = mov.fecha
+        if isinstance(fecha_excel, datetime):
+            if is_aware(fecha_excel):
+                fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
+            fecha_excel = fecha_excel.date()
+
+        ws.write(row_num, 0, mov.usuario.get_full_name())
+        ws.write(row_num, 1, fecha_excel, date_style)
+        ws.write(row_num, 2, str(mov.proyecto))
+        ws.write(row_num, 3, float(mov.cargos or 0))
+        ws.write(row_num, 4, mov.get_status_display())
+
+    wb.save(response)
+    return response

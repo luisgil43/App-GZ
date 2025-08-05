@@ -1,38 +1,23 @@
-{% extends "dashboard/base.html" %}
+{% extends "dashboard_admin/base.html" %}
 {% load humanize %}
 {% load custom_filters %}
 
 {% block title %}Rendiciones{% endblock %}
 
-{% block content %}
+{% block dashboard_content %}
 <div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
 
     <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
-    </div>
+   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
+    {% if user.es_pm %}
+    <a href="{% url 'operaciones:exportar_rendiciones_pm' %}" 
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+        📥 Export to Excel
+    </a>
+    {% endif %}
+</div>
 
-    <!-- Tarjetas resumen -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div class="bg-green-50 p-4 rounded-lg shadow">
-            <h3 class="text-gray-600 text-sm font-medium">Total Rendiciones</h3>
-            <p class="text-2xl font-bold text-green-700">
-                ${{ total|floatformat:0|formato_clp }}
-            </p>
-        </div>
-        <div class="bg-yellow-50 p-4 rounded-lg shadow">
-            <h3 class="text-gray-600 text-sm font-medium">Pendientes</h3>
-            <p class="text-2xl font-bold text-yellow-700">
-                ${{ pendientes|floatformat:0|formato_clp }}
-            </p>
-        </div>
-        <div class="bg-orange-50 p-4 rounded-lg shadow">
-            <h3 class="text-gray-600 text-sm font-medium">Rechazados</h3>
-            <p class="text-2xl font-bold text-orange-700">
-                ${{ rechazados|floatformat:0|formato_clp }}
-            </p>
-        </div>
-    </div>
 
     <!-- Tabla responsive -->
     <div class="rounded-xl border border-gray-200 overflow-x-auto">
@@ -125,18 +110,62 @@
 
 <!-- Acciones -->
 <td class="p-2 border text-center">
-    {% if 'rechazado' not in mov.status and mov.status != "aprobado_finanzas" %}
-        <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-            {% csrf_token %}
-            <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                ✅ Aprobar
+    {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
+        {# Supervisor: solo si pendiente_supervisor #}
+        {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                    ✅ Aprobar
+                </button>
+            </form>
+            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                ❌ Rechazar
             </button>
-        </form>
-        <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-            ❌ Rechazar
-        </button>
+        {% endif %}
+
+        {# PM: solo si ya pasó por el supervisor y aún no fue aprobado por PM #}
+        {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                    ✅ Aprobar
+                </button>
+            </form>
+            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                ❌ Rechazar
+            </button>
+        {% endif %}
+
+        {# Finanzas: solo si ya pasó por el PM #}
+        {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                    ✅ Aprobar
+                </button>
+            </form>
+            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                ❌ Rechazar
+            </button>
+        {% endif %}
+    {% else %}
+        {# Usuario: solo puede aprobar/rechazar abonos pendientes de él #}
+        {% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
+            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                    ✅ Aprobar
+                </button>
+            </form>
+            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                ❌ Rechazar
+            </button>
+        {% endif %}
     {% endif %}
 </td>
+
+
                 </tr>
                 {% empty %}
                 <tr>

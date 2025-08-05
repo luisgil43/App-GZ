@@ -1,3 +1,4 @@
+from django.urls import reverse, NoReverseMatch
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404, render, redirect
 from usuarios.models import CustomUser, Rol
@@ -35,7 +36,11 @@ def admin_dashboard_view(request):
 @login_required(login_url='usuarios:login')
 def logout_view(request):
     logout(request)
-    return redirect('usuarios:login')
+    messages.info(request, "Has cerrado sesión correctamente.")
+    try:
+        return redirect(reverse('login_unificado'))
+    except NoReverseMatch:
+        return redirect(reverse('usuarios:login'))
 
 
 def inicio_admin(request):
