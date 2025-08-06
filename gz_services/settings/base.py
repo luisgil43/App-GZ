@@ -28,7 +28,7 @@ if (
     }
 
 # Configuración básica
-LOGIN_URL = '/usuarios/login/'
+LOGIN_URL = 'usuarios:login_unificado'
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGOUT_REDIRECT_URL = '/usuarios/login/'
 # Si usas login personalizado para admin
