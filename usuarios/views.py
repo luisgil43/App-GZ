@@ -166,21 +166,19 @@ def resetear_contraseña(request, usuario_id, token):
 def login_unificado(request):
     form = AuthenticationForm(request, data=request.POST or None)
 
-    if request.method == 'POST':
-        if form.is_valid():
-            user = form.get_user()
-            login(request, user)
+    if request.method == 'POST' and form.is_valid():
+        user = form.get_user()
+        login(request, user)
 
-            # 🚩 Caso 1: solo tiene rol de usuario
-            if user.roles.count() == 1 and user.tiene_rol('usuario'):
-                # o 'dashboard:inicio_usuario'
-                return redirect('dashboard:index')
+        # Caso 1: solo tiene rol de usuario
+        if user.roles.count() == 1 and user.tiene_rol('usuario'):
+            return redirect(settings.LOGIN_REDIRECT_URL)
 
-            # 🚩 Caso 2: tiene más de un rol
-            return redirect('usuarios:seleccionar_rol')
+        # Caso 2: tiene más de un rol
+        return redirect('usuarios:seleccionar_rol')
 
-        else:
-            messages.error(request, "Credenciales inválidas.")
+    elif request.method == 'POST':
+        messages.error(request, "Credenciales inválidas.")
 
     return render(request, 'usuarios/login.html', {'form': form})
 
