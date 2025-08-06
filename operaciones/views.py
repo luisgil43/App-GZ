@@ -263,8 +263,10 @@ def crear_servicio_cotizado(request):
 def editar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
-    # Validar que el estado permita edición
-    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (request.user.is_superuser or request.user.es_facturacion):
+    # --- Permitir edición siempre a PM, Admin y Facturación ---
+    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (
+        request.user.is_superuser or request.user.es_facturacion or request.user.es_pm
+    ):
         messages.error(
             request, "No puedes editar esta cotización porque ya fue asignada.")
         return redirect('operaciones:listar_servicios_pm')
@@ -273,15 +275,12 @@ def editar_servicio_cotizado(request, pk):
         form = ServicioCotizadoForm(request.POST, instance=servicio)
         if form.is_valid():
             servicio = form.save(commit=False)
-
-            # Buscar datos del sitio automáticamente si existe el ID Claro
             if servicio.id_claro:
                 sitio = SitioMovil.objects.filter(
                     id_claro=servicio.id_claro).first()
                 if sitio:
                     servicio.id_new = sitio.id_sites_new
                     servicio.region = sitio.region
-
             servicio.save()
             messages.success(request, "Cotización actualizada correctamente.")
             return redirect('operaciones:listar_servicios_pm')
