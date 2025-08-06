@@ -1,0 +1,1225 @@
+[33mcommit 0088eeaf68f192ddecadc99daef2c35f67110a63[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Merge: 120ec27 a1592c6
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Aug 5 20:15:22 2025 -0400
+
+    login gz
+
+[33mcommit 120ec27692782861d14dc9345a6fdf76a6989f08[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Aug 5 20:13:34 2025 -0400
+
+    login gz
+
+[33mcommit a1592c6fb22e4aed5884f066ac251d53ac1e53a4[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Aug 5 15:20:38 2025 -0400
+
+    Primer commit - Hyperlink Networks
+
+[33mcommit 1f091fc517da5cabd58fabf4573588b77632583e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Aug 5 15:07:19 2025 -0400
+
+    Activando los exportar
+
+[33mcommit 3b95b7cf06644c6c59cd0417593f386ed9b551ab[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Aug 1 17:43:35 2025 -0400
+
+    Habilitando Rendiciones de gasto
+
+[33mcommit 066c9b1f9f89014230aec209f776cbbdd0148046[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 26 23:18:33 2025 -0400
+
+    Actualizacion de status en tabla de facturacion 3
+
+[33mcommit 3ed671630767df11d7099e95bae71e50a4fd6e1e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 26 23:08:58 2025 -0400
+
+    Actualizacion de status en tabla de facturacion 2
+
+[33mcommit f12f3ef8cb5d398b175c7b06c6e5dede9a6f5937[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 26 22:57:25 2025 -0400
+
+    Actualizacion de status en tabla de facturacion
+
+[33mcommit 2a740eb502902bf5b434b38ad75585405fda1f45[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 26 22:27:20 2025 -0400
+
+    Actualizacion de las importacion de las conformidades Boton de Borrar de listar cotizacion
+
+[33mcommit 4b43fd07e447e90d525c73d0d10f27c99db71cd9[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jul 25 12:58:09 2025 -0400
+
+    Actualizacion exportar en facturacion
+
+[33mcommit 7225a44100d4cf72ae224c233be9a530871aaa24[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jul 25 11:40:33 2025 -0400
+
+    Actualizacion status pm
+
+[33mcommit 109c91a5e4f0e42a396e40acecbdc6c8187c3c71[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jul 25 11:21:56 2025 -0400
+
+    Actualizacion de montos al editar
+
+[33mcommit 2c5064def75ac8903a75560007675e625c201c5f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 24 20:48:39 2025 -0400
+
+    Actualizacion de tablas 15
+
+[33mcommit 1eafa0dbcf425afd6594efad475d5396d71f97b8[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 23:36:27 2025 -0400
+
+    Actualizacion de tablas 14
+
+[33mcommit cdc779c931ecdcc7c610f60b23f57963c24371a1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 23:21:54 2025 -0400
+
+    Actualizacion de tablas 13
+
+[33mcommit 0833db76726e8c60562b4de99a4bc84b98dfae1e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 20:13:05 2025 -0400
+
+    Actualizacion de tablas 12
+
+[33mcommit b9ea6560ae30b71bbbbe195c90eacfb993538a13[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 19:51:44 2025 -0400
+
+    Actualizacion de tablas 11
+
+[33mcommit 85f8a52f680fe18d4c8a2bfc12563ea8d37607f1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 19:41:37 2025 -0400
+
+    Actualizacion de tablas 10
+
+[33mcommit a1b6adf3367db5d7762fa9804b969daa46d3dd20[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 19:34:03 2025 -0400
+
+    Actualizacion de tablas 9
+
+[33mcommit b682e6212650f5dd64c0988184111659da96e69c[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 18:45:03 2025 -0400
+
+    Actualizacion de tablas 8
+
+[33mcommit 518a68942c44e3a406cb8988e63b0a3eb777eccd[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 18:37:47 2025 -0400
+
+    Actualizacion de tablas 7
+
+[33mcommit 9d64b53c3437c493dcd2280321d13dc53a9fa0b1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 18:31:24 2025 -0400
+
+    Actualizacion de tablas 6
+
+[33mcommit d9814dff0f1b285c9c4fe4443424949c4fec2c43[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 17:47:25 2025 -0400
+
+    Actualizacion de tablas 5
+
+[33mcommit 0e51b346fddfd4db391d73920c7dae4ba019f574[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 15:51:51 2025 -0400
+
+    Actualizacion de tablas 3
+
+[33mcommit 8a9706ba8359ab576ba49d81a037a32c0864c363[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 23 08:23:43 2025 -0400
+
+    Actualizacion de tablas 3
+
+[33mcommit 18889f8da85334404dccf37f42e71cb072d593bc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 20:03:34 2025 -0400
+
+    Actualizacion de tablas 2
+
+[33mcommit 23361289d6718efcc60fea8eb86174bfa09423fb[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 19:49:35 2025 -0400
+
+    Actualizacion de tablas
+
+[33mcommit 7a8bf522cfc249b10d2dddcfcd643d18eaaf1e83[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 15:38:03 2025 -0400
+
+    Actualizacion del base
+
+[33mcommit a464a5325810fdf1493a330fc3208b7aedc1c196[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 13:09:57 2025 -0400
+
+    Actualizacion del base
+
+[33mcommit 549a7bbadc09f018db18ab628178e26d90fd25ac[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 09:58:53 2025 -0400
+
+    Actualizacion para que los Pm Puedan editar y eliminar
+
+[33mcommit 12a1744d9d43ee9784ae7724a46a87d4603ba410[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 01:41:07 2025 -0400
+
+    Actualizacion con el Guardado
+
+[33mcommit 453b664f6aecaff2000fd4cb1af17507fb193f38[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 01:04:22 2025 -0400
+
+    Actualizacion de nombre y cerrar sesion y agregar campo de MMOO
+
+[33mcommit e9dc45da048a5bed42495f436fb304e27c472a12[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 22 00:18:55 2025 -0400
+
+    Arreglando los nombres y el cerrar sesion
+
+[33mcommit 1e17469b2b805581d79d21fd760a5ae86b0b6c44[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 18:27:54 2025 -0400
+
+    arreglando filtros
+
+[33mcommit 93252f7fdd833ac761a477bd910b017440a9efb1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 18:09:56 2025 -0400
+
+    Adapcion a movil el listar_pm y ambos base con respecto al nombre
+
+[33mcommit 8d14eb9dea1c3a885daf33d78ee8da4e18c6b968[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 16:53:51 2025 -0400
+
+    Activacion de la parte de oc en facturacion
+
+[33mcommit 7d0c0e3539e03da238dde1df9db81873d133c152[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 02:00:43 2025 -0400
+
+    Activando la tabla en mi asignacion
+
+[33mcommit 086fe348de88381749cd54dfc96d59ff48c8468a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 01:20:21 2025 -0400
+
+    Resolver error 500 n7
+
+[33mcommit 1edf92fdf5ced2658648551c3dfdf7b1bd13c345[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 01:03:58 2025 -0400
+
+    Resolver error 500 n6
+
+[33mcommit becae399027ad1062a6142ea2ecadc9008e7f989[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 00:36:12 2025 -0400
+
+    Resolver error 500 n5
+
+[33mcommit 57caf4137c225a42415217637560938f1abd74ae[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 20 00:25:34 2025 -0400
+
+    Resolver error 500 n4
+
+[33mcommit d9cf9a76116b75ca69d72296d4de5a3697758531[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 22:53:32 2025 -0400
+
+    Resolver error 500 n3
+
+[33mcommit a062610db9c02c4c7573fb5a38fd629e256b3a37[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 22:17:35 2025 -0400
+
+    Resolver error 500 n2
+
+[33mcommit 6d006cfc2cf8edc082afba82d322f3a8458d62d6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 22:08:51 2025 -0400
+
+    Resolver error 500 n1
+
+[33mcommit c42e41d034450cedfb3f1dcf835bdbb4c3a6e9fa[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 21:55:41 2025 -0400
+
+    Resolver error 500 comentando lo del supervisor y usuario
+
+[33mcommit 34eb563a0b63c21ebf23f0f1d8eaa9818368ef42[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 15:13:54 2025 -0400
+
+    Resolver error 500
+
+[33mcommit 8b20b9d7475b3e1bedf11aebbcda25f4798a01f8[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 15:12:55 2025 -0400
+
+    Resolver error 500
+
+[33mcommit 28a6c7b6bb6be43549e9080bce43e2bc24969251[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 14:06:46 2025 -0400
+
+    Activar carga de cotizaciones y asignacion de cotizaciones
+
+[33mcommit 4d7effc9ea3cc2122de96a9d9fd7cd5c107b0fc7[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jul 19 13:54:41 2025 -0400
+
+    Activar carga de cotizaciones y asignacion de cotizaciones
+
+[33mcommit 77d55ba8ef494244daf93c7f3520036520e03754[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 15 00:36:12 2025 -0400
+
+    Modificacion del ancho de los caracteres
+
+[33mcommit 7a36830df8b8083aefce5753e774efcb26247fcc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 15 00:07:07 2025 -0400
+
+    Buscar mi sitio
+
+[33mcommit dcd6eb03539f0342bf7ac40d70c575e154070f53[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jul 9 17:07:56 2025 -0400
+
+    Imprementacion de al app de logistica ingreso de material
+
+[33mcommit 456a6b39f9030ad3805cdb99a1115fdb48d83c65[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jul 6 18:04:43 2025 -0400
+
+    Agregar Campana con Notificacion
+
+[33mcommit a4cbd593b1a140bad98f6f600cc2febaab93bb1a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 23:00:26 2025 -0400
+
+    Cambio para que guarde la contraseña luego de cambiarla
+
+[33mcommit 993279512674d91820f54b601311eb1144512cee[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 22:29:42 2025 -0400
+
+    Cambio para que guarde la contraseña luego de cambiarla
+
+[33mcommit 2b0df55ef9c63d9151f7cb91aabf689a775221d5[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 21:34:56 2025 -0400
+
+    Unificacion del login y recueracion de contraseña
+
+[33mcommit 76ef68c14d6df1069da64ddb7fd4fe7ca709b101[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 16:11:48 2025 -0400
+
+    Activando el olvido de contraseña
+
+[33mcommit 53aae75de94ab48673f2358370d4efd540fcda87[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 13:09:08 2025 -0400
+
+    Se agrega la imagen en el login y el heder de planex
+
+[33mcommit 8db9c6b02a5753ee45823769e970a260aa6eb370[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jul 3 10:52:52 2025 -0400
+
+    Mejora en la firma del admin y del usuario
+
+[33mcommit d7b8a2e554fdbc94151b48ea32d7e8373e66eb0c[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 1 17:15:28 2025 -0400
+
+    Activacion de la firma del representante
+
+[33mcommit 616e190b5bbc811f7b5c2e1e836b2d6b24ccb08b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 1 12:27:54 2025 -0400
+
+    Agregar creación automática de roles y admin desde señales
+
+[33mcommit 298c257f4e04ec6e73d5938ecb579038f593cdc1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 1 11:34:26 2025 -0400
+
+    Guardando cambios pendientes antes del pull
+
+[33mcommit 02cbc1a48e78ecd4488105555887eb18f36ca8c1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jul 1 11:31:33 2025 -0400
+
+    Crear roles y admin automáticamente en producción
+
+[33mcommit a7dacae3be82a1845d3869e1007c15db7ffde078[m
+Author: luisgil43 <luisggil01@gmail.com>
+Date:   Mon Jun 30 23:27:12 2025 -0400
+
+    Update apps.py
+
+[33mcommit fcac54633eaa20b1ed945ddd5886046c1afa5041[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 30 22:58:25 2025 -0400
+
+    super usuario
+
+[33mcommit d16a6222b234dc0d3620e43e4978b6b0751ea87f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 30 22:49:07 2025 -0400
+
+    super usuario
+
+[33mcommit 0c9dfef7c844469f5b621b090e455f0b2eda222f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 30 22:11:38 2025 -0400
+
+    Primer commit GZ
+
+[33mcommit 8d65b6c3c1aa82564fc7c687a04aa9f0b67b7c02[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 30 20:42:19 2025 -0400
+
+    activacion de app gz services
+
+[33mcommit c7ad84745351c562dbcec1e4c69c61cfbc39fd6b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 27 20:45:31 2025 -0400
+
+    solucion del error 500 al redirigir a la vista correcta
+
+[33mcommit c8c913f3e9c3d0c15a0803f1b51b9bc331538b2b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 27 20:11:22 2025 -0400
+
+    Activacion del modulo de solicitud de adelanto
+
+[33mcommit a8c84031cccf93707b19692d8be9aa5fe0432f88[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 26 13:12:53 2025 -0400
+
+    No estaban saliendo los roles en local
+
+[33mcommit 165c9a2e73dfbdb7ba3938b558efe4596617c9ee[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 26 10:26:39 2025 -0400
+
+    Limitando el campo de mes en carga masiva para que sea de 1 a 12
+
+[33mcommit cf8953bf80b2e22a6b2f1952d91c07b6ea8ccfd4[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 26 09:39:08 2025 -0400
+
+    Eliminando el history
+
+[33mcommit 63e4f8548565334a319c5dbf7ba38de9e399fa93[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 23:22:13 2025 -0400
+
+    Agrego nuevas migraciones y actualizaciones
+
+[33mcommit de44e6773e30ae7ce720cc74ea90e2f6ac3dca14[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 23:13:37 2025 -0400
+
+    Modificacion para guardar los cambios o historial de cambio
+
+[33mcommit 34d955edc349aa1b250a3ec053f072496c9213a0[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 22:10:36 2025 -0400
+
+    Modificacion de la carga masiva de liquidaciones y eliminacion de monto
+
+[33mcommit d674dcf2c2a5b1423142908e1214152295791812[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 16:48:19 2025 -0400
+
+    Se agrega el boton de exportar ficha a la planilla y todo su codigo
+
+[33mcommit a7a342d06def6fdb2ee253b80245c999e5d0b14a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 15:09:53 2025 -0400
+
+    Reparacion del firmar en el usuario y asociacion de usuario a la ficha automaticamente
+
+[33mcommit 6e01199162b1c37b70ca8ae2f75abdb39620638f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 13:32:43 2025 -0400
+
+    Modificacion para que salga como ejemplo region dentro del campo
+
+[33mcommit cf237caf5d0aaa38d58bfa214c3479d71753c55f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 25 13:23:11 2025 -0400
+
+    Reparacion del editar y crear en la ficha de ingreso y perdidas de fecha
+
+[33mcommit feec918ab9eca737bf6172a41cc19040f5079edf[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 24 22:58:35 2025 -0400
+
+    Modificacion del modelo para las eliminacion de las liquidaciones en Cloudinary tanto firmadas como sin firmar
+
+[33mcommit e5e83513d604777d4a87c0ec9427a35cd61ed813[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 24 22:28:13 2025 -0400
+
+    Eliminación de los mensajes duplicados en la planilla de Listar firma
+
+[33mcommit d55fbb9475ab6bb5d1b0d3dd8890f53a0cca2ee6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 24 22:16:25 2025 -0400
+
+    Eliminación de los mensajes duplicados en crear documentos
+
+[33mcommit d84c08f6ea0cdd543b7cb7c2e29dfae9b5681ca0[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 24 21:51:56 2025 -0400
+
+    Mejora en los campos de la ficha
+
+[33mcommit 0267e13def3216bc859634dd872cf663abd1a053[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 24 13:39:17 2025 -0400
+
+    Mejora en el firmar liquidaciones y aprobacion de vacaciones
+
+[33mcommit 2ee21e32de3572084ec8c6362f5c5bae0ca14d52[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 15:21:53 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit 8476eb20660f17a621f522ffbe5c8b99813883a1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 14:36:59 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit f996daa0435878d6703ea60ae13de03d11785ea5[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 14:22:41 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit 7e419f5d31e413df6cf2666d4513ebe6e279e57f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 13:48:16 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit ce627f99370085025d05754e4d1091b64d0394c5[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 13:39:51 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit 3236b63a2469bd25c7dbd4588658b27d38c8fb8d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 13:27:18 2025 -0400
+
+    Mejora visual del nombre del nombre de la empresa y quiebre del nombre del usuario
+
+[33mcommit cc02ea3ade1b0f7070647ed33ee96819146fc041[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 12:52:16 2025 -0400
+
+    Mejora visual de los template del admin para telefonos moviles
+
+[33mcommit 0ab2c13bc05cb26e25345912ba73769c16a11d04[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 23 12:23:52 2025 -0400
+
+    Se agrega el heder para que que los nombres quibren en pantalla pequeña
+
+[33mcommit 9518f0ebcc3b933f447da588483d84bac150592b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jun 22 22:29:08 2025 -0400
+
+    Se agrega cronograma de pago
+
+[33mcommit b66c8e7e255cb60ee278e2d22054dc27a61de863[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jun 22 19:38:36 2025 -0400
+
+    Modificacion de la ficha de vacaciones y ingreso
+
+[33mcommit df5a2eb92adb469b7dfda2e31e1c6e28e9c4c0f8[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jun 22 15:37:58 2025 -0400
+
+    Actualización de la ficha y su automatizacion
+
+[33mcommit e0a8da7b333c1fca687d5d84fff5623873d7757c[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 17 17:28:02 2025 -0400
+
+    Activacion del submenu de vacaciones y eliminacion de mensajes duplicados
+
+[33mcommit 8b9647fceb88a678d75d865d5a7398ae1a5fa563[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jun 15 06:26:31 2025 -0400
+
+    Agrega holidays a requirements.txt
+
+[33mcommit 3f703445936d7781d3cafeb3065d9353ab2094ff[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun Jun 15 06:12:33 2025 -0400
+
+    Modificacion de roles en los usuarios
+
+[33mcommit cdb21c8acd68ddd09a173044af7e8a1ad47a4892[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 20:32:02 2025 -0400
+
+    Modificacion de las vistas de descarga, Se lo coloco subrayado
+
+[33mcommit a78c607aa0893e5a4b282181bf0926026c355712[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 19:13:08 2025 -0400
+
+    Solucion al solapamiento en el usuario a nivel de telefono
+
+[33mcommit e0aae0f60f5d3924560eab2aa0a856c4b824025e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 18:26:24 2025 -0400
+
+    Modificacion menu admin
+
+[33mcommit 9556ba76ca4fafff588d1a912627b5872e4fc1cc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 18:20:22 2025 -0400
+
+    Modificacion menu usuario
+
+[33mcommit b11703618f9e9a43452004f631af6e53f38a6a3d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 18:08:48 2025 -0400
+
+    Modificacion menu usuario
+
+[33mcommit 670c60e25b6d2528cf16301ea16c77a3137a90ce[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 03:07:35 2025 -0400
+
+    se corrige template del dashboard porque estaba redirigiendo mal
+
+[33mcommit bd6fc2bb33996322a4c5beb726e3d6514bdd2cac[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 14 02:07:16 2025 -0400
+
+    Creacion de ficha de ingreso
+
+[33mcommit 45aeaf081819343a6a721b5e7217d9ef2558f645[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 22:52:20 2025 -0400
+
+    Solucion del error del setting logger.error
+
+[33mcommit 45c8807ba3bd56f9fa9774c3a9bdefd689812558[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 22:40:32 2025 -0400
+
+    Solucion del error del setting logger.error
+
+[33mcommit a49de3bedfafff9e60d9d863f9c317a252a294bb[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 22:35:22 2025 -0400
+
+    Cambio del template de admin_lista y listar_contratos para que se adapte a movil
+
+[33mcommit 35fc3782913fb43600e4c1db2c93d5ff8909e3aa[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 22:13:29 2025 -0400
+
+    Cambio del template de dashboard_admin para que se adapte a movil
+
+[33mcommit cf8cc8a78c74228b135637e5bdde38a99a139378[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 21:41:43 2025 -0400
+
+    Solucion error de direccionamiento
+
+[33mcommit 4862f1e24a4bf106f5d89a8b8bd952c1121b7a82[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 21:26:41 2025 -0400
+
+    Solucion error de direccionamiento
+
+[33mcommit eb35973e937016bcb530b0e3b31aa37df42f5c73[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 18:15:46 2025 -0400
+
+    Modificacion del template dashboard
+
+[33mcommit 1407e340c11506457e3c394ae39d8ec9e029ae33[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 17:55:53 2025 -0400
+
+    Vistas pdf
+
+[33mcommit 074f7b7ccdd2cd9efd80eae0704fea0fcfdb5a30[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 13 15:44:35 2025 -0400
+
+    Modificacion de las rutas de las carpetas en cloudinary
+
+[33mcommit 85e57dd90dcca62431f4b1525c4390a2d02fee65[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 17:52:53 2025 -0400
+
+    Modificacion del menu para que se adapte a movil
+
+[33mcommit b7c5b8bca0b513e651109ab377bd86544533d997[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 17:15:28 2025 -0400
+
+    Modificacion del menu para que se adapte a movil
+
+[33mcommit 42b1ce8a189ce9483204bcfe1fd45ae746f95f0d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 14:24:17 2025 -0400
+
+    Manejo de errores
+
+[33mcommit cf5b1547ece14969e73910bde738b6565a0feb8d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 12:58:16 2025 -0400
+
+    Manejo de errores
+
+[33mcommit 974f6ae2cac5cc254fd4f1456d3ca2c6a9e16285[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 10:01:13 2025 -0400
+
+    Manejo de errores
+
+[33mcommit 0508ed9efefc71ffc747cf84e7e034283269769d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 09:42:17 2025 -0400
+
+    Manejo de errores
+
+[33mcommit a2aa9b66416ed9900c89d698bbfdd0e57507a6b4[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 02:04:31 2025 -0400
+
+    Modificaciones en respositive
+
+[33mcommit fab96295a0abc1151aa3aaf657ec9a5d78f60e9f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 01:47:44 2025 -0400
+
+    Modificaciones en respositive
+
+[33mcommit 52d9d71daf23e79194622153bf36f89cc0ade196[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 01:39:23 2025 -0400
+
+    Adaptando a que sea responsitive
+
+[33mcommit 68fd8bf45becf375f74939d3e5224316119b3c59[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 12 00:55:56 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 0657b2574b79db485f2a8cda9cbf11dc4ea173d2[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Tue Jun 10 11:57:39 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 234c3a1f607c573492d3b860b7f719a24d88e412[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 20:38:36 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 73fa35ca1c3f0d850c2bee02feddc9947c64f347[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 20:06:44 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 781d2e2aef25cc21bc5343e9f4e16d5ff839ed42[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 18:27:37 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit ab03bde2b3052bf78b589586a496a1f097d6d5bd[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 16:07:29 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit e3fdfb855deec50039d0716b711cebf3c821360b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 15:52:12 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 0a3b075e752d5a4c99b71b2cbe56a1d6aad63738[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Mon Jun 9 11:01:26 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 53caeb58548b5cd0482538505b5b0d63f089a561[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 21:02:16 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 43a266d5ee2ecc247bd662933b41bc230e008e2e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 18:54:54 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 0f395aac36e52829e41b116b301616258c40d561[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 15:21:10 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 97663626e23b6a55ef93fa8940400bca8104e361[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 14:13:06 2025 -0400
+
+    Modificacion para el guardado en cloudinary
+
+[33mcommit 1a7a990eca75e6f7ec57b97dfc3ecd36ada13a6c[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 13:22:40 2025 -0400
+
+    Cambios en admin, estilos personalizados y lógica de cursos
+
+[33mcommit 4f84993f0f4d81d4e910638dc273ff6da5dd1a7a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 13:14:23 2025 -0400
+
+    Cambios en admin, estilos personalizados y lógica de cursos
+
+[33mcommit 8b215d0cd912284c12544ac4fdeb6e0f6489ec3b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 12:52:11 2025 -0400
+
+    Corrigiendo almacenamiento en cloudiary
+
+[33mcommit 1dfe5a3cfcff5ecf9e38591d05fa4e28f705ebd1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 12:27:24 2025 -0400
+
+    ✅ Usar DEFAULT_FILE_STORAGE dinámico eliminando default_storage en campos de archivo
+
+[33mcommit a1b862e6f8f4edb146aed7a96134b7c220a4e08f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 11:51:59 2025 -0400
+
+    Arreglando el guardado en Cloudinary
+
+[33mcommit 62bc05dd57544b3a0c8a69721ff52f4c260eccad[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 10:28:25 2025 -0400
+
+    Arreglando el guardado en Cloudinary
+
+[33mcommit 2fe4b2a69bbc63ed164da12c046ecc41ea0c8169[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 09:36:30 2025 -0400
+
+    Fix firma_digital to use default_storage for Cloudinary
+
+[33mcommit d621fb0c79c281c567941fb5419c6f62d37020e0[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sat Jun 7 09:02:16 2025 -0400
+
+    Reparando el almacenamiento en Cloudinary
+
+[33mcommit b1b31c7c8b2d9bb658efd92520ab3e42e585e975[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 6 20:35:39 2025 -0400
+
+    Cambios en el almacenamiento de local y Cloudinary para que se guarde correctamente
+
+[33mcommit 5a5f311e6ebcc00dc07f7c973cc9e8d93437e8e7[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri Jun 6 18:18:03 2025 -0400
+
+    Manejo de errores al momento de ver las liquidaciones y estas estan borradas
+
+[33mcommit 3fed2c42bd06002365c0f5734a5e7f600ae46cca[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu Jun 5 08:10:26 2025 -0400
+
+    Agregar vista de verificación de Cloudinary
+
+[33mcommit 0f27b6c8201edf4d6a56da577386258c4ba08a18[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 4 22:41:49 2025 -0400
+
+    Modificacion de la url para la vista de usuarios
+
+[33mcommit 9f074efe115d19d5f473c7d1e410681d76f473be[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Wed Jun 4 19:37:24 2025 -0400
+
+    Cambios en dashboard_admin y eliminacion de el admin de django a mi admin personalizado
+
+[33mcommit 7cec4850c63ff02f364fedead8589422e64a7118[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Sun May 25 13:02:36 2025 -0400
+
+    Actualiza rutas de subida de PDFs organizadas por mes y año
+
+[33mcommit 48a5fb3f590e0a3b27f367bafc2e5c131d3af1ac[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 22:53:22 2025 -0400
+
+    Fix: usar dotenv solo en desarrollo
+
+[33mcommit fb7040668a7663a069c0075d672103272c8a7f17[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 22:48:43 2025 -0400
+
+    intentando resolver el admin
+
+[33mcommit 1d3919b0791f18fe192f71e2769dc1a77f64c0c6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 22:38:22 2025 -0400
+
+    resolviendo vista admin
+
+[33mcommit f5343715cd0d791637d16f79a764cfdfe115bc99[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 20:53:58 2025 -0400
+
+    Forzar redeploy con pip
+
+[33mcommit e1911dadea30c9f669b16ed37d56f8faf3b20a79[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 20:45:49 2025 -0400
+
+    Cambio para que me salga bien la informacion en el admin
+
+[33mcommit bc811737128041c1d0c6abf5ae768c0ac723f9a6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 20:23:21 2025 -0400
+
+    Ignorar staticfiles y db.sqlite3
+
+[33mcommit a19816487c7e8425ac5e0fcc69f2e7fe4dde86b6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 20:05:18 2025 -0400
+
+    Levantando el servidor
+
+[33mcommit 8a6cd863622aa98b3eaeae7ea2042434ef459cbf[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 19:19:08 2025 -0400
+
+    Cambio Debut False
+
+[33mcommit 0c98a0e926efc696395a086afbb7bd9a1dcb9e54[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 18:59:57 2025 -0400
+
+    se repara ya que no se estaba viendo las liquidaciones
+
+[33mcommit 282914997b818ce0f5e0521e65cb31a18f74c223[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 17:39:47 2025 -0400
+
+    Actualizar configuración de settings y manage.py, wsgi.py para dev y prod
+
+[33mcommit 48b94339cc9269576e4d770fe7bdbc184b298363[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 15:12:24 2025 -0400
+
+    Modificacion del codigo html base pero el que esta en el template de afuera no es el dashboard
+
+[33mcommit d35e27bfd9359b16c97c189ba9d38eb430ef167d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 14:57:06 2025 -0400
+
+    Barra azul estaba pasando hacia el header
+
+[33mcommit 803b4807ed473baef6c71ca53fa588f8ad53e4f3[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 14:47:13 2025 -0400
+
+    modificacion para que el menu lateran no se expanda hacia el header
+
+[33mcommit b5b76acaadc63966178cf422d3453b84086399f8[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 14:29:47 2025 -0400
+
+    Eliminando diferencia cuando das click en produccion y en liquidacion
+
+[33mcommit fbb2d2d2509c22fa40b65110057fc093ac547bfc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 13:59:10 2025 -0400
+
+    Eliminando espacio en blanco al lado del menu
+
+[33mcommit f0e6034964871afb08b202b9aa06919964209f4b[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 13:39:36 2025 -0400
+
+    pagina en blanco aun volviendo al codigo anterior
+
+[33mcommit 356af2076e6004e47119f3343d008160899f7cdf[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 13:32:18 2025 -0400
+
+    Volviendo a que todo salga normal como antes y no la pagina en blanco
+
+[33mcommit 696bd17f233ae0268ac8ffb56f2de908e99a8a10[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 13:23:56 2025 -0400
+
+    recuperando pantalla
+
+[33mcommit 7467b10c98307c01bea4d4e548610a0741a339da[m
+Merge: 80a6813 e37a22c
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 13:03:16 2025 -0400
+
+    Merge branch 'main' of https://github.com/luisgil43/App-Mv
+
+[33mcommit 80a681395c6c5a8db464dc45b3e30bdeb1a667a9[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 12:55:48 2025 -0400
+
+    se realiza cambio para volver de nuevo a como estaba antes
+
+[33mcommit e37a22c824371aef829a208c1412a68352f42ddd[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 12:30:53 2025 -0400
+
+    Elimina espacio vertical al lado de la barra de manu
+
+[33mcommit 1ff36ea094205df4ee41caf4a9ef4bdee12157d6[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 12:20:32 2025 -0400
+
+    Modificacion de barra superior para que salga el logo, el nombre de la empresa
+
+[33mcommit 65c0f211d0b2d7e9b17fb0b148418966db18b031[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 11:58:12 2025 -0400
+
+    Habia error en la base de dato local con datos duplicados
+
+[33mcommit 5a6b8ac99dbfc3702376adbe4664eb3c024960f8[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 11:31:56 2025 -0400
+
+    Se agrega mensaje de error para cuando el usuario este creando dos liquidaciones en el mismo mes año y el mismo usuario
+
+[33mcommit 3907fe2010295d972a71c097d33d629886537325[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 11:02:27 2025 -0400
+
+    Este cambio se hizo para evitar que el admin pueda crearle dos liquidaciones en el mismo mes al usuario
+
+[33mcommit 1b6fb2c20c7e126a7caf8f942f00c301d0d5b4bb[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 10:10:56 2025 -0400
+
+    Descripción de los cambios
+
+[33mcommit fdc24231b161e3348b15d0862c93eadb88b20c25[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 09:32:14 2025 -0400
+
+    Al insertar la imagen de la firma en el pdf estaba generando error
+
+[33mcommit a866a7b3e0c9dd437b0392d6fbca914c4fb326bc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 02:41:53 2025 -0400
+
+    Descripción de los cambios
+
+[33mcommit 1c3e02ef30af592229420695ecb51518a9cd3a55[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 00:54:55 2025 -0400
+
+    Descripción de los cambios
+
+[33mcommit c5ba51f6ce14a78ebfadcd38931670e5bedbe04f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Fri May 23 00:21:55 2025 -0400
+
+    Descripción de los cambios
+
+[33mcommit 430496fb513cd63633a2155191426c011e50fbec[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 23:55:25 2025 -0400
+
+    problemas con la redireccion al darle ver pdf
+
+[33mcommit f092bfafd0b9ff66ce140be763a84bb89b3148cc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 23:02:38 2025 -0400
+
+    Configuracion de cloudinary
+
+[33mcommit 20cc9980f3b3195e8c78ef1d701837a102ba917a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 22:38:31 2025 -0400
+
+    Agrego configuración Cloudinary y actualizo .env
+
+[33mcommit c6c13b4b5be70a0b785fa93f5a8e85d36fd78fbb[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 21:09:55 2025 -0400
+
+    Cambios en el archivo view.py en firma liquidacion
+
+[33mcommit cb4cb022f79926702a973e35d8fb8d7cf485136e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 21:06:54 2025 -0400
+
+    Problemas con la firma y la descarga del pdf
+
+[33mcommit 7f08f8c46757f2aa7181e46ce3ce3e8e218121d2[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 20:48:50 2025 -0400
+
+    El cambio resuelve el error de que al firmar consiga la ruta
+
+[33mcommit 5a952ec11a1b82f39ee4b29b5f4bc9b71574d136[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 20:06:07 2025 -0400
+
+    Descripción de los cambios
+
+[33mcommit f100b6febc4fb4bc3b49142e3cfb855e221b5d2e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 18:52:25 2025 -0400
+
+    Agrega creación automática de superusuario si no existe
+
+[33mcommit e1f49b7dc84046c63fbd269b6b509b4727d208e9[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 18:14:36 2025 -0400
+
+    Add script to create superuser automatically
+
+[33mcommit c72a4859adbc3f7a7e258e6867818eb3566b5d5d[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 17:35:31 2025 -0400
+
+    Agrega psycopg2-binary para soporte PostgreSQL en producción
+
+[33mcommit 8773d06c2ad00604dd6cf1154b82d9e39a5f3e6a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 17:29:02 2025 -0400
+
+    Cambios de en el guardado, activacion de base de dato
+
+[33mcommit f10afed5d72ac4864ef3a3b886f03252bc92448e[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 16:27:52 2025 -0400
+
+    Cambios de mensaje
+
+[33mcommit e979e9c4f030933e0a85df282a1d4639457310dd[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 16:00:47 2025 -0400
+
+    No se estaba registrando la firma desde el cel
+
+[33mcommit 4d80519eeba4e7a3d46fa9755f986c6b976d89dc[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 15:14:15 2025 -0400
+
+    Mismo Admin
+
+[33mcommit 9b0038fde34249def13102a3b170341ba39fe04a[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 14:28:32 2025 -0400
+
+    Mismo caso del Admin
+
+[33mcommit 7e53ab13206f32ebd9bf448c802d5148b3dad8ef[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 13:59:12 2025 -0400
+
+    Mismo error del Id en el Admin
+
+[33mcommit 2c796452a472a2a8ea319875ce76a10d63196b48[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 13:32:27 2025 -0400
+
+    No se estaba Editanto el Id en el Admin
+
+[33mcommit 75e37152c9b528dd4821fdb75bb26277027e6525[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 12:10:00 2025 -0400
+
+    Agregar whitenoise a requirements.txt
+
+[33mcommit 0aee393767901d61d7e564a52495f0b9065f6f39[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 11:52:30 2025 -0400
+
+    Configuración estáticos y ajustes
+
+[33mcommit a205e02dc16c0c523529913cbe5962701f3e423f[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 11:25:54 2025 -0400
+
+    Agregar vista de salud /healthz para Render
+
+[33mcommit b695e3c68bee6ea8071ba02c55e85cb24191c3ac[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 11:10:27 2025 -0400
+
+    Corregir ALLOWED_HOSTS en settings.py
+
+[33mcommit b00f4bac2576be7222fe927383b8e579b8bd36db[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 10:58:57 2025 -0400
+
+    Agregar dominio de Render a ALLOWED_HOSTS
+
+[33mcommit 0a917968404adb42faa6cd4151bf1af8a5426209[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 10:48:09 2025 -0400
+
+    Agregar requirements.txt
+
+[33mcommit ebced9cbf6c14152daf7636a5d20c36c5f0584b1[m
+Author: Luis Gil <luisggil01@gmail.com>
+Date:   Thu May 22 09:30:30 2025 -0400
+
+    Primer commit

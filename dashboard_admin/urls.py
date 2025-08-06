@@ -1,4 +1,5 @@
 from django.urls import path
+from django.shortcuts import redirect
 from . import views
 
 app_name = 'dashboard_admin'
@@ -7,8 +8,8 @@ urlpatterns = [
     path('', views.admin_dashboard_view, name='home'),
     path('logout/', views.logout_view, name='logout'),
 
-    # Redirige al login unificado en lugar del antiguo AdminLoginView
-    path('login/', lambda request: redirect('usuarios:login'), name='login'),
+    # Redirige al login unificado
+    path('login/', views.redirigir_a_login_unificado, name='login'),
 
     path('producciones/', views.produccion_tecnico, name='produccion_tecnico'),
     path('grupos/', views.grupos_view, name='grupos'),
@@ -28,7 +29,5 @@ urlpatterns = [
     path('feriados/eliminar/<int:pk>/',
          views.eliminar_feriado, name='eliminar_feriado'),
 
-    # Asegúrate de no duplicar '/'
     path('index/', views.inicio_admin, name='index'),
-    path('login/', views.redirigir_a_login_unificado, name='login'),
 ]

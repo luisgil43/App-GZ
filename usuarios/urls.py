@@ -19,7 +19,7 @@ urlpatterns = [
          views.resetear_contraseña, name='resetear_contraseña'),
     path('recuperar/enviado/', TemplateView.as_view(
         template_name='usuarios/confirmacion_envio.html'), name='confirmacion_envio'),
-    path('login/', views.login_unificado, name='login'),
+    path('login/', views.login_unificado, name='login_unificado'),
     path('seleccionar-rol/', views.seleccionar_rol, name='seleccionar_rol'),
     path('notificacion/<int:pk>/leer/',
          views.marcar_notificacion_como_leida, name='leer_notificacion'),

@@ -33,14 +33,11 @@ def admin_dashboard_view(request):
     return render(request, 'dashboard_admin/base.html')
 
 
-@login_required(login_url='usuarios:login')
+@login_required(login_url='usuarios:login_unificado')
 def logout_view(request):
     logout(request)
     messages.info(request, "Has cerrado sesión correctamente.")
-    try:
-        return redirect(reverse('login_unificado'))
-    except NoReverseMatch:
-        return redirect(reverse('usuarios:login'))
+    return redirect('usuarios:login_unificado')
 
 
 def inicio_admin(request):
