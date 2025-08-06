@@ -6,9 +6,7 @@
   <title>Iniciar Sesión - ADMINISTRACIÓN GZ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -32,16 +30,26 @@
       text-align: center;
     }
 
-    .login-container img {
-      max-width: 180px;
-      height: auto;
+    /* Logo enmarcado */
+    .logo-box {
+      display: inline-block;
+      padding: 10px;
+      background: #f0f4ff;
+      border: 2px solid #d0d8f0;
+      border-radius: 12px;
       margin-bottom: 1rem;
     }
+    .logo-box img {
+      max-width: 160px;
+      height: auto;
+    }
 
+    /* Texto Plataforma */
     .login-container h2 {
       margin: 0 0 8px 0;
-      font-size: 1.2rem;
-      color: #2a2a2a;
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #1a73e8;
     }
 
     .login-container p.subtexto {
@@ -68,41 +76,38 @@
       transition: opacity 0.5s ease-out;
     }
 
-    .message-box.error {
-      background-color: #fdecea;
-      color: #d93025;
-    }
+    .message-box.error { background-color: #fdecea; color: #d93025; }
+    .message-box.success { background-color: #e6ffed; color: #188038; }
+    .message-box.info { background-color: #e8f0fe; color: #1a73e8; }
 
-    .message-box.success {
-      background-color: #e6ffed;
-      color: #188038;
-    }
+    form { text-align: left; }
+    form p { margin-bottom: 15px; }
+    form label { font-weight: bold; display: block; margin-bottom: 5px; }
 
-    .message-box.info {
-      background-color: #e8f0fe;
-      color: #1a73e8;
-    }
-
-    form {
-      text-align: left;
-    }
-
-    form p {
-      margin-bottom: 15px;
-    }
-
-    form label {
-      font-weight: bold;
-      display: block;
-      margin-bottom: 5px;
-    }
-
-    form input {
+    /* Inputs iguales */
+    form input[type="text"], 
+    form input[type="password"] {
       width: 100%;
       padding: 10px;
       border: 2px solid #ccc;
       border-radius: 8px;
       font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    /* Campo con ojito */
+    .password-wrapper {
+      position: relative;
+    }
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      font-size: 1.3rem;
+      color: #888;
+      user-select: none;
     }
 
     button {
@@ -118,25 +123,11 @@
       transition: background-color 0.3s;
       margin-top: 5px;
     }
+    button:hover { background-color: #155a96; }
 
-    button:hover {
-      background-color: #155a96;
-    }
-
-    .forgot-password {
-      margin-top: 15px;
-      text-align: center;
-    }
-
-    .forgot-password a {
-      color: #1e73be;
-      text-decoration: none;
-      font-size: 0.9rem;
-    }
-
-    .forgot-password a:hover {
-      text-decoration: underline;
-    }
+    .forgot-password { margin-top: 15px; text-align: center; }
+    .forgot-password a { color: #1e73be; text-decoration: none; font-size: 0.9rem; }
+    .forgot-password a:hover { text-decoration: underline; }
 
     .footer {
       text-align: center;
@@ -144,33 +135,24 @@
       color: #999;
       margin-top: 2px;
     }
-
-    .footer img {
-      height: 60px;
-      vertical-align: middle;
-      margin-left: 0px;
-    }
+    .footer img { height: 60px; vertical-align: middle; }
 
     @media (max-width: 500px) {
-      .login-container {
-        padding: 1.5rem;
-        margin: 0 1rem;
-      }
-
-      .login-container img {
-        width: 120px;
-      }
+      .login-container { padding: 1.5rem; margin: 0 1rem; }
+      .logo-box img { width: 120px; }
     }
   </style>
 </head>
 <body>
 
   <div class="login-container">
-    <!-- Logo -->
-    <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+    <!-- Logo enmarcado -->
+    <div class="logo-box">
+      <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+    </div>
 
     <!-- Título -->
-    <h2>Plataforma de MILTEL</h2>
+    <h2>PLATAFORMA DE MILTEL</h2>
     <p class="subtexto">Potenciada por <strong>Planix</strong></p>
 
     <!-- Mensajes del sistema -->
@@ -200,7 +182,10 @@
       </p>
       <p>
         <label for="{{ form.password.id_for_label }}">Contraseña:</label>
-        {{ form.password }}
+        <div class="password-wrapper">
+          {{ form.password }}
+          <span class="toggle-password" onclick="togglePassword()">👁️</span>
+        </div>
       </p>
       <button type="submit">Iniciar sesión</button>
     </form>
@@ -217,14 +202,26 @@
     <img src="{% static 'images/planixl.png' %}" alt="Planix">
   </div>
 
-  <!-- JS para ocultar mensajes -->
+  <!-- JS para ocultar mensajes y toggle -->
   <script>
+    function togglePassword() {
+      const passwordField = document.querySelector('input[name="{{ form.password.name }}"]');
+      const toggleIcon = document.querySelector('.toggle-password');
+      if (passwordField.type === "password") {
+        passwordField.type = "text";
+        toggleIcon.textContent = "🙈";
+      } else {
+        passwordField.type = "password";
+        toggleIcon.textContent = "👁️";
+      }
+    }
+
     setTimeout(() => {
       document.querySelectorAll('.message-box').forEach(el => {
         el.style.opacity = '0';
         setTimeout(() => el.remove(), 500);
       });
-    }, 4000); // 4 segundos
+    }, 4000);
   </script>
 
 </body>
