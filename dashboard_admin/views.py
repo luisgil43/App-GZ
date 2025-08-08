@@ -101,42 +101,49 @@ def grupos_view(request):
 def editar_usuario_view(request, user_id):
     usuario = get_object_or_404(User, id=user_id)
     grupos = Group.objects.all()
+    roles_disponibles = Rol.objects.all()
 
     if request.method == 'POST':
-        usuario.username = request.POST['username']
-        usuario.first_name = request.POST['first_name']
-        usuario.last_name = request.POST['last_name']
-        usuario.email = request.POST['email']
+        # --- Datos básicos ---
+        usuario.username = request.POST.get('username', usuario.username)
+        usuario.first_name = request.POST.get('first_name', usuario.first_name)
+        usuario.last_name = request.POST.get('last_name', usuario.last_name)
+        usuario.email = request.POST.get('email', usuario.email)
         usuario.is_active = 'is_active' in request.POST
         usuario.is_staff = 'is_staff' in request.POST
         usuario.is_superuser = 'is_superuser' in request.POST
-        usuario.identidad = request.POST['identidad']
+        usuario.identidad = request.POST.get('identidad', usuario.identidad)
 
+        # --- Grupos ---
         grupo_ids = request.POST.getlist('groups')
         usuario.groups.set(grupo_ids)
 
-        # ✅ Roles múltiples
+        # --- Roles múltiples ---
         roles_ids = request.POST.getlist('roles')
         usuario.roles.set(roles_ids)
 
-        password1 = request.POST.get('password1')
-        password2 = request.POST.get('password2')
-        if password1 and password1 == password2:
+        # --- Contraseña (opcional) ---
+        password1 = (request.POST.get('password1') or '').strip()
+        password2 = (request.POST.get('password2') or '').strip()
+        if password1 and password2:
+            if password1 != password2:
+                messages.error(request, 'Las contraseñas no coinciden.')
+                return render(request, 'dashboard_admin/editar_usuario.html', {
+                    'usuario': usuario,
+                    'grupos': grupos,
+                    'roles': roles_disponibles,
+                    'roles_seleccionados': set(map(int, roles_ids)),
+                    'grupo_ids_post': set(map(int, grupo_ids)),
+                })
             usuario.set_password(password1)
-        elif password1 != password2:
-            messages.error(request, 'Las contraseñas no coinciden.')
-            return redirect(request.path)
 
         usuario.save()
         messages.success(request, "Usuario actualizado exitosamente.")
         return redirect('dashboard_admin:listar_usuarios')
 
-    # 👇 Cargamos roles para editar
-    roles_disponibles = Rol.objects.all()
-    roles_seleccionados = usuario.roles.values_list('id', flat=True)
-    roles_seleccionados = [str(rid) for rid in roles_seleccionados]
-
-    grupo_ids_post = [str(g.id) for g in usuario.groups.all()]
+    # --- GET: precargar datos actuales ---
+    roles_seleccionados = set(usuario.roles.values_list('id', flat=True))
+    grupo_ids_post = set(usuario.groups.values_list('id', flat=True))
 
     return render(request, 'dashboard_admin/editar_usuario.html', {
         'usuario': usuario,
