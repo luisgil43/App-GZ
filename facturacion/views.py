@@ -137,72 +137,91 @@ def importar_orden_compra(request):
         ruta_absoluta = default_storage.path(ruta_temporal)
 
         datos_extraidos = []
-        numero_oc = 'NO_ENCONTRADO'
+
+        import re
+        import pdfplumber
 
         with pdfplumber.open(ruta_absoluta) as pdf:
-            lineas_completas = []
+            # Procesar página por página para que cada una tenga su OC correcta
             for pagina in pdf.pages:
-                texto = pagina.extract_text()
-                if not texto:
-                    continue
+                texto = pagina.extract_text() or ""
+                lineas = [l for l in texto.split("\n") if l.strip()]
 
-                if pagina.page_number == 1:
-                    lineas = texto.split('\n')
-                    for idx, linea in enumerate(lineas):
-                        if 'ORDEN DE COMPRA' in linea.upper():
-                            if idx + 1 < len(lineas):
-                                posible_oc = re.search(
-                                    r'\d{10}', lineas[idx + 1])
-                                if posible_oc:
-                                    numero_oc = posible_oc.group()
+                # --- 1) Detectar la OC de ESTA página ---
+                numero_oc = None
+                # Buscar "ORDEN DE COMPRA" y luego el número en las 1-4 líneas siguientes
+                for idx, linea in enumerate(lineas[:40]):
+                    if 'ORDEN DE COMPRA' in linea.upper():
+                        for k in range(1, 5):
+                            if idx + k < len(lineas):
+                                m = re.search(r'\b(\d{10})\b', lineas[idx + k])
+                                if m:
+                                    numero_oc = m.group(1)
                                     break
+                        if numero_oc:
+                            break
+                # Fallback: si no se encontró con la etiqueta, busca el primer 10 dígitos en la cabecera
+                if not numero_oc:
+                    for cab in lineas[:60]:
+                        m = re.search(r'\b(\d{10})\b', cab)
+                        if m:
+                            numero_oc = m.group(1)
+                            break
+                # Último fallback: marca si no se logró encontrar
+                if not numero_oc:
+                    numero_oc = 'NO_ENCONTRADO'
 
-                lineas_completas += texto.split('\n')
+                # --- 2) Extraer filas de detalle de ESTA página ---
+                i = 0
+                while i < len(lineas):
+                    linea = lineas[i]
 
-        i = 0
-        while i < len(lineas_completas):
-            linea = lineas_completas[i]
-            if re.match(r'^\d+\s+\d+\s+SER', linea):
-                partes = re.split(r'\s{2,}', linea.strip())
-                if len(partes) < 7:
-                    partes = linea.split()
+                    # Coincide con: "POS  CANT  UM  MATERIAL  DESCRIP...  FECHA  P_UNIT  MONTO"
+                    # Ej: "10 1 SER 3013768 Mantención Correctiva... 10.07.2025  16,72  16,72"
+                    if re.match(r'^\d+\s+\d+\s+SER', linea):
+                        partes = re.split(r'\s{2,}', linea.strip())
+                        if len(partes) < 7:
+                            partes = linea.split()
 
-                if len(partes) >= 8:
-                    pos = partes[0]
-                    cantidad = partes[1]
-                    unidad = partes[2]
-                    material = partes[3]
-                    descripcion = ' '.join(partes[4:-3])
-                    fecha_entrega = partes[-3]
-                    precio_unitario = partes[-2].replace(',', '.')
-                    monto = partes[-1].replace(',', '.')
+                        if len(partes) >= 8:
+                            pos = partes[0]
+                            cantidad = partes[1]
+                            unidad = partes[2]
+                            material = partes[3]
+                            descripcion = ' '.join(partes[4:-3])
+                            fecha_entrega = partes[-3]
+                            precio_unitario = partes[-2].replace(',', '.')
+                            monto = partes[-1].replace(',', '.')
 
-                    id_new = None
-                    if i + 1 < len(lineas_completas):
-                        match_id = re.search(
-                            r'(CL-\d{2}-[A-Z]{2}-\d{5}-\d{2})',
-                            lineas_completas[i + 1]
-                        )
-                        if match_id:
-                            id_new = match_id.group(1)
+                            # El ID NEW suele venir en la línea siguiente
+                            id_new = None
+                            if i + 1 < len(lineas):
+                                m2 = re.search(
+                                    r'(CL-\d{2}-[A-Z]{2}-\d{5}-\d{2})',
+                                    lineas[i + 1]
+                                )
+                                if m2:
+                                    id_new = m2.group(1)
 
-                    datos_extraidos.append({
-                        'orden_compra': numero_oc,
-                        'pos': pos,
-                        'cantidad': cantidad,
-                        'unidad_medida': unidad,
-                        'material_servicio': material,
-                        'descripcion_sitio': descripcion,
-                        'fecha_entrega': fecha_entrega,
-                        'precio_unitario': precio_unitario,
-                        'monto': monto,
-                        'id_new': id_new,
-                    })
+                            datos_extraidos.append({
+                                'orden_compra': numero_oc,
+                                'pos': pos,
+                                'cantidad': cantidad,
+                                'unidad_medida': unidad,
+                                'material_servicio': material,
+                                'descripcion_sitio': descripcion,
+                                'fecha_entrega': fecha_entrega,
+                                'precio_unitario': precio_unitario,
+                                'monto': monto,
+                                'id_new': id_new,
+                            })
+                            i += 1  # saltar la línea del ID NEW
                     i += 1
-            i += 1
 
+        # Limpieza del temporal
         default_storage.delete(ruta_temporal)
 
+        # Guardar en sesión para el preview
         request.session['ordenes_previsualizadas'] = datos_extraidos
 
         # Verificación: detectar ID NEW sin servicio registrado
@@ -212,9 +231,7 @@ def importar_orden_compra(request):
             if not id_new:
                 ids_no_encontrados.add("SIN_ID")
                 continue
-
-            existe = ServicioCotizado.objects.filter(id_new=id_new).exists()
-            if not existe:
+            if not ServicioCotizado.objects.filter(id_new=id_new).exists():
                 ids_no_encontrados.add(id_new)
 
         return render(request, 'facturacion/preview_oc.html', {
@@ -223,7 +240,7 @@ def importar_orden_compra(request):
             'ids_no_encontrados': ids_no_encontrados,
         })
 
-    # 🔁 Este return es fundamental para evitar el ValueError en peticiones GET
+    # GET
     return render(request, 'facturacion/importar_orden_compra.html')
 
 
