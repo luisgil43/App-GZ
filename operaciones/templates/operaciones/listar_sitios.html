@@ -88,6 +88,7 @@
         <th class="p-2 border">Guardias</th>
         <th class="p-2 border">Nivel</th>
         <th class="p-2 border">Descripción</th>
+<th class="p-2 border">Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -115,6 +116,20 @@
         <td class="p-2 border">{{ sitio.guardias }}</td>
         <td class="p-2 border">{{ sitio.nivel }}</td>
         <td class="p-2 border">{{ sitio.descripcion }}</td>
+    <td class="p-2 border">
+      {% with next_param="?next="|add:request.get_full_path %}
+        <a href="{% url 'operaciones:editar_sitio' sitio.pk %}{{ next_param }}"
+           class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs">
+          ✏️ Editar
+        </a>
+      {% endwith %}
+      {% with next_param="?next="|add:request.get_full_path %}
+        <a href="{% url 'operaciones:eliminar_sitio' sitio.pk %}{{ next_param }}"
+           class="inline-block bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-full text-xs ml-1">
+          🗑️ Eliminar
+        </a>
+      {% endwith %}
+    </td>
       </tr>
       {% empty %}
       <tr>

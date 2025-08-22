@@ -65,6 +65,8 @@ urlpatterns = [
          name='exportar_rendiciones_pm'),
     path('mis-rendiciones/exportar/', views.exportar_mis_rendiciones,
          name='exportar_mis_rendiciones'),
+    path("sitios/<int:pk>/editar/", views.editar_sitio, name="editar_sitio"),
+    path("sitios/<int:pk>/eliminar/", views.eliminar_sitio, name="eliminar_sitio"),
 
 
 
