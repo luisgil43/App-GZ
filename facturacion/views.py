@@ -1,3 +1,4 @@
+import unicodedata
 import xlwt
 from django.utils.timezone import is_aware
 from django.db.models import Q
@@ -132,24 +133,21 @@ def importar_orden_compra(request):
         archivo = request.FILES['archivo_pdf']
         nombre_archivo = archivo.name
 
+        # Guardar temporalmente
         ruta_temporal = default_storage.save(
             f"temp_oc/{nombre_archivo}", ContentFile(archivo.read()))
         ruta_absoluta = default_storage.path(ruta_temporal)
 
         datos_extraidos = []
 
-        import re
-        import pdfplumber
-
         with pdfplumber.open(ruta_absoluta) as pdf:
-            # Procesar página por página para que cada una tenga su OC correcta
+            # Procesar página por página
             for pagina in pdf.pages:
                 texto = pagina.extract_text() or ""
                 lineas = [l for l in texto.split("\n") if l.strip()]
 
-                # --- 1) Detectar la OC de ESTA página ---
+                # --- 1) Detectar número de OC en esta página ---
                 numero_oc = None
-                # Buscar "ORDEN DE COMPRA" y luego el número en las 1-4 líneas siguientes
                 for idx, linea in enumerate(lineas[:40]):
                     if 'ORDEN DE COMPRA' in linea.upper():
                         for k in range(1, 5):
@@ -160,24 +158,20 @@ def importar_orden_compra(request):
                                     break
                         if numero_oc:
                             break
-                # Fallback: si no se encontró con la etiqueta, busca el primer 10 dígitos en la cabecera
                 if not numero_oc:
                     for cab in lineas[:60]:
                         m = re.search(r'\b(\d{10})\b', cab)
                         if m:
                             numero_oc = m.group(1)
                             break
-                # Último fallback: marca si no se logró encontrar
                 if not numero_oc:
                     numero_oc = 'NO_ENCONTRADO'
 
-                # --- 2) Extraer filas de detalle de ESTA página ---
+                # --- 2) Extraer filas de detalle ---
                 i = 0
                 while i < len(lineas):
                     linea = lineas[i]
 
-                    # Coincide con: "POS  CANT  UM  MATERIAL  DESCRIP...  FECHA  P_UNIT  MONTO"
-                    # Ej: "10 1 SER 3013768 Mantención Correctiva... 10.07.2025  16,72  16,72"
                     if re.match(r'^\d+\s+\d+\s+SER', linea):
                         partes = re.split(r'\s{2,}', linea.strip())
                         if len(partes) < 7:
@@ -193,13 +187,16 @@ def importar_orden_compra(request):
                             precio_unitario = partes[-2].replace(',', '.')
                             monto = partes[-1].replace(',', '.')
 
-                            # El ID NEW suele venir en la línea siguiente
+                            # Buscar ID NEW en la siguiente línea
                             id_new = None
                             if i + 1 < len(lineas):
-                                m2 = re.search(
-                                    r'(CL-\d{2}-[A-Z]{2}-\d{5}-\d{2})',
-                                    lineas[i + 1]
+                                siguiente = unicodedata.normalize(
+                                    "NFKC", lineas[i + 1]
                                 )
+                                # regex que acepta Ñ y diferentes guiones
+                                pat = r'(CL[--–—]\d{2}[--–—][A-ZÑ]{2}[--–—]\d{5}[--–—]\d{2})'
+                                m2 = re.search(
+                                    pat, siguiente, flags=re.IGNORECASE)
                                 if m2:
                                     id_new = m2.group(1)
 
@@ -215,16 +212,16 @@ def importar_orden_compra(request):
                                 'monto': monto,
                                 'id_new': id_new,
                             })
-                            i += 1  # saltar la línea del ID NEW
+                            i += 1
                     i += 1
 
-        # Limpieza del temporal
+        # Limpiar archivo temporal
         default_storage.delete(ruta_temporal)
 
-        # Guardar en sesión para el preview
+        # Guardar en sesión para preview
         request.session['ordenes_previsualizadas'] = datos_extraidos
 
-        # Verificación: detectar ID NEW sin servicio registrado
+        # Verificar IDs no encontrados
         ids_no_encontrados = set()
         for fila in datos_extraidos:
             id_new = fila.get('id_new')
@@ -343,10 +340,11 @@ def guardar_ordenes_compra(request):
                 "<br>".join(set(ordenes_sin_servicio)) +
                 "<br><br>Comunícate con el PM para que cree el servicio y vuelve a importar la OC."
             )
+       # ⬇️ Redirige al LISTADO de OCs
+        return redirect('facturacion:listar_oc_facturacion')
 
-        return redirect('facturacion:importar_orden_compra')
-
-    return redirect('facturacion:listar_ordenes_compra')
+    # Si no es POST, también al listado
+    return redirect('facturacion:listar_oc_facturacion')
 
 
 @login_required
