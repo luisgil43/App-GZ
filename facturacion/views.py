@@ -1,3 +1,4 @@
+from uuid import uuid4
 import unicodedata
 import xlwt
 from django.utils.timezone import is_aware
@@ -129,111 +130,136 @@ def listar_ordenes_compra(request):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def importar_orden_compra(request):
-    if request.method == 'POST' and request.FILES.get('archivo_pdf'):
-        archivo = request.FILES['archivo_pdf']
-        nombre_archivo = archivo.name
-
-        # Guardar temporalmente
-        ruta_temporal = default_storage.save(
-            f"temp_oc/{nombre_archivo}", ContentFile(archivo.read()))
-        ruta_absoluta = default_storage.path(ruta_temporal)
+    if request.method == 'POST':
+        archivos = request.FILES.getlist('archivo_pdf')
+        if not archivos:
+            messages.error(request, "Selecciona al menos un archivo PDF.")
+            return redirect('facturacion:importar_orden_compra')
 
         datos_extraidos = []
+        nombres_archivos = []
 
-        with pdfplumber.open(ruta_absoluta) as pdf:
-            # Procesar página por página
-            for pagina in pdf.pages:
-                texto = pagina.extract_text() or ""
-                lineas = [l for l in texto.split("\n") if l.strip()]
+        # --- helper local para normalizar guiones/Ñ en una línea ---
+        def _norm_line(s: str) -> str:
+            s = unicodedata.normalize("NFKC", s or "")
+            # Homogeneiza guiones en-dash/em-dash a guion normal
+            s = s.replace("–", "-").replace("—", "-")
+            return s
 
-                # --- 1) Detectar número de OC en esta página ---
-                numero_oc = None
-                for idx, linea in enumerate(lineas[:40]):
-                    if 'ORDEN DE COMPRA' in linea.upper():
-                        for k in range(1, 5):
-                            if idx + k < len(lineas):
-                                m = re.search(r'\b(\d{10})\b', lineas[idx + k])
-                                if m:
-                                    numero_oc = m.group(1)
-                                    break
-                        if numero_oc:
-                            break
-                if not numero_oc:
-                    for cab in lineas[:60]:
-                        m = re.search(r'\b(\d{10})\b', cab)
-                        if m:
-                            numero_oc = m.group(1)
-                            break
-                if not numero_oc:
-                    numero_oc = 'NO_ENCONTRADO'
+        # --- helper local: extraer de 1 PDF (devuelve lista de dicts) ---
+        def _extraer_de_pdf(ruta_absoluta: str) -> list[dict]:
+            filas = []
+            with pdfplumber.open(ruta_absoluta) as pdf:
+                for pagina in pdf.pages:
+                    texto = pagina.extract_text() or ""
+                    # normaliza por línea y descarta vacías
+                    lineas = [_norm_line(l).strip()
+                              for l in texto.split("\n") if l.strip()]
 
-                # --- 2) Extraer filas de detalle ---
-                i = 0
-                while i < len(lineas):
-                    linea = lineas[i]
+                    # 1) Detectar número de OC en esta página
+                    numero_oc = None
+                    for idx, linea in enumerate(lineas[:40]):
+                        if 'ORDEN DE COMPRA' in linea.upper():
+                            for k in range(1, 5):
+                                if idx + k < len(lineas):
+                                    m = re.search(
+                                        r'\b(\d{10})\b', lineas[idx + k])
+                                    if m:
+                                        numero_oc = m.group(1)
+                                        break
+                            if numero_oc:
+                                break
+                    if not numero_oc:
+                        # Fallback: primer 10 dígitos en la “cabecera”
+                        for cab in lineas[:60]:
+                            m = re.search(r'\b(\d{10})\b', cab)
+                            if m:
+                                numero_oc = m.group(1)
+                                break
+                    if not numero_oc:
+                        numero_oc = 'NO_ENCONTRADO'
 
-                    if re.match(r'^\d+\s+\d+\s+SER', linea):
-                        partes = re.split(r'\s{2,}', linea.strip())
-                        if len(partes) < 7:
-                            partes = linea.split()
+                    # 2) Extraer filas de detalle (misma lógica que ya tenías)
+                    i = 0
+                    while i < len(lineas):
+                        linea = lineas[i]
+                        if re.match(r'^\d+\s+\d+\s+SER', linea):
+                            partes = re.split(r'\s{2,}', linea.strip())
+                            if len(partes) < 7:
+                                partes = linea.split()
 
-                        if len(partes) >= 8:
-                            pos = partes[0]
-                            cantidad = partes[1]
-                            unidad = partes[2]
-                            material = partes[3]
-                            descripcion = ' '.join(partes[4:-3])
-                            fecha_entrega = partes[-3]
-                            precio_unitario = partes[-2].replace(',', '.')
-                            monto = partes[-1].replace(',', '.')
+                            if len(partes) >= 8:
+                                pos = partes[0]
+                                cantidad = partes[1]
+                                unidad = partes[2]
+                                material = partes[3]
+                                descripcion = ' '.join(partes[4:-3])
+                                fecha_entrega = partes[-3]
+                                precio_unitario = partes[-2].replace(',', '.')
+                                monto = partes[-1].replace(',', '.')
 
-                            # Buscar ID NEW en la siguiente línea
-                            id_new = None
-                            if i + 1 < len(lineas):
-                                siguiente = unicodedata.normalize(
-                                    "NFKC", lineas[i + 1]
-                                )
-                                # regex que acepta Ñ y diferentes guiones
-                                pat = r'(CL[--–—]\d{2}[--–—][A-ZÑ]{2}[--–—]\d{5}[--–—]\d{2})'
-                                m2 = re.search(
-                                    pat, siguiente, flags=re.IGNORECASE)
-                                if m2:
-                                    id_new = m2.group(1)
+                                # ID NEW en la siguiente línea (acepta Ñ/ñ y guiones varios)
+                                id_new = None
+                                if i + 1 < len(lineas):
+                                    siguiente = lineas[i + 1]
+                                    pat = r'(CL-\d{2}-[A-ZÑ]{2}-\d{5}-\d{2})'
+                                    m2 = re.search(
+                                        pat, siguiente, flags=re.IGNORECASE)
+                                    if m2:
+                                        # normaliza mayúsculas y guiones a tu formato
+                                        id_new = m2.group(1).upper()
 
-                            datos_extraidos.append({
-                                'orden_compra': numero_oc,
-                                'pos': pos,
-                                'cantidad': cantidad,
-                                'unidad_medida': unidad,
-                                'material_servicio': material,
-                                'descripcion_sitio': descripcion,
-                                'fecha_entrega': fecha_entrega,
-                                'precio_unitario': precio_unitario,
-                                'monto': monto,
-                                'id_new': id_new,
-                            })
-                            i += 1
-                    i += 1
+                                filas.append({
+                                    'orden_compra': numero_oc,
+                                    'pos': pos,
+                                    'cantidad': cantidad,
+                                    'unidad_medida': unidad,
+                                    'material_servicio': material,
+                                    'descripcion_sitio': descripcion,
+                                    'fecha_entrega': fecha_entrega,
+                                    'precio_unitario': precio_unitario,
+                                    'monto': monto,
+                                    'id_new': id_new,
+                                })
+                                i += 1
+                        i += 1
+            return filas
 
-        # Limpiar archivo temporal
-        default_storage.delete(ruta_temporal)
+        # --- procesar todos los PDFs seleccionados ---
+        for archivo in archivos:
+            nombre_archivo = archivo.name
+            nombres_archivos.append(nombre_archivo)
 
-        # Guardar en sesión para preview
+            # guarda cada PDF con un nombre único
+            ruta_temporal = default_storage.save(
+                f"temp_oc/{uuid4().hex}_{nombre_archivo}",
+                ContentFile(archivo.read())
+            )
+            ruta_absoluta = default_storage.path(ruta_temporal)
+
+            try:
+                datos_extraidos.extend(_extraer_de_pdf(ruta_absoluta))
+            finally:
+                # limpieza del temporal
+                default_storage.delete(ruta_temporal)
+
+        # Guardar todo en sesión para el preview
         request.session['ordenes_previsualizadas'] = datos_extraidos
 
-        # Verificar IDs no encontrados
+        # Verificar IDs NEW sin servicio (opcional: muestra en preview)
         ids_no_encontrados = set()
         for fila in datos_extraidos:
-            id_new = fila.get('id_new')
-            if not id_new:
+            idn = (fila.get('id_new') or "").strip().upper()
+            if not idn:
                 ids_no_encontrados.add("SIN_ID")
                 continue
-            if not ServicioCotizado.objects.filter(id_new=id_new).exists():
-                ids_no_encontrados.add(id_new)
+            # Nota: si en DB guardas con guiones normales, esto ya está normalizado
+            if not ServicioCotizado.objects.filter(id_new=idn).exists():  # pylint: disable=no-member
+                ids_no_encontrados.add(idn)
 
         return render(request, 'facturacion/preview_oc.html', {
             'datos': datos_extraidos,
-            'nombre_archivo': nombre_archivo,
+            'nombre_archivo': ", ".join(nombres_archivos),  # muestra todos
             'ids_no_encontrados': ids_no_encontrados,
         })
 
