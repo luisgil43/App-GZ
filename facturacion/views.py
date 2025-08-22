@@ -335,14 +335,27 @@ def guardar_ordenes_compra(request):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def editar_orden_compra(request, pk):
-    orden = get_object_or_404(OrdenCompraFacturacion, pk=pk)
+    """
+    Edita una orden de compra.
+    Si no existe, la crea para el Servicio (DU) dado por pk.
+    """
+    # Buscar si es pk de OrdenCompra o de Servicio
+    try:
+        orden = OrdenCompraFacturacion.objects.get(pk=pk)
+    except OrdenCompraFacturacion.DoesNotExist:
+        servicio = get_object_or_404(ServicioCotizado, pk=pk)
+        orden = OrdenCompraFacturacion.objects.create(du=servicio)
+
     if request.method == 'POST':
         form = OrdenCompraFacturacionForm(request.POST, instance=orden)
         if form.is_valid():
             form.save()
+            messages.success(
+                request, "Orden de compra guardada correctamente.")
             return redirect('facturacion:listar_oc_facturacion')
     else:
         form = OrdenCompraFacturacionForm(instance=orden)
+
     return render(request, 'facturacion/editar_orden_compra.html', {'form': form})
 
 
