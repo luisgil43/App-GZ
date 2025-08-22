@@ -1,0 +1,42 @@
+{# templates/operaciones/editar_sitio.html #}
+{% extends "dashboard_admin/base.html" %}
+{% load widget_tweaks %}
+{% block title %}Editar Sitio Móvil{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold text-gray-800">✏️ Editar Sitio — {{ sitio.id_sites }} / {{ sitio.nombre }}</h1>
+
+    <div class="flex gap-2">
+      <a href="{{ next|default:'{% url "operaciones:listar_sitios" %}' }}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-full text-sm">⬅️ Volver</a>
+    </div>
+  </div>
+
+  <form method="post" class="space-y-5">
+    {% csrf_token %}
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {% for field in form %}
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ field.label }}</label>
+          {% render_field field class+="w-full" %}
+          {% if field.errors %}
+            <p class="text-red-600 text-xs mt-1">{{ field.errors|striptags }}</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="flex justify-end gap-2">
+      <a href="{{ next|default:'{% url "operaciones:listar_sitios" %}' }}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-full text-sm">Cancelar</a>
+      <button type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-full text-sm">
+        Guardar cambios
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

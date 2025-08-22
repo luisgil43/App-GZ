@@ -1,6 +1,7 @@
 # servicios/forms.py
 
 
+from .models import SitioMovil
 from django.core.exceptions import ValidationError
 import requests
 import re
@@ -227,3 +228,39 @@ def verificar_rut_sii(rut):
         return "RUT no válido" not in response.text
     except:
         return True
+
+
+class SitioMovilForm(forms.ModelForm):
+    class Meta:
+        model = SitioMovil
+        fields = [
+            "id_sites", "id_claro", "id_sites_new", "region", "nombre", "direccion",
+            "latitud", "longitud", "comuna", "tipo_construccion", "altura",
+            "candado_bt", "condiciones_acceso", "claves", "llaves", "cantidad_llaves",
+            "observaciones_generales", "zonas_conflictivas", "alarmas", "guardias",
+            "nivel", "descripcion",
+        ]
+        widgets = {
+            "direccion": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "condiciones_acceso": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
+            "observaciones_generales": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
+            "descripcion": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
+            "zonas_conflictivas": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "claves": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "llaves": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "tipo_construccion": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "region": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "nombre": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "comuna": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "id_sites": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "id_claro": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "id_sites_new": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "candado_bt": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "alarmas": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "guardias": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "nivel": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "altura": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
+            "cantidad_llaves": forms.NumberInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
+            "latitud": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
+            "longitud": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
+        }

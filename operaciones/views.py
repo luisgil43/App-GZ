@@ -1,4 +1,5 @@
 # operaciones/views.py
+from .forms import SitioMovilForm
 from django.utils.timezone import is_aware
 from .forms import validar_rut_chileno, verificar_rut_sii
 from django.db.models import Sum
@@ -96,7 +97,7 @@ def buscar_mi_sitio(request):
 def listar_sitios(request):
     id_claro = request.GET.get("id_claro", "")
     id_new = request.GET.get("id_new", "")
-    cantidad = request.GET.get("cantidad", "10")  # Cantidad por página
+    cantidad = request.GET.get("cantidad", "10")
     page_number = request.GET.get("page", 1)
 
     sitios = SitioMovil.objects.all()
@@ -106,7 +107,6 @@ def listar_sitios(request):
     if id_new:
         sitios = sitios.filter(id_sites_new__icontains=id_new)
 
-    # Si selecciona "todos", mostramos todo
     if cantidad == "todos":
         paginator = Paginator(sitios, sitios.count() or 1)
     else:
@@ -121,6 +121,49 @@ def listar_sitios(request):
         'cantidad': cantidad,
         'pagina': pagina
     })
+
+
+@login_required
+@rol_requerido('pm', 'admin', 'facturacion', 'supervisor')
+def editar_sitio(request, pk: int):
+    """
+    Edita un Sitio Móvil. Soporta `next` en query para volver a la lista con filtros.
+    """
+    sitio = get_object_or_404(SitioMovil, pk=pk)
+    # ej: ?next=/operaciones/sitios/?page=2&id_new=ABC
+    next_url = request.GET.get("next")
+
+    if request.method == "POST":
+        form = SitioMovilForm(request.POST, instance=sitio)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Sitio actualizado correctamente.")
+            return redirect(next_url or reverse('operaciones:listar_sitios'))
+        else:
+            messages.error(request, "Revisa los campos del formulario.")
+    else:
+        form = SitioMovilForm(instance=sitio)
+
+    return render(request, "operaciones/editar_sitio.html", {
+        "form": form,
+        "sitio": sitio,
+        "next": next_url,
+    })
+
+
+# (Opcional) Eliminar
+
+
+@login_required
+@rol_requerido('admin')
+def eliminar_sitio(request, pk: int):
+    sitio = get_object_or_404(SitioMovil, pk=pk)
+    next_url = request.GET.get("next")
+    if request.method == "POST":
+        sitio.delete()
+        messages.success(request, "Sitio eliminado correctamente.")
+        return redirect(next_url or reverse('operaciones:listar_sitios'))
+    return render(request, "operaciones/eliminar_sitio.html", {"sitio": sitio, "next": next_url})
 
 
 # operaciones/views.py
