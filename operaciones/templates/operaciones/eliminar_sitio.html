@@ -1,0 +1,15 @@
+{# templates/operaciones/eliminar_sitio.html #}
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Eliminar Sitio{% endblock %}
+{% block dashboard_content %}
+<div class="max-w-xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <h1 class="text-2xl font-bold text-gray-800 mb-4">🗑️ Eliminar Sitio</h1>
+  <p class="mb-4">¿Seguro que deseas eliminar el sitio <b>{{ sitio.id_sites }} — {{ sitio.nombre }}</b>? Esta acción no se puede deshacer.</p>
+  <form method="post" class="flex gap-2">
+    {% csrf_token %}
+    <a href="{{ next|default:'{% url "operaciones:listar_sitios" %}' }}"
+       class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-full text-sm">Cancelar</a>
+    <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full text-sm">Eliminar</button>
+  </form>
+</div>
+{% endblock %}
