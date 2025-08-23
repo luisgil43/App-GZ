@@ -222,18 +222,23 @@
         <td class="p-2">{{ factura.fecha_factoring|date:"Y-m-d"|default:"—" }}</td>
 
         <!-- Status y acciones -->
-        <td class="p-2">
-          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-            {% if factura.get_status_factura == 'Pendiente por Conformidad' %}bg-yellow-100 text-yellow-800
-            {% elif factura.get_status_factura == 'Pendiente por Facturación' %}bg-orange-100 text-orange-800
-            {% elif factura.get_status_factura == 'Facturado' %}bg-blue-100 text-blue-800
-            {% elif factura.get_status_factura == 'En proceso de Factoring' %}bg-purple-100 text-purple-800
-            {% elif factura.get_status_factura == 'Cobrado' %}bg-green-100 text-green-800
-            {% else %}bg-gray-100 text-gray-800{% endif %}">
-            {{ factura.get_status_factura }}
-          </span>
-        </td>
-        <td class="p-2">
+<td class="p-2">
+  {% if factura.orden_compra.du.estado in 'aprobado_supervisor,informe_subido,finalizado' %}
+    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+      {% if factura.get_status_factura == 'Pendiente por Conformidad' %}bg-yellow-100 text-yellow-800
+      {% elif factura.get_status_factura == 'Pendiente por Facturación' %}bg-orange-100 text-orange-800
+      {% elif factura.get_status_factura == 'Facturado' %}bg-blue-100 text-blue-800
+      {% elif factura.get_status_factura == 'En proceso de Factoring' %}bg-purple-100 text-purple-800
+      {% elif factura.get_status_factura == 'Cobrado' %}bg-green-100 text-green-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
+      {{ factura.get_status_factura }}
+    </span>
+  {% else %}
+    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+      En proceso
+    </span>
+  {% endif %}
+</td>        <td class="p-2">
           {% if request.user.is_superuser or request.user.rol == 'admin' %}
             <a href="{% url 'facturacion:editar_factura' factura.pk %}" class="text-blue-600 hover:underline text-xs">✏️</a>
             <a href="{% url 'facturacion:eliminar_factura' factura.pk %}" class="text-red-600 hover:underline text-xs">🗑️</a>
@@ -369,5 +374,5 @@ function mostrarToast(mensaje) {
   window.addEventListener('DOMContentLoaded', restoreCaret);
 })();
 </script>
-
+ 
 {% endblock %}
