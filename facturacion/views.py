@@ -58,44 +58,43 @@ User = get_user_model()
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_ordenes_compra(request):
-    # Filtros
-    du = request.GET.get('du', '')
-    id_claro = request.GET.get('id_claro', '')
-    id_new = request.GET.get('id_new', '')
-    mes_produccion = request.GET.get('mes_produccion', '')
-    estado = request.GET.get('estado', '')
+    # Copia de GET para manipular
+    q = request.GET.copy()
 
-    # Estados válidos (de cotizado a finalizado)
+    # -------- Filtros --------
+    du_raw = q.get('du', '')
+    du = du_raw.strip().upper().replace('DU', '') if du_raw else ''
+    id_claro = q.get('id_claro', '')
+    id_new = q.get('id_new', '')
+    mes_produccion = q.get('mes_produccion', '')
+    estado = q.get('estado', '')
+
     estados_validos = [
-        'cotizado',
-        'aprobado_pendiente',
-        'asignado',
-        'en_progreso',
-        'finalizado_trabajador',
-        'rechazado_supervisor',
-        'aprobado_supervisor',
-        'informe_subido',
-        'finalizado'
+        'cotizado', 'aprobado_pendiente', 'asignado', 'en_progreso',
+        'finalizado_trabajador', 'rechazado_supervisor', 'aprobado_supervisor',
+        'informe_subido', 'finalizado'
     ]
 
-    # IDs de órdenes ya facturadas
-    ordenes_facturadas = FacturaOC.objects.values('orden_compra_id')
+    # IDs de órdenes ya facturadas (corregido con values_list)
+    ordenes_facturadas = FacturaOC.objects.values_list(
+        'orden_compra_id', flat=True)
 
-    # Traer servicios, EXCLUYENDO los que ya tienen facturas
-    servicios = ServicioCotizado.objects.select_related(
-        'pm_aprueba', 'tecnico_aceptado', 'tecnico_finalizo', 'supervisor_aprobo',
-        'supervisor_rechazo', 'supervisor_asigna', 'usuario_informe'
-    ).prefetch_related(
-        'ordenes_compra', 'trabajadores_asignados'
-    ).filter(
-        estado__in=estados_validos
-    ).exclude(
-        ordenes_compra__in=Subquery(ordenes_facturadas)
-    ).order_by('-fecha_creacion')
+    # Base queryset
+    servicios = (
+        ServicioCotizado.objects
+        .select_related(
+            'pm_aprueba', 'tecnico_aceptado', 'tecnico_finalizo',
+            'supervisor_aprobo', 'supervisor_rechazo', 'supervisor_asigna',
+            'usuario_informe'
+        )
+        .prefetch_related('ordenes_compra', 'trabajadores_asignados')
+        .filter(estado__in=estados_validos)
+        .exclude(ordenes_compra__in=Subquery(ordenes_facturadas))
+        .order_by('-fecha_creacion')
+    )
 
-    # Filtros dinámicos
+    # Aplicar filtros
     if du:
-        du = du.strip().upper().replace('DU', '')
         servicios = servicios.filter(du__iexact=du)
     if id_claro:
         servicios = servicios.filter(id_claro__icontains=id_claro)
@@ -106,25 +105,35 @@ def listar_ordenes_compra(request):
     if estado:
         servicios = servicios.filter(estado=estado)
 
-    # Paginación
-    cantidad = request.GET.get("cantidad", "10")
-    cantidad = 999999 if cantidad == "todos" else int(cantidad)
-    paginator = Paginator(servicios, cantidad)
-    page_number = request.GET.get("page")
+    # -------- Paginación --------
+    cantidad = q.get("cantidad", "10")
+    per_page = 999999 if cantidad == "todos" else int(cantidad)
+    paginator = Paginator(servicios, per_page)
+    page_number = q.get("page")
     pagina = paginator.get_page(page_number)
 
-    return render(request, 'facturacion/listar_ordenes_compra.html', {
+    # -------- Querystrings persistentes --------
+    qs_pag = q.copy()
+    qs_pag.pop("page", None)
+
+    qs_cant = q.copy()
+    qs_cant.pop("cantidad", None)
+
+    context = {
         'pagina': pagina,
-        'cantidad': request.GET.get("cantidad", "10"),
+        'cantidad': cantidad,
         'filtros': {
-            'du': du,
+            'du': du_raw,
             'id_claro': id_claro,
             'id_new': id_new,
             'mes_produccion': mes_produccion,
             'estado': estado,
         },
-        'estado_choices': ServicioCotizado.ESTADOS
-    })
+        'estado_choices': ServicioCotizado.ESTADOS,
+        'qs_pag': qs_pag.urlencode(),
+        'qs_cant': qs_cant.urlencode(),
+    }
+    return render(request, 'facturacion/listar_ordenes_compra.html', context)
 
 
 @login_required
@@ -377,27 +386,38 @@ def guardar_ordenes_compra(request):
 @rol_requerido('facturacion', 'admin')
 def editar_orden_compra(request, pk):
     """
-    Edita una orden de compra.
-    Si no existe, la crea para el Servicio (DU) dado por pk.
+    pk puede ser:
+    - id de OrdenCompraFacturacion  -> edita esa OC
+    - id de ServicioCotizado        -> muestra form para crear OC de ese DU (sin guardar aún)
     """
-    # Buscar si es pk de OrdenCompra o de Servicio
-    try:
-        orden = OrdenCompraFacturacion.objects.get(pk=pk)
-    except OrdenCompraFacturacion.DoesNotExist:
+    oc = OrdenCompraFacturacion.objects.filter(
+        pk=pk).select_related('du').first()
+    servicio = None
+
+    if oc is None:
+        # pk no es OC -> interpretarlo como id de Servicio
         servicio = get_object_or_404(ServicioCotizado, pk=pk)
-        orden = OrdenCompraFacturacion.objects.create(du=servicio)
+        # Instancia SIN GUARDAR para poder renderizar el form sin crear registros
+        oc = OrdenCompraFacturacion(du=servicio)
 
     if request.method == 'POST':
-        form = OrdenCompraFacturacionForm(request.POST, instance=orden)
+        form = OrdenCompraFacturacionForm(request.POST, instance=oc)
         if form.is_valid():
-            form.save()
+            oc = form.save(commit=False)
+            # Si veníamos por DU (instancia no guardada), fijar su DU antes de guardar
+            if oc.du_id is None and servicio is not None:
+                oc.du = servicio
+            oc.save()
             messages.success(
                 request, "Orden de compra guardada correctamente.")
             return redirect('facturacion:listar_oc_facturacion')
     else:
-        form = OrdenCompraFacturacionForm(instance=orden)
+        form = OrdenCompraFacturacionForm(instance=oc)
 
-    return render(request, 'facturacion/editar_orden_compra.html', {'form': form})
+    return render(request, 'facturacion/editar_orden_compra.html', {
+        'form': form,
+        'oc': oc,  # por si quieres usarlo en el template
+    })
 
 
 @login_required
@@ -568,8 +588,10 @@ def listar_facturas(request):
     if estado:
         facturas = facturas.filter(orden_compra__du__estado=estado)
 
-    # Paginación
-    paginator = Paginator(facturas, 10)
+    # Paginación (usa 'cantidad' del GET)
+    cantidad = request.GET.get("cantidad", "10")
+    per_page = 999999 if cantidad == "todos" else int(cantidad)
+    paginator = Paginator(facturas, per_page)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
@@ -583,7 +605,7 @@ def listar_facturas(request):
             "estado": estado,
         },
         "estado_choices": ServicioCotizado.ESTADOS,
-        "cantidad": request.GET.get("cantidad", "10")
+        "cantidad": cantidad,
     })
 
 
@@ -933,7 +955,8 @@ def exportar_facturacion_excel(request):
         du = oc.du if oc else None
 
         # Servicio
-        ws.cell(row=row_num, column=1, value=du.du if du else "")
+        ws.cell(row=row_num, column=1,
+                value=f"DU{du.du}" if du and du.du else "")
         ws.cell(row=row_num, column=2, value=du.id_claro if du else "")
         ws.cell(row=row_num, column=3, value=du.id_new if du else "")
         ws.cell(row=row_num, column=4, value=du.detalle_tarea if du else "")

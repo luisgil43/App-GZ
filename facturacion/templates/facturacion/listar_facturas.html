@@ -14,7 +14,6 @@
     border-radius: 0.75rem;
     font-size: 0.875rem;
     height: 2.25rem;
-    width: 100%;
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
@@ -23,14 +22,28 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  .tabla-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
+  .filtros-compactos .campo-filtro { 
+    width: auto; 
+    min-width: 8.5rem;   /* tamaño mínimo cómodo */
+    max-width: 12rem;    /* evita que crezcan de más */
   }
-  table {
-    white-space: nowrap;
-    min-width: 1200px;
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
   }
+
+/* === Tabla responsive: el scroll queda dentro del recuadro === */
+.tabla-responsive{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+.tabla-responsive table{
+  white-space: nowrap;     /* mantiene columnas en una línea */
+  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
+}
+
 </style>
 
 <!-- Título y botones -->
@@ -40,48 +53,45 @@
   </h2>
   <div class="flex gap-2">
    <a href="{% url 'facturacion:importar_facturas' %}" 
-   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
-  + Importar Conformidad
-</a>
+      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      + Importar Conformidad
+   </a>
    <a href="{% url 'facturacion:exportar_facturacion_excel' %}"  
-   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-   📥 Exportar Excel
-</a>
+      class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      📥 Exportar Excel
+   </a>
   </div>
 </div>
 
-<!-- Filtros estilo pill -->
-<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
-  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+<!-- Filtros -->
+<form id="form-filtros" method="get" class="filtros-compactos mb-6">
+  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
 
-  <select name="estado"
-          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-    <option value="">Todos los estados</option>
-    {% for codigo, nombre in estado_choices %}
-      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-    {% endfor %}
-  </select>
+    <select name="estado" class="campo-filtro">
+      <option value="">Todos los estados</option>
+      {% for codigo, nombre in estado_choices %}
+        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
 
-  <div class="flex gap-2">
-    <button type="submit"
-            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
-      🔍 Filtrar
-    </button>
-    <a href="{% url 'facturacion:listar_facturas' %}"
-       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
-      ❌ Limpiar
-    </a>
+  <div class="flex gap-2 w-full sm:w-auto">
+   <!-- Único botón -->
+   <a href="{% url 'facturacion:listar_facturas' %}"
+   class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+  ❌ Limpiar
+</a>
+  </div>
+<input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
 
-<!-- Tabla responsive -->
+
+
+<!-- Tabla -->
 <div class="rounded-xl border border-gray-200 tabla-responsive">
   <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
@@ -89,11 +99,11 @@
         <th class="p-2">DU</th>
         <th class="p-2">ID CLARO</th>
         <th class="p-2">ID NEW</th>
+ <th class="p-2">MES DE PRODUCCIÓN</th>
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">ASIGNADOS</th>
         <th class="p-2">M. COTIZADO (UF)</th>
         <th class="p-2">M. MMOO (CLP)</th>
-<th class="p-2">MES DE PRODUCCIÓN</th>
         <th class="p-2">FECHA FIN</th>
         <th class="p-2">STATUS SERVICIO</th>
         <th class="p-2">OC</th>
@@ -110,7 +120,6 @@
         <th class="p-2">CONFORMIDAD</th>
         <th class="p-2">N° FACTURA</th>
         <th class="p-2">FECHA FACTURACIÓN</th>
-        
         <th class="p-2">FACTORIZADO</th>
         <th class="p-2">FECHA FACTORING</th>
         <th class="p-2">STATUS FACTURA</th>
@@ -124,6 +133,7 @@
         <td class="p-2 font-mono">DU{{ factura.orden_compra.du.du }}</td>
         <td class="p-2">{{ factura.orden_compra.du.id_claro }}</td>
         <td class="p-2">{{ factura.orden_compra.du.id_new }}</td>
+ <td class="p-2">{{ factura.mes_produccion|default:"—" }}</td>
         <td class="p-2 text-xs whitespace-pre-line break-words min-w-[200px] max-w-[400px]">{{ factura.orden_compra.du.detalle_tarea }}</td>
         <td class="p-2">
           {% for user in factura.orden_compra.du.trabajadores_asignados.all %}
@@ -132,71 +142,63 @@
             <span class="italic text-gray-400">Sin asignar</span>
           {% endfor %}
         </td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-    UF {{ factura.orden_compra.du.monto_cotizado|formato_uf }}
-</td>
-<td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-    $ {{ factura.orden_compra.du.monto_mmoo|formato_clp }} CLP
-</td>
-<td class="p-2">{{ factura.mes_produccion|default:"—" }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ factura.orden_compra.du.monto_cotizado|formato_uf }}</td>
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ factura.orden_compra.du.monto_mmoo|formato_clp }} CLP</td>
+       
         <td class="p-2">
-    {% if factura.orden_compra.du.fecha_aprobacion_supervisor %}
-        {{ factura.orden_compra.du.fecha_aprobacion_supervisor|date:"d/m/Y" }}
-    {% else %}
-        —
-    {% endif %}
-</td>
-<td class="p-2 text-sm">
-  <div class="flex flex-col gap-1 text-left">
-    <!-- Badge principal -->
-    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-      {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-      {% elif factura.orden_compra.du.estado == 'asignado' %}bg-blue-100 text-blue-800
-      {% elif factura.orden_compra.du.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-      {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-      {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-      {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-      {% elif factura.orden_compra.du.estado == 'informe_subido' %}bg-purple-100 text-purple-800
-      {% elif factura.orden_compra.du.estado == 'finalizado' %}bg-green-100 text-green-800
-      {% else %}bg-gray-100 text-gray-800{% endif %}">
-      {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}
-       ✅ Aprobado por PM: {% if factura.orden_compra.du.pm_aprueba %}{{ factura.orden_compra.du.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'asignado' %}
-       ✅ Asignado por Supervisor: {% if factura.orden_compra.du.supervisor_asigna %}{{ factura.orden_compra.du.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'en_progreso' %}
-       🕓 En ejecución (aceptado por {% if factura.orden_compra.du.tecnico_aceptado %}{{ factura.orden_compra.du.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
-      {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}
-       ✔ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}
-       ❌ Rechazado por Supervisor {% if factura.orden_compra.du.supervisor_rechazo %}{{ factura.orden_compra.du.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}
-       ✅  Aprobado por Supervisor: {% if factura.orden_compra.du.supervisor_aprobo %}{{ factura.orden_compra.du.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'informe_subido' %}
-        📄 Informe cargado por {% if factura.orden_compra.du.usuario_informe %}{{ factura.orden_compra.du.usuario_informe.get_full_name }} ({{ factura.orden_compra.du.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif factura.orden_compra.du.estado == 'finalizado' %}
-        ✅ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} ({{ factura.orden_compra.du.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% else %}
-        {{ factura.orden_compra.du.estado }}
-      {% endif %}
-    </div>
+          {% if factura.orden_compra.du.fecha_aprobacion_supervisor %}
+            {{ factura.orden_compra.du.fecha_aprobacion_supervisor|date:"d/m/Y" }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="p-2 text-sm">
+          <div class="flex flex-col gap-1 text-left">
+            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+              {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+              {% elif factura.orden_compra.du.estado == 'asignado' %}bg-blue-100 text-blue-800
+              {% elif factura.orden_compra.du.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+              {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+              {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+              {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+              {% elif factura.orden_compra.du.estado == 'informe_subido' %}bg-purple-100 text-purple-800
+              {% elif factura.orden_compra.du.estado == 'finalizado' %}bg-green-100 text-green-800
+              {% else %}bg-gray-100 text-gray-800{% endif %}">
+              {% if factura.orden_compra.du.estado == 'aprobado_pendiente' %}
+               ✅ Aprobado por PM: {% if factura.orden_compra.du.pm_aprueba %}{{ factura.orden_compra.du.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'asignado' %}
+               ✅ Asignado por Supervisor: {% if factura.orden_compra.du.supervisor_asigna %}{{ factura.orden_compra.du.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'en_progreso' %}
+               🕓 En ejecución (aceptado por {% if factura.orden_compra.du.tecnico_aceptado %}{{ factura.orden_compra.du.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+              {% elif factura.orden_compra.du.estado == 'finalizado_trabajador' %}
+               ✔ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'rechazado_supervisor' %}
+               ❌ Rechazado por Supervisor {% if factura.orden_compra.du.supervisor_rechazo %}{{ factura.orden_compra.du.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'aprobado_supervisor' %}
+               ✅  Aprobado por Supervisor: {% if factura.orden_compra.du.supervisor_aprobo %}{{ factura.orden_compra.du.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'informe_subido' %}
+                📄 Informe cargado por {% if factura.orden_compra.du.usuario_informe %}{{ factura.orden_compra.du.usuario_informe.get_full_name }} ({{ factura.orden_compra.du.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% elif factura.orden_compra.du.estado == 'finalizado' %}
+                ✅ Finalizado por {% if factura.orden_compra.du.tecnico_finalizo %}{{ factura.orden_compra.du.tecnico_finalizo.get_full_name }} ({{ factura.orden_compra.du.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+              {% else %}
+                {{ factura.orden_compra.du.estado }}
+              {% endif %}
+            </div>
+            {% if factura.orden_compra.du.estado == 'finalizado_trabajador' %}
+              <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                📝 Pendiente revisión del supervisor
+              </div>
+            {% endif %}
+          </div>
 
-    <!-- Badge secundario cuando está finalizado -->
-    {% if factura.orden_compra.du.estado == 'finalizado_trabajador' %}
-      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-        📝 Pendiente revisión del supervisor
-      </div>
-    {% endif %}
-  </div>
-
-  {% if factura.orden_compra.du.estado == 'rechazado_supervisor' and factura.orden_compra.du.motivo_rechazo %}
-    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
-        style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
-        data-id="{{ factura.orden_compra.du.id }}">
-      <strong>Motivo:</strong> <span class="motivo-text">{{ factura.orden_compra.du.motivo_rechazo }}</span>
-    </div>
-  {% endif %}
-</td>
-
+          {% if factura.orden_compra.du.estado == 'rechazado_supervisor' and factura.orden_compra.du.motivo_rechazo %}
+            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
+                style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
+                data-id="{{ factura.orden_compra.du.id }}">
+              <strong>Motivo:</strong> <span class="motivo-text">{{ factura.orden_compra.du.motivo_rechazo }}</span>
+            </div>
+          {% endif %}
+        </td>
 
         <!-- Orden de compra -->
         <td class="p-2">{{ factura.orden_compra.orden_compra }}</td>
@@ -247,31 +249,24 @@
   </table>
 </div>
 
-<!-- Selector de cantidad -->
-<form method="get" class="mt-4 flex flex-wrap items-center gap-2">
+<!-- Selector cantidad (idéntico al listar supervisor) -->
+<form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
     <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
     <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
+
+  <!-- preserva filtros actuales -->
+  <input type="hidden" name="du" value="{{ filtros.du }}">
+  <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
+  <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
+  <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
+  <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
 
-<!-- Paginación -->
-<div class="mt-4 flex flex-wrap justify-center gap-2 text-sm">
-  {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-  {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-  {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-  {% endif %}
-</div>
-
-</div>
 
 <!-- Toast de éxito -->
 <div id="toast" class="hidden fixed top-20 left-1/2 transform -translate-x-1/2 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50"></div>
@@ -283,118 +278,96 @@ function mostrarToast(mensaje) {
     toast.classList.remove("hidden");
     setTimeout(() => toast.classList.add("hidden"), 2000);
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-    document.querySelectorAll(".editable").forEach(cell => {
-        cell.addEventListener("dblclick", function () {
-            if (this.querySelector("input") || this.querySelector("select")) return;
-
-            const span = this.querySelector(".editable-text");
-            const valorOriginal = span.innerText.trim() === "—" ? "" : span.innerText.trim();
-            const campo = this.dataset.campo;
-            const id = this.dataset.id;
-            const celdaEditable = this; // 🔹 Guardamos referencia al TD
-
-            let input = null;
-            let select = null;
-
-            // Si es factorizado, usar select
-            if (campo === "factorizado") {
-                select = document.createElement("select");
-                select.className = "border rounded px-1 w-full";
-                select.innerHTML = `
-                    <option value="false" ${valorOriginal === "No" ? "selected" : ""}>No</option>
-                    <option value="true" ${valorOriginal === "Sí" ? "selected" : ""}>Sí</option>
-                `;
-                span.replaceWith(select);
-                select.focus();
-                select.addEventListener("blur", guardarCambio);
-                select.addEventListener("change", guardarCambio);
-                return;
-            }
-
-            // Input normal
-            input = document.createElement("input");
-            input.value = valorOriginal;
-            input.className = "border rounded px-1 w-full";
-            if (campo.includes("fecha")) input.type = "date";
-            span.replaceWith(input);
-            input.focus();
-
-            input.addEventListener("blur", guardarCambio);
-            input.addEventListener("keydown", function(e) {
-                if (e.key === "Enter") guardarCambio();
-                if (e.key === "Escape") cancelarCambio();
-            });
-
-            function cancelarCambio(){
-                input.replaceWith(span);
-            }
-
-            function guardarCambio() {
-                const nuevoValor = (campo === "factorizado") ? select.value : input.value.trim();
-                const url = "{% url 'facturacion:actualizar_factura_ajax' 0 %}".replace("0", id);
-
-                fetch(url, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/x-www-form-urlencoded",
-                        "X-CSRFToken": "{{ csrf_token }}",
-                    },
-                    body: new URLSearchParams({
-                        "campo": campo,
-                        "valor": nuevoValor
-                    })
-                })
-                .then(res => {
-                    if (!res.ok) throw new Error("HTTP " + res.status);
-                    return res.json();
-                })
-                .then(data => {
-                    if (data.success) {
-                        // Actualizar celda editada
-                        const newSpan = document.createElement("span");
-                        newSpan.className = "editable-text";
-                        newSpan.innerText = (campo === "factorizado") 
-                            ? (nuevoValor === "true" ? "Sí" : "No") 
-                            : nuevoValor || "—";
-                        if (input) input.replaceWith(newSpan);
-                        if (select) select.replaceWith(newSpan);
-
-                        // 🔹 Actualizar el badge de estado
-                        if (data.nuevo_status) {
-                            const statusCell = celdaEditable.closest("tr").querySelector('td:nth-last-child(2) span');
-                            if (statusCell) {
-                                statusCell.innerText = data.nuevo_status;
-                                statusCell.className = "inline-block px-3 py-1 rounded-full text-xs font-medium";
-                                if (data.nuevo_status === "Pendiente por Conformidad") statusCell.classList.add("bg-yellow-100","text-yellow-800");
-                                else if (data.nuevo_status === "Pendiente por Facturación") statusCell.classList.add("bg-orange-100","text-orange-800");
-                                else if (data.nuevo_status === "Facturado") statusCell.classList.add("bg-blue-100","text-blue-800");
-                                else if (data.nuevo_status === "En proceso de Factoring") statusCell.classList.add("bg-purple-100","text-purple-800");
-                                else if (data.nuevo_status === "Cobrado") statusCell.classList.add("bg-green-100","text-green-800");
-                                else statusCell.classList.add("bg-gray-100","text-gray-800");
-                            }
-                        }
-
-                        mostrarToast("¡Guardado!");
-                    } else {
-                        alert(data.error || "Error al guardar");
-                        if (input) input.replaceWith(span);
-                        if (select) select.replaceWith(span);
-                    }
-                })
-                .catch(err => {
-                    alert("Error de conexión: " + err.message);
-                    if (input) input.replaceWith(span);
-                    if (select) select.replaceWith(span);
-                });
-            }
-        });
-    });
-});
 </script>
 
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
 
+  const inputs = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
 
+  let timer;
+  const submitDebounced = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => form.requestSubmit(), 500);
+  };
+
+  inputs.forEach(el => {
+    el.addEventListener('input', submitDebounced);
+    el.addEventListener('change', submitDebounced);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }});
+  });
+
+  selects.forEach(el => el.addEventListener('change', () => form.requestSubmit()));
+})();
+</script>
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'fact_filtros_focus';
+
+  function rememberCaret(el) {
+    try {
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+    } catch (_) {}
+  }
+
+  function restoreCaret() {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    } catch (_) {}
+  }
+
+  function ensureCantidadHidden() {
+    if (!form.querySelector('input[name="cantidad"]')) {
+      const sel = document.getElementById('cantidad');
+      if (sel) {
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'cantidad'; h.value = sel.value;
+        form.appendChild(h);
+      }
+    }
+  }
+
+  let t;
+  function submitDebounced(el) {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 450);
+  }
+
+  inputs.forEach(el => {
+    el.addEventListener('input',  () => submitDebounced(el));
+    el.addEventListener('change', () => submitDebounced(el));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitDebounced(el); }
+    });
+  });
+
+  selects.forEach(el => el.addEventListener('change', () => {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    form.requestSubmit();
+  }));
+
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+})();
+</script>
 
 {% endblock %}
