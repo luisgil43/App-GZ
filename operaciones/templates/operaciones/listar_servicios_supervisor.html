@@ -14,8 +14,6 @@
     border-radius: 0.75rem;
     font-size: 0.875rem;
     height: 2.25rem;
-    width: 100%;
-    max-width: 160px;
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
@@ -24,14 +22,28 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  .boton-filtrar {
-    height: 2.25rem;
-    font-size: 0.875rem;
-    border-radius: 0.75rem;
-    padding: 0 1rem;
+  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
+  .filtros-compactos .campo-filtro { 
+    width: auto; 
+    min-width: 8.5rem;   /* tamaño mínimo cómodo */
+    max-width: 12rem;    /* evita que crezcan de más */
   }
-  .tabla-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { white-space: nowrap; min-width: 1100px; }
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
+  }
+
+/* === Tabla responsive: el scroll queda dentro del recuadro === */
+.tabla-responsive{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+.tabla-responsive table{
+  white-space: nowrap;     /* mantiene columnas en una línea */
+  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
+}
+
 </style>
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
@@ -42,26 +54,31 @@
 </div>
 
 <!-- Filtros -->
-<form method="get" class="mb-6 flex flex-wrap gap-2">
-  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro flex-1 min-w-[140px]">
-  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro flex-1 min-w-[140px]">
-  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro flex-1 min-w-[140px]">
-  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro flex-1 min-w-[140px]">
-  <select name="estado" class="campo-filtro w-full sm:w-[200px]">
-    <option value="">Todos los estados</option>
-    {% for codigo, nombre in estado_choices %}
-      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-    {% endfor %}
-  </select>
-  <div class="flex gap-2 w-full sm:w-auto">
-    <button type="submit" class="flex-1 sm:flex-none flex items-center justify-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
-      🔍 Filtrar
-    </button>
-    <a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="flex-1 sm:flex-none flex items-center justify-center gap-1 bg-gray-200 text-red-600 text-sm font-medium px-4 py-1.5 rounded-full hover:bg-gray-300 transition">
-      ❌ Limpiar
-    </a>
+<form id="form-filtros" method="get" class="filtros-compactos mb-6">
+  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
+
+    <select name="estado" class="campo-filtro">
+      <option value="">Todos los estados</option>
+      {% for codigo, nombre in estado_choices %}
+        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+
+    <div class="flex gap-2">
+      <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
+         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+        ❌ Limpiar
+      </a>
+    </div>
+
+    <input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
+
 
 <!-- Tabla -->
 <div class="rounded-xl border border-gray-200 tabla-responsive">
@@ -185,15 +202,17 @@
   </table>
 </div>
 
-<!-- Selector cantidad -->
+<!-- Selector cantidad (idéntico al listar supervisor) -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
     <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
     <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
+
+  <!-- preserva filtros actuales -->
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
   <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
@@ -201,62 +220,182 @@
   <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
 
-</div>
-
 <script>
   function abrirModalAsignacion(id) {
-    document.getElementById('modal-rechazo-' + id).classList.remove('hidden');
+    const modal = document.getElementById('modal-rechazo-' + id);
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    // Evita scroll del fondo
+    document.body.classList.add('overflow-hidden');
+    // Focus al textarea si existe
+    const ta = modal.querySelector('textarea[name="motivo_rechazo"]');
+    if (ta) setTimeout(() => ta.focus(), 50);
   }
-  function cerrarModalAsignacion(id) {
-    document.getElementById('modal-rechazo-' + id).classList.add('hidden');
-  }
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  document.querySelectorAll('.editable-motivo').forEach(function(el) {
-    el.addEventListener('dblclick', function() {
-      const span = el.querySelector('.motivo-text');
-      const oldText = span.textContent;
-      const input = document.createElement('textarea');
-      input.value = oldText;
-      input.className = 'w-full border rounded p-1 text-xs';
-      span.replaceWith(input);
-      input.focus();
 
-      // Guardar al perder foco
-      input.addEventListener('blur', function() { guardarCambio(el, input); });
-      // Guardar con Enter
-      input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') { e.preventDefault(); guardarCambio(el, input); }
-      });
+  function cerrarModalAsignacion(id) {
+    const modal = document.getElementById('modal-rechazo-' + id);
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cerrar clickeando el backdrop
+  document.addEventListener('click', (e) => {
+    const modal = e.target.closest('[id^="modal-rechazo-"]');
+    if (modal && e.target === modal) {
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+
+  // Cerrar con Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('[id^="modal-rechazo-"]:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+</script>
+
+<script>
+  // Solo si algún día agregas un "select all" en esta vista.
+  (function() {
+    const selectAll = document.getElementById('select-all');
+    if (!selectAll) return;
+    selectAll.addEventListener('change', function() {
+      document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
+    });
+  })();
+</script>
+
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  // 🔒 Mantén página/tamaño: ya tienes <input type="hidden" name="cantidad" ...> en el form ✔
+
+  // ✅ Guardar/restaurar foco y caret para que no “salte” el cursor tras el auto-submit
+  const KEY = 'svc_sup_filtros_focus';
+  function rememberCaret(el) {
+    try {
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+    } catch (_) {}
+  }
+  function restoreCaret() {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    } catch (_) {}
+  }
+
+  let t;
+  const submitDebounced = (el) => {
+    rememberCaret(el);
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 450);
+  };
+
+  inputs.forEach(el => {
+    el.addEventListener('input',  () => submitDebounced(el));
+    el.addEventListener('change', () => submitDebounced(el));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
     });
   });
 
-  function guardarCambio(el, input) {
-    const nuevoTexto = input.value;
-    const servicioId = el.getAttribute('data-id');
-    fetch(`/operaciones/servicios/${servicioId}/actualizar-motivo/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': '{{ csrf_token }}',
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({ 'motivo': nuevoTexto })
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
+  selects.forEach(el => el.addEventListener('change', () => { rememberCaret(el); form.requestSubmit(); }));
+
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+})();
+</script>
+<script>
+(function () {
+  // Obtiene CSRF del cookie (más robusto que {{ csrf_token }} en JS)
+  function getCookie(name) {
+    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return m ? m.pop() : '';
+  }
+  const CSRF = getCookie('csrftoken');
+
+  // Delegación: doble clic para editar
+  document.addEventListener('dblclick', function (e) {
+    const wrapper = e.target.closest('.editable-motivo');
+    if (!wrapper) return;
+
+    const span = wrapper.querySelector('.motivo-text');
+    if (!span) return;
+
+    const oldText = span.textContent === 'Doble clic para editar…' ? '' : span.textContent;
+
+    // Crear textarea
+    const ta = document.createElement('textarea');
+    ta.value = oldText;
+    ta.rows = Math.max(3, Math.min(8, (oldText.split('\n').length || 1)));
+    ta.className = 'w-full border rounded p-2 text-xs';
+    span.replaceWith(ta);
+    ta.focus();
+
+    const servicioId = wrapper.getAttribute('data-id');
+    let saving = false;
+
+    function save() {
+      if (saving) return;
+      saving = true;
+      const nuevoTexto = ta.value.trim();
+
+      fetch(`/operaciones/servicios/${servicioId}/actualizar-motivo/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': CSRF,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ 'motivo': nuevoTexto })
+      })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
         const newSpan = document.createElement('span');
         newSpan.className = 'motivo-text';
-        newSpan.textContent = data.motivo;
-        input.replaceWith(newSpan);
-      } else {
+        newSpan.textContent = (data && data.motivo) ? data.motivo : (nuevoTexto || 'Doble clic para editar…');
+        if (!nuevoTexto) newSpan.classList.add('italic', 'text-gray-400');
+        ta.replaceWith(newSpan);
+      })
+      .catch(() => {
         alert('Error al guardar el motivo.');
+        ta.focus();
+        saving = false;
+      });
+    }
+
+    // Guardar al perder foco o con Enter (sin salto de línea)
+    ta.addEventListener('blur', save);
+    ta.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter' && !ev.shiftKey) {
+        ev.preventDefault();
+        save();
+      } else if (ev.key === 'Escape') {
+        // Cancelar: restaurar el span original
+        const back = document.createElement('span');
+        back.className = 'motivo-text';
+        back.textContent = oldText || 'Doble clic para editar…';
+        if (!oldText) back.classList.add('italic', 'text-gray-400');
+        ta.replaceWith(back);
       }
-    })
-    .catch(() => alert('Error en la conexión.'));
-  }
-});
+    });
+  });
+})();
 </script>
+
 
 {% endblock %}

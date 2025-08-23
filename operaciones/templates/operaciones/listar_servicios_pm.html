@@ -14,42 +14,38 @@
     border-radius: 0.75rem;
     font-size: 0.875rem;
     height: 2.25rem;
-    width: 100%;
-    max-width: 160px;
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
-
   .campo-filtro:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-
-  .boton-filtrar {
-    height: 2.25rem;
-    font-size: 0.875rem;
-    border-radius: 0.75rem;
-    padding: 0 1rem;
+  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
+  .filtros-compactos .campo-filtro { 
+    width: auto; 
+    min-width: 8.5rem;   /* tamaño mínimo cómodo */
+    max-width: 12rem;    /* evita que crezcan de más */
+  }
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
   }
 
-  /* Ajuste scroll */
-  .tabla-scroll {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
+/* === Tabla responsive: el scroll queda dentro del recuadro === */
+.tabla-responsive{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+.tabla-responsive table{
+  white-space: nowrap;     /* mantiene columnas en una línea */
+  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
+}
 
-  /* Scroll horizontal solo en móviles */
-  .tabla-responsive {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  table {
-    white-space: nowrap;
-    min-width: 1100px;
-  }
 </style>
+
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
   <h2 class="text-2xl font-bold text-gray-800">📋 Lista de Cotizaciones</h2>
@@ -60,35 +56,31 @@
 </div>
 
 <!-- Filtros -->
-<form method="get" class="mb-6 flex flex-wrap gap-2">
-  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
-         class="flex-1 min-w-[140px] md:w-[160px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+<form id="form-filtros" method="get" class="filtros-compactos mb-6">
+  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
 
-  <select name="estado"
-          class="flex-1 min-w-[160px] md:w-[200px] px-3 py-1.5 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-    <option value="">Todos los estados</option>
-    {% for codigo, nombre in estado_choices %}
-      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-    {% endfor %}
-  </select>
+    <select name="estado" class="campo-filtro">
+      <option value="">Todos los estados</option>
+      {% for codigo, nombre in estado_choices %}
+        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
 
-  <div class="flex gap-2 w-full md:w-auto">
-    <button type="submit"
-            class="flex-1 md:flex-none items-center justify-center bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
-      🔍 Filtrar
-    </button>
-    <a href="{% url 'facturacion:listar_oc_facturacion' %}"
-       class="flex-1 md:flex-none items-center justify-center bg-gray-200 text-red-600 text-sm font-medium px-4 py-1.5 rounded-full hover:bg-gray-300 transition">
-      ❌ Limpiar
-    </a>
+    <div class="flex gap-2">
+      <a href="{% url 'facturacion:listar_oc_facturacion' %}"
+         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+        ❌ Limpiar
+      </a>
+    </div>
+
+    <input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
+
 
 <div class="rounded-xl border border-gray-200 tabla-responsive">
   <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
@@ -215,15 +207,17 @@
 {% endfor %}
 
 
-<!-- Selector de cantidad -->
+<!-- Selector cantidad (idéntico al listar supervisor) -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
     <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
     <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
+
+  <!-- preserva filtros actuales -->
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
   <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
@@ -231,20 +225,116 @@
   <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
 
-<!-- Paginación -->
-<div class="mt-4 flex justify-center gap-2 text-sm">
-  {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-  {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-  {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&du={{ filtros.du }}&id_claro={{ filtros.id_claro }}&id_new={{ filtros.id_new }}&mes_produccion={{ filtros.mes_produccion }}&estado={{ filtros.estado }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-  {% endif %}
-</div>
+<script>
+  function abrirModalAsignacion(id) {
+    const modal = document.getElementById('modal-rechazo-' + id);
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    // Evita scroll del fondo
+    document.body.classList.add('overflow-hidden');
+    // Focus al textarea si existe
+    const ta = modal.querySelector('textarea[name="motivo_rechazo"]');
+    if (ta) setTimeout(() => ta.focus(), 50);
+  }
 
-</div>
+  function cerrarModalAsignacion(id) {
+    const modal = document.getElementById('modal-rechazo-' + id);
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cerrar clickeando el backdrop
+  document.addEventListener('click', (e) => {
+    const modal = e.target.closest('[id^="modal-rechazo-"]');
+    if (modal && e.target === modal) {
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+
+  // Cerrar con Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('[id^="modal-rechazo-"]:not(.hidden)').forEach(m => m.classList.add('hidden'));
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+</script>
+
+<script>
+  // Solo si algún día agregas un "select all" en esta vista.
+  (function() {
+    const selectAll = document.getElementById('select-all');
+    if (!selectAll) return;
+    selectAll.addEventListener('change', function() {
+      document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
+    });
+  })();
+</script>
+
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const isTouch = matchMedia('(pointer:coarse)').matches;
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'svc_sup_filtros_focus_v2';
+  function rememberCaret(el){
+    try{
+      const pos = typeof el.selectionStart==='number' ? el.selectionStart : (el.value||'').length;
+      sessionStorage.setItem(KEY, JSON.stringify({name: el.name, pos}));
+    }catch(_){}
+  }
+  function submitNow(fromEl){ rememberCaret(fromEl); form.requestSubmit(); }
+
+  // TEXT INPUTS
+  inputs.forEach(el => {
+    if (isTouch) {
+      // 📱 En móvil: no auto-submit mientras escribes
+      el.addEventListener('blur', () => submitNow(el));
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); submitNow(el); }
+      });
+    } else {
+      // 🖥️ En desktop: debounce
+      let t, composing = false;
+      el.addEventListener('compositionstart', () => composing = true);
+      el.addEventListener('compositionend',   () => { composing = false; doSubmit(); });
+      el.addEventListener('input', doSubmit);
+      el.addEventListener('change', doSubmit);
+      el.addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); submitNow(el); } });
+      function doSubmit(){
+        clearTimeout(t);
+        t = setTimeout(() => { if (!composing) submitNow(el); }, 700);
+      }
+    }
+  });
+
+  // SELECTS: enviar al cambiar (igual en móvil y desktop)
+  selects.forEach(el => el.addEventListener('change', () => submitNow(el)));
+
+  // Restaurar foco/caret tras la recarga (más robusto)
+  function restoreCaret(){
+    try{
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    }catch(_){}
+  }
+  window.addEventListener('DOMContentLoaded', () => { restoreCaret(); requestAnimationFrame(restoreCaret); });
+  window.addEventListener('pageshow', restoreCaret);
+})();
+</script>
+
 
 <script>
   function abrirModal(id) {

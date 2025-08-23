@@ -15,8 +15,6 @@
     border-radius: 0.75rem;
     font-size: 0.875rem;
     height: 2.25rem;
-    width: 100%;
-    max-width: 160px;
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
@@ -25,8 +23,28 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  .tabla-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { white-space: nowrap; min-width: 1100px; }
+  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
+  .filtros-compactos .campo-filtro { 
+    width: auto; 
+    min-width: 8.5rem;   /* tamaño mínimo cómodo */
+    max-width: 12rem;    /* evita que crezcan de más */
+  }
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
+  }
+
+/* === Tabla responsive: el scroll queda dentro del recuadro === */
+.tabla-responsive{
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+  max-width: 100%;
+}
+.tabla-responsive table{
+  white-space: nowrap;     /* mantiene columnas en una línea */
+  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
+}
+
 </style>
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
@@ -47,36 +65,34 @@
   </div>
 </div>
 
-<!-- Filtros estilo pill -->
-<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
-  <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
 
-  <select name="estado"
-          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-    <option value="">Todos los estados</option>
-    {% for codigo, nombre in estado_choices %}
-      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-    {% endfor %}
-  </select>
+<!-- Filtros -->
+<form id="form-filtros" method="get" class="filtros-compactos mb-6">
+  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
 
-  <div class="flex gap-2">
-    <button type="submit"
-            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
-      🔍 Filtrar
-    </button>
-    <a href="{% url 'facturacion:listar_facturas' %}"
-       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
+    <select name="estado" class="campo-filtro">
+      <option value="">Todos los estados</option>
+      {% for codigo, nombre in estado_choices %}
+        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+
+  <div class="flex gap-2 w-full sm:w-auto">
+   <!-- Único botón -->
+    <a href="{% url 'facturacion:listar_oc_facturacion' %}"
+       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
       ❌ Limpiar
     </a>
   </div>
+<input type="hidden" name="cantidad" value="{{ cantidad }}">
+  </div>
 </form>
+
+
 
 <!-- Formulario que envuelve la tabla -->
 <form id="enviar-a-facturacion-form" method="POST" action="{% url 'facturacion:enviar_a_facturacion' %}">
@@ -89,6 +105,7 @@
         <th class="p-2">DU</th>
         <th class="p-2">ID CLARO</th>
         <th class="p-2">ID NEW</th>
+<th class="p-2">MES PRODUCCIÓN</th>
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">ASIGNADOS</th>
         <th class="p-2">M. COTIZADO (UF)</th>
@@ -116,6 +133,7 @@
         <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
+<td class="p-2">{{ servicio.mes_produccion }}</td>
         <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
         <td class="p-2">
           {% for user in servicio.trabajadores_asignados.all %}
@@ -192,6 +210,7 @@
         <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
         <td class="p-2">{{ servicio.id_new }}</td>
+<td class="p-2">{{ servicio.mes_produccion }}</td>
         <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
         <td class="p-2">
           {% for user in servicio.trabajadores_asignados.all %}
@@ -264,34 +283,55 @@
 
 </form>
 
-<!-- Selector de cantidad -->
-<form method="get" class="mt-4 flex flex-wrap items-center gap-2">
+
+<!-- Selector cantidad (idéntico al listar supervisor) -->
+<form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
     <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
     <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
+
+  <!-- preserva filtros actuales -->
+  <input type="hidden" name="du" value="{{ filtros.du }}">
+  <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
+  <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
+  <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
+  <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
 
-<!-- Paginación -->
-<div class="mt-4 flex flex-wrap justify-center gap-2 text-sm">
-  {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-  {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-  {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-  {% endif %}
-</div>
 
-</div>
 <script>
 document.getElementById('select-all').addEventListener('change', function() {
     document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
 });
 </script>
+
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  let t;
+  const submitDebounced = () => {
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 400);
+  };
+
+  inputs.forEach(el => {
+    el.addEventListener('input', submitDebounced);
+    el.addEventListener('change', submitDebounced);
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+    });
+  });
+  selects.forEach(el => el.addEventListener('change', submitDebounced));
+})();
+</script>
+
 {% endblock %}
