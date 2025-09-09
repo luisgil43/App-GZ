@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from uuid import uuid4
 import unicodedata
 import xlwt
@@ -58,28 +59,26 @@ User = get_user_model()
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_ordenes_compra(request):
-    # Copia de GET para manipular
     q = request.GET.copy()
 
-    # -------- Filtros --------
-    du_raw = q.get('du', '')
+    # --- Filtros ---
+    du_raw = (q.get('du') or '')
     du = du_raw.strip().upper().replace('DU', '') if du_raw else ''
-    id_claro = q.get('id_claro', '')
-    id_new = q.get('id_new', '')
-    mes_produccion = q.get('mes_produccion', '')
-    estado = q.get('estado', '')
+    id_claro = (q.get('id_claro') or '').strip()
+    id_new = (q.get('id_new') or '').strip()
+    mes_produccion = (q.get('mes_produccion') or '').strip()
+    estado = (q.get('estado') or '').strip()
 
-    estados_validos = [
-        'cotizado', 'aprobado_pendiente', 'asignado', 'en_progreso',
-        'finalizado_trabajador', 'rechazado_supervisor', 'aprobado_supervisor',
-        'informe_subido', 'finalizado'
-    ]
+    # IDs de OC ya facturadas
+    oc_facturadas_ids = list(
+        FacturaOC.objects.values_list('orden_compra_id', flat=True)
+    )
 
-    # IDs de órdenes ya facturadas (corregido con values_list)
-    ordenes_facturadas = FacturaOC.objects.values_list(
-        'orden_compra_id', flat=True)
+    # Prefetch SOLO OC no facturadas (se respeta en .ordenes_compra.all())
+    oc_no_facturadas_qs = OrdenCompraFacturacion.objects.exclude(
+        pk__in=oc_facturadas_ids
+    )
 
-    # Base queryset
     servicios = (
         ServicioCotizado.objects
         .select_related(
@@ -87,13 +86,19 @@ def listar_ordenes_compra(request):
             'supervisor_aprobo', 'supervisor_rechazo', 'supervisor_asigna',
             'usuario_informe'
         )
-        .prefetch_related('ordenes_compra', 'trabajadores_asignados')
-        .filter(estado__in=estados_validos)
-        .exclude(ordenes_compra__in=Subquery(ordenes_facturadas))
+        .prefetch_related(
+            Prefetch('ordenes_compra', queryset=oc_no_facturadas_qs),
+            'trabajadores_asignados'
+        )
         .order_by('-fecha_creacion')
     )
 
-    # Aplicar filtros
+    # 🔎 Filtrado por estado: SOLO si el usuario lo elige
+    if estado:
+        servicios = servicios.filter(estado=estado)
+    # (si no hay estado → NO se filtra: muestra todos)
+
+    # Filtros de texto
     if du:
         servicios = servicios.filter(du__iexact=du)
     if id_claro:
@@ -102,20 +107,18 @@ def listar_ordenes_compra(request):
         servicios = servicios.filter(id_new__icontains=id_new)
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
-    if estado:
-        servicios = servicios.filter(estado=estado)
 
-    # -------- Paginación --------
-    cantidad = q.get("cantidad", "10")
-    per_page = 999999 if cantidad == "todos" else int(cantidad)
-    paginator = Paginator(servicios, per_page)
-    page_number = q.get("page")
-    pagina = paginator.get_page(page_number)
+    # --- Paginación ---
+    cantidad = (q.get("cantidad") or "10")
+    try:
+        per_page = 999_999 if cantidad == "todos" else int(cantidad)
+    except ValueError:
+        per_page = 10
+    pagina = Paginator(servicios, per_page).get_page(q.get("page"))
 
-    # -------- Querystrings persistentes --------
+    # --- Querystrings persistentes ---
     qs_pag = q.copy()
     qs_pag.pop("page", None)
-
     qs_cant = q.copy()
     qs_cant.pop("cantidad", None)
 

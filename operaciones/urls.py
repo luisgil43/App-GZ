@@ -2,6 +2,8 @@
 
 from django.urls import path
 from . import views
+from . import views_fotos
+from . import views_fotos as fotos
 
 app_name = 'operaciones'  # <--- ESTA LÍNEA ES OBLIGATORIA PARA USAR NAMESPACES
 
@@ -67,6 +69,52 @@ urlpatterns = [
          name='exportar_mis_rendiciones'),
     path("sitios/<int:pk>/editar/", views.editar_sitio, name="editar_sitio"),
     path("sitios/<int:pk>/eliminar/", views.eliminar_sitio, name="eliminar_sitio"),
+
+
+    # Supervisor
+    path("fotos/servicio/<int:servicio_id>/revisar/",
+         fotos.revisar_sesion_fotos, name="fotos_revisar_sesion"),
+
+    # Requisitos de fotos
+    path("servicios/<int:servicio_id>/fotos/requisitos/",
+         fotos.configurar_requisitos, name="fotos_configurar_requisitos"),
+    path("servicios/<int:servicio_id>/fotos/requisitos/importar/",
+         fotos.import_requirements_page, name="fotos_import_requirements_page"),
+    path("servicios/<int:servicio_id>/fotos/requisitos/descargar/<str:ext>/",
+         fotos.download_requirements_template, name="fotos_download_requirements_template"),
+    path("servicios/<int:servicio_id>/fotos/requisitos/importar/submit/",
+         fotos.importar_requisitos, name="fotos_importar_requisitos"),
+
+    # Atajo desde el servicio para que el técnico entre a su upload
+    path("servicios/<int:servicio_id>/fotos/",
+         views.ir_a_upload_fotos, name="ir_a_upload_fotos"),
+
+    # Upload del técnico
+    path("fotos/asignacion/<int:pk>/upload/",
+         fotos.upload_evidencias_fotos, name="fotos_upload"),
+    path("fotos/evidencia/<int:ev_id>/borrar/",
+         fotos.borrar_evidencia_foto, name="fotos_borrar_evidencia"),
+    path(
+        "fotos/evidencia/<int:ev_id>/borrar-supervisor/", fotos.borrar_evidencia_supervisor,
+        name="fotos_borrar_evidencia_supervisor",),
+
+    path("fotos/servicio/<int:servicio_id>/reporte-parcial/",
+         views_fotos.generar_reporte_parcial_proyecto,
+         name="generar_reporte_parcial_proyecto",
+         ),
+
+    path("operaciones/fotos/servicio/<int:servicio_id>/acta/preview/",
+         views_fotos.generar_acta_preview,
+         name="generar_acta_preview"),
+    path('servicios/<int:pk>/reabrir/',
+         views.reabrir_servicio, name='reabrir_servicio'),
+
+    path("operaciones/fotos/upload-ajax/<int:pk>/",
+         views_fotos.upload_evidencias_ajax, name="fotos_upload_ajax"),
+
+    path("fotos/asignacion/<int:asig_id>/status/", views_fotos.fotos_status_json,
+         name="fotos_status_json"),
+
 
 
 

@@ -6,15 +6,21 @@ from django.utils.module_loading import import_string
 from dotenv import load_dotenv
 load_dotenv()
 
-
 # Ruta base del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+REPORTE_FOTOS_TEMPLATE_XLSX = r"C:\Users\luisg\OneDrive\Escritorio\APP\gz_services\static\reporte_fotos_template.xlsx"
+ACTA_SITES_LOGO_PATH = BASE_DIR / "static" / "images" / "sites_logo.png"
+ACTA_FIRMA_EDGARDO_PATH = BASE_DIR / "static" / "images" / "edgardo_zapata.png"
 
 
 def is_env_var_set(key):
     return bool(os.environ.get(key) and os.environ.get(key).strip().lower() != "none")
 
 
+# ===============================
+# ✅ Cloudinary (cuando está activo)
+# ===============================
 if (
     is_env_var_set("CLOUDINARY_CLOUD_NAME") and
     is_env_var_set("CLOUDINARY_API_KEY") and
@@ -52,6 +58,9 @@ INSTALLED_APPS = [
     'django_select2',
     'cloudinary',
     'cloudinary_storage',
+    # Storage S3/Wasabi para los nuevos campos (no afecta Cloudinary)
+    'storages',
+
     # Tus apps
     'liquidaciones',
     'dashboard',
@@ -84,7 +93,6 @@ MIDDLEWARE = [
     'usuarios.middleware.SessionExpiryMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
 
 ROOT_URLCONF = 'gz_services.urls'
 
@@ -139,9 +147,16 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # ===============================
-# ✅ Cloudinary (cuando está activo)
+# 📦 Wasabi (GZ Services) SOLO para reportes/evidencias
+#     Se usa con un backend dedicado por campo (no cambia el default)
 # ===============================
-
+WASABI_GZ_ACCESS_KEY_ID = os.getenv("WASABI_GZ_ACCESS_KEY_ID")
+WASABI_GZ_SECRET_ACCESS_KEY = os.getenv("WASABI_GZ_SECRET_ACCESS_KEY")
+WASABI_GZ_BUCKET_NAME = os.getenv("WASABI_GZ_BUCKET_NAME", "gz-services")
+WASABI_GZ_REGION_NAME = os.getenv("WASABI_GZ_REGION_NAME", "us-west-1")
+WASABI_GZ_ENDPOINT_URL = os.getenv(
+    "WASABI_GZ_ENDPOINT_URL", "https://s3.us-west-1.wasabisys.com")
+AWS_S3_FILE_OVERWRITE = False
 # Email
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'mail.grupogzs.com'
@@ -158,11 +173,9 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
 # ====================================
 # Datos de la empresa emisora del DTE
 # ====================================
-
 EMPRESA_RUT = "77084679-K"
 EMPRESA_NOMBRE = "GZ SERVICES AND BUSINESS SPA"
 EMPRESA_GIRO = "Servicio de Ingenieria de Telecomunicaciones y Construcciones"
@@ -173,13 +186,10 @@ EMPRESA_ACTIVIDAD_ECONOMICA = "123456"  # Código del SII
 EMPRESA_FECHA_RESOLUCION = "2020-01-01"
 EMPRESA_NUMERO_RESOLUCION = "80"
 
-
 CSRF_FAILURE_VIEW = 'usuarios.views.csrf_error_view'
-
 
 LANGUAGE_CODE = 'es-cl'
 USE_L10N = True
-
 
 # Tiempo máximo de inactividad (en segundos). Ej: 15 minutos
 IDLE_TIMEOUT_SECONDS = 15 * 60

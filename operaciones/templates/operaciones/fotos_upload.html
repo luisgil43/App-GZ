@@ -1,0 +1,1263 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Subir Evidencias — DU{{ servicio.du }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+ <div class="flex items-center justify-between gap-3">
+  <div class="flex items-center gap-2">
+    <a href="{% url 'operaciones:mis_servicios_tecnico' %}"
+       class="inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-md">
+      ⬅️ Volver
+    </a>
+
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold leading-tight">
+        📸 Subir Evidencias — DU{{ servicio.du }}
+      </h1>
+      <div class="text-sm text-gray-600">
+        {{ servicio.id_claro }} · {{ servicio.id_new }} · {{ servicio.region }}
+      </div>
+    </div>
+  </div>
+
+ {% if can_finish %}
+  <form method="post" action="{% url 'operaciones:finalizar_servicio' servicio.id %}">
+      {% csrf_token %}
+      <button type="submit"
+              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
+        🏁 Finalizar
+      </button>
+    </form>
+  {% else %}
+    <button type="button"
+            class="inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed"
+            title="Debes subir todas las fotos requeridas y que todos acepten la asignación.">
+      🏁 Finalizar
+    </button>
+  {% endif %}
+</div>
+  
+
+  {% if not can_finish %}
+    {% if pendientes_aceptar %}
+      <div class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
+        Aún faltan técnicos por aceptar: {{ pendientes_aceptar|join:", " }}.
+      </div>
+    {% endif %}
+    {% if faltantes_global %}
+      <div class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
+        Faltan fotos requeridas: {{ faltantes_global|join:", " }}.
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="grid md:grid-cols-2 gap-6 mt-4">
+    <div>
+      <h2 class="font-semibold mb-2">Requisitos</h2>
+      <ul class="space-y-2">
+        {% for r in requisitos %}
+<li class="border rounded p-3">
+  <div class="flex items-center justify-between">
+    <div class="font-medium">
+      {{ r.orden }}. {{ r.titulo }} {% if r.obligatorio %}<span class="text-red-600">*</span>{% endif %}
+
+      {# Si está tomado y aún no hay subidas -> "Tomado". Si ya tiene subidas, usa la badge normal #}
+      {% if r.id in locked_ids and r.uploaded|default:0 == 0 %}
+        <span class="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">Tomado</span>
+      {% else %}
+       <span
+  class="ml-2 text-xs px-2 py-0.5 rounded req-badge
+         {% if r.uploaded > 0 or r.completed_global %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}"
+  data-req="{{ r.id }}"
+  data-state="{% if r.uploaded > 0 or r.completed_global %}done{% else %}pending{% endif %}">
+  {% if r.uploaded > 0 or r.completed_global %}Completado{% else %}Pendiente{% endif %}
+</span>
+      {% endif %}
+    </div>
+
+    <div class="text-xs text-gray-500 req-count" data-req="{{ r.id }}">
+      {{ r.uploaded }} subidas (tú)
+    </div>
+  </div>
+
+  {% if r.descripcion %}
+    <div class="text-sm text-gray-600">{{ r.descripcion }}</div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="mt-2 geo-upload-form ajax-uploader">
+    {% csrf_token %}
+    <input type="hidden" name="req_id" value="{{ r.id }}">
+
+    <!-- HIDDEN META -->
+    <input type="hidden" name="lat">
+    <input type="hidden" name="lng">
+    <input type="hidden" name="acc">
+    <input type="hidden" name="client_taken_at">
+
+    <div class="flex items-center gap-2">
+      <!-- GALLERY -->
+      <input id="file-gallery-{{ r.id }}" type="file" name="imagenes[]" accept="image/*" multiple
+             class="sr-only file-input" {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+      <label for="file-gallery-{{ r.id }}"
+             class="px-3 py-2 rounded text-sm cursor-pointer
+                    {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}bg-gray-100 text-gray-400 cursor-not-allowed opacity-60 pointer-events-none{% else %}bg-gray-100 hover:bg-gray-200{% endif %}">
+        📁 Elegir archivos
+      </label>
+      <span class="text-xs text-gray-600 filename" data-empty="Sin archivos">
+        {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}Cerrado{% else %}Sin archivos{% endif %}
+      </span>
+
+      <!-- CAMERA -->
+      <input id="file-camera-{{ r.id }}" type="file" name="imagenes[]" accept="image/*" capture="environment"
+             class="sr-only file-input-camera" {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+      <button type="button"
+              class="px-3 py-2 rounded text-sm
+                     {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}bg-gray-100 text-gray-400 cursor-not-allowed opacity-60{% else %}bg-gray-100 hover:bg-gray-200{% endif %} trigger-camera"
+              data-target="file-camera-{{ r.id }}"
+              {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+        📷 Tomar
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
+      <span class="gps-status">
+        {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}📍 Cerrado{% else %}📍 En espera de ubicación…{% endif %}
+      </span>
+      <span class="time-status">🕒 —</span>
+    </div>
+
+    <div class="flex items-center gap-2 mt-2">
+      <input type="text" name="nota" placeholder="Nota (opcional)" class="w-full border rounded p-2"
+             {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+      <button type="button"
+              class="grant-location px-3 py-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm
+                     {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}opacity-60 cursor-not-allowed{% endif %}"
+              {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+        Capturar ubicación
+      </button>
+    </div>
+
+    <button class="mt-2 px-3 py-1 rounded
+                   {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}bg-gray-300 text-white cursor-not-allowed opacity-60{% else %}bg-blue-600 text-white hover:bg-blue-700{% endif %}"
+            {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
+      Subir
+    </button>
+  </form>
+</li>
+
+
+        {% endfor %}
+      </ul>
+
+     <div class="mt-6">
+  <h3 class="font-semibold mb-2">Fotos Extra</h3>
+
+  <!-- CAMBIO 1: marcamos este formulario como el de EXTRAS -->
+  <form method="post" enctype="multipart/form-data"
+        class="geo-upload-form ajax-uploader border rounded p-3" data-extra="1">
+    {% csrf_token %}
+
+    <!-- HIDDEN META -->
+    <input type="hidden" name="lat">
+    <input type="hidden" name="lng">
+    <input type="hidden" name="acc">
+    <input type="hidden" name="client_taken_at">
+
+    <div class="flex items-center gap-2">
+      <input id="file-gallery-extra" type="file" name="imagenes[]" accept="image/*" multiple class="sr-only file-input">
+      <label for="file-gallery-extra" class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm cursor-pointer">📁 Elegir archivos</label>
+      <span class="text-xs text-gray-600 filename" data-empty="Sin archivos">Sin archivos</span>
+
+      <input id="file-camera-extra" type="file" name="imagenes[]" accept="image/*" capture="environment" class="sr-only file-input-camera">
+      <button type="button" class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm trigger-camera" data-target="file-camera-extra">📷 Tomar</button>
+    </div>
+
+    <div class="flex items-center justify-between mt-2 text-xs text-gray-600">
+      <span class="gps-status">📍 En espera de ubicación…</span>
+      <span class="time-status">🕒 —</span>
+    </div>
+
+    {% if is_proyecto_especial %}
+      <div class="mt-3">
+        <label for="titulo_manual" class="block text-sm font-semibold text-gray-700">Título (requerido para Extra)</label>
+        <input type="text" name="titulo_manual" id="titulo_manual" class="w-full border rounded-lg p-2" placeholder="Escribe un título para esta foto" required>
+      </div>
+    {% else %}
+      <input type="hidden" name="titulo_manual" value="Extra">
+    {% endif %}
+
+    <div class="flex items-center gap-2 mt-2">
+      <input type="text" name="nota" placeholder="Nota (opcional)" class="w-full border rounded p-2">
+      <button type="button" class="grant-location px-3 py-2 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm">Capturar ubicación</button>
+    </div>
+
+    <button class="mt-2 bg-gray-800 text-white px-3 py-1 rounded">Subir</button>
+  </form>
+</div>
+
+ </div>
+
+
+
+  <div>
+      <h2 class="font-semibold mb-2">Subidas</h2>
+
+<!-- hooks para JS (no cambia comportamiento visual) -->
+<div id="js-urls"
+     data-delete-url-template="{% url 'operaciones:fotos_borrar_evidencia' 0 %}"
+     data-status-url="{% url 'operaciones:fotos_status_json' a.pk %}">
+</div>
+<script>
+  // ► GLOBAL: disponible para otros scripts
+  window.CAN_DELETE = {% if a.estado == 'en_proceso' %}true{% elif a.estado == 'rechazado_supervisor' and a.reintento_habilitado %}true{% else %}false{% endif %};
+  window.DELETE_URL_TPL = document.getElementById('js-urls')?.dataset?.deleteUrlTemplate || '';
+  window.deleteUrlFor   = (id) => (window.DELETE_URL_TPL || '').replace(/\/0(\/|$)/, `/${id}$1`);
+
+  // Convierte candados existentes en botones ✕ (si hay permiso)
+  window.__upgradeDeleteBadges = function () {
+    if (!window.CAN_DELETE || !window.DELETE_URL_TPL) return;
+    document.querySelectorAll('.grid.grid-cols-2.gap-3 figure[data-ev-id]').forEach(fig => {
+      if (fig.querySelector('[data-delete]')) return;      // ya tiene ✕
+      const evId = fig.getAttribute('data-ev-id');
+      if (!evId) return;
+      const holder = fig.querySelector('.relative');
+      const lock = holder?.querySelector('[title="Bloqueado"]');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.title = 'Eliminar esta foto';
+      btn.className = 'absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center bg-red-600/90 hover:bg-red-700 text-white text-sm shadow';
+      btn.setAttribute('data-delete','');
+      btn.setAttribute('data-action', window.deleteUrlFor(evId));
+      btn.textContent = '✕';
+      if (lock) lock.replaceWith(btn); else holder?.appendChild(btn);
+    });
+  };
+
+  // Al cargar la página, “upgradear” lo que vino del server
+  document.addEventListener('DOMContentLoaded', window.__upgradeDeleteBadges);
+</script>
+
+
+      <div class="grid grid-cols-2 gap-3 max-h-[600px] overflow-auto">
+{% for ev in evidencias %}
+  <figure class="border rounded p-2"
+          data-ev-id="{{ ev.id }}"
+          {% if ev.requisito_id %}data-req="{{ ev.requisito.id }}"{% endif %}>
+    <div class="relative">
+      <img src="{{ ev.imagen.url }}" class="w-full h-32 object-cover rounded" loading="lazy" alt="photo">
+
+
+{# Mostrar X solo si el técnico puede borrar; sin paréntesis en el if #}
+{% if a.estado == 'en_proceso' %}
+  <button type="button"
+          class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
+                 bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+          title="Eliminar esta foto"
+          data-delete
+          data-action="{% url 'operaciones:fotos_borrar_evidencia' ev.id %}">
+    ✕
+  </button>
+{% elif a.estado == 'rechazado_supervisor' and a.reintento_habilitado %}
+  <button type="button"
+          class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
+                 bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+          title="Eliminar esta foto"
+          data-delete
+          data-action="{% url 'operaciones:fotos_borrar_evidencia' ev.id %}">
+    ✕
+  </button>
+{% else %}
+  <span class="absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center
+               bg-gray-300 text-white text-sm"
+        title="Bloqueado">
+    🔒
+  </span>
+{% endif %}
+    </div>
+
+    <figcaption class="text-xs mt-1 space-y-0.5">
+      <div class="font-medium">
+        {% if ev.requisito %}{{ ev.requisito.titulo }}
+        {% elif ev.titulo_manual %}{{ ev.titulo_manual }}
+        {% else %}Extra{% endif %}
+      </div>
+      <div>🕒 {% if ev.client_taken_at %}{{ ev.client_taken_at|date:"Y-m-d H:i" }}{% else %}{{ ev.tomada_en|date:"Y-m-d H:i" }}{% endif %}</div>
+
+      {% if ev.lat and ev.lng %}
+        <div>📍 {{ ev.lat }}, {{ ev.lng }}{% if ev.gps_accuracy_m %} (±{{ ev.gps_accuracy_m }}m){% endif %}</div>
+        <a class="text-blue-600 hover:underline" target="_blank" rel="noopener" href="https://maps.google.com/?q={{ ev.lat }},{{ ev.lng }}">Abrir en Maps</a>
+      {% else %}
+        <div class="text-gray-400">📍 Sin GPS</div>
+      {% endif %}
+
+      {% if ev.nota %}
+        <div class="text-gray-600">{{ ev.nota }}</div>
+      {% endif %}
+    </figcaption>
+  </figure>
+{% empty %}
+  <div class="text-gray-500" data-empty>Aún no hay fotos.</div>
+{% endfor %}
+      </div>
+    </div>
+  </div>
+
+<!-- Modal eliminar evidencia -->
+<div id="delete-modal" class="fixed inset-0 z-50 hidden">
+  <button id="delete-backdrop" class="absolute inset-0 bg-black/40" aria-label="Cerrar"></button>
+
+  <div class="relative max-w-md mx-auto bg-white rounded-2xl shadow p-6 mt-40">
+    <h3 class="text-lg font-semibold text-red-600">Eliminar foto</h3>
+    <p class="mt-1 text-sm text-gray-600">¿Seguro que deseas eliminar esta foto? Esta acción no se puede deshacer.</p>
+
+    <form id="delete-form" method="post" class="mt-4">
+      {% csrf_token %}
+      <div class="flex justify-end gap-2">
+        <button type="button"
+                id="delete-cancel"
+                class="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200">
+          Cancelar
+        </button>
+        <button type="submit"
+                class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">
+          Eliminar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+
+
+<script>
+  // IDs de evidencias ya presentes en el DOM
+  window.__knownEvIds = new Set(
+    Array.from(document.querySelectorAll('figure[data-ev-id]'))
+         .map(f => parseInt(f.getAttribute('data-ev-id'),10))
+         .filter(Number.isFinite)
+  );
+  window.__maxEvId = window.__knownEvIds.size
+    ? Math.max(...Array.from(window.__knownEvIds))
+    : 0;
+</script>
+
+<script>
+  (function () {
+    const modal    = document.getElementById('delete-modal');
+    const form     = document.getElementById('delete-form');
+    const backdrop = document.getElementById('delete-backdrop');
+    const cancel   = document.getElementById('delete-cancel');
+    const CSRF     = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value;
+
+    let targetFigure = null;
+
+    function openModal(actionUrl, fig) {
+      targetFigure = fig || null;
+      form.setAttribute('action', actionUrl);
+      modal.classList.remove('hidden');
+    }
+    function closeModal() {
+      modal.classList.add('hidden');
+      form.removeAttribute('action');
+      targetFigure = null;
+    }
+
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-delete]');
+      if (!btn) return;
+      e.preventDefault();
+      openModal(btn.getAttribute('data-action'), btn.closest('figure'));
+    });
+
+    backdrop.addEventListener('click', closeModal);
+    cancel.addEventListener('click', closeModal);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+
+    /* 🔁 NUEVO LISTENER: recarga la página tras borrar */
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const action = form.getAttribute('action');
+      if (!action) return;
+
+      try {
+        const fd = new FormData(form);
+        const res = await fetch(action, {
+          method: 'POST',
+          body: fd,
+          headers: { 'X-CSRFToken': CSRF },
+          cache: 'no-store'
+        });
+
+        // Acepta 2xx o redirecciones 3xx (Django puede responder 302/303)
+        if ((res.status >= 200 && res.status < 300) || (res.status >= 300 && res.status < 400)) {
+          window.location.reload();
+          return;
+        }
+        throw new Error('Error al borrar: ' + res.status);
+      } catch (err) {
+        alert('No se pudo eliminar la foto. Vuelve a intentarlo.');
+      } finally {
+        // Por si la recarga falla
+        closeModal();
+      }
+    });
+  })();
+</script>
+
+<script>
+/* Exponer una función global para capturar GPS al ENVIAR (sin tocar tu script existente) */
+window.__captureGeoForFotos = async function(form){
+  const GEO_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
+  const latEl   = form.querySelector('input[name="lat"]');
+  const lngEl   = form.querySelector('input[name="lng"]');
+  const accEl   = form.querySelector('input[name="acc"]');
+  const takenEl = form.querySelector('input[name="client_taken_at"]');
+  const gpsStatus  = form.querySelector('.gps-status');
+  const timeStatus = form.querySelector('.time-status');
+
+  const now = new Date();
+  if (takenEl) takenEl.value = now.toISOString();
+  if (timeStatus) timeStatus.textContent = "🕒 " + now.toLocaleString();
+
+  if (!('geolocation' in navigator)) {
+    if (gpsStatus) gpsStatus.textContent = "📍 Geolocalización no soportada";
+    return false;
+  }
+
+  return new Promise((resolve)=>{
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        const { latitude, longitude, accuracy } = (pos && pos.coords) || {};
+        if (latEl) latEl.value = latitude ?? "";
+        if (lngEl) lngEl.value = longitude ?? "";
+        if (accEl) accEl.value = accuracy ?? "";
+        if (latEl.value && lngEl.value){
+          if (gpsStatus) gpsStatus.textContent =
+            `📍 ${Number(latEl.value).toFixed(6)}, ${Number(lngEl.value).toFixed(6)}${accEl.value ? " (±"+Math.round(accEl.value)+"m)" : ""}`;
+          resolve(true);
+        } else {
+          if (gpsStatus) gpsStatus.textContent = "📍 Ubicación no disponible";
+          resolve(false);
+        }
+      },
+      ()=>{
+        if (gpsStatus) gpsStatus.textContent = "📍 Permiso denegado o no disponible";
+        resolve(false);
+      },
+      { ...GEO_OPTS }
+    );
+  });
+};
+</script>
+
+<script>
+(function(){
+  const GEO_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 };
+
+  async function captureGeo(form){
+    const latEl   = form.querySelector('input[name="lat"]');
+    const lngEl   = form.querySelector('input[name="lng"]');
+    const accEl   = form.querySelector('input[name="acc"]');
+    const takenEl = form.querySelector('input[name="client_taken_at"]');
+    const gpsStatus  = form.querySelector('.gps-status');
+    const timeStatus = form.querySelector('.time-status');
+
+    function setTimeNow(){
+      const now = new Date();
+      if (takenEl) takenEl.value = now.toISOString();
+      if (timeStatus) timeStatus.textContent = "🕒 " + now.toLocaleString();
+    }
+    function setGps(text){ if (gpsStatus) gpsStatus.textContent = text; }
+
+    setTimeNow();
+
+    if (!('geolocation' in navigator)){
+      setGps("📍 Geolocalización no soportada");
+      return false;
+    }
+
+    setGps("📍 Obteniendo ubicación…");
+    return new Promise((resolve)=>{
+      navigator.geolocation.getCurrentPosition(
+        (pos)=>{
+          const { latitude, longitude, accuracy } = (pos && pos.coords) || {};
+          if (latEl) latEl.value = (latitude ?? "");
+          if (lngEl) lngEl.value = (longitude ?? "");
+          if (accEl) accEl.value = (accuracy ?? "");
+          if (latEl.value && lngEl.value){
+            setGps(`📍 ${Number(latEl.value).toFixed(6)}, ${Number(lngEl.value).toFixed(6)}${accEl.value ? " (±"+Math.round(accEl.value)+"m)" : ""}`);
+            resolve(true);
+          } else {
+            setGps("📍 Ubicación no disponible");
+            resolve(false);
+          }
+        },
+        ()=>{
+          setGps("📍 Permiso denegado o no disponible");
+          resolve(false);
+        },
+        GEO_OPTS
+      );
+    });
+  }
+
+  document.querySelectorAll('.geo-upload-form').forEach(form=>{
+    const fileInputGallery = form.querySelector('.file-input');
+    const fileInputCam     = form.querySelector('.file-input-camera');
+    const filenameEl       = form.querySelector('.filename');
+
+    if (filenameEl) filenameEl.textContent = filenameEl.getAttribute('data-empty') || 'Sin archivos';
+
+    document.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.trigger-camera');
+      if(!btn) return;
+      if(btn.closest('form') !== form) return;
+      const id = btn.getAttribute('data-target');
+      const inputCam = document.getElementById(id);
+      if(inputCam) inputCam.click();
+    });
+
+    if (fileInputGallery){
+  fileInputGallery.addEventListener('change', () => {
+    const n = fileInputGallery.files ? fileInputGallery.files.length : 0;
+    if (filenameEl){
+      filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
+                           : n===1 ? fileInputGallery.files[0].name
+                                   : `${n} archivos seleccionados`;
+    }
+  });
+}
+
+if (fileInputCam){
+  fileInputCam.addEventListener('change', () => {
+    const n = fileInputCam.files ? fileInputCam.files.length : 0;
+    if (filenameEl){
+      filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
+                           : n===1 ? fileInputCam.files[0].name
+                                   : `${n} archivos seleccionados`;
+    }
+  });
+}
+
+    const btnGrant = form.querySelector('.grant-location');
+    if (btnGrant){
+      btnGrant.addEventListener('click', async ()=>{ await captureGeo(form); });
+    }
+
+    form.addEventListener('submit', async (e)=>{
+      // El envío real lo intercepta el uploader en segundo plano (script de abajo)
+      // Aquí solo validamos que haya archivos
+      const hasFiles = Array.from(form.querySelectorAll('input[type=file][name="imagenes[]"]'))
+                        .some(inp => (inp.files && inp.files.length));
+      if (!hasFiles) {
+        e.preventDefault();
+        alert('Selecciona al menos una imagen.');
+      }
+    });
+  });
+})();
+</script>
+
+<script>
+/* Geolocalización pasiva global: guarda el último fix y lo “estampa” en cada form */
+(function(){
+  const OPTS = { enableHighAccuracy:true, maximumAge:10000, timeout:8000 };
+  const last = { ok:false, lat:null, lng:null, acc:null, ts:0 };
+  window.__lastGeo = last;
+
+  function setLabelCoords(el, lat, lng, acc){
+    if (!el) return;
+    el.textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}${isFinite(acc)?' (±'+Math.round(acc)+'m)':''}`;
+  }
+
+  // Estampa (si hay fix) + pone hora
+  function stampToForm(form){
+    const latEl=form.querySelector('input[name="lat"]');
+    const lngEl=form.querySelector('input[name="lng"]');
+    const accEl=form.querySelector('input[name="acc"]');
+    const tEl  =form.querySelector('input[name="client_taken_at"]');
+    const lbl  =form.querySelector('.gps-status');
+    if (tEl && !tEl.value) tEl.value = new Date().toISOString();
+
+    if (last.ok && latEl && lngEl){
+      latEl.value = last.lat; lngEl.value = last.lng;
+      if (accEl) accEl.value = last.acc ?? '';
+      setLabelCoords(lbl, Number(last.lat), Number(last.lng), Number(last.acc));
+      return true;
+    }
+    return false;
+  }
+
+  // Watcher continuo (no bloquea nada)
+  if ('geolocation' in navigator){
+    try {
+      navigator.geolocation.watchPosition((pos)=>{
+        const c = pos.coords||{};
+        last.ok  = isFinite(c.latitude) && isFinite(c.longitude);
+        last.lat = c.latitude;
+        last.lng = c.longitude;
+        last.acc = c.accuracy;
+        last.ts  = Date.now();
+        // pinta en forms que estén “esperando ubicación…”
+        document.querySelectorAll('.geo-upload-form').forEach(f=>{
+          const lbl=f.querySelector('.gps-status');
+          if (last.ok && lbl && /espera|intentando/i.test(lbl.textContent||'')){
+            stampToForm(f);
+          }
+        });
+      }, ()=>{}, OPTS);
+    } catch(e){}
+  }
+
+  // API pública: intenta con el last fix; si no hay, fuerza un getCurrentPosition.
+  window.__stampGeoIntoForm = async function(form){
+    if (stampToForm(form)) return true;
+
+    const lbl=form.querySelector('.gps-status');
+    if (lbl) lbl.textContent='📍 Intentando obtener ubicación…';
+
+    if (!('geolocation' in navigator)) {
+      if (lbl) lbl.textContent='📍 Geolocalización no soportada';
+      return false;
+    }
+    return new Promise(resolve=>{
+      navigator.geolocation.getCurrentPosition(
+        (pos)=>{ // éxito
+          const c=pos.coords||{};
+          last.ok  = isFinite(c.latitude)&&isFinite(c.longitude);
+          last.lat = c.latitude; last.lng = c.longitude; last.acc = c.accuracy;
+          stampToForm(form);
+          resolve(true);
+        },
+        ()=>{ // fallo: seguimos sin GPS
+          if (lbl) lbl.textContent='📍 Sin GPS (se subirá sin coordenadas)';
+          resolve(false);
+        },
+        OPTS
+      );
+    });
+  };
+})();
+</script>
+
+
+<script>
+/* — dentro del uploader — */
+async function resizeImage(file, maxSide=1600, quality=0.85) {
+  // si el archivo ya es pequeño, no perder tiempo reescalando
+  if (file && file.size <= 1_000_000) return file;
+
+  if (!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) return file;
+  const bmp = await createImageBitmap(file).catch(()=>null);
+  if (!bmp) return file;
+  const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+  if (scale === 1) return file;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = Math.round(bmp.width*scale);
+  canvas.height = Math.round(bmp.height*scale);
+  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+
+  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+  const safeName = (file.name || 'foto').replace(/\.(heic|heif|png|webp)$/i, '.jpg');
+  return new File([blob], safeName, {type: 'image/jpeg'});
+}
+</script>
+ 	<script>
+/* — dentro del uploader — */
+async function bestEffortGps(form){
+  // 1) usar fix pasivo si ya existe (instantáneo)
+  if (window.__stampGeoIntoForm) {
+    const ok = await window.__stampGeoIntoForm(form);
+    if (ok) return true;
+  }
+  // 2) fallback a tu función existente (getCurrentPosition con UI)
+  if (window.__captureGeoForFotos) {
+    const lbl = form.querySelector('.gps-status');
+    if (lbl) lbl.textContent = '📍 Intentando obtener ubicación…';
+    const ok2 = await window.__captureGeoForFotos(form);
+    if (!ok2 && lbl) lbl.textContent = '📍 Sin GPS (se subirá sin coordenadas)';
+    return ok2;
+  }
+  return false;
+}
+</script>
+<script>
+(() => {
+  const UPLOAD_URL = "{% url 'operaciones:fotos_upload_ajax' a.pk %}";
+  const CSRF = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value;
+
+  // ---- estado por requisito (contador propio)
+  const myCountsByReq = new Map();
+  document.querySelectorAll('.req-count[data-req]').forEach(el => {
+    const id = el.getAttribute('data-req');
+    const m = (el.textContent.match(/\d+/) || [0])[0];
+    myCountsByReq.set(id, parseInt(m,10));
+  });
+
+  function setReqEnabled(reqId, enabled){
+    const inp = document.querySelector(`input[name="req_id"][value="${reqId}"]`);
+    if (!inp) return;
+    const li   = inp.closest('li');
+    const form = inp.closest('form');
+
+    const gallery = document.getElementById(`file-gallery-${reqId}`);
+    const lblGal  = li?.querySelector(`label[for="file-gallery-${reqId}"]`);
+    const cam     = document.getElementById(`file-camera-${reqId}`);
+    const btnCam  = li?.querySelector(`.trigger-camera[data-target="file-camera-${reqId}"]`);
+    const btnLoc  = li?.querySelector('.grant-location');
+    const nota    = li?.querySelector('input[name="nota"]');
+    const submit  = form?.querySelector('button[type="submit"], button:not([type])`);
+
+    [gallery, cam, btnCam, btnLoc, nota, submit].forEach(el=>{
+      if(!el) return;
+      el.disabled = !enabled;
+      el.classList.toggle('cursor-not-allowed', !enabled);
+      el.classList.toggle('opacity-60', !enabled);
+    });
+    if (lblGal){
+      lblGal.classList.toggle('pointer-events-none', !enabled);
+      lblGal.classList.toggle('opacity-60', !enabled);
+    }
+    const filenameEl = form?.querySelector('.filename');
+    if (filenameEl) filenameEl.textContent = enabled ? (filenameEl.dataset.empty || 'Sin archivos') : 'Cerrado';
+    if (!enabled && nota) nota.value = '';
+  }
+  window.__setReqEnabled = setReqEnabled;
+
+  function markReqDone(reqId){
+    if (!reqId) return;
+    const n = (myCountsByReq.get(String(reqId)) || 0) + 1;
+    myCountsByReq.set(String(reqId), n);
+    const countEl = document.querySelector(`.req-count[data-req="${reqId}"]`);
+    if (countEl) countEl.textContent = `${n} subidas (tú)`;
+    const badge = document.querySelector(`.req-badge[data-req="${reqId}"]`);
+    if (badge){
+      badge.dataset.state = 'done';
+      badge.textContent   = 'Completado';
+      badge.classList.remove('bg-red-100','text-red-800');
+      badge.classList.add('bg-green-100','text-green-800');
+    }
+  }
+
+  function afterFormDrained(form){
+  // Feedback visual: “Completado” un momento y luego vuelve a “Sin archivos”
+  const filenameEl = form.querySelector('.filename');
+  if (filenameEl) {
+    filenameEl.textContent = 'Completado';
+    clearTimeout(form._filenameTimer);
+    form._filenameTimer = setTimeout(() => {
+      filenameEl.textContent = filenameEl.dataset.empty || 'Sin archivos';
+    }, 1500); // 1.5s de feedback
+  }
+
+  // Limpia inputs de archivo (necesario para poder elegir el mismo archivo otra vez)
+  form.querySelectorAll('input[type=file][name="imagenes[]"]').forEach(inp => { inp.value = ''; });
+
+  // Limpia campos de apoyo
+  const titulo = form.querySelector('input[name="titulo_manual"]');
+  if (titulo && (titulo.type || '').toLowerCase() !== 'hidden') titulo.value = '';
+
+  const nota = form.querySelector('input[name="nota"]');
+  if (nota) nota.value = '';
+
+  const gpsStatus  = form.querySelector('.gps-status');
+  if (gpsStatus) gpsStatus.textContent = '📍 En espera de ubicación…';
+
+  const timeStatus = form.querySelector('.time-status');
+  if (timeStatus) timeStatus.textContent = '🕒 —';
+
+  ['lat','lng','acc','client_taken_at'].forEach(nm => {
+    const el = form.querySelector(`input[name="${nm}"]`);
+    if (el) el.value = '';
+  });
+
+  // Si el requisito quedó “done”, deshabilitarlo
+  const reqId = form.querySelector('input[name="req_id"]')?.value || null;
+  if (reqId) {
+    const badge = document.querySelector(`.req-badge[data-req="${reqId}"]`);
+    if (badge && badge.dataset.state === 'done' && window.__setReqEnabled) {
+      window.__setReqEnabled(reqId, false);
+delete form.dataset.working;
+    }
+  }
+}
+
+  // ---- utilidades de subida
+  async function resizeImage(file, maxSide=1600, quality=0.85) {
+    if (!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) return file;
+    const bmp = await createImageBitmap(file).catch(()=>null);
+    if (!bmp) return file;
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    if (scale === 1) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width*scale);
+    canvas.height = Math.round(bmp.height*scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+    const safeName = (file.name || 'foto').replace(/\.(heic|heif|png|webp)$/i, '.jpg');
+    return new File([blob], safeName, {type: 'image/jpeg'});
+  }
+
+  function insertEvidenceFigure(fig, ev) {
+  const grid = document.querySelector('.grid.grid-cols-2.gap-3');
+  if (!grid) return;
+
+  // quita el mensaje "Aún no hay fotos"
+  const emptyMsg = grid.querySelector('[data-empty]');
+  if (emptyMsg) emptyMsg.remove();
+
+  // primera tarjeta que NO tiene data-req => es extra
+  const firstExtra = grid.querySelector('figure:not([data-req])');
+
+  if (ev.req_id) {
+    // con requisito: debe ir antes de las extras
+    if (firstExtra) grid.insertBefore(fig, firstExtra);
+    else grid.appendChild(fig);
+  } else {
+    // extra: siempre al final
+    grid.appendChild(fig);
+  }
+}
+
+function addEvidenceCard(ev) {
+  const grid = document.querySelector('.grid.grid-cols-2.gap-3');
+  if (!grid) return;
+
+  const fig = document.createElement('figure');
+  fig.className = "border rounded p-2";
+  fig.setAttribute('data-ev-id', ev.id);
+  if (ev.req_id) fig.setAttribute('data-req', ev.req_id);
+
+  const gps = (ev.lat && ev.lng)
+    ? `📍 ${Number(ev.lat).toFixed(5)}, ${Number(ev.lng).toFixed(5)}${ev.acc ? " (±"+Math.round(ev.acc)+"m)" : ""}`
+    : '📍 Sin GPS';
+
+  let badgeHtml = `<span class="absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center bg-gray-300 text-white text-sm" title="Bloqueado">🔒</span>`;
+  if (window.CAN_DELETE && window.DELETE_URL_TPL) {
+    const action = window.deleteUrlFor ? window.deleteUrlFor(ev.id)
+                                       : window.DELETE_URL_TPL.replace(/\/0(\/|$)/, `/${ev.id}$1`);
+    badgeHtml = `
+      <button type="button"
+              class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
+                     bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+              title="Eliminar esta foto"
+              data-delete
+              data-action="${action}">✕</button>`;
+  }
+
+  fig.innerHTML = `
+    <div class="relative">
+      <img src="${ev.url}" class="w-full h-32 object-cover rounded" loading="lazy" alt="photo">
+      ${badgeHtml}
+    </div>
+    <figcaption class="text-xs mt-1 space-y-0.5">
+      <div class="font-medium">${ev.titulo}</div>
+      <div>🕒 ${ev.fecha}</div>
+      <div>${gps}</div>
+    </figcaption>`;
+
+  // ⬇️ Inserta respetando que las extras queden al final
+  insertEvidenceFigure(fig, ev);
+
+  if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
+}
+
+
+  function makeQueueItem(file, meta, parentForm) {
+    const el = document.createElement('div');
+    el.className = "border rounded p-2 relative";
+    el.innerHTML = `
+      <div class="text-xs mb-1 truncate">${file.name}</div>
+      <div class="w-full h-2 bg-gray-100 rounded overflow-hidden">
+        <div class="h-2 bg-blue-600" style="width:0%"></div>
+      </div>
+      <div class="flex items-center justify-between mt-1 text-xs text-gray-600">
+        <span class="status">Preparando…</span>
+        <button class="cancel text-red-600" type="button">Cancelar</button>
+      </div>`;
+    el._meta = meta;
+    el._file = file;
+    el._xhr  = null;
+    el._parentForm = parentForm;
+    return el;
+  }
+
+  async function uploadOne(el) {
+  const bar = el.querySelector('.bg-blue-600');
+  const status = el.querySelector('.status');
+  const cancelBtn = el.querySelector('.cancel');
+
+  status.textContent = 'Optimizando…';
+  const small = await resizeImage(el._file).catch(()=>el._file);
+
+  const fd = new FormData();
+  if (CSRF) fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('imagen', small);
+  for (const [k, v] of Object.entries(el._meta||{})) {
+    if (v !== undefined && v !== null) fd.append(k, v);
+  }
+
+  const xhr = new XMLHttpRequest();
+  el._xhr = xhr;
+
+  return new Promise((resolve) => {
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      bar.style.width = pct + '%';
+      status.textContent = `Subiendo… ${pct}%`;
+    });
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== 4) return;
+      cancelBtn.disabled = true;
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+          bar.style.width = '100%';
+          status.textContent = 'Completado';
+          addEvidenceCard(data.evidencia);
+          if (el._meta.req_id) markReqDone(el._meta.req_id);
+          setTimeout(()=> el.remove(), 400);
+        } else {
+          status.textContent = (data && data.error) ? data.error : `Error ${xhr.status}`;
+          el.classList.add('bg-red-50');
+        }
+      } catch {
+        status.textContent = `Error ${xhr.status}`;
+        el.classList.add('bg-red-50');
+      }
+
+      // ↓↓↓ Ajuste del label mientras queden subidas pendientes
+      const form = el._parentForm;
+      const filenameEl = form ? form.querySelector('.filename') : null;
+      if (form) {
+        form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
+        if (filenameEl) {
+          if (form._pendingUploads > 0) filenameEl.textContent = 'Subiendo…';
+        }
+        if (form._pendingUploads === 0) afterFormDrained(form);
+      }
+      if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
+
+      resolve();
+    };
+
+    cancelBtn.addEventListener('click', () => {
+      if (el._xhr) el._xhr.abort();
+      status.textContent = 'Cancelado';
+      el.classList.add('opacity-60');
+      const form = el._parentForm;
+      if (form) {
+        form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
+        if (form._pendingUploads === 0) afterFormDrained(form);
+      }
+      setTimeout(()=> el.remove(), 300);
+    });
+
+    xhr.open('POST', UPLOAD_URL, true);
+    xhr.send(fd);
+  });
+}
+  // ── GPS "best-effort": intenta automático, pero NO bloquea si falla
+  async function bestEffortGps(form){
+    const latEl = form.querySelector('input[name="lat"]');
+    const lngEl = form.querySelector('input[name="lng"]');
+    const accEl = form.querySelector('input[name="acc"]');
+    const taken = form.querySelector('input[name="client_taken_at"]');
+    const gpsLabel = form.querySelector('.gps-status');
+
+    // marca hora local del cliente
+    if (taken && !taken.value) taken.value = new Date().toISOString();
+
+    // si ya tenemos coords, listo
+    if (latEl?.value && lngEl?.value) return true;
+
+    if (gpsLabel) gpsLabel.textContent = '📍 Intentando obtener ubicación…';
+
+    let ok = false;
+    if (window.__captureGeoForFotos) {
+      ok = await window.__captureGeoForFotos(form); // devuelve true/false
+    }
+
+    if (!ok) {
+      // deja claro que continuará sin GPS, pero no bloquea
+      if (gpsLabel) gpsLabel.textContent = '📍 Sin GPS (se subirá sin coordenadas)';
+      // limpia por si quedaron valores parciales
+      if (accEl) accEl.value = '';
+      return false;
+    }
+    // éxito: etiqueta con coords ya lo hace __captureGeoForFotos
+    return true;
+  }
+
+  // ---- wiring formularios (SUBIR INMEDIATO al elegir archivos) + GPS best-effort
+  document.querySelectorAll('.geo-upload-form').forEach(form => {
+    const queueBox = document.createElement('div');
+    queueBox.className = "mt-2 space-y-2";
+    form.appendChild(queueBox);
+    form._pendingUploads = 0;
+
+    const fileInputs = form.querySelectorAll('input[type=file][name="imagenes[]"]');
+    const filenameEl = form.querySelector('.filename');
+
+    // límite solo para EXTRAS (lo maneja el polling en window.__EXTRAS_LEFT)
+    function enforceExtrasLimit(files) {
+      const req = form.querySelector('input[name="req_id"]')?.value || "";
+      if (req) return files;
+      const left = (typeof window.__EXTRAS_LEFT === 'number') ? window.__EXTRAS_LEFT : 4;
+      if (left <= 0) { alert('Ya alcanzaste el máximo de 4 fotos extra.'); return []; }
+      if (files.length > left) {
+        alert(`Solo puedes subir ${left} foto(s) extra más.`);
+        return Array.from(files).slice(0, left);
+      }
+      return files;
+    }
+
+async function pushFiles(files) {
+  files = enforceExtrasLimit(files);
+  if (!files.length) return;
+
+  // Marca que el usuario está trabajando en este form
+  form.dataset.working = '1';
+
+  if (typeof bestEffortGps === 'function') {
+    await bestEffortGps(form);
+  }
+
+  const lat   = form.querySelector('input[name="lat"]')?.value || "";
+  const lng   = form.querySelector('input[name="lng"]')?.value || "";
+  const acc   = form.querySelector('input[name="acc"]')?.value || "";
+  const taken = form.querySelector('input[name="client_taken_at"]')?.value || new Date().toISOString();
+  const req   = form.querySelector('input[name="req_id"]')?.value || "";
+  const nota  = form.querySelector('input[name="nota"]')?.value || "";
+  const titulo_manual = form.querySelector('input[name="titulo_manual"]')?.value || "";
+
+  form._pendingUploads = (form._pendingUploads || 0) + files.length;
+
+  for (const f of files) {
+    const el = makeQueueItem(f, {
+      req_id: req || undefined,
+      nota: nota || undefined,
+      lat, lng, acc,
+      client_taken_at: taken,
+      titulo_manual: titulo_manual || undefined,
+    }, form);
+    queueBox.prepend(el);
+    queue.push(el);
+    pump();
+  }
+
+  // ↓↓↓ Mostrar en el label el número de archivos que van en cola
+  const filenameEl = form.querySelector('.filename');
+  if (filenameEl) {
+    filenameEl.textContent = `${files.length} archivo${files.length>1?'s':''} en cola`;
+  }
+}
+
+    // SUBIDA AUTOMÁTICA al elegir desde galería o cámara (con GPS best-effort)
+    fileInputs.forEach(inp => {
+      inp.addEventListener('change', async () => {
+        const files = inp.files ? Array.from(inp.files) : [];
+        if (!files.length) return;
+        await pushFiles(files);
+        inp.value = ''; // permite volver a elegir el mismo archivo
+      });
+    });
+
+    // Fallback: botón “Subir” (accesibilidad) — también intenta GPS pero no bloquea
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const files = [];
+      fileInputs.forEach(inp => {
+        if (inp.files && inp.files.length) Array.from(inp.files).forEach(f => files.push(f));
+      });
+      if (!files.length) { alert('Selecciona al menos una imagen.'); return; }
+      await pushFiles(files);
+      fileInputs.forEach(inp => inp.value = '');
+    });
+  });
+})();
+</script>
+<script>
+  // Fallback: cerrar al cargar todos los requisitos que ya vienen en "done"
+  document.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.__setReqEnabled !== 'function') return;
+
+    document.querySelectorAll('.req-badge[data-req]').forEach(badge => {
+      const reqId = badge.getAttribute('data-req');
+      const state = badge.getAttribute('data-state'); // "done" | "pending"
+      if (state === 'done' && reqId) {
+        window.__setReqEnabled(reqId, false); // deshabilita inputs y muestra "Cerrado"
+      }
+    });
+  });
+</script>
+
+<div id="js-status" data-status-url="{% url 'operaciones:fotos_status_json' a.pk %}"></div>
+<script>
+(function(){
+  var hostEl = document.getElementById('js-status');
+  var STATUS_URL = hostEl ? hostEl.getAttribute('data-status-url') : '';
+  if (!STATUS_URL) return;
+
+  function updateReqFromServer(list){
+  if (!Array.isArray(list)) return;
+
+  list.forEach(function(r){
+    var badge = document.querySelector('.req-badge[data-req="' + r.id + '"]');
+    var nowState = r.global_done ? 'done' : 'pending';
+
+    if (badge){
+      var prevState = badge.getAttribute('data-state');
+
+      // Actualiza visual SOLO si el estado cambió
+      if (prevState !== nowState){
+        badge.setAttribute('data-state', nowState);
+        if (nowState === 'done'){
+          badge.textContent = 'Completado';
+          badge.classList.remove('bg-red-100','text-red-800');
+          badge.classList.add('bg-green-100','text-green-800');
+          if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, false);
+        } else {
+          badge.textContent = 'Pendiente';
+          badge.classList.remove('bg-green-100','text-green-800');
+          badge.classList.add('bg-red-100','text-red-800');
+          if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, true);
+        }
+      }
+    } else {
+      // Si no hay badge visible, al menos refleja el bloqueo cuando esté done
+      if (r.global_done && typeof window.__setReqEnabled === 'function') {
+        window.__setReqEnabled(r.id, false);
+      }
+    }
+  });
+}
+function setFinishEnabled(enabled){
+  // botón “Finalizar” (form POST)
+  var btn = document.querySelector('form[action*="finalizar_servicio"] button[type="submit"]');
+  if (!btn) return;
+  if (enabled){
+    btn.disabled = false;
+    btn.className = 'inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md';
+    btn.removeAttribute('title');
+  } else {
+    btn.disabled = true;
+    btn.className = 'inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed';
+    btn.title = 'Debes subir todas las fotos requeridas y que todos acepten la asignación.';
+  }
+}
+ 
+
+  function tick(){
+  fetch(STATUS_URL, {cache:'no-store'})
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j || !j.ok) return;
+      updateReqFromServer(j.requisitos || []);
+      if ('can_finish' in j) setFinishEnabled(!!j.can_finish);
+
+      // CAMBIO 2: solo toca el formulario de EXTRAS
+      if ('extras_left' in j) {
+        window.__EXTRAS_LEFT = j.extras_left;
+        const extraForm = document.querySelector('.geo-upload-form.ajax-uploader[data-extra="1"]'); // solo “Extra”
+        if (extraForm) {
+          const enabled = j.extras_left > 0;
+          extraForm.querySelectorAll('input[type=file],input[name=titulo_manual],input[name=nota],button').forEach(el => el.disabled = !enabled);
+          const fn = extraForm.querySelector('.filename');
+          if (fn) fn.textContent = enabled ? (fn.dataset.empty || 'Sin archivos') : 'Cerrado';
+          const gps = extraForm.querySelector('.gps-status');
+          if (gps) gps.textContent = enabled ? '📍 En espera de ubicación…' : '📍 Límite de 4 extra alcanzado';
+        }
+      }
+    })
+    .catch(()=>{});
+}
+
+   document.addEventListener('DOMContentLoaded', tick);
+  setInterval(tick, 8000);
+
+  // ⬇️ EXponer para que otros scripts la llamen inmediatamente tras un cambio
+  window.__refreshFotosStatus = tick;
+  window.__STATUS_URL = STATUS_URL;
+})();
+
+</script>
+
+<script>
+  // ÚNICA definición de __setReqEnabled (en español)
+  window.__setReqEnabled = function(reqId, enabled){
+  var inp = document.querySelector('input[name="req_id"][value="' + reqId + '"]');
+  if (!inp) return;
+  var li   = inp.closest('li');
+  var form = inp.closest('form');
+
+  var gallery = document.getElementById('file-gallery-' + reqId);
+  var lblGal  = li ? li.querySelector('label[for="file-gallery-' + reqId + '"]') : null;
+  var cam     = document.getElementById('file-camera-' + reqId);
+  var btnCam  = li ? li.querySelector('.trigger-camera[data-target="file-camera-' + reqId + '"]') : null;
+  var btnLoc  = li ? li.querySelector('.grant-location') : null;
+  var nota    = li ? li.querySelector('input[name="nota"]') : null;
+  var submit  = form ? (form.querySelector('button[type="submit"], button:not([type])')) : null;
+  var filenameEl = form ? form.querySelector('.filename') : null;
+
+  // ¿El usuario está trabajando aquí?
+  var hasPending = !!(form && ((form._pendingUploads||0) > 0 ||
+                    Array.from(form.querySelectorAll('input[type=file][name="imagenes[]"]'))
+                         .some(i => i.files && i.files.length)));
+  var isWorking = hasPending || (form && form.dataset.working === '1');
+
+  [gallery, cam, btnCam, btnLoc, nota, submit].forEach(function(el){
+    if (!el) return;
+    el.disabled = !enabled;
+    if (!enabled) el.classList.add('cursor-not-allowed','opacity-60');
+    else el.classList.remove('cursor-not-allowed','opacity-60');
+  });
+  if (lblGal){
+    if (!enabled) lblGal.classList.add('pointer-events-none','opacity-60');
+    else lblGal.classList.remove('pointer-events-none','opacity-60');
+  }
+
+  // ✅ Solo cambiamos el texto del filename cuando:
+  //   - se DESHABILITA (→ “Cerrado”), o
+  //   - se HABILITA pero antes estaba en “Cerrado” y NO está trabajando el usuario
+  if (filenameEl){
+    if (!enabled){
+      filenameEl.textContent = 'Cerrado';
+    } else {
+      var txt = (filenameEl.textContent||'').trim();
+      if ((txt === 'Cerrado' || txt === '') && !isWorking){
+        filenameEl.textContent = filenameEl.getAttribute('data-empty') || 'Sin archivos';
+      }
+    }
+  }
+
+  var gpsStatus  = form ? form.querySelector('.gps-status') : null;
+  var timeStatus = form ? form.querySelector('.time-status') : null;
+
+  if (!enabled){
+    if (gpsStatus)  gpsStatus.textContent  = '📍 Cerrado';
+    if (timeStatus) timeStatus.textContent = '🕒 —';
+    ['lat','lng','acc','client_taken_at'].forEach(function(nm){
+      var el = form.querySelector('input[name="' + nm + '"]');
+      if (el) el.value = '';
+    });
+    if (nota) nota.value = '';
+  } else {
+    if (gpsStatus && (gpsStatus.textContent||'').includes('Cerrado')){
+      gpsStatus.textContent = '📍 En espera de ubicación…';
+    }
+    if (timeStatus && (timeStatus.textContent||'') === '🕒 —'){
+      // se queda igual
+    }
+  }
+};
+
+</script>
+
+{% endblock %}
