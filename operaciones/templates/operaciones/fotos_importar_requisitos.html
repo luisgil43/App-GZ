@@ -1,0 +1,66 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}Importar Requerimientos — DU{{ servicio.du }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-2xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <div class="text-center mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📥 Importar Requerimientos</h2>
+    <p class="text-sm text-gray-600">DU{{ servicio.du }} — {{ servicio.id_claro }}</p>
+  </div>
+
+  <p class="text-gray-700 mb-4 text-center">
+    Descarga una plantilla, edítala y súbela aquí:
+  </p>
+
+  <div class="flex flex-wrap justify-center gap-2 mb-6">
+    <a href="{% url 'operaciones:fotos_download_requirements_template' servicio.id 'xlsx' %}"
+       class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50">⬇️ Plantilla XLSX</a>
+    <a href="{% url 'operaciones:fotos_download_requirements_template' servicio.id 'csv' %}"
+       class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50">⬇️ Plantilla CSV</a>
+    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
+       class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50">← Volver</a>
+  </div>
+
+  <form method="post" enctype="multipart/form-data"
+        action="{% url 'operaciones:fotos_importar_requisitos' servicio.id %}" class="space-y-4">
+    {% csrf_token %}
+
+    <div class="border-2 border-dashed rounded-xl p-6 text-center">
+      <input id="file" type="file" name="file" accept=".csv,.xlsx,.xls" class="hidden" required>
+      <label for="file"
+             class="inline-flex items-center gap-2 px-4 py-2 rounded-full border cursor-pointer hover:bg-gray-50">
+        📄 Seleccionar archivo .CSV / .XLSX
+      </label>
+      <p id="file-name" class="mt-2 text-sm text-gray-500">Ningún archivo seleccionado</p>
+    </div>
+
+    <div class="flex justify-center gap-3">
+      <button type="submit"
+              class="bg-emerald-600 text-white px-4 py-2 rounded-full hover:bg-emerald-700">
+        Importar
+      </button>
+      <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
+         class="px-4 py-2 rounded-full border hover:bg-gray-50">
+        Cancelar
+      </a>
+    </div>
+  </form>
+
+  <div class="mt-6 text-xs text-gray-500">
+    <p><strong>Formato esperado:</strong> columnas <code>name</code>, <code>order</code>, <code>mandatory</code> (1/0).
+       Si no incluyes <code>order</code>, se asigna en el orden de las filas.</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const input = document.getElementById('file');
+    const nameEl = document.getElementById('file-name');
+    if (!input || !nameEl) return;
+    input.addEventListener('change', () => {
+      nameEl.textContent = input.files.length ? input.files[0].name : 'Ningún archivo seleccionado';
+    });
+  })();
+</script>
+{% endblock %}

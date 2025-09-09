@@ -1,0 +1,205 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+
+{% block title %}Configurar Requerimientos — DU{{ servicio.du }}{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">
+      📸 Configurar Requerimientos — DU{{ servicio.du }} ({{ servicio.id_claro }})
+    </h2>
+    <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
+       class="text-sm text-gray-600 hover:underline">← Volver a la lista</a>
+  </div>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    <label class="inline-flex items-center gap-2">
+      <input type="checkbox" name="proyecto_especial" {% if is_special %}checked{% endif %}
+             class="h-4 w-4 rounded border-gray-300">
+      <span class="text-gray-800">
+        Proyecto especial
+        <span class="text-gray-500">(permitirá fotos “extra” sin requisito específico)</span>
+      </span>
+    </label>
+
+    <div class="flex flex-wrap gap-2 items-center">
+      <a class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50"
+         href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}">📥 Importar (CSV/XLSX)</a>
+    </div>
+
+    <div class="rounded-xl border border-gray-200 overflow-x-auto">
+      <table class="min-w-[720px] w-full text-sm">
+        <thead class="bg-gray-50 text-gray-700">
+          <tr>
+            <th class="p-2 text-left w-24">Orden</th>
+            <th class="p-2 text-left">Nombre del requisito</th>
+            <th class="p-2 text-left w-40">Obligatorio</th>
+            <th class="p-2 w-16"></th>
+          </tr>
+        </thead>
+        <tbody id="req-body">
+          {% if requirements %}
+            {% for r in requirements %}
+            <tr class="border-t">
+              <td class="p-2">
+                <input type="number" name="order[]" value="{{ r.orden }}" class="w-20 border rounded px-2 py-1">
+              </td>
+              <td class="p-2">
+                <input type="text" name="name[]" value="{{ r.titulo }}" class="w-full border rounded px-2 py-1">
+              </td>
+              <td class="p-2">
+                <select name="mandatory[]" class="border rounded px-2 py-1">
+                  <option value="1" {% if r.obligatorio %}selected{% endif %}>Sí</option>
+                  <option value="0" {% if not r.obligatorio %}selected{% endif %}>No</option>
+                </select>
+              </td>
+              <td class="p-2 text-right">
+                <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr class="border-t">
+              <td class="p-2">
+                <input type="number" name="order[]" value="0" class="w-20 border rounded px-2 py-1">
+              </td>
+              <td class="p-2">
+                <input type="text" name="name[]" value="" placeholder="Nombre del requisito" class="w-full border rounded px-2 py-1">
+              </td>
+              <td class="p-2">
+                <select name="mandatory[]" class="border rounded px-2 py-1">
+                  <option value="1" selected>Sí</option>
+                  <option value="0">No</option>
+                </select>
+              </td>
+              <td class="p-2 text-right">
+                <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button type="button" id="btn-add"
+              class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50">➕ Agregar fila</button>
+      <div class="flex-1"></div>
+      <button type="submit"
+              class="bg-emerald-600 text-white px-4 py-2 rounded-full hover:bg-emerald-700">
+        💾 Guardar y replicar a técnicos
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const tbody   = document.getElementById('req-body');
+  const btnAdd  = document.getElementById('btn-add');
+
+  // Siguiente orden = max(order[]) + 1 (o 0 si vacío)
+  function nextOrderValue() {
+    const vals = Array.from(tbody.querySelectorAll('input[name="order[]"]'))
+      .map(el => parseInt(el.value, 10))
+      .filter(Number.isFinite);
+    return vals.length ? Math.max(...vals) + 1 : 0;
+  }
+
+  // Reindexa correlativo 0..N-1 tras eliminar
+  function reindexOrders() {
+    Array.from(tbody.querySelectorAll('tr')).forEach((tr, i) => {
+      const ord = tr.querySelector('input[name="order[]"]');
+      if (ord) ord.value = i;
+    });
+  }
+
+  // Crea una <tr> nueva de forma segura (sin innerHTML con datos del usuario)
+  function makeRow(orderValue) {
+    const tr = document.createElement('tr');
+    tr.className = 'border-t';
+
+    // --- TD: order ---
+    const tdOrder = document.createElement('td');
+    tdOrder.className = 'p-2';
+    const inpOrder = document.createElement('input');
+    inpOrder.type = 'number';
+    inpOrder.name = 'order[]';
+    inpOrder.className = 'w-20 border rounded px-2 py-1';
+    inpOrder.value = String(orderValue);
+    tdOrder.appendChild(inpOrder);
+
+    // --- TD: name ---
+    const tdName = document.createElement('td');
+    tdName.className = 'p-2';
+    const inpName = document.createElement('input');
+    inpName.type = 'text';
+    inpName.name = 'name[]';
+    inpName.className = 'w-full border rounded px-2 py-1';
+    inpName.placeholder = 'Nombre del requisito';
+    tdName.appendChild(inpName);
+
+    // --- TD: mandatory (select Sí/No) ---
+    const tdMan = document.createElement('td');
+    tdMan.className = 'p-2';
+    const sel = document.createElement('select');
+    sel.name = 'mandatory[]';
+    sel.className = 'border rounded px-2 py-1';
+    const optSi = document.createElement('option');
+    optSi.value = '1'; optSi.textContent = 'Sí'; optSi.selected = true;
+    const optNo = document.createElement('option');
+    optNo.value = '0'; optNo.textContent = 'No';
+    sel.appendChild(optSi); sel.appendChild(optNo);
+    tdMan.appendChild(sel);
+
+    // --- TD: acciones (eliminar) ---
+    const tdActions = document.createElement('td');
+    tdActions.className = 'p-2 text-right';
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'btn-del-row text-red-600 hover:underline';
+    btnDel.textContent = '🗑';
+    tdActions.appendChild(btnDel);
+
+    // Ensamblar fila
+    tr.appendChild(tdOrder);
+    tr.appendChild(tdName);
+    tr.appendChild(tdMan);
+    tr.appendChild(tdActions);
+    return tr;
+  }
+
+  // Agregar fila nueva
+  function addRow() {
+    const tr = makeRow(nextOrderValue());
+    tbody.appendChild(tr);
+  }
+
+  // Delegación para eliminar
+  tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-del-row');
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (tr) {
+      tr.remove();
+      reindexOrders();
+    }
+  });
+
+  // Botón "Agregar fila"
+  if (btnAdd) btnAdd.addEventListener('click', addRow);
+
+  // Limpia ${name} que haya venido de datos viejos
+  tbody.querySelectorAll('input[name="name[]"]').forEach(inp => {
+    if (/\$\{\s*name\s*\}/i.test(inp.value)) inp.value = '';
+    if (!inp.placeholder) inp.placeholder = 'Nombre del requisito';
+  });
+});
+</script>
+
+
+{% endblock %}

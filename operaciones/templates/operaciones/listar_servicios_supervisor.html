@@ -22,28 +22,30 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
   .filtros-compactos .campo-filtro { 
     width: auto; 
-    min-width: 8.5rem;   /* tamaño mínimo cómodo */
-    max-width: 12rem;    /* evita que crezcan de más */
+    min-width: 8.5rem;
+    max-width: 12rem;
   }
   @media (max-width: 640px) {
     .filtros-compactos .campo-filtro { max-width: 10.5rem; }
   }
+  .tabla-responsive{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+  .tabla-responsive table{
+    white-space: nowrap;
+    min-width: 1100px;
+  }
 
-/* === Tabla responsive: el scroll queda dentro del recuadro === */
-.tabla-responsive{
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
-  max-width: 100%;
-}
-.tabla-responsive table{
-  white-space: nowrap;     /* mantiene columnas en una línea */
-  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
-}
-
+.modal-copy{
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+  }
 </style>
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
@@ -79,7 +81,6 @@
   </div>
 </form>
 
-
 <!-- Tabla -->
 <div class="rounded-xl border border-gray-200 tabla-responsive">
   <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
@@ -114,40 +115,41 @@
             <span class="italic text-gray-400">Sin asignar</span>
           {% endfor %}
         </td>
-<td class="p-2 text-sm">
+     <td class="p-2 text-sm">
   <div class="flex flex-col gap-1 text-left">
-    <!-- Badge principal -->
-    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-      {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-      {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-      {% else %}bg-gray-100 text-gray-800{% endif %}">
+
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+  {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+  {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+  {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
+  {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
+  {% elif servicio.estado == 'en_revision_supervisor' %}bg-yellow-100 text-emerald-800
+  {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+  {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+  {% else %}bg-gray-100 text-gray-800{% endif %}">
+
       {% if servicio.estado == 'aprobado_pendiente' %}
-       ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'asignado' %}
-       ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
       {% elif servicio.estado == 'en_progreso' %}
-       🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
-      {% elif servicio.estado == 'finalizado_trabajador' %}
-       ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+  {% if servicio.tecnico_aceptado %}
+    🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
+  {% else %}
+    🔁 Reabierto — pendiente re-aceptación del técnico
+  {% endif %}
+      {% elif servicio.estado == 'en_revision_supervisor' %}
+        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
       {% elif servicio.estado == 'rechazado_supervisor' %}
-       ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
       {% elif servicio.estado == 'aprobado_supervisor' %}
-       ✅  Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-{% elif servicio.estado == 'informe_subido' %}
-        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif servicio.estado == 'finalizado' %}
-        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+        ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
       {% else %}
         {{ servicio.estado }}
       {% endif %}
     </div>
 
-    <!-- Badge secundario cuando está finalizado -->
-    {% if servicio.estado == 'finalizado_trabajador' %}
+    {% if servicio.estado == 'en_revision_supervisor' %}
       <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
         📝 Pendiente revisión del supervisor
       </div>
@@ -155,46 +157,92 @@
   </div>
 
   {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
-        style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
-        data-id="{{ servicio.id }}">
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
       <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
     </div>
   {% endif %}
 </td>
-      <td class="p-2 space-y-1">
-  {% if servicio.estado == 'aprobado_pendiente' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">👥 Asignar</a>
-  
-  {% elif servicio.estado == 'asignado' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-indigo-600 hover:underline block">🔁 Reasignar</a>
-  
-  {% elif servicio.estado == 'finalizado_trabajador' %}
-    <form action="{% url 'operaciones:aprobar_asignacion' servicio.pk %}" method="post" class="inline">
-      {% csrf_token %}
-      <button type="submit" class="text-green-600 hover:underline">✅ Aprobar</button>
-    </form>
-    <button onclick="abrirModalAsignacion('{{ servicio.pk }}')" class="text-red-600 hover:underline">❌ Rechazar</button>
 
-    <!-- Modal de rechazo -->
-    <div id="modal-rechazo-{{ servicio.pk }}" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
-        <h3 class="text-lg font-semibold mb-4">Motivo de rechazo</h3>
-        <form method="post" action="{% url 'operaciones:rechazar_asignacion' servicio.pk %}">
+<td class="p-2 space-y-1">
+  {% if servicio.estado == 'aprobado_pendiente' %}
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">
+      👥 Asignar
+    </a>
+
+  {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'rechazado_supervisor' %}
+    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
+       class="text-sky-700 hover:underline block">📋 Requerimientos fotos</a>
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}"
+       class="text-emerald-700 hover:underline block">🔎 Revisión</a>
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}"
+       class="text-indigo-600 hover:underline block">🔁 Reasignar</a>
+
+    {% if servicio.motivo_rechazo %}
+      <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
+        <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
+      </div>
+    {% endif %}
+
+  {% elif servicio.estado == 'aprobado_supervisor' %}
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}"
+       class="text-emerald-700 hover:underline block">🔎 Revisar</a>
+
+    <button type="button"
+            class="text-red-600 hover:underline block"
+            onclick="abrirModalReabrir('{{ servicio.id }}')">
+      🔓 Reabrir servicio
+    </button>
+
+    <div id="modal-reabrir-{{ servicio.id }}"
+         class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
+      <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
+        <div class="px-5 py-4 border-b flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-800">Reabrir servicio</h3>
+          <button type="button" class="text-gray-500 hover:text-gray-700"
+                  onclick="cerrarModalReabrir('{{ servicio.id }}')">✕</button>
+        </div>
+
+        <form method="post"
+              action="{% url 'operaciones:reabrir_servicio' servicio.pk %}"
+              class="px-5 pt-4 pb-5 space-y-3">
           {% csrf_token %}
-          <textarea name="motivo_rechazo" rows="3" class="w-full border rounded-lg p-2 mb-4" placeholder="Ingrese el motivo del rechazo"></textarea>
-          <div class="flex justify-end gap-2">
-            <button type="button" onclick="cerrarModalAsignacion('{{ servicio.pk }}')" class="bg-gray-300 px-4 py-2 rounded-lg">Cancelar</button>
-            <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded-lg">Rechazar</button>
+          <p class="text-sm text-gray-600 break-words whitespace-normal leading-relaxed modal-copy">
+            Indica el motivo por el cual se reabre la asignación, por ejemplo: rechazo del cliente o fotos faltantes.
+          </p>
+
+          <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
+          <textarea name="motivo" rows="4" required pattern=".*\S.*"
+                    oninput="this.value = this.value.replace(/^\s+/, '')"
+                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+
+          <div class="flex items-center justify-end gap-2 pt-2">
+            <button type="button"
+                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    onclick="cerrarModalReabrir('{{ servicio.id }}')">Cancelar</button>
+            <button type="submit"
+                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+              Reabrir servicio
+            </button>
           </div>
         </form>
       </div>
     </div>
-  
+
   {% else %}
     <span class="text-gray-400 italic">Sin acciones</span>
   {% endif %}
 </td>
+
+
+<!-- Script para capturar el motivo antes de enviar el formulario -->
+<script>
+  function confirmarReapertura(form) {
+    const motivo = prompt('Motivo para reabrir el servicio (por ejemplo: rechazo del cliente):');
+    if (motivo === null) return false; // Si el usuario cancela
+    form.motivo.value = (motivo || '').trim(); // Guardamos el texto ingresado en el input hidden
+    return true;
+  }
+</script>
 
       </tr>
       {% endfor %}
@@ -202,7 +250,7 @@
   </table>
 </div>
 
-<!-- Selector cantidad (idéntico al listar supervisor) -->
+<!-- Selector cantidad -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
@@ -212,7 +260,6 @@
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
 
-  <!-- preserva filtros actuales -->
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
   <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
@@ -225,9 +272,7 @@
     const modal = document.getElementById('modal-rechazo-' + id);
     if (!modal) return;
     modal.classList.remove('hidden');
-    // Evita scroll del fondo
     document.body.classList.add('overflow-hidden');
-    // Focus al textarea si existe
     const ta = modal.querySelector('textarea[name="motivo_rechazo"]');
     if (ta) setTimeout(() => ta.focus(), 50);
   }
@@ -239,7 +284,6 @@
     document.body.classList.remove('overflow-hidden');
   }
 
-  // Cerrar clickeando el backdrop
   document.addEventListener('click', (e) => {
     const modal = e.target.closest('[id^="modal-rechazo-"]');
     if (modal && e.target === modal) {
@@ -248,7 +292,6 @@
     }
   });
 
-  // Cerrar con Escape
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('[id^="modal-rechazo-"]:not(.hidden)').forEach(m => m.classList.add('hidden'));
@@ -258,7 +301,6 @@
 </script>
 
 <script>
-  // Solo si algún día agregas un "select all" en esta vista.
   (function() {
     const selectAll = document.getElementById('select-all');
     if (!selectAll) return;
@@ -276,9 +318,6 @@
   const inputs  = form.querySelectorAll('input[type="text"]');
   const selects = form.querySelectorAll('select');
 
-  // 🔒 Mantén página/tamaño: ya tienes <input type="hidden" name="cantidad" ...> en el form ✔
-
-  // ✅ Guardar/restaurar foco y caret para que no “salte” el cursor tras el auto-submit
   const KEY = 'svc_sup_filtros_focus';
   function rememberCaret(el) {
     try {
@@ -321,14 +360,12 @@
 </script>
 <script>
 (function () {
-  // Obtiene CSRF del cookie (más robusto que {{ csrf_token }} en JS)
   function getCookie(name) {
     const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
     return m ? m.pop() : '';
   }
   const CSRF = getCookie('csrftoken');
 
-  // Delegación: doble clic para editar
   document.addEventListener('dblclick', function (e) {
     const wrapper = e.target.closest('.editable-motivo');
     if (!wrapper) return;
@@ -338,7 +375,6 @@
 
     const oldText = span.textContent === 'Doble clic para editar…' ? '' : span.textContent;
 
-    // Crear textarea
     const ta = document.createElement('textarea');
     ta.value = oldText;
     ta.rows = Math.max(3, Math.min(8, (oldText.split('\n').length || 1)));
@@ -378,14 +414,12 @@
       });
     }
 
-    // Guardar al perder foco o con Enter (sin salto de línea)
     ta.addEventListener('blur', save);
     ta.addEventListener('keydown', function (ev) {
       if (ev.key === 'Enter' && !ev.shiftKey) {
         ev.preventDefault();
         save();
       } else if (ev.key === 'Escape') {
-        // Cancelar: restaurar el span original
         const back = document.createElement('span');
         back.className = 'motivo-text';
         back.textContent = oldText || 'Doble clic para editar…';
@@ -395,6 +429,45 @@
     });
   });
 })();
+</script>
+
+<script>
+  function abrirModalReabrir(id) {
+    const modal = document.getElementById('modal-reabrir-' + id);
+    if (!modal) return;
+    modal.classList.remove('hidden');
+    document.body.classList.add('overflow-hidden');
+
+    // Autofocus al textarea cuando se abre
+    setTimeout(() => {
+      const ta = modal.querySelector('textarea[name="motivo"]');
+      if (ta) ta.focus();
+    }, 30);
+  }
+
+  function cerrarModalReabrir(id) {
+    const modal = document.getElementById('modal-reabrir-' + id);
+    if (!modal) return;
+    modal.classList.add('hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cerrar al hacer clic fuera de la caja o presionar ESC
+  document.addEventListener('click', (e) => {
+    const modal = e.target.closest('[id^="modal-reabrir-"]');
+    if (modal && e.target === modal) {
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('[id^="modal-reabrir-"]:not(.hidden)')
+        .forEach(m => m.classList.add('hidden'));
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
 </script>
 
 

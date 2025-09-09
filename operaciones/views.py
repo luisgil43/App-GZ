@@ -1,4 +1,14 @@
 # operaciones/views.py
+from .models import ServicioCotizado, SesionFotoTecnico
+from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404, redirect
+from django.db import transaction
+from django.utils import timezone
+from django.db.models import Count
+from .models import RequisitoFoto, SesionFotoTecnico
+from .views_fotos import _get_or_create_sesion, _norm_title
+from .models import SesionFotoTecnico
+from .views_fotos import _get_or_create_sesion
 from .forms import SitioMovilForm
 from django.utils.timezone import is_aware
 from .forms import validar_rut_chileno, verificar_rut_sii
@@ -615,6 +625,52 @@ def listar_servicios_supervisor(request):
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
+@require_POST
+def reabrir_servicio(request, pk):
+    servicio = get_object_or_404(ServicioCotizado, pk=pk)
+
+    if servicio.estado != 'aprobado_supervisor':
+        messages.error(
+            request, "Solo se pueden reabrir servicios aprobados por el supervisor.")
+        return redirect('operaciones:listar_servicios_supervisor')
+
+    motivo = (request.POST.get('motivo') or "").strip()
+    if not motivo:
+        messages.error(
+            request, "Debes indicar un motivo para reabrir el servicio.")
+        return redirect('operaciones:listar_servicios_supervisor')
+
+    with transaction.atomic():
+        servicio.motivo_rechazo = motivo
+        servicio.supervisor_aprobo = None
+        servicio.supervisor_rechazo = None
+        servicio.tecnico_finalizo = None
+        servicio.tecnico_aceptado = None
+        servicio.estado = 'asignado'
+        servicio.save(update_fields=[
+            'motivo_rechazo', 'supervisor_aprobo', 'supervisor_rechazo',
+            'tecnico_finalizo', 'tecnico_aceptado', 'estado',
+        ])
+
+        sesion = _get_or_create_sesion(servicio)
+
+        qs = SesionFotoTecnico.objects.filter(sesion=sesion)
+        update_vals = {'estado': 'asignado'}
+        if hasattr(SesionFotoTecnico, 'aceptado_en'):
+            update_vals['aceptado_en'] = None
+        if hasattr(SesionFotoTecnico, 'finalizado_en'):
+            update_vals['finalizado_en'] = None
+        if hasattr(SesionFotoTecnico, 'rechazado_en'):
+            update_vals['rechazado_en'] = None
+        qs.update(**update_vals)
+
+    messages.success(
+        request, f"Servicio DU{servicio.du} reabierto. Motivo: {motivo}")
+    return redirect('operaciones:listar_servicios_supervisor')
+
+
+@login_required
+@rol_requerido('supervisor', 'admin', 'pm')
 @csrf_exempt
 def actualizar_motivo_rechazo(request, pk):
     if request.method == 'POST':
@@ -707,43 +763,59 @@ def exportar_servicios_supervisor(request):
     return response
 
 
+# operaciones/views.py
 @login_required
 @rol_requerido('usuario')
 def mis_servicios_tecnico(request):
     usuario = request.user
 
-    # Orden personalizado:
-    # 1 = aceptado, 2 = en_ejecucion, 3 = finalizado, 4 = pendiente_aceptar, 5 = otros
     estado_prioridad = Case(
-        When(estado='aceptado', then=Value(1)),
-        When(estado='en_ejecucion', then=Value(2)),
-        When(estado='finalizado', then=Value(3)),
-        When(estado='pendiente_aceptar', then=Value(4)),
-        default=Value(5),
+        When(estado='en_progreso', then=Value(1)),
+        When(estado='finalizado_trabajador', then=Value(2)),
+        When(estado='asignado', then=Value(3)),
+        default=Value(4),
         output_field=IntegerField()
     )
 
-    # Filtrar: excluir cotizado y aprobado_supervisor
-    servicios = ServicioCotizado.objects.filter(
-        trabajadores_asignados=usuario
-    ).exclude(
-        estado__in=['cotizado', 'aprobado_supervisor']
-    ).annotate(
-        prioridad=estado_prioridad
-    ).order_by('prioridad', '-du')
+    servicios = (
+        ServicioCotizado.objects
+        .filter(trabajadores_asignados=usuario)
+        .exclude(estado__in=['cotizado', 'aprobado_supervisor'])
+        .annotate(prioridad=estado_prioridad)
+        .order_by('prioridad', '-du')
+    )
 
-    print("Servicios encontrados:", servicios.count())
-
-    # Prepara los montos personalizados (manteniendo la lógica de MMOO dividido entre técnicos)
     servicios_info = []
     for servicio in servicios:
-        total_mmoo = servicio.monto_mmoo or 0  # Monto total de mano de obra
-        # Número de técnicos asignados
-        total_tecnicos = servicio.trabajadores_asignados.count()
-        monto_tecnico = total_mmoo / total_tecnicos if total_tecnicos else 0
+        total_mmoo = servicio.monto_mmoo or 0
+        total_tecnicos = servicio.trabajadores_asignados.count() or 1
+        monto_tecnico = total_mmoo / total_tecnicos
+
+        sesion = _get_or_create_sesion(servicio)
+        a = sesion.asignaciones.filter(tecnico=usuario).first()
+        if not a:
+            # si entro por primera vez, me creo mi asignación en "asignado"
+            a = SesionFotoTecnico.objects.create(
+                sesion=sesion, tecnico=usuario, estado='asignado'
+            )
+
+        # yo acepté ⇢ mi asignación en_proceso
+        yo_acepte = (a.estado == 'en_proceso')
+        # puedo aceptar ⇢ mi asignación aún está en "asignado"
+        puedo_aceptar = (a.estado == 'asignado')
+
+        # aceptados reales (quienes tienen aceptado_en registrado)
+        aceptados = sesion.asignaciones.filter(
+            aceptado_en__isnull=False).count()
+        total = sesion.asignaciones.count()
+
         servicios_info.append({
             'servicio': servicio,
-            'monto_tecnico': round(monto_tecnico, 2)
+            'monto_tecnico': round(monto_tecnico, 2),
+            'yo_acepte': yo_acepte,
+            'puedo_aceptar': puedo_aceptar,
+            'aceptados': aceptados,
+            'total': total,
         })
 
     return render(request, 'operaciones/mis_servicios_tecnico.html', {
@@ -753,25 +825,96 @@ def mis_servicios_tecnico(request):
 
 @login_required
 @rol_requerido('usuario')
+def ir_a_upload_fotos(request, servicio_id):
+    servicio = get_object_or_404(ServicioCotizado, id=servicio_id)
+    if request.user not in servicio.trabajadores_asignados.all():
+        messages.error(request, "No tienes permiso en este servicio.")
+        return redirect('operaciones:mis_servicios_tecnico')
+
+    sesion = _get_or_create_sesion(servicio)
+    a = sesion.asignaciones.filter(tecnico=request.user).first()
+    if not a:
+        a = SesionFotoTecnico.objects.create(
+            sesion=sesion, tecnico=request.user, estado='asignado'
+        )
+
+    # ✅ Sólo puede entrar si ya aceptó (en_proceso) o si fue rechazado con reintento
+    puede_subir = (a.estado == "en_proceso") or (
+        a.estado == "rechazado_supervisor" and a.reintento_habilitado)
+    if not puede_subir:
+        messages.info(
+            request, "Debes aceptar tu asignación antes de subir fotos.")
+        return redirect('operaciones:mis_servicios_tecnico')
+
+    return redirect('operaciones:fotos_upload', pk=a.pk)
+
+
+@login_required
+@rol_requerido('usuario')
 def aceptar_servicio(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, id=servicio_id)
 
+    # Debe ser un técnico asignado a este servicio
     if request.user not in servicio.trabajadores_asignados.all():
         messages.error(
             request, "No tienes permiso para aceptar este servicio.")
         return redirect('operaciones:mis_servicios_tecnico')
 
-    if servicio.estado not in ['asignado', 'rechazado_supervisor']:
+    # Estados donde ya no corresponde aceptar
+    estados_bloqueados = {
+        'finalizado_trabajador',
+        'en_revision_supervisor',
+        'aprobado_supervisor',
+        'informe_subido',
+        'finalizado',
+    }
+    if servicio.estado in estados_bloqueados:
         messages.warning(
-            request, "Este servicio no está disponible para aceptar.")
+            request, "Este servicio ya no está disponible para aceptar.")
         return redirect('operaciones:mis_servicios_tecnico')
 
-    servicio.estado = 'en_progreso'
-    servicio.tecnico_aceptado = request.user
-    servicio.save()
+    # Estados desde los que SÍ se puede aceptar
+    estados_permitidos = {'asignado', 'en_progreso', 'rechazado_supervisor'}
+    if servicio.estado not in estados_permitidos:
+        messages.warning(
+            request, "Este servicio no se puede aceptar en su estado actual.")
+        return redirect('operaciones:mis_servicios_tecnico')
+
+    # Crear/obtener sesión de fotos del servicio
+    sesion = _get_or_create_sesion(servicio)
+
+    # Mi asignación individual dentro de la sesión
+    asignacion, _ = SesionFotoTecnico.objects.get_or_create(
+        sesion=sesion,
+        tecnico=request.user,
+        defaults={'estado': 'asignado'}
+    )
+
+    # IMPORTANTE: permitir "reiniciar" también cuando ESTÁ EN rechazado_supervisor
+    if asignacion.estado != 'asignado':
+        if servicio.motivo_rechazo and servicio.estado in ['asignado', 'en_progreso', 'rechazado_supervisor']:
+            asignacion.estado = 'asignado'
+            if hasattr(asignacion, 'aceptado_en'):
+                asignacion.aceptado_en = None
+            asignacion.save(update_fields=[
+                            'estado'] + (['aceptado_en'] if hasattr(asignacion, 'aceptado_en') else []))
+        else:
+            messages.info(request, "Ya habías aceptado esta asignación.")
+            return redirect('operaciones:mis_servicios_tecnico')
+
+    # Marcar mi aceptación
+    asignacion.estado = 'en_proceso'
+    asignacion.aceptado_en = timezone.now()
+    asignacion.save(update_fields=['estado', 'aceptado_en'])
+
+    # Pasar el servicio a EN PROGRESO si aún no lo está (incluye caso rechazado_supervisor)
+    if servicio.estado != 'en_progreso':
+        servicio.estado = 'en_progreso'
+        servicio.tecnico_aceptado = request.user
+        servicio.save(update_fields=['estado', 'tecnico_aceptado'])
 
     messages.success(
-        request, "Has aceptado el servicio. Ahora está en progreso.")
+        request, "Has aceptado el servicio. Ya puedes subir fotos.")
     return redirect('operaciones:mis_servicios_tecnico')
 
 
@@ -780,7 +923,7 @@ def aceptar_servicio(request, servicio_id):
 def finalizar_servicio(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, id=servicio_id)
 
-    # Ahora cualquier trabajador asignado puede finalizar
+    # Debe ser un técnico asignado
     if request.user not in servicio.trabajadores_asignados.all():
         messages.error(
             request, "Solo los técnicos asignados pueden finalizar este servicio.")
@@ -790,11 +933,63 @@ def finalizar_servicio(request, servicio_id):
         messages.warning(request, "Este servicio no está en progreso.")
         return redirect('operaciones:mis_servicios_tecnico')
 
-    servicio.estado = 'finalizado_trabajador'
-    servicio.tecnico_finalizo = request.user
-    servicio.save()
+    # Asegurar sesión y la asignación del usuario
+    sesion = _get_or_create_sesion(servicio)
+    a = sesion.asignaciones.filter(tecnico=request.user).first()
+    if not a:
+        # si no existe, la creamos pero sin aceptar
+        a = SesionFotoTecnico.objects.create(
+            sesion=sesion, tecnico=request.user, estado='asignado'
+        )
 
-    messages.success(request, "Has marcado este servicio como finalizado.")
+    # 1) Validar fotos requeridas a nivel proyecto
+    req_titles = (
+        RequisitoFoto.objects
+        .filter(tecnico_sesion__sesion=sesion, obligatorio=True)
+        .values_list("titulo", flat=True)
+    )
+    required_set = {_norm_title(t) for t in req_titles if t}
+
+    taken_titles = (
+        sesion.asignaciones
+        .values("requisitos__titulo")
+        .annotate(c=Count("requisitos__evidencias"))
+        .filter(c__gt=0)
+        .values_list("requisitos__titulo", flat=True)
+    )
+    covered_set = {_norm_title(t) for t in taken_titles if t}
+
+    missing = sorted(required_set - covered_set)
+    if missing:
+        messages.error(
+            request,
+            "No puedes finalizar: faltan fotos requeridas de " + ", ".join(missing) +
+            ". Carga las evidencias para continuar."
+        )
+        return redirect('operaciones:fotos_upload', pk=a.pk)
+
+    # 2) Validar que TODOS los técnicos hayan aceptado su asignación
+    for asg in sesion.asignaciones.all():
+        # aceptado si tiene aceptado_en o su estado ya no es "asignado"
+        if not (asg.aceptado_en or asg.estado != "asignado"):
+            messages.error(
+                request, "Aún hay técnicos sin aceptar la asignación. No se puede finalizar.")
+            return redirect('operaciones:fotos_upload', pk=a.pk)
+
+    # 3) Si todo ok, mover a revisión de supervisor (comportamiento igual a Hyperlink)
+    now_ = timezone.now()
+    with transaction.atomic():
+        sesion.asignaciones.update(
+            estado="en_revision_supervisor", finalizado_en=now_)
+        sesion.estado = "en_revision_supervisor"
+        sesion.save(update_fields=["estado"])
+
+        servicio.estado = "en_revision_supervisor"
+        servicio.tecnico_finalizo = request.user
+        servicio.save(update_fields=["estado", "tecnico_finalizo"])
+
+    messages.success(
+        request, "Enviado a revisión del supervisor (proyecto completo).")
     return redirect('operaciones:mis_servicios_tecnico')
 
 
