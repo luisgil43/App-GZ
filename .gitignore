@@ -5,16 +5,35 @@ __pycache__/
 
 # Django static/media
 /staticfiles/
-/media/
+media/
+staticfiles/
 
 # Entorno virtual
 venv/
 env/
 
-# Archivos de entorno
+# Archivos de entorno (no subir nunca)
 .env
+.env.*
+!.env.example
+.envrc
 
-# Archivos de configuración del editor
-*.vscode/
-*.idea/
-"staticfiles/" 
+# Certificados / claves / CAF (no subir nunca)
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+*.der
+*.caf
+*.xml  # si generas XML firmados para SII, mantenlos fuera del repo
+
+# Logs y temporales
+*.log
+*.tmp
+*.DS_Store
+
+# Editor/IDE
+.vscode/
+.idea/
