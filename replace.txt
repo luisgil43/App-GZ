@@ -1,0 +1,16 @@
+@'
+# Emails/SMTP en código
+re:EMAIL_HOST_USER\s*=\s*["'][^"']+["']==>EMAIL_HOST_USER="***REDACTED***"
+re:EMAIL_HOST_PASSWORD\s*=\s*["'][^"']+["']==>EMAIL_HOST_PASSWORD="***REDACTED***"
+re:EMAIL_PASS\s*=\s*["'][^"']+["']==>EMAIL_PASS="***REDACTED***"
+
+# Cloudinary
+re:CLOUDINARY_API_KEY\s*=\s*["'][^"']+["']==>CLOUDINARY_API_KEY="***REDACTED***"
+re:CLOUDINARY_API_SECRET\s*=\s*["'][^"']+["']==>CLOUDINARY_API_SECRET="***REDACTED***"
+
+# Wasabi / S3
+re:WASABI_[A-Z_]*\s*=\s*["']?[^"'\r\n]+["']?==>$0="***REDACTED***"
+
+# Django SECRET_KEY en código
+re:DJANGO_SECRET_KEY\s*=\s*["'][^"']+["']==>DJANGO_SECRET_KEY="***REDACTED***"
+'@ | Set-Content replace.txt -Encoding utf8
