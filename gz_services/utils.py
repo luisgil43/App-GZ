@@ -1,8 +1,10 @@
 import smtplib
 from email.mime.text import MIMEText
+import os
 
-EMAIL_USER = 'planix@grupogzs.com'
-EMAIL_PASS = '}xZs%l%xGFb3'
+EMAIL_USER = os.environ["EMAIL_HOST_USER"]
+EMAIL_PASS = os.environ["EMAIL_HOST_PASSWORD"]
+
 
 def enviar_correo_manual(destinatario, asunto, cuerpo, html=False):
     if html:
