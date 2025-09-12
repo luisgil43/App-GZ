@@ -4,7 +4,7 @@
 {% block content %}
 <div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
 
-<div class="flex items-center justify-between gap-3">
+ <div class="flex items-center justify-between gap-3">
   <div class="flex items-center gap-2">
     <a href="{% url 'operaciones:mis_servicios_tecnico' %}"
        class="inline-flex items-center bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded-md">
@@ -21,30 +21,36 @@
     </div>
   </div>
 
-  <form id="finalizar-form" method="post" action="{% url 'operaciones:finalizar_servicio' servicio.id %}">
-    {% csrf_token %}
-    <button id="btn-finalizar" type="submit"
-            {% if not can_finish %}disabled{% endif %}
-            class="{% if can_finish %}inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md{% else %}inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed{% endif %}"
-            {% if not can_finish %}title="Debes subir todas las fotos requeridas y que todos acepten la asignación."{% endif %}>
+ {% if can_finish %}
+  <form method="post" action="{% url 'operaciones:finalizar_servicio' servicio.id %}">
+      {% csrf_token %}
+      <button type="submit"
+              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md">
+        🏁 Finalizar
+      </button>
+    </form>
+  {% else %}
+    <button type="button"
+            class="inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed"
+            title="Debes subir todas las fotos requeridas y que todos acepten la asignación.">
       🏁 Finalizar
     </button>
-  </form>
+  {% endif %}
 </div>
+  
 
-
-   {% if pendientes_aceptar %}
-  <div class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
-    Aún faltan técnicos por aceptar: {{ pendientes_aceptar|join:", " }}.
-  </div>
-{% endif %}
-
-<div id="faltantes-banner"
-     class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm {% if not faltantes_global %}hidden{% endif %}">
-  {% if faltantes_global %}Faltan fotos requeridas: {{ faltantes_global|join:", " }}.{% endif %}
-</div>
-
-
+  {% if not can_finish %}
+    {% if pendientes_aceptar %}
+      <div class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
+        Aún faltan técnicos por aceptar: {{ pendientes_aceptar|join:", " }}.
+      </div>
+    {% endif %}
+    {% if faltantes_global %}
+      <div class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm">
+        Faltan fotos requeridas: {{ faltantes_global|join:", " }}.
+      </div>
+    {% endif %}
+  {% endif %}
 
   <div class="grid md:grid-cols-2 gap-6 mt-4">
     <div>
@@ -56,6 +62,7 @@
     <div class="font-medium">
       {{ r.orden }}. {{ r.titulo }} {% if r.obligatorio %}<span class="text-red-600">*</span>{% endif %}
 
+      {# Si está tomado y aún no hay subidas -> "Tomado". Si ya tiene subidas, usa la badge normal #}
       {% if r.id in locked_ids and r.uploaded|default:0 == 0 %}
         <span class="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">Tomado</span>
       {% else %}
@@ -146,6 +153,7 @@
      <div class="mt-6">
   <h3 class="font-semibold mb-2">Fotos Extra</h3>
 
+  <!-- CAMBIO 1: marcamos este formulario como el de EXTRAS -->
   <form method="post" enctype="multipart/form-data"
         class="geo-upload-form ajax-uploader border rounded p-3" data-extra="1">
     {% csrf_token %}
@@ -240,6 +248,7 @@
       <img src="{{ ev.imagen.url }}" class="w-full h-32 object-cover rounded" loading="lazy" alt="photo">
 
 
+{# Mostrar X solo si el técnico puede borrar; sin paréntesis en el if #}
 {% if a.estado == 'en_proceso' %}
   <button type="button"
           class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
@@ -367,6 +376,7 @@
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
+    /* 🔁 NUEVO LISTENER: recarga la página tras borrar */
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const action = form.getAttribute('action');
@@ -381,6 +391,7 @@
           cache: 'no-store'
         });
 
+        // Acepta 2xx o redirecciones 3xx (Django puede responder 302/303)
         if ((res.status >= 200 && res.status < 300) || (res.status >= 300 && res.status < 400)) {
           window.location.reload();
           return;
@@ -389,6 +400,7 @@
       } catch (err) {
         alert('No se pudo eliminar la foto. Vuelve a intentarlo.');
       } finally {
+        // Por si la recarga falla
         closeModal();
       }
     });
@@ -396,7 +408,7 @@
 </script>
 
 <script>
-/* Exponer una función global para capturar GPS al ENVIAR */
+/* Exponer una función global para capturar GPS al ENVIAR (sin tocar tu script existente) */
 window.__captureGeoForFotos = async function(form){
   const GEO_OPTS = { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 };
   const latEl   = form.querySelector('input[name="lat"]');
@@ -509,43 +521,48 @@ window.__captureGeoForFotos = async function(form){
     });
 
     if (fileInputGallery){
-      fileInputGallery.addEventListener('change', () => {
-        const n = fileInputGallery.files ? fileInputGallery.files.length : 0;
-        if (filenameEl){
-          filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
-                               : n===1 ? fileInputGallery.files[0].name
-                                       : `${n} archivos seleccionados`;
-        }
-      });
+  fileInputGallery.addEventListener('change', () => {
+    const n = fileInputGallery.files ? fileInputGallery.files.length : 0;
+    if (filenameEl){
+      filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
+                           : n===1 ? fileInputGallery.files[0].name
+                                   : `${n} archivos seleccionados`;
     }
+  });
+}
 
-    if (fileInputCam){
-      fileInputCam.addEventListener('change', () => {
-        const n = fileInputCam.files ? fileInputCam.files.length : 0;
-        if (filenameEl){
-          filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
-                               : n===1 ? fileInputCam.files[0].name
-                                       : `${n} archivos seleccionados`;
-        }
-      });
+if (fileInputCam){
+  fileInputCam.addEventListener('change', () => {
+    const n = fileInputCam.files ? fileInputCam.files.length : 0;
+    if (filenameEl){
+      filenameEl.textContent = n===0 ? (filenameEl.dataset.empty || 'Sin archivos')
+                           : n===1 ? fileInputCam.files[0].name
+                                   : `${n} archivos seleccionados`;
     }
+  });
+}
 
     const btnGrant = form.querySelector('.grant-location');
     if (btnGrant){
       btnGrant.addEventListener('click', async ()=>{ await captureGeo(form); });
     }
 
-  form.addEventListener('submit', (e) => {
-  // ⚠️ Nunca dejes pasar el submit nativo: el uploader AJAX es quien sube.
-  e.preventDefault();
-  // No hacemos nada aquí: el otro bloque (uploader) maneja la subida en su propio submit.
-});
+    form.addEventListener('submit', async (e)=>{
+      // El envío real lo intercepta el uploader en segundo plano (script de abajo)
+      // Aquí solo validamos que haya archivos
+      const hasFiles = Array.from(form.querySelectorAll('input[type=file][name="imagenes[]"]'))
+                        .some(inp => (inp.files && inp.files.length));
+      if (!hasFiles) {
+        e.preventDefault();
+        alert('Selecciona al menos una imagen.');
+      }
+    });
   });
 })();
 </script>
 
 <script>
-/* Geolocalización pasiva global */
+/* Geolocalización pasiva global: guarda el último fix y lo “estampa” en cada form */
 (function(){
   const OPTS = { enableHighAccuracy:true, maximumAge:10000, timeout:8000 };
   const last = { ok:false, lat:null, lng:null, acc:null, ts:0 };
@@ -556,6 +573,7 @@ window.__captureGeoForFotos = async function(form){
     el.textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}${isFinite(acc)?' (±'+Math.round(acc)+'m)':''}`;
   }
 
+  // Estampa (si hay fix) + pone hora
   function stampToForm(form){
     const latEl=form.querySelector('input[name="lat"]');
     const lngEl=form.querySelector('input[name="lng"]');
@@ -573,6 +591,7 @@ window.__captureGeoForFotos = async function(form){
     return false;
   }
 
+  // Watcher continuo (no bloquea nada)
   if ('geolocation' in navigator){
     try {
       navigator.geolocation.watchPosition((pos)=>{
@@ -582,6 +601,7 @@ window.__captureGeoForFotos = async function(form){
         last.lng = c.longitude;
         last.acc = c.accuracy;
         last.ts  = Date.now();
+        // pinta en forms que estén “esperando ubicación…”
         document.querySelectorAll('.geo-upload-form').forEach(f=>{
           const lbl=f.querySelector('.gps-status');
           if (last.ok && lbl && /espera|intentando/i.test(lbl.textContent||'')){
@@ -592,6 +612,7 @@ window.__captureGeoForFotos = async function(form){
     } catch(e){}
   }
 
+  // API pública: intenta con el last fix; si no hay, fuerza un getCurrentPosition.
   window.__stampGeoIntoForm = async function(form){
     if (stampToForm(form)) return true;
 
@@ -604,14 +625,14 @@ window.__captureGeoForFotos = async function(form){
     }
     return new Promise(resolve=>{
       navigator.geolocation.getCurrentPosition(
-        (pos)=>{
+        (pos)=>{ // éxito
           const c=pos.coords||{};
           last.ok  = isFinite(c.latitude)&&isFinite(c.longitude);
           last.lat = c.latitude; last.lng = c.longitude; last.acc = c.accuracy;
           stampToForm(form);
           resolve(true);
         },
-        ()=>{
+        ()=>{ // fallo: seguimos sin GPS
           if (lbl) lbl.textContent='📍 Sin GPS (se subirá sin coordenadas)';
           resolve(false);
         },
@@ -622,10 +643,13 @@ window.__captureGeoForFotos = async function(form){
 })();
 </script>
 
+
 <script>
 /* — dentro del uploader — */
 async function resizeImage(file, maxSide=1600, quality=0.85) {
+  // si el archivo ya es pequeño, no perder tiempo reescalando
   if (file && file.size <= 1_000_000) return file;
+
   if (!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) return file;
   const bmp = await createImageBitmap(file).catch(()=>null);
   if (!bmp) return file;
@@ -642,14 +666,15 @@ async function resizeImage(file, maxSide=1600, quality=0.85) {
   return new File([blob], safeName, {type: 'image/jpeg'});
 }
 </script>
-
-<script>
+ 	<script>
 /* — dentro del uploader — */
 async function bestEffortGps(form){
+  // 1) usar fix pasivo si ya existe (instantáneo)
   if (window.__stampGeoIntoForm) {
     const ok = await window.__stampGeoIntoForm(form);
     if (ok) return true;
   }
+  // 2) fallback a tu función existente (getCurrentPosition con UI)
   if (window.__captureGeoForFotos) {
     const lbl = form.querySelector('.gps-status');
     if (lbl) lbl.textContent = '📍 Intentando obtener ubicación…';
@@ -660,10 +685,8 @@ async function bestEffortGps(form){
   return false;
 }
 </script>
-
 <script>
 (() => {
-  /* ✅ endpoint AJAX correcto */
   const UPLOAD_URL = "{% url 'operaciones:fotos_upload_ajax' a.pk %}";
   const CSRF = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value;
 
@@ -687,7 +710,7 @@ async function bestEffortGps(form){
     const btnCam  = li?.querySelector(`.trigger-camera[data-target="file-camera-${reqId}"]`);
     const btnLoc  = li?.querySelector('.grant-location');
     const nota    = li?.querySelector('input[name="nota"]');
-    const submit  = form?.querySelector('button[type="submit"], button:not([type])');
+    const submit  = form?.querySelector('button[type="submit"], button:not([type])`);
 
     [gallery, cam, btnCam, btnLoc, nota, submit].forEach(el=>{
       if(!el) return;
@@ -721,91 +744,128 @@ async function bestEffortGps(form){
   }
 
   function afterFormDrained(form){
-    const filenameEl = form.querySelector('.filename');
-    if (filenameEl) {
-      filenameEl.textContent = 'Completado';
-      clearTimeout(form._filenameTimer);
-      form._filenameTimer = setTimeout(() => {
-        filenameEl.textContent = filenameEl.dataset.empty || 'Sin archivos';
-      }, 1500);
+  // Feedback visual: “Completado” un momento y luego vuelve a “Sin archivos”
+  const filenameEl = form.querySelector('.filename');
+  if (filenameEl) {
+    filenameEl.textContent = 'Completado';
+    clearTimeout(form._filenameTimer);
+    form._filenameTimer = setTimeout(() => {
+      filenameEl.textContent = filenameEl.dataset.empty || 'Sin archivos';
+    }, 1500); // 1.5s de feedback
+  }
+
+  // Limpia inputs de archivo (necesario para poder elegir el mismo archivo otra vez)
+  form.querySelectorAll('input[type=file][name="imagenes[]"]').forEach(inp => { inp.value = ''; });
+
+  // Limpia campos de apoyo
+  const titulo = form.querySelector('input[name="titulo_manual"]');
+  if (titulo && (titulo.type || '').toLowerCase() !== 'hidden') titulo.value = '';
+
+  const nota = form.querySelector('input[name="nota"]');
+  if (nota) nota.value = '';
+
+  const gpsStatus  = form.querySelector('.gps-status');
+  if (gpsStatus) gpsStatus.textContent = '📍 En espera de ubicación…';
+
+  const timeStatus = form.querySelector('.time-status');
+  if (timeStatus) timeStatus.textContent = '🕒 —';
+
+  ['lat','lng','acc','client_taken_at'].forEach(nm => {
+    const el = form.querySelector(`input[name="${nm}"]`);
+    if (el) el.value = '';
+  });
+
+  // Si el requisito quedó “done”, deshabilitarlo
+  const reqId = form.querySelector('input[name="req_id"]')?.value || null;
+  if (reqId) {
+    const badge = document.querySelector(`.req-badge[data-req="${reqId}"]`);
+    if (badge && badge.dataset.state === 'done' && window.__setReqEnabled) {
+      window.__setReqEnabled(reqId, false);
+delete form.dataset.working;
     }
-    form.querySelectorAll('input[type=file][name="imagenes[]"]').forEach(inp => { inp.value = ''; });
-    const titulo = form.querySelector('input[name="titulo_manual"]');
-    if (titulo && (titulo.type || '').toLowerCase() !== 'hidden') titulo.value = '';
-    const nota = form.querySelector('input[name="nota"]');
-    if (nota) nota.value = '';
-    const gpsStatus  = form.querySelector('.gps-status');
-    if (gpsStatus) gpsStatus.textContent = '📍 En espera de ubicación…';
-    const timeStatus = form.querySelector('.time-status');
-    if (timeStatus) timeStatus.textContent = '🕒 —';
-    ['lat','lng','acc','client_taken_at'].forEach(nm => {
-      const el = form.querySelector(`input[name="${nm}"]`);
-      if (el) el.value = '';
-    });
-    const reqId = form.querySelector('input[name="req_id"]')?.value || null;
-    if (reqId) {
-      const badge = document.querySelector(`.req-badge[data-req="${reqId}"]`);
-      if (badge && badge.dataset.state === 'done' && window.__setReqEnabled) {
-        window.__setReqEnabled(reqId, false);
-        delete form.dataset.working;
-      }
-    }
+  }
+}
+
+  // ---- utilidades de subida
+  async function resizeImage(file, maxSide=1600, quality=0.85) {
+    if (!/^image\/(jpeg|jpg|png|webp)$/i.test(file.type)) return file;
+    const bmp = await createImageBitmap(file).catch(()=>null);
+    if (!bmp) return file;
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    if (scale === 1) return file;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width*scale);
+    canvas.height = Math.round(bmp.height*scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+    const safeName = (file.name || 'foto').replace(/\.(heic|heif|png|webp)$/i, '.jpg');
+    return new File([blob], safeName, {type: 'image/jpeg'});
   }
 
   function insertEvidenceFigure(fig, ev) {
-    const grid = document.querySelector('.grid.grid-cols-2.gap-3');
-    if (!grid) return;
-    const emptyMsg = grid.querySelector('[data-empty]');
-    if (emptyMsg) emptyMsg.remove();
-    const firstExtra = grid.querySelector('figure:not([data-req])');
-    if (ev.req_id) {
-      if (firstExtra) grid.insertBefore(fig, firstExtra);
-      else grid.appendChild(fig);
-    } else {
-      grid.appendChild(fig);
-    }
+  const grid = document.querySelector('.grid.grid-cols-2.gap-3');
+  if (!grid) return;
+
+  // quita el mensaje "Aún no hay fotos"
+  const emptyMsg = grid.querySelector('[data-empty]');
+  if (emptyMsg) emptyMsg.remove();
+
+  // primera tarjeta que NO tiene data-req => es extra
+  const firstExtra = grid.querySelector('figure:not([data-req])');
+
+  if (ev.req_id) {
+    // con requisito: debe ir antes de las extras
+    if (firstExtra) grid.insertBefore(fig, firstExtra);
+    else grid.appendChild(fig);
+  } else {
+    // extra: siempre al final
+    grid.appendChild(fig);
+  }
+}
+
+function addEvidenceCard(ev) {
+  const grid = document.querySelector('.grid.grid-cols-2.gap-3');
+  if (!grid) return;
+
+  const fig = document.createElement('figure');
+  fig.className = "border rounded p-2";
+  fig.setAttribute('data-ev-id', ev.id);
+  if (ev.req_id) fig.setAttribute('data-req', ev.req_id);
+
+  const gps = (ev.lat && ev.lng)
+    ? `📍 ${Number(ev.lat).toFixed(5)}, ${Number(ev.lng).toFixed(5)}${ev.acc ? " (±"+Math.round(ev.acc)+"m)" : ""}`
+    : '📍 Sin GPS';
+
+  let badgeHtml = `<span class="absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center bg-gray-300 text-white text-sm" title="Bloqueado">🔒</span>`;
+  if (window.CAN_DELETE && window.DELETE_URL_TPL) {
+    const action = window.deleteUrlFor ? window.deleteUrlFor(ev.id)
+                                       : window.DELETE_URL_TPL.replace(/\/0(\/|$)/, `/${ev.id}$1`);
+    badgeHtml = `
+      <button type="button"
+              class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
+                     bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+              title="Eliminar esta foto"
+              data-delete
+              data-action="${action}">✕</button>`;
   }
 
-  function addEvidenceCard(ev) {
-    const grid = document.querySelector('.grid.grid-cols-2.gap-3');
-    if (!grid) return;
+  fig.innerHTML = `
+    <div class="relative">
+      <img src="${ev.url}" class="w-full h-32 object-cover rounded" loading="lazy" alt="photo">
+      ${badgeHtml}
+    </div>
+    <figcaption class="text-xs mt-1 space-y-0.5">
+      <div class="font-medium">${ev.titulo}</div>
+      <div>🕒 ${ev.fecha}</div>
+      <div>${gps}</div>
+    </figcaption>`;
 
-    const fig = document.createElement('figure');
-    fig.className = "border rounded p-2";
-    fig.setAttribute('data-ev-id', ev.id);
-    if (ev.req_id) fig.setAttribute('data-req', ev.req_id);
+  // ⬇️ Inserta respetando que las extras queden al final
+  insertEvidenceFigure(fig, ev);
 
-    const gps = (ev.lat && ev.lng)
-      ? `📍 ${Number(ev.lat).toFixed(5)}, ${Number(ev.lng).toFixed(5)}${ev.acc ? " (±"+Math.round(ev.acc)+"m)" : ""}`
-      : '📍 Sin GPS';
+  if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
+}
 
-    let badgeHtml = `<span class="absolute top-1 right-1 w-7 h-7 rounded-full grid place-items-center bg-gray-300 text-white text-sm" title="Bloqueado">🔒</span>`;
-    if (window.CAN_DELETE && window.DELETE_URL_TPL) {
-      const action = window.deleteUrlFor ? window.deleteUrlFor(ev.id)
-                                         : window.DELETE_URL_TPL.replace(/\/0(\/|$)/, `/${ev.id}$1`);
-      badgeHtml = `
-        <button type="button"
-                class="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
-                       bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
-                title="Eliminar esta foto"
-                data-delete
-                data-action="${action}">✕</button>`;
-    }
-
-    fig.innerHTML = `
-      <div class="relative">
-        <img src="${ev.url}" class="w-full h-32 object-cover rounded" loading="lazy" alt="photo">
-        ${badgeHtml}
-      </div>
-      <figcaption class="text-xs mt-1 space-y-0.5">
-        <div class="font-medium">${ev.titulo}</div>
-        <div>🕒 ${ev.fecha}</div>
-        <div>${gps}</div>
-      </figcaption>`;
-
-    insertEvidenceFigure(fig, ev);
-    if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
-  }
 
   function makeQueueItem(file, meta, parentForm) {
     const el = document.createElement('div');
@@ -827,333 +887,310 @@ async function bestEffortGps(form){
   }
 
   async function uploadOne(el) {
-    const bar = el.querySelector('.bg-blue-600');
-    const status = el.querySelector('.status');
-    const cancelBtn = el.querySelector('.cancel');
+  const bar = el.querySelector('.bg-blue-600');
+  const status = el.querySelector('.status');
+  const cancelBtn = el.querySelector('.cancel');
 
-    status.textContent = 'Optimizando…';
-    // usa el resize global si existe; si no, sin cambio
-    const small = (typeof resizeImage === 'function')
-      ? await resizeImage(el._file).catch(()=>el._file)
-      : el._file;
+  status.textContent = 'Optimizando…';
+  const small = await resizeImage(el._file).catch(()=>el._file);
 
-    const fd = new FormData();
-    if (CSRF) fd.append('csrfmiddlewaretoken', CSRF);
-    fd.append('imagen', small);
-    for (const [k, v] of Object.entries(el._meta||{})) {
-      if (v !== undefined && v !== null) fd.append(k, v);
-    }
-
-    const xhr = new XMLHttpRequest();
-    el._xhr = xhr;
-
-    return new Promise((resolve) => {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (!e.lengthComputable) return;
-        const pct = Math.round((e.loaded / e.total) * 100);
-        bar.style.width = pct + '%';
-        status.textContent = `Subiendo… ${pct}%`;
-      });
-
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState !== 4) return;
-        cancelBtn.disabled = true;
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
-            bar.style.width = '100%';
-            status.textContent = 'Completado';
-            addEvidenceCard(data.evidencia);
-            if (el._meta.req_id) markReqDone(el._meta.req_id);
-            if (typeof window.__refreshFotosStatus === 'function') window.__refreshFotosStatus();
-            setTimeout(()=> el.remove(), 400);
-          } else {
-            status.textContent = (data && data.error) ? data.error : `Error ${xhr.status}`;
-            el.classList.add('bg-red-50');
-          }
-        } catch {
-          status.textContent = `Error ${xhr.status}`;
-          el.classList.add('bg-red-50');
-        }
-
-        const form = el._parentForm;
-        const filenameEl = form ? form.querySelector('.filename') : null;
-        if (form) {
-          form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
-          if (filenameEl && form._pendingUploads > 0) filenameEl.textContent = 'Subiendo…';
-          if (form._pendingUploads === 0) afterFormDrained(form);
-        }
-        if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
-
-        resolve();
-      };
-
-      cancelBtn.addEventListener('click', () => {
-        if (el._xhr) el._xhr.abort();
-        status.textContent = 'Cancelado';
-        el.classList.add('opacity-60');
-        const form = el._parentForm;
-        if (form) {
-          form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
-          if (form._pendingUploads === 0) afterFormDrained(form);
-        }
-        setTimeout(()=> el.remove(), 300);
-      });
-
-      xhr.open('POST', UPLOAD_URL, true);
-      xhr.send(fd);
-    });
+  const fd = new FormData();
+  if (CSRF) fd.append('csrfmiddlewaretoken', CSRF);
+  fd.append('imagen', small);
+  for (const [k, v] of Object.entries(el._meta||{})) {
+    if (v !== undefined && v !== null) fd.append(k, v);
   }
 
-  // best-effort GPS auxiliar (por si no existe el global)
-  async function bestEffortGpsLocal(form){
+  const xhr = new XMLHttpRequest();
+  el._xhr = xhr;
+
+  return new Promise((resolve) => {
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      bar.style.width = pct + '%';
+      status.textContent = `Subiendo… ${pct}%`;
+    });
+
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState !== 4) return;
+      cancelBtn.disabled = true;
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && data.ok) {
+          bar.style.width = '100%';
+          status.textContent = 'Completado';
+          addEvidenceCard(data.evidencia);
+          if (el._meta.req_id) markReqDone(el._meta.req_id);
+          setTimeout(()=> el.remove(), 400);
+        } else {
+          status.textContent = (data && data.error) ? data.error : `Error ${xhr.status}`;
+          el.classList.add('bg-red-50');
+        }
+      } catch {
+        status.textContent = `Error ${xhr.status}`;
+        el.classList.add('bg-red-50');
+      }
+
+      // ↓↓↓ Ajuste del label mientras queden subidas pendientes
+      const form = el._parentForm;
+      const filenameEl = form ? form.querySelector('.filename') : null;
+      if (form) {
+        form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
+        if (filenameEl) {
+          if (form._pendingUploads > 0) filenameEl.textContent = 'Subiendo…';
+        }
+        if (form._pendingUploads === 0) afterFormDrained(form);
+      }
+      if (typeof window.__upgradeDeleteBadges === 'function') window.__upgradeDeleteBadges();
+
+      resolve();
+    };
+
+    cancelBtn.addEventListener('click', () => {
+      if (el._xhr) el._xhr.abort();
+      status.textContent = 'Cancelado';
+      el.classList.add('opacity-60');
+      const form = el._parentForm;
+      if (form) {
+        form._pendingUploads = Math.max(0, (form._pendingUploads||0) - 1);
+        if (form._pendingUploads === 0) afterFormDrained(form);
+      }
+      setTimeout(()=> el.remove(), 300);
+    });
+
+    xhr.open('POST', UPLOAD_URL, true);
+    xhr.send(fd);
+  });
+}
+  // ── GPS "best-effort": intenta automático, pero NO bloquea si falla
+  async function bestEffortGps(form){
     const latEl = form.querySelector('input[name="lat"]');
     const lngEl = form.querySelector('input[name="lng"]');
     const accEl = form.querySelector('input[name="acc"]');
     const taken = form.querySelector('input[name="client_taken_at"]');
     const gpsLabel = form.querySelector('.gps-status');
 
+    // marca hora local del cliente
     if (taken && !taken.value) taken.value = new Date().toISOString();
+
+    // si ya tenemos coords, listo
     if (latEl?.value && lngEl?.value) return true;
 
     if (gpsLabel) gpsLabel.textContent = '📍 Intentando obtener ubicación…';
 
     let ok = false;
-    if (window.__captureGeoForFotos) ok = await window.__captureGeoForFotos(form);
+    if (window.__captureGeoForFotos) {
+      ok = await window.__captureGeoForFotos(form); // devuelve true/false
+    }
+
     if (!ok) {
+      // deja claro que continuará sin GPS, pero no bloquea
       if (gpsLabel) gpsLabel.textContent = '📍 Sin GPS (se subirá sin coordenadas)';
+      // limpia por si quedaron valores parciales
       if (accEl) accEl.value = '';
       return false;
     }
+    // éxito: etiqueta con coords ya lo hace __captureGeoForFotos
     return true;
   }
 
-  const queue = [];
-  let pumping = false;
-  async function pump(){
-    if (pumping) return;
-    pumping = true;
-    try {
-      while (queue.length){
-        const el = queue.shift();
-        await uploadOne(el);
-      }
-    } finally {
-      pumping = false;
-    }
-  }
-
-  /* ✅ FALTABA: función que encola los archivos del formulario */
-  async function pushFiles(form, files) {
-    // Límite para EXTRAS (si aplica)
-    const reqId = form.querySelector('input[name="req_id"]')?.value || "";
-    if (!reqId && typeof window.__EXTRAS_LEFT === 'number') {
-      if (window.__EXTRAS_LEFT <= 0) { alert('Ya alcanzaste el máximo de 4 fotos extra.'); return; }
-      if (files.length > window.__EXTRAS_LEFT) {
-        alert(`Solo puedes subir ${window.__EXTRAS_LEFT} foto(s) extra más.`);
-        files = Array.from(files).slice(0, window.__EXTRAS_LEFT);
-      }
-    }
-    if (!files.length) return;
-
-    form.dataset.working = '1';
-
-    // GPS best-effort (usa global si existe; si no, local)
-    if (typeof bestEffortGps === 'function') {
-      await bestEffortGps(form);
-    } else {
-      await bestEffortGpsLocal(form);
-    }
-
-    // Meta común
-    const lat   = form.querySelector('input[name="lat"]')?.value || "";
-    const lng   = form.querySelector('input[name="lng"]')?.value || "";
-    const acc   = form.querySelector('input[name="acc"]')?.value || "";
-    const taken = form.querySelector('input[name="client_taken_at"]')?.value || new Date().toISOString();
-    const nota  = form.querySelector('input[name="nota"]')?.value || "";
-    const titulo_manual = form.querySelector('input[name="titulo_manual"]')?.value || "";
-
-    form._pendingUploads = (form._pendingUploads || 0) + files.length;
-
-    const queueBox = form._queueBox || form.querySelector('.mt-2.space-y-2');
-
-    for (const f of files) {
-      const el = makeQueueItem(f, {
-        req_id: reqId || undefined,
-        nota: nota || undefined,
-        lat, lng, acc,
-        client_taken_at: taken,
-        titulo_manual: titulo_manual || undefined,
-      }, form);
-      queueBox.prepend(el);
-      queue.push(el);
-      pump();
-    }
-
-    const filenameEl = form.querySelector('.filename');
-    if (filenameEl) {
-      filenameEl.textContent = `${files.length} archivo${files.length>1?'s':''} en cola`;
-    }
-  }
-
-  // ───────── Wire de formularios
+  // ---- wiring formularios (SUBIR INMEDIATO al elegir archivos) + GPS best-effort
   document.querySelectorAll('.geo-upload-form').forEach(form => {
     const queueBox = document.createElement('div');
     queueBox.className = "mt-2 space-y-2";
     form.appendChild(queueBox);
-    form._queueBox = queueBox;
     form._pendingUploads = 0;
 
     const fileInputs = form.querySelectorAll('input[type=file][name="imagenes[]"]');
     const filenameEl = form.querySelector('.filename');
 
-    // Solo mostrar nombre/cantidad al elegir; no subir aún
+    // límite solo para EXTRAS (lo maneja el polling en window.__EXTRAS_LEFT)
+    function enforceExtrasLimit(files) {
+      const req = form.querySelector('input[name="req_id"]')?.value || "";
+      if (req) return files;
+      const left = (typeof window.__EXTRAS_LEFT === 'number') ? window.__EXTRAS_LEFT : 4;
+      if (left <= 0) { alert('Ya alcanzaste el máximo de 4 fotos extra.'); return []; }
+      if (files.length > left) {
+        alert(`Solo puedes subir ${left} foto(s) extra más.`);
+        return Array.from(files).slice(0, left);
+      }
+      return files;
+    }
+
+async function pushFiles(files) {
+  files = enforceExtrasLimit(files);
+  if (!files.length) return;
+
+  // Marca que el usuario está trabajando en este form
+  form.dataset.working = '1';
+
+  if (typeof bestEffortGps === 'function') {
+    await bestEffortGps(form);
+  }
+
+  const lat   = form.querySelector('input[name="lat"]')?.value || "";
+  const lng   = form.querySelector('input[name="lng"]')?.value || "";
+  const acc   = form.querySelector('input[name="acc"]')?.value || "";
+  const taken = form.querySelector('input[name="client_taken_at"]')?.value || new Date().toISOString();
+  const req   = form.querySelector('input[name="req_id"]')?.value || "";
+  const nota  = form.querySelector('input[name="nota"]')?.value || "";
+  const titulo_manual = form.querySelector('input[name="titulo_manual"]')?.value || "";
+
+  form._pendingUploads = (form._pendingUploads || 0) + files.length;
+
+  for (const f of files) {
+    const el = makeQueueItem(f, {
+      req_id: req || undefined,
+      nota: nota || undefined,
+      lat, lng, acc,
+      client_taken_at: taken,
+      titulo_manual: titulo_manual || undefined,
+    }, form);
+    queueBox.prepend(el);
+    queue.push(el);
+    pump();
+  }
+
+  // ↓↓↓ Mostrar en el label el número de archivos que van en cola
+  const filenameEl = form.querySelector('.filename');
+  if (filenameEl) {
+    filenameEl.textContent = `${files.length} archivo${files.length>1?'s':''} en cola`;
+  }
+}
+
+    // SUBIDA AUTOMÁTICA al elegir desde galería o cámara (con GPS best-effort)
     fileInputs.forEach(inp => {
-      inp.addEventListener('change', () => {
-        const n = inp.files ? inp.files.length : 0;
-        if (!filenameEl) return;
-        filenameEl.textContent =
-          n === 0 ? (filenameEl.dataset.empty || 'Sin archivos')
-        : n === 1 ? inp.files[0].name
-                  : `${n} archivos seleccionados`;
+      inp.addEventListener('change', async () => {
+        const files = inp.files ? Array.from(inp.files) : [];
+        if (!files.length) return;
+        await pushFiles(files);
+        inp.value = ''; // permite volver a elegir el mismo archivo
       });
     });
 
-    // La subida ocurre al hacer submit (click “Subir”)
+    // Fallback: botón “Subir” (accesibilidad) — también intenta GPS pero no bloquea
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const files = [];
       fileInputs.forEach(inp => {
-        if (inp.files && inp.files.length) files.push(...inp.files);
+        if (inp.files && inp.files.length) Array.from(inp.files).forEach(f => files.push(f));
       });
       if (!files.length) { alert('Selecciona al menos una imagen.'); return; }
-      await pushFiles(form, files);
+      await pushFiles(files);
       fileInputs.forEach(inp => inp.value = '');
     });
   });
 })();
 </script>
-
 <script>
+  // Fallback: cerrar al cargar todos los requisitos que ya vienen en "done"
   document.addEventListener('DOMContentLoaded', () => {
     if (typeof window.__setReqEnabled !== 'function') return;
 
     document.querySelectorAll('.req-badge[data-req]').forEach(badge => {
       const reqId = badge.getAttribute('data-req');
-      const state = badge.getAttribute('data-state');
+      const state = badge.getAttribute('data-state'); // "done" | "pending"
       if (state === 'done' && reqId) {
-        window.__setReqEnabled(reqId, false);
+        window.__setReqEnabled(reqId, false); // deshabilita inputs y muestra "Cerrado"
       }
     });
   });
 </script>
 
 <div id="js-status" data-status-url="{% url 'operaciones:fotos_status_json' a.pk %}"></div>
-
-
 <script>
 (function(){
   var hostEl = document.getElementById('js-status');
   var STATUS_URL = hostEl ? hostEl.getAttribute('data-status-url') : '';
   if (!STATUS_URL) return;
 
-  function updateMissingBanner(list){
-    var el = document.getElementById('faltantes-banner');
-    if (!el) return;
-    if (Array.isArray(list) && list.length){
-      el.classList.remove('hidden');
-      el.textContent = 'Faltan fotos requeridas: ' + list.join(', ') + '.';
-    } else {
-      el.classList.add('hidden');
-      el.textContent = '';
-    }
-  }
-
-  function setFinishEnabled(enabled){
-    var btn = document.getElementById('btn-finalizar');
-    if (!btn) return;
-    btn.disabled = !enabled;
-    if (enabled){
-      btn.className = 'inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md';
-      btn.removeAttribute('title');
-    } else {
-      btn.className = 'inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed';
-      btn.title = 'Debes subir todas las fotos requeridas y que todos acepten la asignación.';
-    }
-  }
-
-  // ✅ ESTA era la función que faltaba
   function updateReqFromServer(list){
-    if (!Array.isArray(list)) return;
+  if (!Array.isArray(list)) return;
 
-    list.forEach(function(r){
-      var badge = document.querySelector('.req-badge[data-req="' + r.id + '"]');
-      var nowState = r.global_done ? 'done' : 'pending';
+  list.forEach(function(r){
+    var badge = document.querySelector('.req-badge[data-req="' + r.id + '"]');
+    var nowState = r.global_done ? 'done' : 'pending';
 
-      if (badge){
-        var prevState = badge.getAttribute('data-state');
-        if (prevState !== nowState){
-          badge.setAttribute('data-state', nowState);
-          if (nowState === 'done'){
-            badge.textContent = 'Completado';
-            badge.classList.remove('bg-red-100','text-red-800');
-            badge.classList.add('bg-green-100','text-green-800');
-            if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, false);
-          } else {
-            badge.textContent = 'Pendiente';
-            badge.classList.remove('bg-green-100','text-green-800');
-            badge.classList.add('bg-red-100','text-red-800');
-            if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, true);
-          }
-        }
-      } else {
-        // por si el requisito no está en DOM (raro), al menos ciérralo si está done
-        if (r.global_done && typeof window.__setReqEnabled === 'function'){
-          window.__setReqEnabled(r.id, false);
+    if (badge){
+      var prevState = badge.getAttribute('data-state');
+
+      // Actualiza visual SOLO si el estado cambió
+      if (prevState !== nowState){
+        badge.setAttribute('data-state', nowState);
+        if (nowState === 'done'){
+          badge.textContent = 'Completado';
+          badge.classList.remove('bg-red-100','text-red-800');
+          badge.classList.add('bg-green-100','text-green-800');
+          if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, false);
+        } else {
+          badge.textContent = 'Pendiente';
+          badge.classList.remove('bg-green-100','text-green-800');
+          badge.classList.add('bg-red-100','text-red-800');
+          if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, true);
         }
       }
-    });
+    } else {
+      // Si no hay badge visible, al menos refleja el bloqueo cuando esté done
+      if (r.global_done && typeof window.__setReqEnabled === 'function') {
+        window.__setReqEnabled(r.id, false);
+      }
+    }
+  });
+}
+function setFinishEnabled(enabled){
+  // botón “Finalizar” (form POST)
+  var btn = document.querySelector('form[action*="finalizar_servicio"] button[type="submit"]');
+  if (!btn) return;
+  if (enabled){
+    btn.disabled = false;
+    btn.className = 'inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md';
+    btn.removeAttribute('title');
+  } else {
+    btn.disabled = true;
+    btn.className = 'inline-flex items-center gap-2 bg-indigo-300 text-white px-4 py-2 rounded-md cursor-not-allowed';
+    btn.title = 'Debes subir todas las fotos requeridas y que todos acepten la asignación.';
   }
+}
+ 
 
   function tick(){
-    // param anti-cache por si el navegador ignora no-store
-    var url = STATUS_URL + (STATUS_URL.includes('?') ? '&' : '?') + '_ts=' + Date.now();
-    fetch(url, {cache:'no-store'})
-      .then(r => r.ok ? r.json() : null)
-      .then(j => {
-        if (!j || !j.ok) return;
-        updateReqFromServer(j.requisitos || []);
-        setFinishEnabled(!!j.can_finish);
-        updateMissingBanner(j.faltantes_global || []);
+  fetch(STATUS_URL, {cache:'no-store'})
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if (!j || !j.ok) return;
+      updateReqFromServer(j.requisitos || []);
+      if ('can_finish' in j) setFinishEnabled(!!j.can_finish);
 
-        if ('extras_left' in j) {
-          window.__EXTRAS_LEFT = j.extras_left;
-          const extraForm = document.querySelector('.geo-upload-form.ajax-uploader[data-extra="1"]');
-          if (extraForm) {
-            const enabled = j.extras_left > 0;
-            extraForm.querySelectorAll('input[type=file],input[name=titulo_manual],input[name=nota],button').forEach(el => el.disabled = !enabled);
-            const fn = extraForm.querySelector('.filename');
-            if (fn) fn.textContent = enabled ? (fn.dataset.empty || 'Sin archivos') : 'Cerrado';
-            const gps = extraForm.querySelector('.gps-status');
-            if (gps) gps.textContent = enabled ? '📍 En espera de ubicación…' : '📍 Límite de 4 extra alcanzado';
-          }
+      // CAMBIO 2: solo toca el formulario de EXTRAS
+      if ('extras_left' in j) {
+        window.__EXTRAS_LEFT = j.extras_left;
+        const extraForm = document.querySelector('.geo-upload-form.ajax-uploader[data-extra="1"]'); // solo “Extra”
+        if (extraForm) {
+          const enabled = j.extras_left > 0;
+          extraForm.querySelectorAll('input[type=file],input[name=titulo_manual],input[name=nota],button').forEach(el => el.disabled = !enabled);
+          const fn = extraForm.querySelector('.filename');
+          if (fn) fn.textContent = enabled ? (fn.dataset.empty || 'Sin archivos') : 'Cerrado';
+          const gps = extraForm.querySelector('.gps-status');
+          if (gps) gps.textContent = enabled ? '📍 En espera de ubicación…' : '📍 Límite de 4 extra alcanzado';
         }
-      })
-      .catch(()=>{});
-  }
+      }
+    })
+    .catch(()=>{});
+}
 
-  document.addEventListener('DOMContentLoaded', tick);
+   document.addEventListener('DOMContentLoaded', tick);
   setInterval(tick, 8000);
 
-  // llamado explícito tras cada subida exitosa
+  // ⬇️ EXponer para que otros scripts la llamen inmediatamente tras un cambio
   window.__refreshFotosStatus = tick;
   window.__STATUS_URL = STATUS_URL;
 })();
+
 </script>
 
-
-
 <script>
+  // ÚNICA definición de __setReqEnabled (en español)
   window.__setReqEnabled = function(reqId, enabled){
   var inp = document.querySelector('input[name="req_id"][value="' + reqId + '"]');
   if (!inp) return;
@@ -1169,6 +1206,7 @@ async function bestEffortGps(form){
   var submit  = form ? (form.querySelector('button[type="submit"], button:not([type])')) : null;
   var filenameEl = form ? form.querySelector('.filename') : null;
 
+  // ¿El usuario está trabajando aquí?
   var hasPending = !!(form && ((form._pendingUploads||0) > 0 ||
                     Array.from(form.querySelectorAll('input[type=file][name="imagenes[]"]'))
                          .some(i => i.files && i.files.length)));
@@ -1185,6 +1223,9 @@ async function bestEffortGps(form){
     else lblGal.classList.remove('pointer-events-none','opacity-60');
   }
 
+  // ✅ Solo cambiamos el texto del filename cuando:
+  //   - se DESHABILITA (→ “Cerrado”), o
+  //   - se HABILITA pero antes estaba en “Cerrado” y NO está trabajando el usuario
   if (filenameEl){
     if (!enabled){
       filenameEl.textContent = 'Cerrado';
@@ -1211,8 +1252,12 @@ async function bestEffortGps(form){
     if (gpsStatus && (gpsStatus.textContent||'').includes('Cerrado')){
       gpsStatus.textContent = '📍 En espera de ubicación…';
     }
+    if (timeStatus && (timeStatus.textContent||'') === '🕒 —'){
+      // se queda igual
+    }
   }
 };
+
 </script>
 
 {% endblock %}

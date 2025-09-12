@@ -115,7 +115,10 @@ urlpatterns = [
     path("fotos/asignacion/<int:asig_id>/status/", views_fotos.fotos_status_json,
          name="fotos_status_json"),
 
-
+    path("fotos/<int:asig_id>/presign/",
+         views_fotos.presign_put, name="fotos_presign"),
+    path("fotos/<int:asig_id>/finalize/",
+         views_fotos.finalize_upload, name="fotos_finalize"),
 
 
 

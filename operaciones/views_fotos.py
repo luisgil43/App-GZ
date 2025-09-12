@@ -1,4 +1,12 @@
 # operaciones/views_fotos.py
+import boto3
+import mimetypes
+import uuid
+import re
+from django.core.files.storage import default_storage
+from .models import SesionFotoTecnico
+from django.shortcuts import get_object_or_404
+from datetime import datetime, timezone
 from django.db.models import Case, When, Value, IntegerField
 from django.http import JsonResponse
 from .models import SitioMovil, ServicioCotizado, _site_name_for
@@ -47,14 +55,45 @@ from usuarios.decoradores import rol_requerido
 # ========== Helpers ==========
 
 
+from django.db import transaction
+from django.db.models import Count  # ya lo tienes importado arriba
+
+
 def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
     sesion, _ = SesionFotos.objects.get_or_create(servicio=servicio)
-    # Asegura asignaciones por cada técnico del servicio
+
+    # Asignaciones existentes y canon (primera que tenga requisitos)
     existentes = {a.tecnico_id for a in sesion.asignaciones.all()}
+    canon_asig = (sesion.asignaciones
+                  .filter(requisitos__isnull=False)
+                  .annotate(n=Count("requisitos"))
+                  .filter(n__gt=0)
+                  .first())
+    canon_reqs = []
+    if canon_asig:
+        canon_reqs = list(
+            RequisitoFoto.objects.filter(tecnico_sesion=canon_asig)
+                                 .order_by("orden", "id")
+        )
+
+    # Crea asignaciones que falten y clona requisitos si hay canónicos
     for user in servicio.trabajadores_asignados.all():
-        if user.id not in existentes:
-            SesionFotoTecnico.objects.create(
-                sesion=sesion, tecnico=user, estado='asignado')
+        if user.id in existentes:
+            continue
+        a_nueva = SesionFotoTecnico.objects.create(
+            sesion=sesion, tecnico=user, estado='asignado'
+        )
+        if canon_reqs:
+            RequisitoFoto.objects.bulk_create([
+                RequisitoFoto(
+                    tecnico_sesion=a_nueva,
+                    titulo=r.titulo,
+                    descripcion=r.descripcion,
+                    obligatorio=r.obligatorio,
+                    orden=r.orden,
+                ) for r in canon_reqs
+            ])
+
     # Limpia asignaciones huérfanas si se desasignó un técnico
     actuales = {u.id for u in servicio.trabajadores_asignados.all()}
     sesion.asignaciones.exclude(tecnico_id__in=actuales).delete()
@@ -441,6 +480,153 @@ def _exif_to_latlng_taken_at(image):
         return None, None, None
 
 
+SAFE_PREFIX = settings.DIRECT_UPLOADS_SAFE_PREFIX.rstrip("/") + "/"
+ALLOWED_CT = ("image/jpeg", "image/png", "image/webp",
+              "image/heic", "image/heif")
+
+
+def _safe_key(filename: str, subdir: str = "") -> str:
+    base = os.path.basename(filename or "upload")
+    # sanea nombre
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base)
+    ext = (os.path.splitext(base)[1] or ".jpg").lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"):
+        # fuerza extensión razonable
+        ext = ".jpg"
+    today = datetime.now(timezone.utc).strftime("%Y/%m/%d")
+    uid = uuid.uuid4().hex[:12]
+    sub = (subdir.strip("/") + "/") if subdir else ""
+    return f"{SAFE_PREFIX}{sub}{today}/{uid}_{base.split('.')[0][:40]}{ext}"
+
+
+@login_required
+@require_POST
+def presign_put(request, asig_id: int):
+    if not settings.DIRECT_UPLOADS_ENABLED:
+        return JsonResponse({"ok": False, "error": "Direct uploads disabled."}, status=400)
+
+    a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
+
+    filename = request.POST.get("filename") or ""
+    content_type = request.POST.get("content_type") or mimetypes.guess_type(
+        filename)[0] or "application/octet-stream"
+    size_bytes = int(request.POST.get("size_bytes") or 0)
+
+    if not content_type.startswith("image/") or content_type.lower() not in ALLOWED_CT:
+        return JsonResponse({"ok": False, "error": "Tipo de archivo no permitido."}, status=400)
+
+    max_bytes = settings.DIRECT_UPLOADS_MAX_MB * 1024 * 1024
+    if size_bytes <= 0 or size_bytes > max_bytes:
+        return JsonResponse({"ok": False, "error": f"Tamaño inválido (máximo {settings.DIRECT_UPLOADS_MAX_MB}MB)."}, status=400)
+
+    key = _safe_key(filename, subdir=f"asig_{a.pk}")
+
+    # Presign PUT (objeto será privado por defecto; no ACL)
+    s3 = wasabi_client()
+    url = s3.generate_presigned_url(
+        ClientMethod="put_object",
+        Params={
+            "Bucket": settings.AWS_STORAGE_BUCKET_NAME,
+            "Key": key,
+            "ContentType": content_type,
+        },
+        ExpiresIn=300,  # 5 minutos
+    )
+    head = s3.head_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key)
+
+    return JsonResponse({"ok": True, "url": url, "key": key, "content_type": content_type, "expires_in": 300})
+
+
+@login_required
+@require_POST
+def finalize_upload(request, asig_id: int):
+    a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
+    s = a.sesion
+
+    key = request.POST.get("key") or ""
+    req_id = request.POST.get("req_id") or None
+    nota = (request.POST.get("nota") or "").strip()
+    lat = request.POST.get("lat") or None
+    lng = request.POST.get("lng") or None
+    acc = request.POST.get("acc") or None
+    taken = request.POST.get("client_taken_at") or ""
+    titulo_manual = (request.POST.get("titulo_manual") or "").strip()
+    direccion_manual = (request.POST.get("direccion_manual") or "").strip()
+
+    # Validaciones
+    if not key or (".." in key) or (not key.startswith(SAFE_PREFIX)):
+        return JsonResponse({"ok": False, "error": "Key inválida."}, status=400)
+
+    # Límite global de extras (si no hay req)
+    if not req_id:
+        total_extra = EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=s, requisito__isnull=True
+        ).count()
+        if total_extra >= 4:
+            return JsonResponse({"ok": False, "error": "Límite alcanzado: máximo 4 fotos extra por proyecto."}, status=400)
+
+    # Verifica que el objeto exista y sea imagen
+    s3 = wasabi_client()
+    try:
+        head = s3.head_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key)
+        ct = (head.get("ContentType") or "").lower()
+        if not ct.startswith("image/"):
+            return JsonResponse({"ok": False, "error": "El objeto subido no es imagen."}, status=400)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": f"No se encontró el objeto en Wasabi."}, status=400)
+
+    taken_dt = parse_datetime(taken) if taken else None
+
+    with transaction.atomic():
+        ev = EvidenciaFoto(
+            tecnico_sesion=a,
+            requisito_id=(int(req_id) if req_id else None),
+            nota=nota,
+            lat=lat or None, lng=lng or None, gps_accuracy_m=acc or None,
+            client_taken_at=taken_dt,
+            titulo_manual=titulo_manual,
+            direccion_manual=direccion_manual or "",
+        )
+        # ⚠️ no subas: asigna directamente el path en el campo
+        ev.imagen.name = key
+        ev.save()
+
+    # Respuesta para UI
+    try:
+        url = default_storage.url(key)  # firmada si AWS_QUERYSTRING_AUTH=True
+    except Exception:
+        url = ""
+
+    titulo = ev.requisito.titulo if ev.requisito_id else (
+        ev.titulo_manual or "Extra")
+    fecha_txt = (ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M")
+
+    return JsonResponse({
+        "ok": True,
+        "evidencia": {
+            "id": ev.id, "url": url, "titulo": titulo, "fecha": fecha_txt,
+            "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
+            "req_id": ev.requisito_id,
+        },
+        "extras_left": max(0, 4 - EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=s, requisito__isnull=True
+        ).count()),
+        "max_extra": 4,
+    })
+
+# operaciones/views_direct_uploads.py
+
+
+def _wasabi_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+        region_name=settings.AWS_S3_REGION_NAME,
+    )
+
+
 @login_required
 @rol_requerido('usuario')
 def upload_evidencias_fotos(request, pk):
@@ -525,7 +711,36 @@ def upload_evidencias_fotos(request, pk):
         messages.success(
             request, f"{n} foto(s) subidas." if n else "No seleccionaste archivos.")
         return redirect("operaciones:fotos_upload", pk=a.pk)
+
     # ---------------- GET: armar contexto ----------------
+
+    # Si esta asignación NO tiene requisitos (pasa cuando se agregó después),
+    # clónalos desde otra asignación de la misma sesión que sí los tenga.
+    if not a.requisitos.exists():
+        canon_asig = (
+            s.asignaciones
+             .exclude(pk=a.pk)
+             .filter(requisitos__isnull=False)
+             .annotate(n=Count("requisitos"))
+             .filter(n__gt=0)
+             .first()
+        )
+        if canon_asig:
+            base = list(
+                RequisitoFoto.objects
+                             .filter(tecnico_sesion=canon_asig)
+                             .order_by("orden", "id")
+            )
+            RequisitoFoto.objects.bulk_create([
+                RequisitoFoto(
+                    tecnico_sesion=a,
+                    titulo=r.titulo,
+                    descripcion=r.descripcion,
+                    obligatorio=r.obligatorio,
+                    orden=r.orden,
+                ) for r in base
+            ])
+
     # Requisitos de ESTA asignación con conteo "mío"
     requisitos = (
         a.requisitos
@@ -578,7 +793,8 @@ def upload_evidencias_fotos(request, pk):
             pendientes_aceptar.append(nombre)
 
     can_finish = (
-        a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar)
+        a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar
+    )
 
     evidencias = _order_evidencias(
         a.evidencias.select_related("requisito")
@@ -595,6 +811,7 @@ def upload_evidencias_fotos(request, pk):
         "can_finish": can_finish,
         "is_proyecto_especial": s.proyecto_especial,
     })
+
 
 # ============================
 # SUPERVISOR — Revisión + generación Excel y Acta PDF
@@ -705,66 +922,91 @@ def upload_evidencias_ajax(request, pk):
     })
 
 
+@rol_requerido('usuario')
 @login_required
 def fotos_status_json(request, asig_id: int):
-    a = get_object_or_404(SesionFotoTecnico, pk=asig_id)
+    # Debe ser la asignación del técnico autenticado
+    a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
     s = a.sesion
 
+    # Para traer solo nuevas evidencias si quieres usarlo en el front
     after = int(request.GET.get("after", "0") or 0)
 
+    # Requisitos SOLO de esta asignación (mismos que muestras en la página)
     reqs = list(
-        RequisitoFoto.objects
-        .filter(tecnico_sesion__sesion=s)
+        a.requisitos
         .order_by("orden")
         .values("id", "titulo", "obligatorio")
     )
 
-    team_counts = (
-        EvidenciaFoto.objects
-        .filter(tecnico_sesion__sesion=s, requisito_id__isnull=False)
-        .values("requisito_id")
-        .annotate(c=Count("id"))
-    )
-    my_counts = (
-        EvidenciaFoto.objects
-        .filter(tecnico_sesion=a, requisito_id__isnull=False)
-        .values("requisito_id")
-        .annotate(c=Count("id"))
-    )
-    team_map = {x["requisito_id"]: x["c"] for x in team_counts}
-    my_map = {x["requisito_id"]: x["c"] for x in my_counts}
+    # Conteo propio del técnico (para mostrar "X subidas (tú)")
+    my_counts = {
+        x["requisito_id"]: x["c"]
+        for x in (EvidenciaFoto.objects
+                  .filter(tecnico_sesion=a, requisito_id__isnull=False)
+                  .values("requisito_id")
+                  .annotate(c=Count("id")))
+    }
+
+    # >>> CLAVE: títulos ya presentes en CUALQUIER técnico del equipo (match por título)
+    titles_done = {
+        _norm_title(t)
+        for t in (EvidenciaFoto.objects
+                  .filter(tecnico_sesion__sesion=s, requisito__isnull=False)
+                  .values_list("requisito__titulo", flat=True)
+                  .distinct())
+        if t
+    }
 
     requisitos_json, faltantes = [], []
     for r in reqs:
-        t = team_map.get(r["id"], 0)
-        m = my_map.get(r["id"], 0)
-        done = t > 0
-        if r["obligatorio"] and not done:
-            faltantes.append(r["titulo"])
+        titulo = r["titulo"] or ""
+        global_done = (_norm_title(titulo) in titles_done)
+        my_count = my_counts.get(r["id"], 0)
+
+        if r["obligatorio"] and not global_done:
+            faltantes.append(titulo)
+
         requisitos_json.append({
-            "id": r["id"], "titulo": r["titulo"], "obligatorio": r["obligatorio"],
-            "team_count": t, "my_count": m, "global_done": done,
+            "id": r["id"],
+            "titulo": titulo,
+            "obligatorio": r["obligatorio"],
+            # estos campos son opcionales en el front, pero útiles si quieres mostrarlos
+            "team_count": 1 if global_done else 0,
+            "my_count": my_count,
+            "global_done": global_done,
         })
 
-    nuevas_qs = EvidenciaFoto.objects.filter(
-        tecnico_sesion__sesion=s, id__gt=after
-    ).order_by("id")
+    # Evidencias nuevas desde 'after' (por si las quieres pintar sin recargar)
+    nuevas_qs = (EvidenciaFoto.objects
+                 .filter(tecnico_sesion__sesion=s, id__gt=after)
+                 .order_by("id"))
     evidencias_nuevas = [{
-        "id": ev.id, "url": ev.imagen.url, "req_id": ev.requisito_id,
+        "id": ev.id,
+        "url": ev.imagen.url,
+        "req_id": ev.requisito_id,
         "titulo": (ev.requisito.titulo if ev.requisito_id else (ev.titulo_manual or "Extra")),
-        "fecha": (ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M"),
+        "fecha": timezone.localtime(ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M"),
         "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
     } for ev in nuevas_qs]
 
-    # Cupo global de extras
+    # Cupo global de extras (4 por sesión/proyecto)
     total_extra = EvidenciaFoto.objects.filter(
         tecnico_sesion__sesion=s, requisito__isnull=True
     ).count()
     extras_left = max(0, 4 - total_extra)
 
-    # Reglas para finalizar (usa tu lógica actual si quieres)
-    # + “todos aceptaron” si lo manejas aparte
-    can_finish = (len(faltantes) == 0)
+    # ¿faltan aceptaciones?
+    pendientes_aceptar = []
+    for asg in s.asignaciones.select_related("tecnico"):
+        accepted = bool(asg.aceptado_en) or asg.estado != "asignado"
+        if not accepted:
+            nombre = asg.tecnico.get_full_name() or asg.tecnico.username
+            pendientes_aceptar.append(nombre)
+
+    # Botón finalizar: mismo criterio que en tu template
+    can_finish = (
+        a.estado == "en_proceso" and not faltantes and not pendientes_aceptar)
 
     return JsonResponse({
         "ok": True,
@@ -772,7 +1014,7 @@ def fotos_status_json(request, asig_id: int):
         "faltantes_global": faltantes,
         "requisitos": requisitos_json,
         "evidencias_nuevas": evidencias_nuevas,
-        "extras_left": extras_left,   # ← GLOBAL
+        "extras_left": extras_left,
         "max_extra": 4,
     })
 

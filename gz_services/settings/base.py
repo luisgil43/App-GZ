@@ -3,6 +3,7 @@ import os
 
 from django.urls import reverse_lazy
 from dotenv import load_dotenv
+from boto3.s3.transfer import TransferConfig
 
 # ====== Rutas base ======
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -166,17 +167,53 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
+
+DIRECT_UPLOADS_ENABLED = os.environ.get("DIRECT_UPLOADS_ENABLED", "1") == "1"
+DIRECT_UPLOADS_MAX_MB = int(os.environ.get("DIRECT_UPLOADS_MAX_MB", "20"))
+DIRECT_UPLOADS_SAFE_PREFIX = os.environ.get(
+    "DIRECT_UPLOADS_SAFE_PREFIX", "operaciones/evidencias/"
+)
+
+
 # ===============================
 # 📦 Wasabi (solo campos dedicados)
 # ===============================
+# ===============================
+# 📦 Wasabi (S3) — aceleración multipart
+# ===============================
+
 WASABI_GZ_ACCESS_KEY_ID = os.getenv("WASABI_GZ_ACCESS_KEY_ID")
 WASABI_GZ_SECRET_ACCESS_KEY = os.getenv("WASABI_GZ_SECRET_ACCESS_KEY")
 WASABI_GZ_BUCKET_NAME = os.getenv("WASABI_GZ_BUCKET_NAME", "gz-services")
 WASABI_GZ_REGION_NAME = os.getenv("WASABI_GZ_REGION_NAME", "us-west-1")
 WASABI_GZ_ENDPOINT_URL = os.getenv(
-    "WASABI_GZ_ENDPOINT_URL", "https://s3.us-west-1.wasabisys.com"
-)
+    "WASABI_GZ_ENDPOINT_URL", "https://s3.us-west-1.wasabisys.com")
+
+AWS_S3_SIGNATURE_VERSION = "s3v4"
+AWS_S3_ADDRESSING_STYLE = "path"
+AWS_S3_USE_SSL = True
+AWS_S3_VERIFY = True
+AWS_DEFAULT_ACL = None
+AWS_QUERYSTRING_AUTH = True
 AWS_S3_FILE_OVERWRITE = False
+AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=31536000, public"}
+
+# ⚙️ Parámetros de transferencia (desde env, con defaults)
+WASABI_GZ_USE_THREADS = os.getenv("WASABI_GZ_USE_THREADS", "True") == "True"
+WASABI_GZ_MAX_CONCURRENCY = int(os.getenv("WASABI_GZ_MAX_CONCURRENCY", "10"))
+WASABI_GZ_MULTIPART_THRESHOLD = int(
+    os.getenv("WASABI_GZ_MULTIPART_THRESHOLD", str(8 * 1024 * 1024)))
+WASABI_GZ_MULTIPART_CHUNKSIZE = int(
+    os.getenv("WASABI_GZ_MULTIPART_CHUNKSIZE", str(8 * 1024 * 1024)))
+
+# ✅ Tiene que ser un TransferConfig (NO un dict)
+AWS_S3_TRANSFER_CONFIG = TransferConfig(
+    multipart_threshold=WASABI_GZ_MULTIPART_THRESHOLD,
+    multipart_chunksize=WASABI_GZ_MULTIPART_CHUNKSIZE,
+    max_concurrency=WASABI_GZ_MAX_CONCURRENCY,
+    use_threads=WASABI_GZ_USE_THREADS,
+)
+
 
 # ===============================
 # Email (desde variables de entorno)
