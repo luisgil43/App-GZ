@@ -1,9 +1,10 @@
+from boto3.s3.transfer import TransferConfig
+from dotenv import load_dotenv
+from django.urls import reverse_lazy
 from pathlib import Path
 import os
-
-from django.urls import reverse_lazy
-from dotenv import load_dotenv
-from boto3.s3.transfer import TransferConfig
+import mimetypes
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 # ====== Rutas base ======
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -23,6 +24,9 @@ ACTA_FIRMA_EDGARDO_PATH = BASE_DIR / "static" / "images" / "edgardo_zapata.png"
 def is_env_var_set(key: str) -> bool:
     v = os.environ.get(key)
     return bool(v and v.strip().lower() != "none")
+
+
+CSRF_TRUSTED_ORIGINS = ["https://app-gz.onrender.com"]
 
 
 # ===============================
@@ -69,6 +73,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django_select2",
+    "axes",
     "cloudinary",
     "cloudinary_storage",
     # Storage S3/Wasabi para los nuevos campos (no afecta Cloudinary)
@@ -101,11 +106,17 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "axes.middleware.AxesMiddleware",
     # "simple_history.middleware.HistoryRequestMiddleware",  # si lo activas, va aquí
     "django.contrib.messages.middleware.MessageMiddleware",
     # 👇 cierre de sesión por inactividad
     "usuarios.middleware.SessionExpiryMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+]
+
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 ROOT_URLCONF = "gz_services.urls"
@@ -260,3 +271,92 @@ IDLE_TIMEOUT_SECONDS = 15 * 60
 SESSION_ABSOLUTE_TIMEOUT = None
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+
+# ===== django-axes =====
+AXES_FAILURE_LIMIT = 5                 # intentos fallidos antes de bloquear
+AXES_COOLOFF_TIME = 1                  # horas de enfriamiento
+# (por defecto) bloquear por usuario + IP
+AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+# cuenta por IP+usuario (más estricto)
+AXES_LOCKOUT_CALLABLE = None
+AXES_RESET_ON_SUCCESS = True
+AXES_ENABLE_ADMIN = True
+
+# Detección IP correcta detrás de Render/Proxy
+AXES_IPWARE_META_PRECEDENCE_ORDER = (
+    "HTTP_X_FORWARDED_FOR",
+    "REMOTE_ADDR",
+)
+
+# Útil para auditoría
+AXES_IPWARE_PROXY_COUNT = 1
+
+
+# ===== CSRF / SSL / Cookies seguras =====
+
+SECURE_SSL_REDIRECT = not DEBUG
+
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# ===== Cabeceras de seguridad =====
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "[{levelname}] {asctime} {name} :: {message}",
+            "style": "{",
+        },
+        "simple": {"format": "[{levelname}] {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        # Eventos de django-axes (intentos fallidos, bloqueos, etc.)
+        "axes": {
+            "handlers": ["console"],
+            "level": "INFO",   # DEBUG si quieres más ruido
+            "propagate": False,
+        },
+        # Autenticación Django (login/logout, permisos)
+        "django.security": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "django.auth": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        # Tu app de usuarios (para auditar el login unificado)
+        "usuarios": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

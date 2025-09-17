@@ -1,3 +1,4 @@
+from django.contrib.staticfiles.storage import staticfiles_storage
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth.views import (
@@ -15,6 +16,11 @@ from dashboard import views as dashboard_views
 def health_check(request):
     return HttpResponse("OK", status=200)
 
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    # ... tus otras urls ...
+]
 
 urlpatterns = [
     # Health check
@@ -61,6 +67,63 @@ urlpatterns = [
     path('logistica/', include('logistica.urls', namespace='logistica')),
     path('operaciones/', include('operaciones.urls')),
     path('facturacion/', include('facturacion.urls')),
+
+    path(
+        "favicon.ico",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("images/favicon.ico"),
+            permanent=True,
+        ),
+        name="favicon"
+    ),
+    path(
+        "apple-touch-icon.png",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("images/apple-touch-icon.png"),
+            permanent=True,
+        ),
+        name="apple_touch_icon"
+    ),
+    path(
+        "apple-touch-icon-precomposed.png",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("images/apple-touch-icon.png"),
+            permanent=True,
+        ),
+        name="apple_touch_icon_precomposed"
+    ),
+    # (Opcional) variantes que a veces piden dispositivos antiguos
+    path(
+        "apple-touch-icon-120x120.png",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("images/apple-touch-icon-120x120.png"),
+            permanent=True,
+        ),
+        name="apple_touch_icon_120"
+    ),
+    path(
+        "favicon.ico",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("icons/favicon.ico"),
+            permanent=True,
+        )
+    ),
+    path(
+        "apple-touch-icon.png",
+        RedirectView.as_view(
+            # o tu apple-touch-icon.png
+            url=staticfiles_storage.url("icons/apple-touch-icon-180x180.png"),
+            permanent=True,
+        )
+    ),
+    path(
+        "apple-touch-icon-precomposed.png",
+        RedirectView.as_view(
+            url=staticfiles_storage.url("icons/apple-touch-icon-180x180.png"),
+            permanent=True,
+        )
+    ),
+
 
 ]
 
