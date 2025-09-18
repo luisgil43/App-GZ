@@ -543,6 +543,27 @@ def finalize_upload(request, asig_id: int):
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
     s = a.sesion
 
+    # ===== Helpers locales para límite de "extras" =====
+    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
+    EXTRA_MAX = None
+    # EXTRA_MAX = 400
+
+    def _extra_count(sesion):
+        return EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=sesion, requisito__isnull=True
+        ).count()
+
+    def _limit_reached(sesion, adding: int = 1) -> bool:
+        if EXTRA_MAX is None:
+            return False
+        return _extra_count(sesion) + adding > EXTRA_MAX
+
+    def _extras_left(sesion):
+        if EXTRA_MAX is None:
+            return None  # ilimitado
+        return max(0, EXTRA_MAX - _extra_count(sesion))
+    # ===================================================
+
     key = request.POST.get("key") or ""
     req_id = request.POST.get("req_id") or None
     nota = (request.POST.get("nota") or "").strip()
@@ -557,13 +578,13 @@ def finalize_upload(request, asig_id: int):
     if not key or (".." in key) or (not key.startswith(SAFE_PREFIX)):
         return JsonResponse({"ok": False, "error": "Key inválida."}, status=400)
 
-    # Límite global de extras (si no hay req)
-    if not req_id:
-        total_extra = EvidenciaFoto.objects.filter(
-            tecnico_sesion__sesion=s, requisito__isnull=True
-        ).count()
-        if total_extra >= 4:
-            return JsonResponse({"ok": False, "error": "Límite alcanzado: máximo 4 fotos extra por proyecto."}, status=400)
+    # Límite global configurable de extras (si no hay requisito)
+    if not req_id and _limit_reached(s, adding=1):
+        lim = EXTRA_MAX
+        return JsonResponse(
+            {"ok": False, "error": f"Límite alcanzado: máximo {lim} fotos extra por proyecto."},
+            status=400
+        )
 
     # Verifica que el objeto exista y sea imagen
     s3 = wasabi_client()
@@ -608,10 +629,8 @@ def finalize_upload(request, asig_id: int):
             "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
             "req_id": ev.requisito_id,
         },
-        "extras_left": max(0, 4 - EvidenciaFoto.objects.filter(
-            tecnico_sesion__sesion=s, requisito__isnull=True
-        ).count()),
-        "max_extra": 4,
+        "extras_left": _extras_left(s),
+        "max_extra": EXTRA_MAX,
     })
 
 # operaciones/views_direct_uploads.py
@@ -637,6 +656,22 @@ def upload_evidencias_fotos(request, pk):
     puede_subir = (a.estado == "en_proceso") or (
         a.estado == "rechazado_supervisor" and a.reintento_habilitado
     )
+
+    # ===== Helpers locales para límite de "extras" =====
+    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
+    EXTRA_MAX = None
+    # EXTRA_MAX = 400
+
+    def _extra_count(sesion):
+        return EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=sesion, requisito__isnull=True
+        ).count()
+
+    def _extras_left(sesion):
+        if EXTRA_MAX is None:
+            return None
+        return max(0, EXTRA_MAX - _extra_count(sesion))
+    # ===================================================
 
     if request.method == "POST":
         if not puede_subir:
@@ -664,22 +699,18 @@ def upload_evidencias_fotos(request, pk):
 
         files = request.FILES.getlist("imagenes[]")
 
-        # >>> LIMITE GLOBAL: 4 EXTRA POR PROYECTO (SESION) <<<
-        if not req_id:  # es “Extra”
-            total_extra = EvidenciaFoto.objects.filter(
-                tecnico_sesion__sesion=s, requisito__isnull=True
-            ).count()
-            cupo = max(0, 4 - total_extra)
+        # >>> LÍMITE GLOBAL configurable de extras por sesión/proyecto <<<
+        if not req_id and EXTRA_MAX is not None:
+            total_extra = _extra_count(s)
+            cupo = max(0, EXTRA_MAX - total_extra)
             if cupo <= 0:
                 messages.error(
-                    request, "Ya se alcanzó el máximo de 4 fotos extra del proyecto.")
+                    request, f"Ya se alcanzó el máximo de {EXTRA_MAX} fotos extra del proyecto.")
                 return redirect("operaciones:fotos_upload", pk=a.pk)
             if len(files) > cupo:
                 files = files[:cupo]
                 messages.warning(
-                    request,
-                    f"Solo se aceptaron {cupo} foto(s) extra (límite 4 por proyecto)."
-                )
+                    request, f"Solo se aceptaron {cupo} foto(s) extra (límite {EXTRA_MAX} por proyecto).")
 
         n = 0
         for f in files:
@@ -714,8 +745,7 @@ def upload_evidencias_fotos(request, pk):
 
     # ---------------- GET: armar contexto ----------------
 
-    # Si esta asignación NO tiene requisitos (pasa cuando se agregó después),
-    # clónalos desde otra asignación de la misma sesión que sí los tenga.
+    # Si esta asignación NO tiene requisitos, clónalos desde otra asignación de la sesión
     if not a.requisitos.exists():
         canon_asig = (
             s.asignaciones
@@ -763,7 +793,6 @@ def upload_evidencias_fotos(request, pk):
         setattr(r, "completed_global", _norm_title(r.titulo) in titles_done)
 
     # 🔒 IDs bloqueados (si quieres cerrar al resto cuando otro ya lo subió)
-    # Si prefieres que quede abierto aunque el equipo ya lo tenga, deja locked_ids = []
     locked_ids = [
         r.id for r in requisitos if r.completed_global and r.uploaded == 0]
 
@@ -793,19 +822,16 @@ def upload_evidencias_fotos(request, pk):
             pendientes_aceptar.append(nombre)
 
     can_finish = (
-        a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar
-    )
+        a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar)
 
-    evidencias = _order_evidencias(
-        a.evidencias.select_related("requisito")
-    )
+    evidencias = _order_evidencias(a.evidencias.select_related("requisito"))
 
     return render(request, "operaciones/fotos_upload.html", {
         "a": a,
         "servicio": servicio,
         "requisitos": requisitos,
         "evidencias": evidencias,
-        "locked_ids": locked_ids,                 # ← ahora sí bloquea por compañero
+        "locked_ids": locked_ids,
         "faltantes_global": faltantes_global,
         "pendientes_aceptar": pendientes_aceptar,
         "can_finish": can_finish,
@@ -848,6 +874,27 @@ def upload_evidencias_ajax(request, pk):
     if not puede_subir:
         return JsonResponse({"ok": False, "error": "Asignación no abierta para subir fotos."}, status=400)
 
+    # ===== Helpers locales para límite de "extras" =====
+    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
+    EXTRA_MAX = None
+    # EXTRA_MAX = 400
+
+    def _extra_count(sesion):
+        return EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=sesion, requisito__isnull=True
+        ).count()
+
+    def _limit_reached(sesion, adding: int = 1) -> bool:
+        if EXTRA_MAX is None:
+            return False
+        return _extra_count(sesion) + adding > EXTRA_MAX
+
+    def _extras_left(sesion):
+        if EXTRA_MAX is None:
+            return None
+        return max(0, EXTRA_MAX - _extra_count(sesion))
+    # ===================================================
+
     req_id = request.POST.get("req_id") or None
     nota = (request.POST.get("nota") or "").strip()
     lat = request.POST.get("lat") or None
@@ -861,13 +908,10 @@ def upload_evidencias_ajax(request, pk):
     if s.proyecto_especial and not req_id and not titulo_manual:
         return JsonResponse({"ok": False, "error": "Ingresa un Título (proyecto especial)."}, status=400)
 
-    # >>> LIMITE GLOBAL: 4 EXTRA POR PROYECTO (SESION) <<<
-    if not req_id:
-        total_extra = EvidenciaFoto.objects.filter(
-            tecnico_sesion__sesion=s, requisito__isnull=True
-        ).count()
-        if total_extra >= 4:
-            return JsonResponse({"ok": False, "error": "Límite alcanzado: máximo 4 fotos extra por proyecto."}, status=400)
+    # >>> Límite GLOBAL configurable de EXTRA <<<
+    if not req_id and _limit_reached(s, adding=1):
+        lim = EXTRA_MAX
+        return JsonResponse({"ok": False, "error": f"Límite alcanzado: máximo {lim} fotos extra por proyecto."}, status=400)
 
     file = request.FILES.get("imagen")
     if not file:
@@ -899,9 +943,7 @@ def upload_evidencias_ajax(request, pk):
     )
 
     # extras_left GLOBAL después de esta subida
-    extras_left = max(0, 4 - EvidenciaFoto.objects.filter(
-        tecnico_sesion__sesion=s, requisito__isnull=True
-    ).count())
+    extras_left = _extras_left(s)
 
     titulo = ev.requisito.titulo if ev.requisito_id else (
         ev.titulo_manual or "Extra")
@@ -917,8 +959,8 @@ def upload_evidencias_ajax(request, pk):
             "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
             "req_id": int(req_id) if req_id else None,
         },
-        "extras_left": extras_left,   # ← global por proyecto
-        "max_extra": 4,
+        "extras_left": extras_left,   # global por proyecto
+        "max_extra": EXTRA_MAX,
     })
 
 
@@ -928,6 +970,22 @@ def fotos_status_json(request, asig_id: int):
     # Debe ser la asignación del técnico autenticado
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
     s = a.sesion
+
+    # ===== Helpers locales para límite de "extras" =====
+    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
+    EXTRA_MAX = None
+    # EXTRA_MAX = 400
+
+    def _extra_count(sesion):
+        return EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=sesion, requisito__isnull=True
+        ).count()
+
+    def _extras_left(sesion):
+        if EXTRA_MAX is None:
+            return None
+        return max(0, EXTRA_MAX - _extra_count(sesion))
+    # ===================================================
 
     # Para traer solo nuevas evidencias si quieres usarlo en el front
     after = int(request.GET.get("after", "0") or 0)
@@ -971,13 +1029,12 @@ def fotos_status_json(request, asig_id: int):
             "id": r["id"],
             "titulo": titulo,
             "obligatorio": r["obligatorio"],
-            # estos campos son opcionales en el front, pero útiles si quieres mostrarlos
             "team_count": 1 if global_done else 0,
             "my_count": my_count,
             "global_done": global_done,
         })
 
-    # Evidencias nuevas desde 'after' (por si las quieres pintar sin recargar)
+    # Evidencias nuevas desde 'after'
     nuevas_qs = (EvidenciaFoto.objects
                  .filter(tecnico_sesion__sesion=s, id__gt=after)
                  .order_by("id"))
@@ -990,11 +1047,8 @@ def fotos_status_json(request, asig_id: int):
         "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
     } for ev in nuevas_qs]
 
-    # Cupo global de extras (4 por sesión/proyecto)
-    total_extra = EvidenciaFoto.objects.filter(
-        tecnico_sesion__sesion=s, requisito__isnull=True
-    ).count()
-    extras_left = max(0, 4 - total_extra)
+    # Cupo global de extras (configurable; None = ilimitado)
+    extras_left = _extras_left(s)
 
     # ¿faltan aceptaciones?
     pendientes_aceptar = []
@@ -1004,7 +1058,7 @@ def fotos_status_json(request, asig_id: int):
             nombre = asg.tecnico.get_full_name() or asg.tecnico.username
             pendientes_aceptar.append(nombre)
 
-    # Botón finalizar: mismo criterio que en tu template
+    # Botón finalizar
     can_finish = (
         a.estado == "en_proceso" and not faltantes and not pendientes_aceptar)
 
@@ -1015,7 +1069,7 @@ def fotos_status_json(request, asig_id: int):
         "requisitos": requisitos_json,
         "evidencias_nuevas": evidencias_nuevas,
         "extras_left": extras_left,
-        "max_extra": 4,
+        "max_extra": EXTRA_MAX,
     })
 
 
