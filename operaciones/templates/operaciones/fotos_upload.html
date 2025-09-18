@@ -947,13 +947,15 @@ async function bestEffortGps(form){
   async function pushFiles(form, files) {
     // Límite para EXTRAS (si aplica)
     const reqId = form.querySelector('input[name="req_id"]')?.value || "";
-    if (!reqId && typeof window.__EXTRAS_LEFT === 'number') {
-      if (window.__EXTRAS_LEFT <= 0) { alert('Ya alcanzaste el máximo de 4 fotos extra.'); return; }
-      if (files.length > window.__EXTRAS_LEFT) {
-        alert(`Solo puedes subir ${window.__EXTRAS_LEFT} foto(s) extra más.`);
-        files = Array.from(files).slice(0, window.__EXTRAS_LEFT);
-      }
-    }
+     if (!reqId && Number.isFinite(window.__EXTRAS_LEFT)) {
+   const left = window.__EXTRAS_LEFT;
+   const max  = window.__MAX_EXTRA ?? left;
+   if (left <= 0) { alert(`Ya alcanzaste el máximo de ${max} fotos extra.`); return; }
+   if (files.length > left) {
+     alert(`Solo puedes subir ${left} foto(s) extra más (máximo ${max}).`);
+     files = Array.from(files).slice(0, left);
+   }
+ }
     if (!files.length) return;
 
     form.dataset.working = '1';
@@ -1126,18 +1128,28 @@ async function bestEffortGps(form){
         setFinishEnabled(!!j.can_finish);
         updateMissingBanner(j.faltantes_global || []);
 
-        if ('extras_left' in j) {
-          window.__EXTRAS_LEFT = j.extras_left;
-          const extraForm = document.querySelector('.geo-upload-form.ajax-uploader[data-extra="1"]');
-          if (extraForm) {
-            const enabled = j.extras_left > 0;
-            extraForm.querySelectorAll('input[type=file],input[name=titulo_manual],input[name=nota],button').forEach(el => el.disabled = !enabled);
-            const fn = extraForm.querySelector('.filename');
-            if (fn) fn.textContent = enabled ? (fn.dataset.empty || 'Sin archivos') : 'Cerrado';
-            const gps = extraForm.querySelector('.gps-status');
-            if (gps) gps.textContent = enabled ? '📍 En espera de ubicación…' : '📍 Límite de 4 extra alcanzado';
-          }
-        }
+    if ('extras_left' in j) {
+   window.__EXTRAS_LEFT = j.extras_left;     // puede ser número o null (ilimitado)
+   window.__MAX_EXTRA   = j.max_extra ?? null;
+   const extraForm = document.querySelector('.geo-upload-form.ajax-uploader[data-extra="1"]');
+   if (extraForm) {
+     const hasLimit = Number.isFinite(j.extras_left);
+     const enabled  = !hasLimit || j.extras_left > 0;   // null => habilitado
+     extraForm.querySelectorAll('input[type=file],input[name=titulo_manual],input[name=nota],button')
+       .forEach(el => el.disabled = !enabled);
+     const fn = extraForm.querySelector('.filename');
+     if (fn) fn.textContent = enabled ? (fn.dataset.empty || 'Sin archivos') : 'Cerrado';
+     const gps = extraForm.querySelector('.gps-status');
+     if (gps) {
+       if (!enabled && hasLimit) {
+         const maxTxt = (j.max_extra ?? j.extras_left ?? '').toString();
+         gps.textContent = `📍 Límite de ${maxTxt} extra alcanzado`;
+       } else {
+         gps.textContent = '📍 En espera de ubicación…';
+       }
+     }
+   }
+ }
       })
       .catch(()=>{});
   }
