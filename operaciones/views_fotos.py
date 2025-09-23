@@ -1439,11 +1439,12 @@ def _set_compact_grid(ws, last_col=30, default_col_w=4.5, body_row_h=18):
 def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     """
     Hoja 'Fotografias' (2 por fila):
+      - **1 columna por bloque** (dos bloques por fila con 1 separador).
       - Fill height (llena el alto).
       - Ensanchamiento horizontal por REPORT_IMG_WIDEN_X (no reducimos ancho).
       - Márgenes laterales (REPORT_IMG_SIDE_PAD_PX) y centrado REAL.
       - Anclaje con offsets exactos usando _px_to_anchor (sin canvas ni recorte).
-      - **Bloque reducido a 3 columnas** para cada imagen.
+      - Bloque reducido ~25% respecto al ancho anterior (78 → 59 chars por defecto).
     """
     from tempfile import NamedTemporaryFile
     from openpyxl.drawing.image import Image as XLImage
@@ -1470,10 +1471,10 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     thick = Side(style="thick", color="000000")
     border_all = Border(left=thick, right=thick, top=thick, bottom=thick)
 
-    # ===== Layout (3 columnas por bloque) =====
-    BLOCK_COLS, SEP_COLS = 3, 1
-    LEFT_COL = 1
-    RIGHT_COL = LEFT_COL + BLOCK_COLS + SEP_COLS
+    # ===== Layout (1 columna por bloque) =====
+    BLOCK_COLS, SEP_COLS = 1, 1
+    LEFT_COL = 1                                   # A
+    RIGHT_COL = LEFT_COL + BLOCK_COLS + SEP_COLS   # C (A | B sep | C)
 
     # ---------- Helpers ----------
     def _colwidth_to_px(width_chars: float) -> int:
@@ -1503,16 +1504,22 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             for cc in range(c0, c1 + 1):
                 ws.cell(row=rr, column=cc).border = border_all
 
-    def _set_block_cols(col_start_letter: str):
-        # Antes 6×13 chars; ahora 3×26 chars para conservar ancho aproximado
-        idx = ws[col_start_letter][0].column
-        for off in range(BLOCK_COLS):
-            ws.column_dimensions[get_column_letter(idx + off)].width = 26
+    # === Anchos (reducción 25%: 78 → ~59 chars) ===
+    BLOCK_WIDTH_CH = int(getattr(settings, "REPORT_BLOCK_COL_WIDTH_CH", 59))
+    SEP_WIDTH_CH = int(getattr(settings, "REPORT_SEP_COL_WIDTH_CH", 2))
 
+    def _set_block_cols(col_start_letter: str):
+        idx = ws[col_start_letter][0].column
+        for off in range(BLOCK_COLS):  # 1
+            ws.column_dimensions[get_column_letter(
+                idx + off)].width = BLOCK_WIDTH_CH
+
+    # Config de columnas: A (bloque izq), B (sep), C (bloque der)
     _set_block_cols("A")
-    # separador entre bloques (antes G)
-    ws.column_dimensions["D"].width = 2
-    _set_block_cols("E")                         # segundo bloque arranca en E
+    ws.column_dimensions[get_column_letter(
+        LEFT_COL + BLOCK_COLS)].width = SEP_WIDTH_CH  # B
+    _set_block_cols(get_column_letter(RIGHT_COL)
+                    )                                        # C
 
     HEAD_ROWS, ROWS_IMG, ROW_INFO, ROW_SPACE = 1, 12, 1, 1
 
@@ -1520,12 +1527,12 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         for r in range(r0, r0 + count):
             ws.row_dimensions[r].height = height_pts
 
-    # Título principal
+    # Título principal (2 bloques * 1 col + 1 sep = 3 columnas)
     site_name = _site_name_for(servicio)
     title = f"ID CLARO: {servicio.id_claro or ''} — SITIO: {site_name or ''}"
-    # Como ahora hay menos columnas por bloque, el total a unir sigue siendo 2*3 + 1 sep = 7 columnas
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=7)
-    c_title = ws.cell(row=1, column=1, value=title)
+    ws.merge_cells(start_row=1, start_column=LEFT_COL, end_row=1,
+                   end_column=LEFT_COL + (BLOCK_COLS * 2 + SEP_COLS) - 1)
+    c_title = ws.cell(row=1, column=LEFT_COL, value=title)
     c_title.alignment = Alignment(horizontal="center", vertical="center")
     c_title.font = Font(bold=True)
     ws.row_dimensions[1].height = 24
@@ -1612,7 +1619,7 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
 
             xl_img = XLImage(resized_path)
 
-            # Ancla exacta: usar tu helper _px_to_anchor
+            # Ancla exacta usando helper global _px_to_anchor
             col0, row0, colOffEMU, rowOffEMU = _px_to_anchor(
                 ws, left_col_idx, img_top, off_x_total, off_y_total
             )
