@@ -1438,13 +1438,12 @@ def _set_compact_grid(ws, last_col=30, default_col_w=4.5, body_row_h=18):
 
 def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     """
-    Hoja 'Fotografias' (2 por fila):
-      - **1 columna por bloque** (dos bloques por fila con 1 separador).
+    Hoja 'Fotografias' (2 por fila, 1 columna por bloque):
       - Fill height (llena el alto).
-      - Ensanchamiento horizontal por REPORT_IMG_WIDEN_X (no reducimos ancho).
+      - Ensanchamiento horizontal por REPORT_IMG_WIDEN_X (sin reducir ancho base).
       - Márgenes laterales (REPORT_IMG_SIDE_PAD_PX) y centrado REAL.
-      - Anclaje con offsets exactos usando _px_to_anchor (sin canvas ni recorte).
-      - Bloque reducido ~25% respecto al ancho anterior (78 → 59 chars por defecto).
+      - **Tope de ancho**: la imagen nunca excede el ancho del recuadro.
+      - Anclaje con offsets exactos (_px_to_anchor). Sin canvas ni recorte.
     """
     from tempfile import NamedTemporaryFile
     from openpyxl.drawing.image import Image as XLImage
@@ -1471,10 +1470,10 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     thick = Side(style="thick", color="000000")
     border_all = Border(left=thick, right=thick, top=thick, bottom=thick)
 
-    # ===== Layout (1 columna por bloque) =====
+    # ===== Layout: 1 columna por bloque =====
     BLOCK_COLS, SEP_COLS = 1, 1
     LEFT_COL = 1                                   # A
-    RIGHT_COL = LEFT_COL + BLOCK_COLS + SEP_COLS   # C (A | B sep | C)
+    RIGHT_COL = LEFT_COL + BLOCK_COLS + SEP_COLS   # C  (A | B(sep) | C)
 
     # ---------- Helpers ----------
     def _colwidth_to_px(width_chars: float) -> int:
@@ -1504,22 +1503,20 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             for cc in range(c0, c1 + 1):
                 ws.cell(row=rr, column=cc).border = border_all
 
-    # === Anchos (reducción 25%: 78 → ~59 chars) ===
+    # === Anchos (bloque 25% más angosto que el viejo de 78 chars: ~59) ===
     BLOCK_WIDTH_CH = int(getattr(settings, "REPORT_BLOCK_COL_WIDTH_CH", 59))
     SEP_WIDTH_CH = int(getattr(settings, "REPORT_SEP_COL_WIDTH_CH", 2))
 
     def _set_block_cols(col_start_letter: str):
         idx = ws[col_start_letter][0].column
-        for off in range(BLOCK_COLS):  # 1
+        for off in range(BLOCK_COLS):
             ws.column_dimensions[get_column_letter(
                 idx + off)].width = BLOCK_WIDTH_CH
 
-    # Config de columnas: A (bloque izq), B (sep), C (bloque der)
-    _set_block_cols("A")
+    _set_block_cols("A")  # bloque izq
     ws.column_dimensions[get_column_letter(
-        LEFT_COL + BLOCK_COLS)].width = SEP_WIDTH_CH  # B
-    _set_block_cols(get_column_letter(RIGHT_COL)
-                    )                                        # C
+        LEFT_COL + BLOCK_COLS)].width = SEP_WIDTH_CH  # separador (B)
+    _set_block_cols(get_column_letter(RIGHT_COL))  # bloque der (C)
 
     HEAD_ROWS, ROWS_IMG, ROW_INFO, ROW_SPACE = 1, 12, 1, 1
 
@@ -1527,11 +1524,11 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         for r in range(r0, r0 + count):
             ws.row_dimensions[r].height = height_pts
 
-    # Título principal (2 bloques * 1 col + 1 sep = 3 columnas)
+    # Título principal
     site_name = _site_name_for(servicio)
     title = f"ID CLARO: {servicio.id_claro or ''} — SITIO: {site_name or ''}"
-    ws.merge_cells(start_row=1, start_column=LEFT_COL, end_row=1,
-                   end_column=LEFT_COL + (BLOCK_COLS * 2 + SEP_COLS) - 1)
+    ws.merge_cells(start_row=1, start_column=LEFT_COL,
+                   end_row=1, end_column=LEFT_COL + (BLOCK_COLS * 2 + SEP_COLS) - 1)
     c_title = ws.cell(row=1, column=LEFT_COL, value=title)
     c_title.alignment = Alignment(horizontal="center", vertical="center")
     c_title.font = Font(bold=True)
@@ -1544,15 +1541,15 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         if path:
             tmp_files_to_delete.append(path)
 
-    # ---------- Dibuja bloque ----------
+    # ---------- Dibuja un bloque ----------
     def _draw_block(top_row: int, left_col_idx: int, ev) -> None:
+        # Encabezado
         if getattr(servicio.sesion_fotos, "proyecto_especial", False) and ev.requisito_id is None:
             titulo_req = (ev.titulo_manual or "").strip() or "Extra"
         else:
             titulo_req = ((getattr(ev.requisito, "titulo", "")
                           or "").strip() or "Extra")
 
-        # Cabecera
         ws.merge_cells(start_row=top_row, start_column=left_col_idx,
                        end_row=top_row, end_column=left_col_idx + BLOCK_COLS - 1)
         c_head = ws.cell(row=top_row, column=left_col_idx, value=titulo_req)
@@ -1573,8 +1570,10 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             for cc in range(left_col_idx, left_col_idx + BLOCK_COLS):
                 ws.cell(row=rr, column=cc).border = border_all
 
+        # Medidas de la caja
         box_w_px, box_h_px = _box_size_px(left_col_idx, img_top)
 
+        # Parámetros de visual
         side_pad = int(getattr(settings, "REPORT_IMG_SIDE_PAD_PX", 9))
         top_pad = int(getattr(settings, "REPORT_IMG_TOP_PAD_PX", 0))
 
@@ -1588,17 +1587,22 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             )
             _track_tmp(tmp_img_path)
 
-            # Fill height
+            # Fill height (ajusta alto exactamente)
             target_h = max(1, box_h_px - 2 * top_pad)
             scale_h = target_h / float(h)
             base_w = max(1, int(round(w * scale_h)))
 
-            # Ensanchar (no reducimos)
+            # Ensanchamiento horizontal (NO reducir)…
             widen_x = float(getattr(settings, "REPORT_IMG_WIDEN_X", 1.30))
             widen_x = max(1.0, min(widen_x, 1.40))
             target_w = max(1, int(round(base_w * widen_x)))
 
-            # Offset total para centrado (con margen si cabe)
+            # === TOPE DE ANCHO: nunca exceder el recuadro ===
+            max_w = max(1, box_w_px - 2 * side_pad)
+            if target_w > max_w:
+                target_w = max_w  # cap duro: evita desbordar
+
+            # Offsets para centrado (con margen si cabe)
             if target_w + 2 * side_pad <= box_w_px:
                 off_x_total = side_pad + \
                     (box_w_px - 2 * side_pad - target_w) // 2
@@ -1606,7 +1610,7 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
                 off_x_total = max(0, (box_w_px - target_w) // 2)
             off_y_total = top_pad
 
-            # Redimensionar final
+            # Redimensionar a tamaño final (sin canvas ni recorte)
             with PILImage.open(tmp_img_path) as im:
                 im = ImageOps.exif_transpose(im).convert("RGB")
                 im = im.resize((target_w, target_h), PILImage.LANCZOS)
