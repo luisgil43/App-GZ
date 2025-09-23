@@ -1438,19 +1438,23 @@ def _set_compact_grid(ws, last_col=30, default_col_w=4.5, body_row_h=18):
 
 def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     """
-    Construye el XLSX desde plantilla, crea hoja 'Fotografias' y coloca las fotos
-    2 por fila ocupando COMPLETAMENTE la caja (cover: escala y recorte al centro).
-    Limpia todos los archivos temporales creados por PIL/openpyxl.
+    Hoja 'Fotografias' (2 por fila):
+      - Fill height (llena el alto).
+      - Ensanchamiento horizontal por REPORT_IMG_WIDEN_X (no reducimos ancho).
+      - Márgenes laterales (REPORT_IMG_SIDE_PAD_PX) y centrado REAL.
+      - Anclaje con offsets exactos usando _px_to_anchor (sin canvas ni recorte).
+      - **Bloque reducido a 3 columnas** para cada imagen.
     """
     from tempfile import NamedTemporaryFile
     from openpyxl.drawing.image import Image as XLImage
     from openpyxl.styles import Alignment, Font, Border, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.utils.units import pixels_to_EMU
+    from PIL import Image as PILImage, ImageOps
+    from django.conf import settings
     from .models import _site_name_for
-    from PIL import Image as PILImage
     import os
 
-    # --- Cargar template y hoja 2
     wb = _wb_from_template()
     _prefill_hoja_datos_general(wb, servicio)
 
@@ -1466,36 +1470,12 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     thick = Side(style="thick", color="000000")
     border_all = Border(left=thick, right=thick, top=thick, bottom=thick)
 
-    # Layout: 2 bloques por fila
-    BLOCK_COLS, SEP_COLS = 6, 1
+    # ===== Layout (3 columnas por bloque) =====
+    BLOCK_COLS, SEP_COLS = 3, 1
     LEFT_COL = 1
     RIGHT_COL = LEFT_COL + BLOCK_COLS + SEP_COLS
 
-    def _set_block_cols(col_start_letter: str):
-        idx = ws[col_start_letter][0].column
-        for off in range(BLOCK_COLS):
-            ws.column_dimensions[get_column_letter(idx + off)].width = 13
-
-    _set_block_cols("A")
-    ws.column_dimensions["G"].width = 2
-    _set_block_cols("H")
-
-    HEAD_ROWS, ROWS_IMG, ROW_INFO, ROW_SPACE = 1, 12, 1, 1
-
-    def _set_rows(r0: int, count: int, height_pts: float):
-        for r in range(r0, r0 + count):
-            ws.row_dimensions[r].height = height_pts
-
-    # Título principal
-    site_name = _site_name_for(servicio)
-    title = f"ID CLARO: {servicio.id_claro or ''} — SITIO: {site_name or ''}"
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=13)
-    c_title = ws.cell(row=1, column=1, value=title)
-    c_title.alignment = Alignment(horizontal="center", vertical="center")
-    c_title.font = Font(bold=True)
-    ws.row_dimensions[1].height = 24
-
-    # Helpers tamaños en px
+    # ---------- Helpers ----------
     def _colwidth_to_px(width_chars: float) -> int:
         return int(((256 * width_chars + 128) // 256) * 7)
 
@@ -1513,7 +1493,6 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             h_px += _pts_to_px(h_pts if h_pts is not None else 15)
         return w_px, h_px
 
-    # Merge con borde
     def _merge_with_border(r0, c0, r1, c1, text, align="center"):
         ws.merge_cells(start_row=r0, start_column=c0,
                        end_row=r1, end_column=c1)
@@ -1524,26 +1503,49 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             for cc in range(c0, c1 + 1):
                 ws.cell(row=rr, column=cc).border = border_all
 
-    # >>> TRACK de temporales para limpiarlos SIEMPRE
+    def _set_block_cols(col_start_letter: str):
+        # Antes 6×13 chars; ahora 3×26 chars para conservar ancho aproximado
+        idx = ws[col_start_letter][0].column
+        for off in range(BLOCK_COLS):
+            ws.column_dimensions[get_column_letter(idx + off)].width = 26
+
+    _set_block_cols("A")
+    # separador entre bloques (antes G)
+    ws.column_dimensions["D"].width = 2
+    _set_block_cols("E")                         # segundo bloque arranca en E
+
+    HEAD_ROWS, ROWS_IMG, ROW_INFO, ROW_SPACE = 1, 12, 1, 1
+
+    def _set_rows(r0: int, count: int, height_pts: float):
+        for r in range(r0, r0 + count):
+            ws.row_dimensions[r].height = height_pts
+
+    # Título principal
+    site_name = _site_name_for(servicio)
+    title = f"ID CLARO: {servicio.id_claro or ''} — SITIO: {site_name or ''}"
+    # Como ahora hay menos columnas por bloque, el total a unir sigue siendo 2*3 + 1 sep = 7 columnas
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=7)
+    c_title = ws.cell(row=1, column=1, value=title)
+    c_title.alignment = Alignment(horizontal="center", vertical="center")
+    c_title.font = Font(bold=True)
+    ws.row_dimensions[1].height = 24
+
+    # ---- temporales
     tmp_files_to_delete: list[str] = []
 
-    def _safe_unlink(path: str):
-        if not path:
-            return
-        try:
-            os.unlink(path)
-        except Exception:
-            pass
+    def _track_tmp(path: str):
+        if path:
+            tmp_files_to_delete.append(path)
 
-    # --- Dibuja un bloque (título + imagen COVER + nota)
+    # ---------- Dibuja bloque ----------
     def _draw_block(top_row: int, left_col_idx: int, ev) -> None:
-        # Título del bloque
         if getattr(servicio.sesion_fotos, "proyecto_especial", False) and ev.requisito_id is None:
             titulo_req = (ev.titulo_manual or "").strip() or "Extra"
         else:
             titulo_req = ((getattr(ev.requisito, "titulo", "")
                           or "").strip() or "Extra")
 
+        # Cabecera
         ws.merge_cells(start_row=top_row, start_column=left_col_idx,
                        end_row=top_row, end_column=left_col_idx + BLOCK_COLS - 1)
         c_head = ws.cell(row=top_row, column=left_col_idx, value=titulo_req)
@@ -1554,7 +1556,7 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         for cc in range(left_col_idx, left_col_idx + BLOCK_COLS):
             ws.cell(row=top_row, column=cc).border = border_all
 
-        # Área imagen (caja)
+        # Caja imagen
         img_top = top_row + HEAD_ROWS
         img_bottom = img_top + ROWS_IMG - 1
         ws.merge_cells(start_row=img_top, start_column=left_col_idx,
@@ -1566,60 +1568,82 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
 
         box_w_px, box_h_px = _box_size_px(left_col_idx, img_top)
 
-        # Insertar imagen en modo COVER (escala y recorta al centro; sin canvas blanco)
+        side_pad = int(getattr(settings, "REPORT_IMG_SIDE_PAD_PX", 9))
+        top_pad = int(getattr(settings, "REPORT_IMG_TOP_PAD_PX", 0))
+
         tmp_img_path = ""
-        cover_tmp_path = ""
         try:
-            # 1) JPEG temporal base (se borra luego)
+            # Base JPG
             tmp_img_path, w, h = _tmp_jpeg_from_filefield(
                 ev.imagen,
-                max_px=getattr(settings, "REPORT_IMG_MAX_PX", 1400),
+                max_px=getattr(settings, "REPORT_IMG_MAX_PX", 1600),
                 quality=getattr(settings, "REPORT_IMG_JPG_QUALITY", 88),
             )
-            tmp_files_to_delete.append(tmp_img_path)
+            _track_tmp(tmp_img_path)
 
-            # 2) Escala tipo "cover": que cubra ancho y alto de la caja
-            sx = box_w_px / float(w)
-            sy = box_h_px / float(h)
-            scale = max(sx, sy)  # cover (no contain)
-            new_w = max(1, int(round(w * scale)))
-            new_h = max(1, int(round(h * scale)))
+            # Fill height
+            target_h = max(1, box_h_px - 2 * top_pad)
+            scale_h = target_h / float(h)
+            base_w = max(1, int(round(w * scale_h)))
 
-            with PILImage.open(tmp_img_path).convert("RGB") as im:
-                # 3) Redimensionar a tamaño cover
-                im = im.resize((new_w, new_h), PILImage.LANCZOS)
-                # 4) Recortar al centro al tamaño exacto de la caja
-                left = max(0, (new_w - box_w_px) // 2)
-                top = max(0, (new_h - box_h_px) // 2)
-                right = left + box_w_px
-                bottom = top + box_h_px
-                im = im.crop((left, top, right, bottom))
+            # Ensanchar (no reducimos)
+            widen_x = float(getattr(settings, "REPORT_IMG_WIDEN_X", 1.30))
+            widen_x = max(1.0, min(widen_x, 1.40))
+            target_w = max(1, int(round(base_w * widen_x)))
 
-                # 5) Guardar recorte y agregarlo a la hoja
-                tmp = NamedTemporaryFile(delete=False, suffix=".jpg")
-                im.save(tmp.name, format="JPEG", quality=getattr(
-                    settings, "REPORT_IMG_JPG_QUALITY", 88))
-                tmp.close()
-                cover_tmp_path = tmp.name
-                tmp_files_to_delete.append(cover_tmp_path)
+            # Offset total para centrado (con margen si cabe)
+            if target_w + 2 * side_pad <= box_w_px:
+                off_x_total = side_pad + \
+                    (box_w_px - 2 * side_pad - target_w) // 2
+            else:
+                off_x_total = max(0, (box_w_px - target_w) // 2)
+            off_y_total = top_pad
 
-            xl_img = XLImage(cover_tmp_path)
-            xl_img.width = box_w_px
-            xl_img.height = box_h_px
-            ws.add_image(xl_img, f"{get_column_letter(left_col_idx)}{img_top}")
+            # Redimensionar final
+            with PILImage.open(tmp_img_path) as im:
+                im = ImageOps.exif_transpose(im).convert("RGB")
+                im = im.resize((target_w, target_h), PILImage.LANCZOS)
+                tmp_resized = NamedTemporaryFile(delete=False, suffix=".jpg")
+                im.save(tmp_resized.name, format="JPEG",
+                        quality=getattr(settings, "REPORT_IMG_JPG_QUALITY", 88))
+                tmp_resized.close()
+                resized_path = tmp_resized.name
+                _track_tmp(resized_path)
+
+            xl_img = XLImage(resized_path)
+
+            # Ancla exacta: usar tu helper _px_to_anchor
+            col0, row0, colOffEMU, rowOffEMU = _px_to_anchor(
+                ws, left_col_idx, img_top, off_x_total, off_y_total
+            )
+
+            # OneCellAnchor con EMUs
+            try:
+                from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor, Extent
+                anchor = AnchorMarker(col=col0, row=row0,
+                                      colOff=colOffEMU, rowOff=rowOffEMU)
+                extent = Extent(cx=pixels_to_EMU(target_w),
+                                cy=pixels_to_EMU(target_h))
+                one = OneCellAnchor(_from=anchor, ext=extent, editAs="oneCell")
+                xl_img.anchor = one
+                ws.add_image(xl_img)
+            except Exception:
+                xl_img.width = target_w
+                xl_img.height = target_h
+                ws.add_image(
+                    xl_img, f"{get_column_letter(left_col_idx)}{img_top}")
 
         except Exception:
-            # si falla, seguimos el reporte sin esa imagen
             pass
 
-        # Nota/observación
+        # Nota
         info_row = img_bottom + 1
         _set_rows(info_row, 1, 30)
         nota_txt = (ev.nota or "").strip()
         _merge_with_border(info_row, left_col_idx, info_row,
                            left_col_idx + BLOCK_COLS - 1, nota_txt, align="center")
 
-    # --- Iterar evidencias (2 por fila)
+    # Iteración
     cur_row = 3
     ev_iter = ev_qs.iterator() if callable(
         getattr(ev_qs, "iterator", None)) else ev_qs
@@ -1637,17 +1661,16 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         if idx % 2 == 1:
             cur_row += (HEAD_ROWS + ROWS_IMG + ROW_INFO + ROW_SPACE)
 
-        # Guardar XLSX
         tmp_xlsx = NamedTemporaryFile(delete=False, suffix=".xlsx")
         tmp_xlsx.close()
         wb.save(tmp_xlsx.name)
         return tmp_xlsx.name
     finally:
-        # Limpieza CRÍTICA: borrar TODOS los JPG temporales generados
         for p in tmp_files_to_delete:
-            _safe_unlink(p)
-
-# servicios/reportes_xlsx.py  (o donde tengas tus helpers de XLSX)
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
 
 
 def _prefill_hoja_datos_general(wb: Workbook, servicio: ServicioCotizado) -> None:

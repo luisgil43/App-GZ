@@ -360,3 +360,8 @@ LOGGING = {
         },
     },
 }
+
+
+REPORT_IMG_WIDEN_X = 1.30          # 1.18–1.28 para “como en la foto”
+REPORT_IMG_SIDE_PAD_PX = 9         # margen lateral mínimo
+REPORT_IMG_TOP_PAD_PX = 0         # 0 = llena el alto exacto
