@@ -722,8 +722,8 @@ def asignar_trabajadores(request, pk):
 def exportar_servicios_supervisor(request):
     servicios = ServicioCotizado.objects.filter(
         estado__in=[
-            'aprobado_pendiente', 'asignado', 'en_ejecucion',
-            'finalizado_tecnico', 'en_revision_supervisor',
+            'aprobado_pendiente', 'asignado', 'en_proceso',
+            'en_revision_supervisor',
             'rechazado_supervisor', 'aprobado_supervisor'
         ]
     )
@@ -735,15 +735,14 @@ def exportar_servicios_supervisor(request):
         )
         data.append({
             'DU': f'DU{s.du}',
-            'ID Claro': s.id_claro,  # Cambia a s.id_claro.valor si es ForeignKey
-            'Región': s.region,       # Cambia si es ForeignKey
-            # Evita usar .strftime si es CharField
+            'ID Claro': s.id_claro,
+            'Región': s.region,
             'Mes Producción': s.mes_produccion or '',
             'ID NEW': s.id_new,
             'Detalle Tarea': s.detalle_tarea,
             'Monto MMOO': float(s.monto_mmoo) if s.monto_mmoo else 0,
             'Asignados': asignados,
-            # Usa el display si tienes choices
+            'Fecha Fin': s.fecha_aprobacion_supervisor.strftime("%d-%m-%Y") if s.fecha_aprobacion_supervisor else '',
             'Estado': dict(s.ESTADOS).get(s.estado, s.estado),
         })
 
@@ -751,7 +750,7 @@ def exportar_servicios_supervisor(request):
     columnas = [
         'DU', 'ID Claro', 'Región', 'Mes Producción',
         'ID NEW', 'Detalle Tarea', 'Monto MMOO',
-        'Asignados', 'Estado'
+        'Asignados', 'Fecha Fin', 'Estado'
     ]
     df = df[columnas]
 
@@ -1516,7 +1515,8 @@ def exportar_rendiciones_pm(request):
     date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
 
     # Columnas
-    columns = ["Nombre", "Fecha", "Proyecto", "Monto", "Estado"]
+    columns = ["Nombre", "Fecha", "Proyecto",
+               "Monto", "Tipo", "Observaciones", "Estado"]
     for col_num, column_title in enumerate(columns):
         ws.write(0, col_num, column_title, header_style)
 
@@ -1532,7 +1532,9 @@ def exportar_rendiciones_pm(request):
         ws.write(row_num, 1, fecha_excel, date_style)
         ws.write(row_num, 2, str(mov.proyecto))
         ws.write(row_num, 3, float(mov.cargos or 0))
-        ws.write(row_num, 4, mov.get_status_display())
+        ws.write(row_num, 4, str(mov.tipo or 0))
+        ws.write(row_num, 5, str(mov.observaciones or 0))
+        ws.write(row_num, 6, mov.get_status_display())
 
     wb.save(response)
     return response

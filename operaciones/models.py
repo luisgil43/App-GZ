@@ -160,13 +160,12 @@ class ServicioCotizado(models.Model):
     ESTADOS = [
         ('cotizado', 'Cotizado'),
         ('aprobado_pendiente', 'Aprobada, pendiente por asignar'),
-        ('asignado', 'Técnicos asignados'),
+        ('asignado', 'Asignado'),
         ('en_progreso', 'En progreso'),
-        ('finalizado_trabajador', 'Finalizado por técnico'),
+        ('en_revision_supervisor', 'En revision supervisor'),
         ('rechazado_supervisor', 'Rechazado por supervisor'),
         ('aprobado_supervisor', 'Aprobado por supervisor'),
-        ('informe_subido', 'Informe cargado'),
-        ('finalizado', 'Finalizado'),
+
     ]
 
     du = models.CharField(max_length=20, blank=True, unique=True)

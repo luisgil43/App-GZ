@@ -94,6 +94,7 @@
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">MONTO MMOO</th>
         <th class="p-2">ASIGNADOS</th>
+	<th class="p-2">FECHA FIN</th>
         <th class="p-2">STATUS</th>
         <th class="p-2">ACCIONES</th>
       </tr>
@@ -115,6 +116,7 @@
             <span class="italic text-gray-400">Sin asignar</span>
           {% endfor %}
         </td>
+<td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
      <td class="p-2 text-sm">
   <div class="flex flex-col gap-1 text-left">
 

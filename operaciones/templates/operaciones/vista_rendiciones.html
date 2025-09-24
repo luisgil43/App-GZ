@@ -28,6 +28,8 @@
                     <th class="p-2 border">Fecha</th>
                     <th class="p-2 border">Proyecto</th>
                     <th class="p-2 border text-right">Monto</th>
+		    <th class="p-2 border">Tipo</th>
+		    <th class="p-2 border">Observaciones</th>
                     <th class="p-2 border">Comprobante</th>
                     <th class="p-2 border">Estado</th>
                     <th class="p-2 border">Acciones</th>
@@ -40,6 +42,8 @@
                     <td class="p-2 border">{{ mov.fecha|date:"d/m/Y" }}</td>
                     <td class="p-2 border">{{ mov.proyecto }}</td>
                     <td class="p-2 border text-right">${{ mov.cargos|default:0|floatformat:0|formato_clp }}</td>
+		    <td class="p-2 border">{{ mov.tipo }}</td>
+	            <td class="p-2 border">{{ mov.observaciones }}</td>
                     <td class="p-2 border">
                         {% if mov.comprobante %}
                             <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
