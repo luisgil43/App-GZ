@@ -1,5 +1,6 @@
 {% extends "dashboard_admin/base.html" %}
-{% load humanize %}
+{% load humanize l10n %}
+
 
 {% block title %}Revisión fotográfica{% endblock %}
 
@@ -128,63 +129,73 @@
      {# ...dentro del grid de evidencias... #}
 {% for ev in evs %}
   <figure class="border rounded p-2 relative">
-    <div class="relative rounded overflow-hidden">
-      {% if ev.lat and ev.lng %}
-        <div class="absolute top-2 left-2 z-10">
-          <a target="_blank"
-             href="https://www.google.com/maps?q={{ ev.lat }},{{ ev.lng }}"
-             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[11px] shadow">
-            📍 {{ ev.lat|floatformat:5 }}, {{ ev.lng|floatformat:5 }}
-          </a>
-          {% if ev.gps_accuracy_m %}
-            <span class="ml-1 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px]">
-              ± {{ ev.gps_accuracy_m|floatformat:0 }} m
-            </span>
-          {% endif %}
-        </div>
-      {% endif %}
-
-{# ✅ Botón X solo si: es superuser o supervisor Y el proyecto está en estados permitidos #}
-{% if request.user.is_superuser or request.user.es_supervisor %}
-  {% if s.estado == 'en_revision_supervisor' or s.estado == 'en_progreso' or s.estado == 'rechazado_supervisor' %}
-    <button type="button"
-            class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center
-                   bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
-            title="Eliminar esta foto"
-            data-delete
-            data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}">
-      ✕
-    </button>
-  {% else %}
-    {# 🔒 Bloqueado en aprobado/otros estados #}
-    <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
-          title="Bloqueado">🔒</span>
-  {% endif %}
-{% else %}
-  {# No es supervisor: siempre bloqueado #}
-  <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
-        title="Bloqueado">🔒</span>
+    <div class="relative rounded overflow-hidden bg-black/5">
+ {% if ev.lat and ev.lng %}
+  <div class="absolute top-2 left-2 z-10">
+    <a target="_blank"
+       href="https://www.google.com/maps?q={{ ev.lat|unlocalize }},{{ ev.lng|unlocalize }}"
+       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[11px] shadow">
+      📍 {{ ev.lat|floatformat:5|unlocalize }}, {{ ev.lng|floatformat:5|unlocalize }}
+    </a>
+    {% if ev.gps_accuracy_m %}
+      <span class="ml-1 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px]">
+        ± {{ ev.gps_accuracy_m|floatformat:0|unlocalize }} m
+      </span>
+    {% endif %}
+  </div>
 {% endif %}
 
 
-      <img src="{{ ev.imagen.url }}" class="w-full h-44 object-cover rounded" alt="Foto">
+  {# Imagen completa (sin recorte) + click para abrir en pestaña nueva #}
+  <a href="{{ ev.imagen.url }}" target="_blank" rel="noopener"
+     class="block group">
+    <div class="w-full max-h-96 grid place-items-center p-2">
+      <img src="{{ ev.imagen.url }}"
+           alt="Foto"
+           loading="lazy"
+           class="max-w-full max-h-96 h-auto w-auto object-contain rounded
+                  transition-transform group-hover:scale-[1.01] cursor-zoom-in" />
     </div>
+  </a>
+
+  {# Botón X / candado tal cual lo tenías #}
+  {% if request.user.is_superuser or request.user.es_supervisor %}
+    {% if s.estado == 'en_revision_supervisor' or s.estado == 'en_progreso' or s.estado == 'rechazado_supervisor' %}
+      <button type="button"
+              class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center
+                     bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+              title="Eliminar esta foto"
+              data-delete
+              data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}">
+        ✕
+      </button>
+    {% else %}
+      <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
+            title="Bloqueado">🔒</span>
+    {% endif %}
+  {% else %}
+    <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
+          title="Bloqueado">🔒</span>
+  {% endif %}
+</div>
 
     <figcaption class="text-xs mt-1">
       <div class="font-medium">{{ ev.requisito.titulo|default:ev.titulo_manual|default:"Extra" }}</div>
       <div>🕒 {{ ev.client_taken_at|default:ev.tomada_en|date:"Y-m-d H:i" }}</div>
       <div class="text-gray-600">
-        {% if ev.lat and ev.lng %}
-          📍 {{ ev.lat|floatformat:5 }}, {{ ev.lng|floatformat:5 }}
-          <a class="ml-1 text-blue-600 hover:underline" target="_blank"
-             href="https://www.google.com/maps?q={{ ev.lat }},{{ ev.lng }}">Abrir mapa</a>
-          {% if ev.gps_accuracy_m %}
-            <span class="ml-1 text-gray-400">± {{ ev.gps_accuracy_m|floatformat:0 }} m</span>
-          {% endif %}
-        {% else %}
-          <span class="text-gray-400">📍 Sin GPS</span>
-        {% endif %}
-      </div>
+  {% if ev.lat and ev.lng %}
+    📍 {{ ev.lat|floatformat:5|unlocalize }}, {{ ev.lng|floatformat:5|unlocalize }}
+    <a class="ml-1 text-blue-600 hover:underline" target="_blank"
+       href="https://www.google.com/maps?q={{ ev.lat|unlocalize }},{{ ev.lng|unlocalize }}">
+      Abrir mapa
+    </a>
+    {% if ev.gps_accuracy_m %}
+      <span class="ml-1 text-gray-400">± {{ ev.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
+    {% endif %}
+  {% else %}
+    <span class="text-gray-400">📍 Sin GPS</span>
+  {% endif %}
+</div>
       {% if ev.nota %}<div class="text-gray-600">{{ ev.nota }}</div>{% endif %}
     </figcaption>
   </figure>

@@ -1,4 +1,5 @@
 {% extends "dashboard/base.html" %}
+{% load l10n %}
 {% block title %}Subir Evidencias — DU{{ servicio.du }}{% endblock %}
 
 {% block content %}
@@ -275,12 +276,21 @@
       </div>
       <div>🕒 {% if ev.client_taken_at %}{{ ev.client_taken_at|date:"Y-m-d H:i" }}{% else %}{{ ev.tomada_en|date:"Y-m-d H:i" }}{% endif %}</div>
 
-      {% if ev.lat and ev.lng %}
-        <div>📍 {{ ev.lat }}, {{ ev.lng }}{% if ev.gps_accuracy_m %} (±{{ ev.gps_accuracy_m }}m){% endif %}</div>
-        <a class="text-blue-600 hover:underline" target="_blank" rel="noopener" href="https://maps.google.com/?q={{ ev.lat }},{{ ev.lng }}">Abrir en Maps</a>
-      {% else %}
-        <div class="text-gray-400">📍 Sin GPS</div>
-      {% endif %}
+{% if ev.lat and ev.lng %}
+  <div>
+    📍 {{ ev.lat|unlocalize }}, {{ ev.lng|unlocalize }}
+    {% if ev.gps_accuracy_m %} (±{{ ev.gps_accuracy_m|unlocalize }}m){% endif %}
+  </div>
+  <a class="text-blue-600 hover:underline" target="_blank" rel="noopener"
+     href="https://maps.google.com/?q={{ ev.lat|unlocalize }},{{ ev.lng|unlocalize }}">
+    Abrir en Maps
+  </a>
+{% else %}
+  <div class="text-gray-400">📍 Sin GPS</div>
+{% endif %}
+
+
+
 
       {% if ev.nota %}
         <div class="text-gray-600">{{ ev.nota }}</div>
