@@ -1441,9 +1441,8 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     Hoja 'Fotografias' (2 por fila, **1 columna por bloque**):
       - Fill height (llena el alto).
       - Ensanchamiento horizontal por REPORT_IMG_WIDEN_X.
-      - **Centrado con CANVAS**: se crea un lienzo del tamaño exacto del recuadro
-        (ancho y alto de la caja) y se pega la foto centrada con los pads dados.
-      - Nunca desborda (la imagen se limita antes de pegarse en el canvas).
+      - **Centrado con CANVAS** del tamaño exacto de la caja.
+      - Nunca desborda.
     """
     from tempfile import NamedTemporaryFile
     from openpyxl.drawing.image import Image as XLImage
@@ -1503,7 +1502,7 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             for cc in range(c0, c1 + 1):
                 ws.cell(row=rr, column=cc).border = border_all
 
-    # === Anchos (bloque 25% más angosto que el viejo de 78 chars: ~59) ===
+    # === Anchos (bloque ~59 chars) ===
     BLOCK_WIDTH_CH = int(getattr(settings, "REPORT_BLOCK_COL_WIDTH_CH", 59))
     SEP_WIDTH_CH = int(getattr(settings, "REPORT_SEP_COL_WIDTH_CH", 2))
 
@@ -1518,7 +1517,13 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         LEFT_COL + BLOCK_COLS)].width = SEP_WIDTH_CH  # B (sep)
     _set_block_cols(get_column_letter(RIGHT_COL))  # bloque der (C)
 
-    HEAD_ROWS, ROWS_IMG, ROW_INFO, ROW_SPACE = 1, 12, 1, 1
+    # Altura de la caja
+    HEAD_ROWS = 1
+    ROWS_IMG = int(getattr(settings, "REPORT_ROWS_IMG", 16))  # antes: 12
+    ROW_INFO = 1
+    ROW_SPACE = 1
+    ROW_HEIGHT_PTS = float(
+        getattr(settings, "REPORT_ROW_HEIGHT_PTS", 20.0))  # antes: 18
 
     def _set_rows(r0: int, count: int, height_pts: float):
         for r in range(r0, r0 + count):
@@ -1565,13 +1570,18 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         img_bottom = img_top + ROWS_IMG - 1
         ws.merge_cells(start_row=img_top, start_column=left_col_idx,
                        end_row=img_bottom, end_column=left_col_idx + BLOCK_COLS - 1)
-        _set_rows(img_top, ROWS_IMG, 18)
+        _set_rows(img_top, ROWS_IMG, ROW_HEIGHT_PTS)
         for rr in range(img_top, img_bottom + 1):
             for cc in range(left_col_idx, left_col_idx + BLOCK_COLS):
                 ws.cell(row=rr, column=cc).border = border_all
 
         # Medidas de la caja
         box_w_px, box_h_px = _box_size_px(left_col_idx, img_top)
+
+        # --- Fudge para evitar solape con la nota ---
+        fudge_px = int(
+            getattr(settings, "REPORT_IMG_BOX_FUDGE_PX", 14))  # ↑ antes 3
+        box_h_eff = max(1, box_h_px - fudge_px)
 
         # Pads y ensanchamiento
         side_pad = int(getattr(settings, "REPORT_IMG_SIDE_PAD_PX", 9))
@@ -1581,16 +1591,17 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
 
         tmp_img_path = ""
         try:
-            # Base JPG
+            # Base JPG con mayor fuente y menos compresión
             tmp_img_path, w, h = _tmp_jpeg_from_filefield(
                 ev.imagen,
-                max_px=getattr(settings, "REPORT_IMG_MAX_PX", 1600),
-                quality=getattr(settings, "REPORT_IMG_JPG_QUALITY", 88),
+                max_px=int(getattr(settings, "REPORT_IMG_MAX_PX", 2400)),
+                quality=int(
+                    getattr(settings, "REPORT_IMG_JPG_QUALITY_SRC", 93)),
             )
             _track_tmp(tmp_img_path)
 
             # Fill height + widen, con tope de ancho (para que nunca desborde)
-            target_h = max(1, box_h_px - 2 * top_pad)
+            target_h = max(1, box_h_eff - 2 * top_pad)
             scale_h = target_h / float(h)
             base_w = max(1, int(round(w * scale_h)))
             target_w = max(1, int(round(base_w * widen_x)))
@@ -1598,9 +1609,8 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
             if target_w > max_w:
                 target_w = max_w
 
-            # === CANVAS del tamaño exacto de la caja ===
-            # Lienzo blanco del tamaño de la caja (no recortamos celdas)
-            canvas = Image.new("RGB", (box_w_px, box_h_px), (255, 255, 255))
+            # === CANVAS del tamaño exacto de la caja efectiva ===
+            canvas = Image.new("RGB", (box_w_px, box_h_eff), (255, 255, 255))
 
             with PILImage.open(tmp_img_path) as im:
                 im = ImageOps.exif_transpose(im).convert("RGB")
@@ -1608,37 +1618,43 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
 
                 # Centramos considerando pads
                 off_x = side_pad + (box_w_px - 2 * side_pad - target_w) // 2
-                off_y = top_pad + (box_h_px - 2 * top_pad - target_h) // 2
+                off_y = top_pad + (box_h_eff - 2 * top_pad - target_h) // 2
                 off_x = max(0, off_x)
                 off_y = max(0, off_y)
 
                 canvas.paste(im, (off_x, off_y))
 
-            # Guardar canvas y añadirlo del tamaño COMPLETO de la caja
+            # Guardar canvas como JPG con mejor calidad y sin submuestreo
             tmp_canvas = NamedTemporaryFile(delete=False, suffix=".jpg")
-            canvas.save(tmp_canvas.name, format="JPEG",
-                        quality=getattr(settings, "REPORT_IMG_JPG_QUALITY", 88))
+            canvas.save(
+                tmp_canvas.name,
+                format="JPEG",
+                quality=int(getattr(settings, "REPORT_IMG_JPG_QUALITY", 93)),
+                subsampling=0,       # 4:4:4
+                optimize=True,
+                progressive=True,
+            )
             tmp_canvas.close()
             canvas_path = tmp_canvas.name
             _track_tmp(canvas_path)
 
             xl_img = XLImage(canvas_path)
 
-            # Anclar al inicio de la caja y forzar tamaño exacto de la caja
-            # (no hace falta offset porque el centrado ya está en el canvas)
+            # Anclar al inicio de la caja y forzar tamaño exacto de la caja efectiva
             try:
                 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor, Extent
                 col0 = left_col_idx - 1
                 row0 = img_top - 1
                 anchor = AnchorMarker(col=col0, row=row0, colOff=0, rowOff=0)
+                # -1 px extra en altura para vencer redondeo de Excel
                 extent = Extent(cx=pixels_to_EMU(box_w_px),
-                                cy=pixels_to_EMU(box_h_px))
+                                cy=pixels_to_EMU(max(1, box_h_eff - 1)))
                 one = OneCellAnchor(_from=anchor, ext=extent, editAs="oneCell")
                 xl_img.anchor = one
                 ws.add_image(xl_img)
             except Exception:
                 xl_img.width = box_w_px
-                xl_img.height = box_h_px
+                xl_img.height = max(1, box_h_eff - 1)
                 ws.add_image(
                     xl_img, f"{get_column_letter(left_col_idx)}{img_top}")
 
