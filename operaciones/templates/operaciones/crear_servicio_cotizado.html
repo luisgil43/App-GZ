@@ -1,5 +1,6 @@
 {% extends "dashboard_admin/base.html" %}
 {% load widget_tweaks %}
+{% load custom_filters %}
 
 {% block title %}Crear Cotización{% endblock %}
 
@@ -20,10 +21,15 @@
     <label class="block text-sm font-medium text-gray-700">Región</label>
     {{ form.region|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_region"|attr:"required" }}
   </div>
-  <div>
-    <label class="block text-sm font-medium text-gray-700">Mes Producción</label>
-    {{ form.mes_produccion|add_class:"w-full border rounded-xl px-3 py-2"|attr:"required" }}
-  </div>
+<div>
+  <label class="block text-sm font-medium text-gray-700">Mes Producción</label>
+
+  {# Campo real (oculto) que guarda "Septiembre 2025" #}
+  {{ form.mes_produccion|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_mes_produccion"|attr:"required"|attr:"type:hidden" }}
+
+  {# Picker mes/año visible #}
+  <input id="mes_picker" type="month" class="w-full border rounded-xl px-3 py-2" required>
+</div>
   <div>
     <label class="block text-sm font-medium text-gray-700">ID NEW</label>
     {{ form.id_new|add_class:"w-full border rounded-xl px-3 py-2"|attr:"id:id_id_new"|attr:"required" }}
@@ -78,4 +84,78 @@
     });
   });
 </script>
+
+<script>
+(function(){
+  const MONTHS_ES = [
+    "Enero","Febrero","Marzo","Abril","Mayo","Junio",
+    "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
+  ];
+
+  const hiddenText = document.getElementById("id_mes_produccion"); // campo Django
+  const monthInput = document.getElementById("mes_picker");        // type="month"
+
+  // Convierte "YYYY-MM" → "Mes Año"
+  function toLabel(yyyyMm){
+    if(!/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
+    const [y,m] = yyyyMm.split("-");
+    const i = parseInt(m,10)-1;
+    return (MONTHS_ES[i] || "") + " " + y;   // ← sin "de", mes capitalizado
+  }
+
+  // Convierte texto ("Mes Año", "mes de año", "YYYY-MM") → "YYYY-MM"
+  function toYyyyMm(label){
+    if(!label) return "";
+
+    const raw = label.toString().trim();
+
+    // Ya viene como YYYY-MM
+    if (/^\d{4}-\d{2}$/.test(raw)) return raw;
+
+    // Normaliza: quita " de " y espacios extra → "septiembre 2025"
+    const cleaned = raw
+      .replace(/\s+de\s+/i, " ")
+      .replace(/\s+/g, " ");
+
+    const parts = cleaned.split(" "); // ["Septiembre","2025"]
+    if(parts.length !== 2) return "";
+
+    const y = parts[1];
+    const mIndex = MONTHS_ES.findIndex(n => n.toLowerCase() === parts[0].toLowerCase());
+    if(mIndex < 0 || !/^\d{4}$/.test(y)) return "";
+
+    const mm = String(mIndex+1).padStart(2,"0");
+    return `${y}-${mm}`;
+  }
+
+  // 1) Al cargar: si el campo oculto trae algo, sincroniza el picker y normaliza el texto
+  (function initFromHidden(){
+    const current = hiddenText.value || "";
+    const yyyyMm = toYyyyMm(current);
+    if(yyyyMm){
+      monthInput.value = yyyyMm;                    // ej. "2025-09"
+      hiddenText.value = toLabel(yyyyMm);           // normaliza: "Septiembre 2025"
+    }else{
+      // por defecto: mes actual
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth()+1).padStart(2,"0");
+      monthInput.value = `${y}-${m}`;
+      hiddenText.value = toLabel(monthInput.value); // deja algo válido de entrada
+    }
+  })();
+
+  // 2) Cuando el usuario cambia el picker, actualiza el oculto en formato “Mes Año”
+  monthInput.addEventListener("change", ()=>{
+    hiddenText.value = toLabel(monthInput.value);
+  });
+
+  // 3) Por seguridad: antes de enviar, asegura conversión correcta
+  const form = monthInput.closest("form");
+  form.addEventListener("submit", ()=>{
+    hiddenText.value = toLabel(monthInput.value);
+  });
+})();
+</script>
+
 {% endblock %}

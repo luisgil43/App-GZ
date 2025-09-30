@@ -1,0 +1,486 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Producción aprobada{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    height: 2.25rem;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+  .campo-filtro:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+  .filtros-compactos .campo-filtro {
+    width: auto;
+    min-width: 8.5rem;
+    max-width: 12rem;
+  }
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
+  }
+  .tabla-responsive{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+  .tabla-responsive table{
+    white-space: nowrap;
+    min-width: 1100px;
+  }
+</style>
+
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
+  <h2 class="text-2xl font-bold text-gray-800">✅ Producción aprobada</h2>
+
+  <div class="flex items-center gap-2">
+    <span class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></span>
+<a href="javascript:void(0)"
+   onclick="openAjusteModal()"
+   class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
+  ➕ Crear ajuste
+</a>
+
+
+  <a href="{% url 'operaciones:produccion_totales_a_pagar' %}?f_month={{ current_month }}"
+         class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
+        <span class="sm:hidden">💳 Total</span>
+        <span class="hidden sm:inline">💳 Mostrar totales a pagar</span>
+      </a>
+<a href="{% url 'operaciones:exportar_produccion_admin' %}?{{ filters_qs }}"
+   class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
+  ⬇ Exportar
+</a>
+  </div>
+</div>
+
+<!-- Filtros -->
+<form id="form-filtros" method="get" class="filtros-compactos mb-6">
+  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
+    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
+    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
+    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
+
+    <!-- ⬇️ aquí el nombre correcto -->
+    <input type="text" name="f_tecnico" value="{{ f_tecnico }}" placeholder="Técnico (nombre o usuario)" class="campo-filtro">
+
+    <div class="flex gap-2">
+      <a href="{% url 'operaciones:produccion_admin' %}"
+         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+        ❌ Limpiar
+      </a>
+    </div>
+
+    <input type="hidden" name="cantidad" value="{{ cantidad }}">
+  </div>
+</form>
+
+<!-- Tabla -->
+<div class="rounded-xl border border-gray-200 tabla-responsive">
+  <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <tr>
+        <th class="p-2">DU</th>
+        <th class="p-2">ID CLARO</th>
+        <th class="p-2">REGIÓN</th>
+        <th class="p-2">MES PRODUCCIÓN</th>
+        <th class="p-2">ID NEW</th>
+        <th class="p-2">DETALLE TAREA</th>
+        <th class="p-2">MONTO MMOO</th>
+        <th class="p-2">ASIGNADOS</th>
+        <th class="p-2">FECHA FIN</th>
+        <th class="p-2">STATUS</th>
+        <th class="p-2">ACCIONES</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% for r in pagina %}
+      <tr class="border-t align-top">
+        <td class="p-2 font-mono">DU{{ r.du }}</td>
+        <td class="p-2">{{ r.id_claro|default:"—" }}</td>
+        <td class="p-2">{{ r.region|default:"—" }}</td>
+        <td class="p-2">{{ r.mes_produccion|default:"—" }}</td>
+        <td class="p-2">{{ r.id_new|default:"—" }}</td>
+        <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[420px]">
+          {{ r.detalle_tarea|default:"—" }}
+        </td>
+
+        <!-- Monto prorrateado por técnico -->
+ <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+  $ {{ r.monto_tecnico|miles_dec }} CLP
+</td>
+
+
+
+        <!-- Asignado (solo 1 técnico por fila) -->
+        <td class="p-2 text-left">
+          {% if r.tecnico %}
+            - {{ r.tecnico.get_full_name|default:r.tecnico.username }}
+          {% else %}
+            <span class="italic text-gray-400">Sin asignar</span>
+          {% endif %}
+        </td>
+
+        <td class="p-2">
+          {% if r.fecha_fin %}{{ r.fecha_fin|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+        </td>
+
+  <td class="p-2 text-sm">
+  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+    {% if r.status == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+    {% elif r.status == 'aprobado_pm' %}bg-green-100 text-green-800
+    {% elif r.status == 'aprobado_finanzas' %}bg-teal-100 text-teal-800
+    {% elif r.status == 'ajuste_bono' %}bg-blue-100 text-blue-800
+    {% elif r.status == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+    {% elif r.status == 'ajuste_descuento' %}bg-red-100 text-red-800
+    {% else %}bg-gray-100 text-gray-800{% endif %}">
+    {% if r.status == 'aprobado_supervisor' %}✅ Aprobado por Supervisor
+    {% elif r.status == 'aprobado_pm' %}✅ Aprobado por PM
+    {% elif r.status == 'aprobado_finanzas' %}✅ Aprobado por Finanzas
+    {% elif r.status == 'ajuste_bono' %}🎁 Bono
+    {% elif r.status == 'ajuste_adelanto' %}⏩ Adelanto
+    {% elif r.status == 'ajuste_descuento' %}➖ Descuento
+    {% else %}{{ r.status }}{% endif %}
+  </div>
+</td>
+
+ <td class="p-2">
+  {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
+    <a href="{% url 'operaciones:editar_servicio_cotizado' r.id %}" class="text-blue-600 hover:underline">✏️</a>
+    <button type="button" onclick="abrirModal('modal-{{ r.id }}')" class="text-red-600 hover:underline">🗑️</button>
+  {% else %}
+    <span class="text-gray-400 italic">—</span>
+  {% endif %}
+</td>
+
+
+      </tr>
+      {% empty %}
+      <tr><td colspan="11" class="p-4 text-center text-gray-500">No hay producción para mostrar.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+<!-- Modal: Crear Ajuste (centrado, con scroll interno) -->
+<div id="ajuste-modal"
+     class="fixed inset-0 z-50 hidden items-start justify-center p-4 bg-black/40 overflow-y-auto">
+
+  <!-- wrapper para mantener margen top/bottom cuando hay scroll -->
+  <div class="w-full max-w-xl mx-auto my-6">
+    <!-- caja del modal: altura máx + scroll propio -->
+    <div class="bg-white rounded-2xl shadow p-6 max-h-[92vh] overflow-y-auto">
+      <h3 class="text-xl font-semibold mb-1">Crear ajuste</h3>
+      <p class="text-sm text-gray-600 mb-4">
+        Genera un Bono / Adelanto / Descuento para uno o más técnicos.
+      </p>
+
+      <form id="ajuste-form">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium">Tipo</label>
+            <select name="tipo" class="w-full border rounded-xl px-3 py-2" required>
+              <option value="ajuste_bono">Bono</option>
+              <option value="ajuste_adelanto">Adelanto</option>
+              <option value="ajuste_descuento">Descuento</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium">Mes producción o descuento</label>
+            <!-- guardamos en texto "Mes Año" -->
+            <input type="hidden" id="ajuste_mes_texto" name="mes_texto" required>
+            <input id="ajuste_mes_picker" type="month" class="w-full border rounded-xl px-3 py-2" required>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium">Monto (CLP)</label>
+            <input name="monto" type="number" step="0.01" min="0" class="w-full border rounded-xl px-3 py-2" required>
+            <p class="text-xs text-gray-500 mt-1">
+              Para <b>Descuento</b> el sistema aplicará el signo negativo automáticamente.
+            </p>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium">Observación / Detalle</label>
+            <textarea name="detalle" class="w-full border rounded-xl px-3 py-2" rows="3"
+                      placeholder="Motivo del ajuste" required></textarea>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium">Asignados (uno o más)</label>
+
+            <!-- Buscador -->
+            <input id="filtro-usuarios" type="text"
+                   class="w-full border rounded-xl px-3 py-2 mb-2"
+                   placeholder="Buscar técnico por nombre o usuario…">
+
+            <!-- Lista de checkboxes -->
+            <div id="ajuste_asignados_wrap"
+                 class="border rounded-xl p-2 max-h-52 overflow-auto space-y-1">
+
+              <!-- Maestro: seleccionar todo (afecta solo los visibles con el filtro) -->
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+                <input type="checkbox" id="chk-all-usuarios">
+                <span class="text-sm font-medium">Seleccionar todo</span>
+              </label>
+
+              {% for u in usuarios %}
+                <label class="flex items-center gap-2 usuario-item cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+                  <input type="checkbox" name="asignados" value="{{ u.id }}">
+                  <span class="text-sm">{{ u.get_full_name|default:u.username }}</span>
+                </label>
+              {% endfor %}
+            </div>
+
+            <p class="text-xs text-gray-500 mt-1">
+              Se creará un registro separado por cada usuario seleccionado.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeAjusteModal()">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded bg-amber-600 text-white">Crear ajuste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+<!-- Selector cantidad (idéntico a tu UX) -->
+<form method="get" class="mt-4 flex items-center gap-2">
+  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+  </select>
+
+  <!-- mantener filtros al cambiar cantidad -->
+  <input type="hidden" name="du" value="{{ filtros.du }}">
+  <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
+  <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
+  <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
+  <input type="hidden" name="estado" value="{{ filtros.estado }}">
+  <input type="hidden" name="f_tecnico" value="{{ f_tecnico }}">
+  <input type="hidden" name="f_region" value="{{ f_region }}">
+</form>
+
+<!-- === JS idéntico a tu lista (auto-submit con debounce, caret restore) === -->
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'prod_filtros_focus';
+  function rememberCaret(el) {
+    try {
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+    } catch (_) {}
+  }
+  function restoreCaret() {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    } catch (_) {}
+  }
+
+  let t;
+  const submitDebounced = (el) => {
+    rememberCaret(el);
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 450);
+  };
+
+  inputs.forEach(el => {
+    el.addEventListener('input',  () => submitDebounced(el));
+    el.addEventListener('change', () => submitDebounced(el));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
+    });
+  });
+
+  selects.forEach(el => el.addEventListener('change', () => { rememberCaret(el); form.requestSubmit(); }));
+
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+})();
+</script>
+
+<script>
+  // Mes Año helpers (igual que usaste en otras vistas)
+  (function(){
+    const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const picker = document.getElementById('ajuste_mes_picker');
+    const hidden = document.getElementById('ajuste_mes_texto');
+
+    function toLabel(yyyyMm){
+      if(!/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
+      const [y,m]=yyyyMm.split("-");
+      const i=parseInt(m,10)-1;
+      return (MONTHS_ES[i]||"")+" "+y;
+    }
+    function initDefault(){
+      if(!picker || !hidden) return;
+      const now=new Date();
+      const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,"0");
+      picker.value=`${y}-${m}`;
+      hidden.value=toLabel(picker.value);
+    }
+    document.addEventListener('DOMContentLoaded', initDefault);
+    if(picker){
+      picker.addEventListener('change', ()=>{ if(hidden) hidden.value=toLabel(picker.value); });
+    }
+  })();
+
+  // Modal open/close
+  function openAjusteModal(){
+    const m = document.getElementById('ajuste-modal');
+    if(!m) return;
+    m.classList.remove('hidden'); m.classList.add('flex');
+    // bloquear scroll del fondo
+    document.documentElement.classList.add('overflow-hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+
+  function closeAjusteModal(){
+    const m = document.getElementById('ajuste-modal');
+    if(!m) return;
+    m.classList.add('hidden'); m.classList.remove('flex');
+    // restaurar scroll del fondo
+    document.documentElement.classList.remove('overflow-hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cerrar con ESC y click fuera
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeAjusteModal(); }});
+  document.getElementById('ajuste-modal')?.addEventListener('click', (e)=>{
+    if(e.target.id==='ajuste-modal'){ closeAjusteModal(); }
+  });
+
+  // CSRF
+  function getCookie(name){const v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v? v.pop() : '';}
+  const CSRF = getCookie('csrftoken');
+
+  // Submit del ajuste (AJAX)
+  (function(){
+    const form=document.getElementById('ajuste-form');
+    if(!form) return;
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const fd=new FormData(form);
+
+      // Asignados múltiple → lista
+      // Asignados múltiples → checkboxes marcados
+const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
+const users  = Array.from(checks).map(c => c.value);
+if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
+fd.delete('asignados');
+users.forEach(u => fd.append('asignados', u));
+      try{
+        const resp = await fetch("{% url 'operaciones:crear_ajuste' %}", {
+          method:'POST',
+          headers:{'X-CSRFToken':CSRF, 'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json'},
+          body: fd
+        });
+        const text = await resp.text();
+        if(!resp.ok) throw new Error(text.slice(0,200));
+        let data; try{ data=JSON.parse(text); }catch{ throw new Error('Respuesta no JSON'); }
+        if(!data.ok) throw new Error(data.error||'Error creando ajuste');
+  closeAjusteModal();
+// redirige con flag para que el base muestre el toast
+const url = new URL(window.location.href);
+url.searchParams.set('flash','ajuste_ok');
+window.location.href = url.toString();
+
+      }catch(err){
+        console.error(err);
+    closeAjusteModal();
+const url = new URL(window.location.href);
+url.searchParams.set('flash','ajuste_err');
+window.location.href = url.toString();
+      }
+    });
+  })();
+</script>
+
+<script>
+  (function(){
+    const wrap  = document.getElementById('ajuste_asignados_wrap');
+    const input = document.getElementById('filtro-usuarios');
+    const master= document.getElementById('chk-all-usuarios');
+    const items = Array.from(wrap.querySelectorAll('.usuario-item'));
+
+    function eachBox() {
+      return Array.from(wrap.querySelectorAll('.usuario-item input[type="checkbox"]'));
+    }
+
+    function updateMaster() {
+      const boxes = eachBox();
+      const visible = boxes.filter(cb => cb.closest('.usuario-item').style.display !== 'none');
+      const allChecked = visible.length > 0 && visible.every(cb => cb.checked);
+      const someChecked = visible.some(cb => cb.checked);
+      master.checked = allChecked;
+      master.indeterminate = !allChecked && someChecked;
+    }
+
+    function setAllOnVisible(checked) {
+      eachBox().forEach(cb => {
+        const row = cb.closest('.usuario-item');
+        if (row.style.display === 'none') return; // solo visibles
+        cb.checked = checked;
+      });
+      updateMaster();
+    }
+
+    // Maestro: marca/desmarca solo los visibles
+    master?.addEventListener('change', () => setAllOnVisible(master.checked));
+
+    // Al escribir en el buscador, mostrar/ocultar y recalcular estado del maestro
+    input?.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      items.forEach(li => {
+        const show = li.textContent.toLowerCase().includes(q);
+        li.style.display = show ? '' : 'none';
+      });
+      updateMaster();
+    });
+
+    // Cuando un checkbox individual cambie, recalcula el maestro
+    wrap.addEventListener('change', (e) => {
+      if (e.target.matches('.usuario-item input[type="checkbox"]')) updateMaster();
+    });
+
+    // Estado inicial
+    updateMaster();
+  })();
+</script>
+
+
+</div>
+{% endblock %}

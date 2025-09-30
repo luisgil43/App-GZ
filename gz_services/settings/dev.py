@@ -1,3 +1,5 @@
+# setiign-dev.py
+
 from .base import *
 import os
 
@@ -20,9 +22,17 @@ DATABASES = {
 }
 
 # No forzar HTTPS en desarrollo
-CSRF_COOKIE_SECURE = False
-SESSION_COOKIE_SECURE = False
+
+
 SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False  # porque lees el csrftoken desde document.cookie
+CSRF_TRUSTED_ORIGINS = [
+    "https://app-gz.onrender.com",
+    "http://127.0.0.1:8000",
+    "http://localhost:8000",
+]
 
 # Email en consola si no está definida la var de entorno
 EMAIL_BACKEND = os.environ.get(

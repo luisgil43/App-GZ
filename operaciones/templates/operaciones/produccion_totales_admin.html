@@ -1,0 +1,549 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+{% block title %}Totales a pagar{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center gap-2">
+      <a href="{% url 'operaciones:produccion_admin' %}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded-full shadow text-sm">
+        ← Volver
+      </a>
+      <h1 class="text-2xl font-bold">💳 Totales a pagar</h1>
+    </div>
+    <div class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></div>
+  </div>
+
+  <!-- ================= PARTE SUPERIOR: este mes ================= -->
+  <h2 class="text-lg font-semibold mb-2">Este mes</h2>
+  <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-[950px]" style="white-space: nowrap;">
+      <thead class="bg-gray-100">
+        <tr>
+          <th class="w-10"></th>
+          <th class="p-2 text-left">Técnico</th>
+          <th class="p-2 text-left">Mes de pago</th>
+          <th class="p-2 text-right">Total</th>
+          <th class="p-2 text-left">Estado</th>
+          <th class="p-2 text-left">Comprobante</th>
+          <th class="p-2 text-left">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in top %}
+        <tr class="border-b align-top">
+          <td class="p-2 text-center">
+            <button type="button"
+                    class="btn-toggle inline-flex w-7 h-7 items-center justify-center rounded hover:bg-gray-100"
+                    data-target="det-top-{{ forloop.counter }}" aria-expanded="false">
+              <svg class="chev w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M6.293 7.293a1 1 0 011.414 0L10 9.586l2.293-2.293a1 1 0 111.414 1.414L10 12.414 6.293 8.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </td>
+
+          <td class="p-2">{{ r.display_name }}</td>
+          <td class="p-2">{{ r.week }}</td>
+          <td class="p-2 text-right">$ {{ r.amount|miles_decimales }} CLP</td>
+          <td class="p-2">
+            {% if r.status == "pending_user" %}
+              <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
+            {% elif r.status == "approved_user" or r.status == "pending_payment" %}
+              <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Pendiente de pago</span>
+            {% elif r.status == "rejected_user" %}
+              <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full" title="{{ r.reject_reason|default:'—' }}">Rechazado por el técnico</span>
+            {% elif r.status == "paid" %}
+              <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Pagado</span>
+            {% else %}
+              <span class="text-gray-400">—</span>
+            {% endif %}
+          </td>
+          <td class="p-2">
+            {% if r.receipt %}
+              <a class="text-blue-600 underline" href="{{ r.receipt.url }}" target="_blank" rel="noopener">Ver</a>
+            {% else %}—{% endif %}
+          </td>
+     <td class="p-2">
+  {% if r.status == "pending_payment" or r.status == "approved_user" %}
+    <button type="button"
+            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+            onclick="openPayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+      Marcar como pagado
+    </button>
+  {% elif r.status == "rejected_user" %}
+    <span class="text-gray-500">—</span>
+  {% else %}
+    <span class="text-gray-400">—</span>
+  {% endif %}
+</td>
+
+        </tr>
+
+        <!-- detalle por DU -->
+        <tr id="det-top-{{ forloop.counter }}" class="hidden">
+          <td class="p-0"></td>
+          <td colspan="6" class="bg-gray-50 p-3">
+            <div class="overflow-x-auto rounded border">
+              <table class="min-w-[360px] w-full text-xs">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="p-2 text-left">DU</th>
+                    <th class="p-2 text-right">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for d in r.details %}
+                  <tr class="border-t">
+                    <td class="p-2">{{ d.du|default:"—" }}</td>
+                    <td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
+                  </tr>
+                  {% empty %}
+                  <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="p-4 text-center text-gray-500">No hay registros este mes.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+<!-- ===== Modal: Subir comprobante ===== -->
+<div id="pay-modal"
+     class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50"
+     role="dialog" aria-modal="true" aria-labelledby="pay-modal-title">
+  <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
+    <h3 id="pay-modal-title" class="text-xl font-semibold mb-1">Adjuntar comprobante de pago</h3>
+    <p id="pay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
+
+    <div class="space-y-3">
+      <div class="space-y-1">
+        <label class="block text-sm font-medium">Archivo del comprobante</label>
+
+        <input id="receipt-file" type="file" accept=".pdf,.jpg,.jpeg,.png" class="hidden" required>
+
+        <div class="flex items-center gap-2">
+          <button type="button"
+                  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  onclick="document.getElementById('receipt-file').click()">
+            Elegir archivo
+          </button>
+          <span id="receipt-name" class="text-sm text-gray-600" aria-live="polite">
+            Ningún archivo seleccionado
+          </span>
+        </div>
+      </div>
+
+      <div class="flex gap-2 justify-end pt-2">
+        <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closePayModal()">Cancelar</button>
+        <button id="btn-upload" type="button" class="px-4 py-2 rounded bg-green-600 text-white">
+          Subir y marcar como pagado
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+  </div>
+
+  <!-- ================= HISTORIAL (Pagados) ================= -->
+  <h2 class="text-lg font-semibold mt-8 mb-2">Historial (Pagados)</h2>
+
+  <!-- Filtros automáticos (sin botón Aplicar) -->
+  <form id="filters" class="mb-3" onsubmit="return false;">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+
+    <div>
+        <label class="text-xs text-gray-600">Técnico</label>
+        <input name="f_tecnico" type="text" value="{{ f_tecnico }}"
+               class="w-full border rounded px-2 py-1.5" placeholder="Nombre o usuario">
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Mes de Pago</label>
+        <input name="f_month" type="text" value="{{ f_month }}"
+               class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
+      </div>
+  
+      <div>
+        <label class="text-xs text-gray-600">DU</label>
+        <input name="f_du" type="text" value="{{ f_du }}"
+               class="w-full border rounded px-2 py-1.5" placeholder="DU">
+      </div>
+      <div>
+        <label class="text-xs text-gray-600">Mes Pagado</label>
+        <input name="f_paid_month" type="text" value="{{ f_paid_month }}"
+               class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
+      </div>
+      <div class="flex items-end gap-2">
+        <a href="{% url 'operaciones:produccion_totales_a_pagar' %}"
+           class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">❌ Limpiar</a>
+      </div>
+    </div>
+  </form>
+
+  <div id="paid-wrap">
+    <div class="overflow-x-auto">
+      <table class="table-auto w-full text-sm min-w-[950px]" style="white-space: nowrap;">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="w-10"></th>
+            <th class="p-2 text-left">Técnico</th>
+            <th class="p-2 text-left">Mes de pago</th>
+            <th class="p-2 text-right">Total</th>
+            <th class="p-2 text-left">Estado</th>
+            <th class="p-2 text-left">Mes pagado</th>
+            <th class="p-2 text-left">Comprobante</th>
+            <th class="p-2 text-left">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in pagina %}
+          <tr class="border-b align-top">
+            <td class="p-2 text-center">
+              <button type="button"
+                      class="btn-toggle inline-flex w-7 h-7 items-center justify-center rounded hover:bg-gray-100"
+                      data-target="det-paid-{{ forloop.counter }}" aria-expanded="false">
+                <svg class="chev w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M6.293 7.293a1 1 0 011.414 0L10 9.586l2.293-2.293a1 1 0 111.414 1.414L10 12.414 6.293 8.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                </svg>
+              </button>
+            </td>
+
+            <td class="p-2">{{ r.display_name }}</td>
+            <td class="p-2">{{ r.week }}</td>
+       
+<td class="p-2 text-right">$ {{ r.amount|miles_decimales }} CLP</td>
+            <td class="p-2">
+              <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800">Pagado</span>
+            </td>
+            <td class="p-2">{{ r.paid_month|default:"—" }}</td>
+            <td class="p-2">
+              {% if r.receipt %}
+                <a class="text-blue-600 underline" href="{{ r.receipt.url }}" target="_blank" rel="noopener">Ver</a>
+              {% else %}—{% endif %}
+            </td>
+            <td class="p-2">
+  <button type="button"
+          class="inline-block bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
+          onclick="openUnpayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+    Revertir pago
+  </button>
+</td>
+
+          </tr>
+
+          <tr id="det-paid-{{ forloop.counter }}" class="hidden">
+            <td class="p-0"></td>
+            <td colspan="7" class="bg-gray-50 p-3">
+              <div class="overflow-x-auto rounded border">
+                <table class="min-w-[360px] w-full text-xs">
+                  <thead class="bg-gray-100">
+                    <tr>
+                      <th class="p-2 text-left">DU</th>
+                      <th class="p-2 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for d in r.details %}
+                    <tr class="border-t">
+                      <td class="p-2">{{ d.du|default:"—" }}</td>
+<td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="p-4 text-center text-gray-500">Sin historial.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+<div id="unpay-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
+    <h3 class="text-xl font-semibold mb-1">¿Revertir pago?</h3>
+    <p id="unpay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
+    <p class="text-sm text-gray-700 mb-4">
+      Esto <b>eliminará el comprobante</b> y volverá a <i>Pendiente de pago</i>.
+    </p>
+    <div class="flex gap-2 justify-end">
+      <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeUnpayModal()">Cancelar</button>
+      <button id="btn-unpay" type="button" class="px-4 py-2 rounded bg-amber-600 text-white">Sí, revertir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let currentUnpayId=null;
+  function openUnpayModal(id, month, tech){
+    currentUnpayId=id;
+    const m=document.getElementById('unpay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('unpay-modal-sub').textContent=`${tech} — ${month}`;
+  }
+  function closeUnpayModal(){const m=document.getElementById('unpay-modal'); m.classList.add('hidden'); m.classList.remove('flex');}
+  document.getElementById('btn-unpay').addEventListener('click', async ()=>{
+    const id=currentUnpayId; if(!id) return; closeUnpayModal();
+    try{
+      const url="{% url 'operaciones:admin_unpay_monthly' 0 %}".replace('/0/','/'+id+'/') + '?ajax=1';
+      await fetchJSON(url, {
+        method:'POST',
+        headers:{'X-CSRFToken':CSRF}
+      });
+      toast('Pago revertido. De vuelta a Pendiente de pago ✅','ok');
+      setTimeout(()=>window.location.reload(),500);
+    }catch(e){console.error(e); toast('No se pudo revertir: '+e.message,'error');}
+  });
+</script>
+
+    </div>
+
+    <!-- Paginación abajo a la izquierda -->
+    <div class="mt-4 flex items-center justify-between text-sm">
+      <div class="flex items-center gap-2">
+        <label for="cantidad-bottom" class="text-sm font-medium text-gray-700">Mostrar:</label>
+        <select id="cantidad-bottom" class="border rounded-lg px-3 py-1">
+          <option value="5"    {% if cantidad == '5' %}selected{% endif %}>5</option>
+          <option value="10"   {% if cantidad == '10' %}selected{% endif %}>10</option>
+          <option value="20"   {% if cantidad == '20' %}selected{% endif %}>20</option>
+          <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+
+        {% if cantidad == 'todos' %}
+          <span> Página 1 de 1 </span>
+        {% else %}
+          <span> Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} </span>
+        {% endif %}
+
+        {% if cantidad != 'todos' and pagina.has_previous %}
+          <a data-pagelink
+             href="?page=1&cantidad={{ cantidad }}{% if filters_qs %}&{{ filters_qs }}{% endif %}"
+             class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primera</a>
+          <a data-pagelink
+             href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}{% if filters_qs %}&{{ filters_qs }}{% endif %}"
+             class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+        {% endif %}
+        {% if cantidad != 'todos' and pagina.has_next %}
+          <a data-pagelink
+             href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}{% if filters_qs %}&{{ filters_qs }}{% endif %}"
+             class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+          <a data-pagelink
+             href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}{% if filters_qs %}&{{ filters_qs }}{% endif %}"
+             class="px-2 py-1 bg-gray-200 rounded hover:bg-gray-300">Última »</a>
+        {% endif %}
+      </div>
+
+      <div></div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  const DBG = '[PAGOS]';
+  function dlog(...a){ try{ console.log(DBG, ...a);}catch(_){ } }
+  window.addEventListener('unhandledrejection', e=>{
+    console.error(DBG, 'unhandledrejection', e.reason);
+  });
+</script>
+
+<!-- Toggle filas detalle -->
+<script>
+document.addEventListener('click', function(e){
+  const btn = e.target.closest('.btn-toggle');
+  if(!btn) return;
+  const id = btn.getAttribute('data-target');
+  const row = document.getElementById(id);
+  const chev = btn.querySelector('.chev');
+  const open = !row.classList.contains('hidden');
+  row.classList.toggle('hidden');
+  chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+  btn.setAttribute('aria-expanded', (!open).toString());
+});
+</script>
+
+<!-- Filtros automáticos + control de paginación abajo -->
+<script>
+(function(){
+  // Construye params desde los filtros actuales
+  function paramsFromFilters(){
+    const form = document.getElementById('filters');
+    return new URLSearchParams(new FormData(form));
+  }
+
+  // Debounce para que el usuario escriba cómodo
+  let t=null;
+  function schedule(){ clearTimeout(t); t=setTimeout(applyFilters, 400); }
+
+  function applyFilters(){
+    const p = paramsFromFilters();
+    // preservar cantidad si viene en la URL
+    const url = new URL(window.location.href);
+    const cant = url.searchParams.get('cantidad');
+    if (cant) p.set('cantidad', cant);
+    p.set('page', '1'); // al filtrar, volver a la página 1
+    window.location.search = p.toString();
+  }
+
+  // Auto-aplicar en cada cambio
+  document.querySelectorAll('#filters input').forEach(el=>{
+    el.addEventListener('input', schedule);
+    el.addEventListener('change', schedule);
+  });
+
+  // Selector "Mostrar" (abajo a la izquierda)
+  const sel = document.getElementById('cantidad-bottom');
+  if (sel){
+    sel.addEventListener('change', ()=>{
+      const p = paramsFromFilters();
+      p.set('cantidad', sel.value);
+      // mantener filtros y mandar a página 1
+      p.set('page', '1');
+      window.location.search = p.toString();
+    });
+  }
+
+  // Navegación por enlaces de paginación
+  document.addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-pagelink]');
+    if (!a) return;
+    e.preventDefault();
+    window.location.href = a.getAttribute('href');
+  });
+})();
+</script>
+
+<script>
+  // ---------- CSRF ----------
+  function getCookie(name){const v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v? v.pop() : '';}
+  const CSRF = getCookie('csrftoken');
+
+  // ---------- Toaster simple ----------
+  function toast(msg,kind="info"){
+    let host=document.getElementById('toast'); if(!host){host=document.createElement('div');host.id='toast';host.className='fixed bottom-4 right-4 z-[100]';document.body.appendChild(host);}
+    const box=document.createElement('div');box.className='mb-2 rounded-lg shadow px-3 py-2 text-sm '+(kind==="error"?'bg-red-600 text-white':kind==="ok"?'bg-green-600 text-white':'bg-gray-900 text-white');box.textContent=msg;host.appendChild(box);setTimeout(()=>box.remove(),4500);
+  }
+
+  // ---------- Modal Pago ----------
+let currentPayId=null;
+function openPayModal(id, month, tech){
+  dlog('openPayModal()', {id, month, tech});
+  currentPayId=id;
+  const m=document.getElementById('pay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
+  document.getElementById('pay-modal-sub').textContent=`${tech} — ${month}`;
+}
+
+  function closePayModal(){
+    const m=document.getElementById('pay-modal'); m.classList.add('hidden'); m.classList.remove('flex');
+    document.getElementById('receipt-file').value=""; document.getElementById('receipt-name').textContent='Ningún archivo seleccionado';
+  }
+
+  // UI del archivo
+  (function(){
+    const fileInput = document.getElementById('receipt-file');
+    const fileName  = document.getElementById('receipt-name');
+    const uploadBtn = document.getElementById('btn-upload');
+    if(!fileInput || uploadBtn.dataset.init) return; uploadBtn.dataset.init='1';
+
+    fileInput.addEventListener('change', () => {
+      fileName.textContent = (fileInput.files && fileInput.files.length)
+        ? fileInput.files[0].name
+        : 'Ningún archivo seleccionado';
+    });
+
+    uploadBtn.addEventListener('click', async ()=>{
+  const file=fileInput.files?.[0]; const payId=currentPayId;
+  dlog('UPLOAD click', {payId, file: file?.name, size: file?.size});
+  if(!file){ toast('Selecciona un archivo de comprobante.', 'error'); return; }
+  if(!payId){ toast('ID de pago no encontrado.', 'error'); return; }
+
+  closePayModal();
+  toast('Subiendo comprobante…');
+
+  try{
+    // PASO 1: presign
+    const presignData=new FormData(); presignData.append('filename', file.name);
+    const presignUrl="{% url 'operaciones:presign_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
+    dlog('STEP1 presign →', presignUrl);
+    const presigned = await fetchJSON(presignUrl,{ method:'POST', headers:{'X-CSRFToken':CSRF}, body:presignData });
+    dlog('STEP1 presign OK', presigned);
+    const {post, key} = presigned;
+
+    // PASO 2: upload a S3/Wasabi
+    dlog('STEP2 upload →', post.url);
+    await new Promise((resolve,reject)=>{
+      const fd=new FormData();
+      Object.entries(post.fields).forEach(([k,v])=>fd.append(k,v));
+      fd.append('file', file);
+      const xhr=new XMLHttpRequest();
+      xhr.open('POST', post.url, true);
+      xhr.upload.onprogress = (e)=>{ if(e.lengthComputable){ dlog('STEP2 progress', `${((e.loaded/e.total)*100).toFixed(1)}%`); } };
+      xhr.onload=()=>{
+        dlog('STEP2 onload status', xhr.status, 'respLen', xhr.response?.length);
+        (xhr.status===201 || xhr.status===204) ? resolve() : reject(new Error('Upload '+xhr.status+' '+(xhr.responseText||'')));
+      };
+      xhr.onerror=()=>reject(new Error('Upload network error'));
+      xhr.send(fd);
+    });
+    dlog('STEP2 upload OK');
+
+    // PASO 3: confirm
+    const confirmUrl="{% url 'operaciones:confirm_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
+    const confirmFD=new FormData(); confirmFD.append('key', key);
+    dlog('STEP3 confirm →', confirmUrl, {key});
+    const confirmResp = await fetchJSON(confirmUrl,{ method:'POST', headers:{'X-CSRFToken':CSRF}, body:confirmFD });
+    dlog('STEP3 confirm OK', confirmResp);
+
+    toast('Pago marcado como PAGADO ✅','ok');
+    setTimeout(()=>window.location.reload(),600);
+  }catch(e){
+    console.error(DBG, 'ERROR', e);
+    toast('Fallo al subir: '+e.message,'error');
+  }
+});
+
+
+    // UX: cerrar con click afuera o Escape
+    const modal = document.getElementById('pay-modal');
+    modal.addEventListener('click', (e)=>{ if(e.target===modal) closePayModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('flex')) closePayModal(); });
+  })();
+</script>
+<script>
+async function fetchJSON(url, opts){
+  dlog('fetchJSON ⇒', url, opts?.method||'GET');
+  const resp = await fetch(url, {
+    credentials: 'same-origin',
+    headers: {
+      'X-Requested-With':'XMLHttpRequest',
+      'Accept':'application/json',           // 👈 importante
+      ...(opts?.headers||{})
+    },
+    ...opts
+  });
+  const ctype = resp.headers.get('content-type') || '';
+  dlog('fetchJSON ⇐ status', resp.status, 'ctype', ctype, 'url', resp.url);
+
+  const raw = await resp.text();
+  if (!resp.ok) {
+    dlog('fetchJSON body (error)', raw.slice(0,500));
+    throw new Error(`${resp.status} ${resp.statusText}: ${raw.slice(0,200)}`);
+  }
+  if (!ctype.includes('application/json')) {
+    dlog('fetchJSON body (no-json)', raw.slice(0,500));
+    throw new Error(`Respuesta no JSON (posible redirect/login): ${raw.slice(0,200)}`);
+  }
+  try { return JSON.parse(raw); }
+  catch { throw new Error('JSON inválido del servidor'); }
+}
+
+</script>
+
+{% endblock %}

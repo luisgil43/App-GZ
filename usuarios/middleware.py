@@ -1,4 +1,5 @@
 # usuarios/middlewares.py
+import logging
 import time
 from django.conf import settings
 from django.shortcuts import redirect
@@ -79,3 +80,18 @@ class SessionExpiryMiddleware:
         except Exception:
             pass
         logout(request)
+
+
+log = logging.getLogger('pagos.monthly')
+
+
+class LogRedirectsMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        resp = self.get_response(request)
+        if resp.status_code in (301, 302, 303, 307, 308):
+            log.warning('REDIRECT %s %s → %s', request.method,
+                        request.path, resp.get('Location'))
+        return resp

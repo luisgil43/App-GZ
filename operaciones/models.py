@@ -1,3 +1,5 @@
+import os
+from uuid import uuid4
 from django.utils import timezone
 from operaciones.storage_backends import GZWasabiStorage
 from django.core.validators import FileExtensionValidator
@@ -6,6 +8,7 @@ from django.db import models
 from django.conf import settings
 from usuarios.models import CustomUser
 import re
+from decimal import Decimal
 
 # === Storage Wasabi (GZ Services) ===
 _gz_storage = GZWasabiStorage()
@@ -412,3 +415,81 @@ class EvidenciaFoto(models.Model):
 
     def __str__(self):
         return f"Evidencia {self.id} de {self.tecnico_sesion}"
+
+
+# operaciones/models.py (añade al final del archivo, junto a tus imports existentes)
+
+
+def _name_slug(user) -> str:
+    base = (getattr(user, "get_full_name", lambda: "")()
+            or getattr(user, "username", "")
+            or "").strip()
+    return slugify(base) or "user"
+
+
+def upload_to_payment_receipt(instance, filename: str) -> str:
+    """
+    operaciones/pagos/<YYYY-MM>/<nombre-slug>/receipt_<uuid>.<ext>
+    """
+    _, ext = os.path.splitext(filename or "")
+    ext = (ext or ".pdf").lower()
+    folder = _name_slug(getattr(instance, "technician", None))
+    return f"operaciones/pagos/{instance.month}/{folder}/receipt_{uuid4().hex}{ext}"
+
+
+class MonthlyPayment(models.Model):
+    """
+    1 registro por técnico y MES de pago (YYYY-MM).
+    amount = total mensual prorrateado desde producción aprobada.
+    """
+    STATUS = [
+        ("pending_user", "Pendiente aprobación del técnico"),
+        ("approved_user", "Aprobado por el técnico"),
+        ("rejected_user", "Rechazado por el técnico"),
+        ("pending_payment", "Pendiente de pago"),
+        ("paid", "Pagado"),
+    ]
+
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="monthly_payments",
+    )
+    month = models.CharField(max_length=7, db_index=True)  # YYYY-MM
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    status = models.CharField(max_length=20, choices=STATUS,
+                              default="pending_user", db_index=True)
+    reject_reason = models.TextField(blank=True, default="")
+
+    # Mes efectivo en que se marcó como pagado (YYYY-MM)
+    paid_month = models.CharField(max_length=7, blank=True, default="")
+
+    # Comprobante en Wasabi
+    receipt = models.FileField(
+        upload_to=upload_to_payment_receipt,
+        storage=_gz_storage,
+        validators=[FileExtensionValidator(["pdf", "jpg", "jpeg", "png"])],
+        blank=True, null=True, max_length=1024,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [("technician", "month")]
+        ordering = ["-month", "technician_id"]
+        indexes = [
+            models.Index(fields=["month", "status"]),
+            models.Index(fields=["technician", "month"]),
+        ]
+
+    def __str__(self):
+        return f"{self.technician} • {self.month} • {self.amount}"
+
+    def mark_paid(self, paid_month: str | None = None):
+        if not paid_month:
+            paid_month = _yyyy_mm(timezone.now())
+        self.status = "paid"
+        self.paid_month = paid_month
+        self.save(update_fields=["status", "paid_month", "updated_at"])

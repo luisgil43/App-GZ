@@ -1,178 +1,176 @@
 {% extends "dashboard/base.html" %}
 {% load humanize %}
-{% load custom_filters %}
 
 {% block title %}Mi Producción{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto p-4 bg-white rounded-xl shadow mt-6">
-  <h2 class="text-2xl font-bold text-gray-800 mb-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-    <div>
-      📈 Producción Aprobada
-      <p class="text-sm text-gray-600 mt-1">
-        Total acumulado: <span class="font-semibold text-emerald-700">$ {{ total_estimado|miles }} CLP</span>
-      </p>
-    </div>
+<div class="max-w-7xl mx-auto bg-white p-4 sm:p-6 rounded-2xl shadow mt-6">
 
-    <!-- Dropdown bonito + botón exportar -->
-    <div class="flex gap-2 items-center">
-      <div class="relative inline-block text-left">
-        <button id="dropdownButton" type="button"
-          class="inline-flex justify-center w-full rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
-          aria-expanded="true" aria-haspopup="true">
-          Solo mes actual
-          <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-            fill="currentColor" aria-hidden="true">
-            <path fill-rule="evenodd"
-              d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.23 8.27a.75.75 0 01.02-1.06z"
-              clip-rule="evenodd" />
-          </svg>
-        </button>
+  <!-- Header: Mes actual + Total del mes (CLP) + Botón Mis pagos -->
+  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+    <h1 class="text-2xl font-bold">👷‍♂️ Mi Producción</h1>
 
-        <!-- Menú opciones -->
-        <div id="dropdownMenu"
-          class="hidden origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-50">
-          <div class="py-1">
-            <a href="#" data-value="mes_actual"
-              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Solo mes actual</a>
-            <a href="#" data-value="filtro_actual"
-              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Con filtros aplicados</a>
-            <a href="#" data-value="todos"
-              class="dropdown-option text-gray-700 block px-4 py-2 text-sm hover:bg-emerald-100">Toda la producción</a>
-          </div>
-        </div>
+    <div class="flex items-center gap-3">
+      <div class="text-sm text-gray-600">
+        Mes actual: <b>{{ current_month_label|default:"—" }}</b>
+        · Total del mes (CLP):
+        <b>$ {{ total_current_month|default:0|floatformat:"-2"|intcomma }}</b>
       </div>
 
-      <!-- Botón exportar -->
-      <button id="exportarPDF" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
-        📄 Exportar PDF
-      </button>
+      <a href="{% url 'operaciones:user_monthly_payments' %}"
+         class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+        💳 <span>Mis pagos</span>
+      </a>
     </div>
-  </h2>
-
- 
-<!-- Filtros -->
-<form method="get" class="mb-6 flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-end">
-  <!-- ID CLARO -->
-  <input type="text" name="id_claro" value="{{ id_claro }}" placeholder="Filtrar por ID CLARO"
-         class="border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-auto">
-  
-  <!-- Mes de producción -->
-  <input type="text" name="mes_produccion" value="{{ mes_produccion }}" placeholder="Mes de producción"
-         class="border border-gray-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full sm:w-auto">
-  
-  <!-- Botones juntos -->
-  <div class="flex gap-2">
-    <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 text-sm">
-      🔍 Filtrar
-    </button>
-    <a href="{% url 'operaciones:produccion_tecnico' %}"
-       class="bg-gray-200 px-4 py-2 rounded-lg hover:bg-gray-300 text-sm text-red-600 font-medium">
-      ❌ Limpiar
-    </a>
   </div>
-</form>
 
-  <!-- Contenedor con scroll SOLO para la tabla -->
-  <div class="w-full overflow-x-auto rounded-xl border border-gray-300">
-    <table class="min-w-[1100px] table-auto text-sm">
+  <!-- Filtros -->
+  <form id="filtros" class="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2" method="get" onsubmit="return false;">
+    <input type="text" name="id_claro" value="{{ id_claro }}" placeholder="ID CLARO / ID NEW / Texto proyecto"
+           class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <input type="text" name="mes_produccion" value="{{ mes_produccion }}" placeholder="Mes producción (YYYY-MM o 'Mes Año')"
+           class="border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500">
+    <div class="flex items-center gap-2">
+      <a href="{% url 'operaciones:produccion_tecnico' %}"
+         class="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm">Limpiar</a>
+    </div>
+  </form>
+
+  <div class="rounded-xl border border-gray-200 overflow-x-auto">
+    <table class="table-auto text-sm w-full min-w-[1100px]" style="white-space: nowrap;">
       <thead class="bg-gray-100">
         <tr>
-          <th class="p-2 text-center">DU</th>
-          <th class="p-2 text-center">ID CLARO</th>
-          <th class="p-2 text-center">REGIÓN</th>
-          <th class="p-2 text-center">MES PRODUCCIÓN</th>
-          <th class="p-2 text-center">ID NEW</th>
-          <th class="p-2 text-center">DETALLE TAREA</th>
-          <th class="p-2 text-center">PRODUCCIÓN</th>
+          <th class="w-10"></th>
+          <th class="p-2 text-left">DU</th>
+          <th class="p-2 text-left">ID CLARO</th>
+          <th class="p-2 text-left">ID NEW</th>
+          <th class="p-2 text-left">Región</th>
+          <th class="p-2 text-left">Mes producción</th>
+          <th class="p-2 text-left">Estado</th>
+          <th class="p-2 text-right">Mi total</th>
         </tr>
       </thead>
-      <tbody class="text-center">
-        {% if produccion_info %}
-          {% for item in produccion_info %}
-            {% with servicio=item.servicio monto=item.monto_tecnico %}
-            <tr class="border-t">
-              <td class="p-2 font-mono">DU{{ servicio.du }}</td>
-              <td class="p-2">{{ servicio.id_claro }}</td>
-              <td class="p-2">{{ servicio.region }}</td>
-              <td class="p-2">{{ servicio.mes_produccion }}</td>
-              <td class="p-2">{{ servicio.id_new }}</td>
-              <td class="p-2 text-xs leading-tight whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
-              <td class="p-2 text-right font-semibold text-emerald-700">$ {{ monto|miles }} CLP</td>
-            </tr>
-            {% endwith %}
-          {% endfor %}
-        {% else %}
-          <tr>
-            <td colspan="7" class="text-center p-4 text-gray-500 italic">🔔 No tienes producción aprobada aún.</td>
-          </tr>
-        {% endif %}
+      <tbody>
+        {% for r in pagina %}
+        <tr class="border-t align-top">
+          <td class="p-2 text-center">
+            <button type="button"
+                    class="btn-toggle inline-flex w-7 h-7 items-center justify-center rounded hover:bg-gray-100"
+                    data-target="det-{{ forloop.counter }}" aria-expanded="false">
+              <svg class="chev w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M6.293 7.293a1 1 0 011.414 0L10 9.586l2.293-2.293a1 1 0 111.414 1.414L10 12.414 6.293 8.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+              </svg>
+            </button>
+          </td>
+          <td class="p-2">{{ r.du }}</td>
+          <td class="p-2">{{ r.id_claro }}</td>
+          <td class="p-2">{{ r.id_new }}</td>
+          <td class="p-2">{{ r.region }}</td>
+          <td class="p-2">{{ r.mes_produccion }}</td>
+
+          <!-- Estado real con mismo estilo de badges que el ejemplo admin -->
+         <td class="p-2 text-sm">
+  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+    {% if r.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+    {% elif r.estado == 'aprobado_pm' %}bg-green-100 text-green-800
+    {% elif r.estado == 'aprobado_finanzas' %}bg-teal-100 text-teal-800
+    {% elif r.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+    {% elif r.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+    {% elif r.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+    {% elif r.estado == 'en_proceso' %}bg-blue-100 text-blue-800
+    {% elif r.estado == 'en_revision_supervisor' %}bg-yellow-100 text-yellow-800
+    {% elif r.estado == 'rechazado_supervisor' or r.estado == 'rechazado_pm' %}bg-red-100 text-red-800
+    {% else %}bg-gray-100 text-gray-800{% endif %}">
+    {% if r.estado == 'aprobado_supervisor' %}✅ Aprobado por Supervisor
+    {% elif r.estado == 'aprobado_pm' %}✅ Aprobado por PM
+    {% elif r.estado == 'aprobado_finanzas' %}✅ Aprobado por Finanzas
+    {% elif r.estado == 'ajuste_bono' %}🎁 Bono
+    {% elif r.estado == 'ajuste_adelanto' %}⏩ Adelanto
+    {% elif r.estado == 'ajuste_descuento' %}➖ Descuento
+    {% elif r.estado == 'en_proceso' %}En proceso
+    {% elif r.estado == 'en_revision_supervisor' %}En revisión de Supervisor
+    {% elif r.estado == 'rechazado_supervisor' %}Rechazado por Supervisor
+    {% elif r.estado == 'rechazado_pm' %}Rechazado por PM
+    {% else %}{{ r.estado|default:"—" }}{% endif %}
+  </div>
+</td>
+
+          <td class="p-2 text-right">$ {{ r.monto_tecnico|floatformat:"-2"|intcomma }}</td>
+        </tr>
+
+        <!-- Detalle simple -->
+        <tr id="det-{{ forloop.counter }}" class="hidden">
+          <td class="p-0"></td>
+          <td colspan="7" class="bg-gray-50 p-3">
+            <div class="text-xs text-gray-700">
+              <b>Detalle:</b>
+              <div class="mt-1 whitespace-pre-line">{{ r.detalle_tarea|default:"—" }}</div>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="p-4 text-center text-gray-500">No tienes producción aprobada.</td></tr>
+        {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <!-- Selector de cantidad -->
-  <form method="get" class="mt-4 flex items-center gap-2">
-    <label for="cantidad" class="text-sm">Mostrar:</label>
-    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded px-2 py-1">
-      <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
-      <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-      <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-      <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
-    </select>
-    <input type="hidden" name="id_new" value="{{ id_new }}">
-    <input type="hidden" name="mes_produccion" value="{{ mes_produccion }}">
-  </form>
-
   <!-- Paginación -->
-  <div class="mt-4 flex justify-center gap-2">
-    {% if pagina.has_previous %}
-      <a href="?page=1&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">« Primero</a>
-      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">‹ Anterior</a>
-    {% endif %}
-    <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-    {% if pagina.has_next %}
-      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">Siguiente ›</a>
-      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_new={{ id_new }}&mes_produccion={{ mes_produccion }}" class="px-3 py-1 bg-gray-200 rounded">Último »</a>
-    {% endif %}
+  <div class="mt-4 flex items-center justify-between text-sm">
+    <form method="get" class="flex items-center gap-2">
+      <label for="cantidad" class="text-sm">Mostrar:</label>
+      <select name="cantidad" id="cantidad" class="border rounded px-2 py-1">
+        <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+        <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+        <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+        <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+      </select>
+      <input type="hidden" name="id_claro" value="{{ id_claro }}">
+      <input type="hidden" name="mes_produccion" value="{{ mes_produccion }}">
+    </form>
+
+    <div class="flex-1 text-center">
+      {% if cantidad == 'todos' %}
+        <span>Página 1 de 1</span>
+      {% else %}
+        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+      {% endif %}
+    </div>
+
+    <div></div>
   </div>
 </div>
 
-<!-- Script para dropdown -->
+<!-- Interacciones -->
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const dropdownButton = document.getElementById("dropdownButton");
-    const dropdownMenu = document.getElementById("dropdownMenu");
-    const exportButton = document.getElementById("exportarPDF");
-    let selectedValue = "mes_actual";
+  // Toggle detalle
+  document.addEventListener('click', function(e){
+    const btn = e.target.closest('.btn-toggle');
+    if(!btn) return;
+    const id = btn.getAttribute('data-target');
+    const row = document.getElementById(id);
+    const chev = btn.querySelector('.chev');
+    const open = !row.classList.contains('hidden');
+    row.classList.toggle('hidden');
+    if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
+    btn.setAttribute('aria-expanded', (!open).toString());
+  });
 
-    dropdownButton.addEventListener("click", () => {
-      dropdownMenu.classList.toggle("hidden");
-    });
-
-    document.querySelectorAll(".dropdown-option").forEach(option => {
-      option.addEventListener("click", (e) => {
-        e.preventDefault();
-        selectedValue = option.getAttribute("data-value");
-        dropdownButton.innerHTML = option.innerHTML + `
-          <svg class="-mr-1 ml-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
-            fill="currentColor" aria-hidden="true">
-            <path fill-rule="evenodd"
-              d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.23 8.27a.75.75 0 01.02-1.06z"
-              clip-rule="evenodd" />
-          </svg>`;
-        dropdownMenu.classList.add("hidden");
+  // Filtros automáticos (debounce)
+  (function(){
+    const form = document.getElementById('filtros'); if(!form) return;
+    let t = null;
+    form.querySelectorAll('input[type="text"]').forEach(el=>{
+      el.addEventListener('input', ()=>{
+        clearTimeout(t);
+        t = setTimeout(()=> form.submit(), 450);
       });
     });
+  })();
 
-    exportButton.addEventListener("click", () => {
-      const params = new URLSearchParams({
-        id_new: "{{ id_new }}",
-        mes_produccion: "{{ mes_produccion }}",
-        filtro_pdf: selectedValue
-      });
-      window.location.href = "{% url 'operaciones:exportar_produccion_pdf' %}?" + params.toString();
-    });
+  // Auto-submit al cambiar "Mostrar"
+  document.getElementById('cantidad')?.addEventListener('change', function(){
+    this.form.submit();
   });
 </script>
 {% endblock %}

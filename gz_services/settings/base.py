@@ -193,11 +193,11 @@ DIRECT_UPLOADS_SAFE_PREFIX = os.environ.get(
 # 📦 Wasabi (S3) — aceleración multipart
 # ===============================
 
-WASABI_GZ_ACCESS_KEY_ID = os.getenv("WASABI_GZ_ACCESS_KEY_ID")
-WASABI_GZ_SECRET_ACCESS_KEY = os.getenv("WASABI_GZ_SECRET_ACCESS_KEY")
-WASABI_GZ_BUCKET_NAME = os.getenv("WASABI_GZ_BUCKET_NAME", "gz-services")
-WASABI_GZ_REGION_NAME = os.getenv("WASABI_GZ_REGION_NAME", "us-west-1")
-WASABI_GZ_ENDPOINT_URL = os.getenv(
+AWS_ACCESS_KEY_ID = os.getenv("WASABI_GZ_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("WASABI_GZ_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.getenv("WASABI_GZ_BUCKET_NAME", "gz-services")
+AWS_S3_REGION_NAME = os.getenv("WASABI_GZ_REGION_NAME", "us-west-1")
+AWS_S3_ENDPOINT_URL = os.getenv(
     "WASABI_GZ_ENDPOINT_URL", "https://s3.us-west-1.wasabisys.com")
 
 AWS_S3_SIGNATURE_VERSION = "s3v4"

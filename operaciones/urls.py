@@ -4,6 +4,8 @@ from django.urls import path
 from . import views
 from . import views_fotos
 from . import views_fotos as fotos
+from . import views_produccion as produc
+
 
 app_name = 'operaciones'  # <--- ESTA LÍNEA ES OBLIGATORIA PARA USAR NAMESPACES
 
@@ -44,9 +46,6 @@ urlpatterns = [
          name='exportar_servicios_supervisor'),
     path('advertencia-duplicados/', views.advertencia_cotizaciones_omitidas,
          name='advertencia_cotizaciones_omitidas'),
-    path('produccion/', views.produccion_tecnico, name='produccion_tecnico'),
-    path('produccion/exportar-pdf/', views.exportar_produccion_pdf,
-         name='exportar_produccion_pdf'),
     path('servicios/<int:pk>/actualizar-motivo/',
          views.actualizar_motivo_rechazo, name='actualizar_motivo_rechazo'),
     path('mis-rendiciones/', views.mis_rendiciones, name='mis_rendiciones'),
@@ -119,6 +118,37 @@ urlpatterns = [
          views_fotos.presign_put, name="fotos_presign"),
     path("fotos/<int:asig_id>/finalize/",
          views_fotos.finalize_upload, name="fotos_finalize"),
+    path("produccion/listar/", produc.produccion_admin, name="produccion_admin"),
+
+    path("produccion/exportar/", produc.exportar_produccion_admin,
+         name="exportar_produccion_admin"),
+    path("produccion/pagos/", produc.admin_monthly_payments,
+         name="produccion_totales_a_pagar"),
+    path("produccion/pagos/exportar/", produc.exportar_totales_produccion,
+         name="exportar_totales_produccion"),
+
+    # Admin mensual
+    path("produccion/pagos/", produc.admin_monthly_payments,
+         name="admin_monthly_payments"),
+    path("produccion/pagos/presign/<int:pk>/",
+         produc.presign_receipt_monthly, name="presign_receipt_monthly"),
+    path("produccion/pagos/confirm/<int:pk>/",
+         produc.confirm_receipt_monthly, name="confirm_receipt_monthly"),
+    path("produccion/pagos/unpay/<int:pk>/",
+         produc.admin_unpay_monthly, name="admin_unpay_monthly"),
+
+    # Usuario mensual
+    path("produccion/mis-pagos/", produc.user_monthly_payments,
+         name="user_monthly_payments"),
+    path("produccion/mis-pagos/approve/<int:pk>/",
+         produc.user_approve_monthly, name="user_approve_monthly"),
+    path("produccion/mis-pagos/reject/<int:pk>/",
+         produc.user_reject_monthly, name="user_reject_monthly"),
+    path("produccion/tecnico/", produc.produccion_tecnico,
+         name="produccion_tecnico"),
+    path('ajustes/crear/', produc.crear_ajuste, name='crear_ajuste'),
+
+
 
 
 
