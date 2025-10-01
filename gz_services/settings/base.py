@@ -103,14 +103,14 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+
+    "usuarios.middleware.ChileTimezoneMiddleware",   # singular
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "axes.middleware.AxesMiddleware",
-    # "simple_history.middleware.HistoryRequestMiddleware",  # si lo activas, va aquí
     "django.contrib.messages.middleware.MessageMiddleware",
-    # 👇 cierre de sesión por inactividad
-    "usuarios.middleware.SessionExpiryMiddleware",
+    "usuarios.middleware.SessionExpiryMiddleware",   # singular
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 

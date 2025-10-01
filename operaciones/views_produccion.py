@@ -76,7 +76,7 @@ def produccion_admin(request):
         d = dt.date() if hasattr(dt, "date") else dt
         return f"{d.year:04d}-{d.month:02d}"
 
-    current_month = _month_token(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
 
     # ---------- Filtros GET ----------
     filtros = {
@@ -446,7 +446,7 @@ def produccion_totales_a_pagar(request):
     - Filtros: f_month (YYYY-MM o 'Mes Año' o 'Mes de Año'), f_tecnico, f_project, f_region
     - Desglose: lista de DUs/ajustes con su subtotal prorrateado.
     """
-    current_month = _yyyy_mm(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
 
     f_month = (request.GET.get("f_month") or "").strip()
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
@@ -645,7 +645,7 @@ def exportar_totales_produccion(request):
     Exporta a Excel los totales a pagar (mensual) por técnico con detalle por DU/ajuste.
     Respeta filtros de mes (acepta YYYY-MM y alias), técnico, proyecto y región.
     """
-    current_month = _yyyy_mm(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
 
     f_month = (request.GET.get("f_month") or "").strip() or current_month
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
@@ -883,7 +883,7 @@ def admin_monthly_payments(request):
     - HISTORIAL: sólo registros pagados (status='paid').
     - Adjunta 'details' por DU/ajuste para cada fila, prorrateado y con signo.
     """
-    current_month = _yyyy_mm(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
 
     # Filtros
     f_month = (request.GET.get("f_month") or "").strip()
@@ -1107,7 +1107,7 @@ def confirm_receipt_monthly(request, pay_id: int = None, pk: int = None):
 
         obj.receipt.name = key
         obj.status = "paid"
-        obj.paid_month = _yyyy_mm(timezone.now())  # "YYYY-MM"
+        obj.paid_month = _yyyy_mm(timezone.localdate())
         obj.save(update_fields=["receipt", "status",
                  "paid_month", "updated_at"])
 
@@ -1171,7 +1171,7 @@ def user_monthly_payments(request):
     - Sincroniza el registro del mes actual (con ajustes).
     - Lista sus MonthlyPayment con desglose (DU/AJUSTE) y TOTAL (amount/display_amount).
     """
-    current_month = _yyyy_mm(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
     _sync_monthly_totals(current_month, create_missing=True)
 
     mine = (
@@ -1312,7 +1312,7 @@ def _month_aliases(token: str) -> list[str]:
 
 @login_required
 def produccion_tecnico(request):
-    current_month = _yyyy_mm(timezone.now())
+    current_month = _yyyy_mm(timezone.localdate())
 
     q_text = (request.GET.get("id_claro") or "").strip()
     q_month = (request.GET.get("mes_produccion") or "").strip()
@@ -1419,7 +1419,7 @@ def exportar_produccion_pdf(request):
         # Traducción manual de meses
         meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-        now = datetime.now()
+        now_local = timezone.localtime()
         mes_actual = f"{meses_es[now.month]} {now.year}"
 
         # Texto de filtro

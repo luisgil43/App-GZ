@@ -1,4 +1,6 @@
 # usuarios/middlewares.py
+from zoneinfo import ZoneInfo
+from django.utils import timezone
 import logging
 import time
 from django.conf import settings
@@ -94,4 +96,14 @@ class LogRedirectsMiddleware:
         if resp.status_code in (301, 302, 303, 307, 308):
             log.warning('REDIRECT %s %s → %s', request.method,
                         request.path, resp.get('Location'))
+        return resp
+
+
+class ChileTimezoneMiddleware:
+    def __init__(self, get_response): self.get_response = get_response
+
+    def __call__(self, request):
+        timezone.activate(ZoneInfo("America/Santiago"))
+        resp = self.get_response(request)
+        timezone.deactivate()
         return resp
