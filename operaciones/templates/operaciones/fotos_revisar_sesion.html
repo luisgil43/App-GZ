@@ -31,53 +31,53 @@
     </div>
   </div>
 
-  <!-- Acciones -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded shadow inline-flex items-center gap-1">
-        ⬅️ Volver
+<!-- Acciones -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+  <div class="flex flex-wrap gap-2">
+    <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
+       class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded shadow inline-flex items-center gap-1">
+      ⬅️ Volver
+    </a>
+
+    {# ✅ Acta (PDF): SIEMPRE visible, esté o no aprobado #}
+   <a href="{% url 'operaciones:generar_acta_preview' s.id %}"
+   target="_blank" rel="noopener"
+   class="inline-flex items-center px-4 py-2 rounded shadow bg-emerald-600 hover:bg-emerald-700 text-white">
+  🧾 Acta (PDF)
+</a>
+
+    {# 📸 Reporte parcial: solo antes de que quede aprobado #}
+    {% if s.estado == 'en_progreso' or s.estado == 'en_revision_supervisor' or s.estado == 'rechazado_supervisor' %}
+      <a href="{% url 'operaciones:generar_reporte_parcial_proyecto' s.id %}"
+         class="inline-flex items-center px-4 py-2 rounded shadow bg-indigo-600 hover:bg-indigo-700 text-white">
+        📸 Reporte parcial
       </a>
-
-
-{% if s.estado == 'en_progreso' or s.estado == 'en_revision_supervisor' or s.estado == 'rechazado_supervisor' %}
-  <a href="{% url 'operaciones:generar_reporte_parcial_proyecto' s.id %}"
-     class="inline-flex items-center px-4 py-2 rounded shadow bg-indigo-600 hover:bg-indigo-700 text-white">
-    📸 Reporte parcial
-  </a>
-
-  <a href="{% url 'operaciones:generar_acta_preview' s.id %}"
-     class="inline-flex items-center px-4 py-2 rounded shadow bg-emerald-600 hover:bg-emerald-700 text-white">
-    🧾 Acta (PDF)
-  </a>
-{% endif %}
-
-  
-    </div>
-
-    {% if can_review %}
-      <div class="flex items-center gap-2">
-        <form method="post" action=".">
-          {% csrf_token %}
-          <input type="hidden" name="accion" value="aprobar">
-          <button type="submit"
-                  class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
-            ✅ Aprobar & generar reporte
-          </button>
-        </form>
-
-        <button type="button"
-                onclick="toggleRejectModal(true)"
-                class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow">
-          ❌ Rechazar
-        </button>
-      </div>
-    {% else %}
-      <div class="text-sm text-gray-500">
-        Este proyecto aún no está listo para revisión del supervisor.
-      </div>
     {% endif %}
   </div>
+
+  {% if can_review %}
+    <div class="flex items-center gap-2">
+      <form method="post" action=".">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="aprobar">
+        <button type="submit"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+          ✅ Aprobar & generar reporte
+        </button>
+      </form>
+
+      <button type="button"
+              onclick="toggleRejectModal(true)"
+              class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow">
+        ❌ Rechazar
+      </button>
+    </div>
+  {% else %}
+    <div class="text-sm text-gray-500">
+      Este proyecto aún no está listo para revisión del supervisor.
+    </div>
+  {% endif %}
+</div>
 
  
 {% if reporte_listo %}

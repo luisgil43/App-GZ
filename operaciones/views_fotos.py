@@ -1875,34 +1875,47 @@ def _onecell_anchor_compat(col_idx0, row_idx0, off_x_px, off_y_px, w_px, h_px):
 @rol_requerido('supervisor', 'admin', 'pm')
 def generar_acta_preview(request, servicio_id: int):
     """
-    Genera y descarga el ACTA en PDF para revisión (no guarda ni cambia estados).
+    Genera y descarga (o muestra) el ACTA en PDF para revisión.
+    No cambia estados. Si ya existe acta en el modelo y no se fuerza, la sirve.
     """
     import io
     from django.http import FileResponse
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
 
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
 
-    estados_permitidos = {'en_progreso',
-                          'en_revision_supervisor', 'rechazado_supervisor'}
+    # ✅ Ahora incluye estados aprobados
+    estados_permitidos = {
+        'en_progreso',
+        'en_revision_supervisor',
+        'rechazado_supervisor',
+        'aprobado_supervisor',   # ← añadido
+        'aprobado_pm',           # ← añade/quita según tu flujo
+    }
+
     if servicio.estado not in estados_permitidos:
-        messages.warning(
-            request,
-            "El acta solo se puede generar mientras el proyecto está en proceso o en revisión."
-        )
+        messages.error(request, "El acta no está disponible para este estado.")
         return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
+    # Si ya existe un acta guardada y no se pide regenerar, redirige al archivo
+    force = request.GET.get("force")
+    if getattr(servicio.acta_aceptacion_pdf, "name", "") and not force:
+        return redirect(servicio.acta_aceptacion_pdf.url)
+
+    # Generar bytes del acta (sin guardar en el modelo)
     try:
         pdf_bytes = _bytes_acta_aceptacion(servicio)
     except Exception as e:
         messages.error(request, f"No se pudo generar el acta: {e}")
         return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
-    # Nombre igual al definitivo (solo descarga; no se guarda en el modelo)
     from .models import _pdf_filename
     filename = _pdf_filename(servicio, servicio.documento_compra or "DOC")
 
-    resp = FileResponse(io.BytesIO(pdf_bytes),
-                        as_attachment=True, filename=filename)
+    resp = FileResponse(io.BytesIO(pdf_bytes), content_type="application/pdf")
+    resp["Content-Disposition"] = f'inline; filename="{filename}"'
+
     resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp["Pragma"] = "no-cache"
     return resp
