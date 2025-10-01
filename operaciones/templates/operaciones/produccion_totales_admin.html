@@ -18,7 +18,7 @@
   </div>
 
   <!-- ================= PARTE SUPERIOR: este mes ================= -->
-  <h2 class="text-lg font-semibold mb-2">Este mes</h2>
+  <h2 class="text-lg font-semibold mb-2">Pendiente de Pago</h2>
   <div class="overflow-x-auto">
     <table class="table-auto w-full text-sm min-w-[950px]" style="white-space: nowrap;">
       <thead class="bg-gray-100">
@@ -165,7 +165,7 @@
       </div>
       <div>
         <label class="text-xs text-gray-600">Mes de Pago</label>
-        <input name="f_month" type="text" value="{{ f_month }}"
+        <input name="f_month" type="text" value=""
                class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
       </div>
   
@@ -382,15 +382,15 @@ document.addEventListener('click', function(e){
   let t=null;
   function schedule(){ clearTimeout(t); t=setTimeout(applyFilters, 400); }
 
-  function applyFilters(){
-    const p = paramsFromFilters();
-    // preservar cantidad si viene en la URL
-    const url = new URL(window.location.href);
-    const cant = url.searchParams.get('cantidad');
-    if (cant) p.set('cantidad', cant);
-    p.set('page', '1'); // al filtrar, volver a la página 1
-    window.location.search = p.toString();
-  }
+function applyFilters(){
+  const p = paramsFromFilters();
+  const url = new URL(window.location.href);
+  const cant = url.searchParams.get('cantidad');
+  if (cant) p.set('cantidad', cant);
+  p.set('filters', '1');   // 👈 marca que el usuario aplicó filtros
+  p.set('page', '1');
+  window.location.search = p.toString();
+}
 
   // Auto-aplicar en cada cambio
   document.querySelectorAll('#filters input').forEach(el=>{

@@ -147,6 +147,10 @@ urlpatterns = [
     path("produccion/tecnico/", produc.produccion_tecnico,
          name="produccion_tecnico"),
     path('ajustes/crear/', produc.crear_ajuste, name='crear_ajuste'),
+    path("ajustes/<int:pk>/", produc.editar_ajuste,
+         name="editar_ajuste"),  # GET=datos / POST=guardar
+    path("ajustes/<int:pk>/eliminar/",
+         produc.eliminar_ajuste, name="eliminar_ajuste"),
 
 
 

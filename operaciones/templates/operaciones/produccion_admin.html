@@ -48,7 +48,7 @@
   <div class="flex items-center gap-2">
     <span class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></span>
 <a href="javascript:void(0)"
-   onclick="openAjusteModal()"
+   onclick="newAjuste()"
    class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
   ➕ Crear ajuste
 </a>
@@ -157,22 +157,94 @@
   </div>
 </td>
 
- <td class="p-2">
-  {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
-    <a href="{% url 'operaciones:editar_servicio_cotizado' r.id %}" class="text-blue-600 hover:underline">✏️</a>
-    <button type="button" onclick="abrirModal('modal-{{ r.id }}')" class="text-red-600 hover:underline">🗑️</button>
+<td class="p-2">
+  {% if request.user.is_superuser or request.user.es_admin_general %}
+    {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
+      {% if not r.pagado %}
+        <button type="button"
+                class="text-blue-600 hover:underline"
+                onclick="editAjuste({{ r.id }})">✏️</button>
+        <button type="button"
+                class="text-red-600 hover:underline"
+                onclick="openDelModal('{{ r.id }}')">🗑️</button>
+      {% else %}
+        <span class="text-gray-400 italic">—</span>
+      {% endif %}
+    {% else %}
+      <span class="text-gray-400 italic">—</span>
+    {% endif %}
   {% else %}
     <span class="text-gray-400 italic">—</span>
   {% endif %}
 </td>
 
 
+
+
       </tr>
       {% empty %}
       <tr><td colspan="11" class="p-4 text-center text-gray-500">No hay producción para mostrar.</td></tr>
-      {% endfor %}
+
+
+        <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
+          {% csrf_token %}
+          <div class="flex items-center justify-end gap-2">
+            <button type="button"
+                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    onclick="closeDelModal('{{ r.id }}')">Cancelar</button>
+            <button type="submit"
+                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+              Eliminar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+{% endfor %}
+
+      
     </tbody>
   </table>
+
+{# === Modales de eliminación (FUERA de la tabla) === #}
+{% for r in pagina %}
+  {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
+    <div id="del-modal-{{ r.id }}"
+         class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 px-4">
+      <div class="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden">
+        <div class="px-5 py-4 border-b flex items-center justify-between">
+          <h3 class="text-lg font-semibold text-gray-800">Eliminar ajuste</h3>
+          <button type="button" class="text-gray-500 hover:text-gray-700"
+                  onclick="closeDelModal('{{ r.id }}')">✕</button>
+        </div>
+
+        <div class="px-5 pt-4 pb-2 text-sm text-gray-700 space-y-2">
+          <p>¿Seguro que deseas eliminar este ajuste?</p>
+          <ul class="text-xs bg-gray-50 p-3 rounded-xl space-y-1">
+            <li><b>DU:</b> DU{{ r.du }}</li>
+            <li><b>Tipo:</b>
+              {% if r.status == 'ajuste_bono' %}Bono{% elif r.status == 'ajuste_adelanto' %}Adelanto{% else %}Descuento{% endif %}
+            </li>
+            <li><b>Monto MMOO:</b> $ {{ r.monto_tecnico|miles_dec }} CLP</li>
+            <li><b>Técnico:</b> {% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</li>
+          </ul>
+        </div>
+
+        <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
+          {% csrf_token %}
+          <div class="flex items-center justify-end gap-2">
+            <button type="button" class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    onclick="closeDelModal('{{ r.id }}')">Cancelar</button>
+            <button type="submit" class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+              Eliminar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+{% endfor %}
+
 <!-- Modal: Crear Ajuste (centrado, con scroll interno) -->
 <div id="ajuste-modal"
      class="fixed inset-0 z-50 hidden items-start justify-center p-4 bg-black/40 overflow-y-auto">
@@ -188,6 +260,7 @@
 
       <form id="ajuste-form">
         {% csrf_token %}
+<input type="hidden" name="ajuste_id" id="ajuste_id" value="">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div class="md:col-span-2">
             <label class="block text-sm font-medium">Tipo</label>
@@ -481,6 +554,178 @@ window.location.href = url.toString();
   })();
 </script>
 
+<script>
+// === URLs ===
+const AJ_URL_CREATE = "{% url 'operaciones:crear_ajuste' %}";
+function urlEditar(pk){
+  // Ajusta el nombre de la URL si es distinto en tu urls.py
+  return "{% url 'operaciones:editar_ajuste' 0 %}".replace("/0/","/"+pk+"/");
+}
+
+// === Helpers ===
+function setModalMode(mode){
+  const h3 = document.querySelector('#ajuste-modal h3');
+  const btn = document.querySelector('#ajuste-form button[type="submit"]');
+  if(!h3 || !btn) return;
+  if(mode === 'edit'){
+    h3.textContent = 'Editar ajuste';
+    btn.textContent = 'Guardar cambios';
+  }else{
+    h3.textContent = 'Crear ajuste';
+    btn.textContent = 'Crear ajuste';
+  }
+}
+
+function yyyyMmNow(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+function monthLabelFromYYYYMM(yyyyMm){
+  const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  if(!/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
+  const [y,m] = yyyyMm.split("-");
+  return `${MONTHS_ES[parseInt(m,10)-1]} ${y}`;
+}
+
+// === Crear (limpia y abre modal) ===
+function newAjuste(){
+  const form   = document.getElementById('ajuste-form');
+  const picker = document.getElementById('ajuste_mes_picker');
+  const hidden = document.getElementById('ajuste_mes_texto');
+
+  form?.reset();
+  document.getElementById('ajuste_id').value = '';
+
+  // set mes por defecto
+  const ym = yyyyMmNow();
+  if (picker) picker.value = ym;
+  if (hidden) hidden.value = monthLabelFromYYYYMM(ym);
+
+  // desmarcar checkboxes
+  document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb => cb.checked = false);
+
+  setModalMode('create');
+  openAjusteModal();
+}
+
+// === Editar (precarga, cambia textos y abre modal) ===
+async function editAjuste(id){
+  try{
+    const resp = await fetch(urlEditar(id), {headers: {'Accept':'application/json'}});
+    const data = await resp.json();
+    if(!resp.ok || !data.ok){ throw new Error(data.error || 'No se pudo cargar el ajuste'); }
+
+    // Precargar campos
+    document.getElementById('ajuste_id').value = data.id;
+    document.querySelector('#ajuste-form select[name="tipo"]').value = data.tipo;
+
+    const picker = document.getElementById('ajuste_mes_picker');
+    const hidden = document.getElementById('ajuste_mes_texto');
+    if (picker) picker.value = data.mes_yyyy_mm || "";
+    if (hidden) hidden.value = data.mes_texto || "";
+
+    document.querySelector('#ajuste-form input[name="monto"]').value   = data.monto;
+    document.querySelector('#ajuste-form textarea[name="detalle"]').value = data.detalle;
+
+    // Checkboxes asignados
+    const asignados = Array.isArray(data.asignados) ? data.asignados.map(Number) : [];
+    document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb=>{
+      cb.checked = asignados.includes(parseInt(cb.value));
+    });
+
+    // 👉 Cambiar textos del modal (lo que pediste):
+    document.querySelector('#ajuste-modal h3').textContent = 'Editar ajuste';
+    document.querySelector('#ajuste-form button[type="submit"]').textContent = 'Guardar cambios';
+    // (equivalente a setModalMode('edit');)
+
+    openAjusteModal();
+  }catch(err){
+    console.error(err);
+    alert('No se pudo cargar el ajuste.');
+  }
+}
+
+// === Submit único (crear o editar según 'ajuste_id') ===
+(function(){
+  const form = document.getElementById('ajuste-form');
+  if(!form) return;
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+
+    // Compactar asignados (marcados)
+    const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
+    const users  = Array.from(checks).map(c => c.value);
+    if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
+    fd.delete('asignados'); users.forEach(u => fd.append('asignados', u));
+
+    const ajusteId = (fd.get('ajuste_id') || '').trim();
+    const url = ajusteId ? urlEditar(ajusteId) : AJ_URL_CREATE;
+
+    try{
+      const resp = await fetch(url, {
+        method:'POST',
+        headers:{'X-CSRFToken': (document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop() || '',
+                 'X-Requested-With':'XMLHttpRequest',
+                 'Accept':'application/json'},
+        body: fd
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data.ok) throw new Error(data.error || 'Error');
+
+      closeAjusteModal();
+      const u = new URL(window.location.href);
+      u.searchParams.set('flash', ajusteId ? 'ajuste_edit_ok' : 'ajuste_ok');
+      window.location.href = u.toString();
+    }catch(err){
+      console.error(err);
+      closeAjusteModal();
+      const u = new URL(window.location.href);
+      u.searchParams.set('flash', 'ajuste_err');
+      window.location.href = u.toString();
+    }
+  });
+})();
+</script>
+
+<script>
+  function openDelModal(id) {
+    const m = document.getElementById('del-modal-' + id);
+    if (!m) return;
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+    document.documentElement.classList.add('overflow-hidden');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeDelModal(id) {
+    const m = document.getElementById('del-modal-' + id);
+    if (!m) return;
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+    document.documentElement.classList.remove('overflow-hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  // Cerrar con ESC y clic fuera
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('[id^="del-modal-"]:not(.hidden)')
+        .forEach(m => { m.classList.add('hidden'); m.classList.remove('flex'); });
+      document.documentElement.classList.remove('overflow-hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    const modal = e.target.closest('[id^="del-modal-"]');
+    if (modal && e.target === modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.documentElement.classList.remove('overflow-hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+  });
+</script>
 
 </div>
 {% endblock %}
