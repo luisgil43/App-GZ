@@ -151,6 +151,7 @@ urlpatterns = [
          name="editar_ajuste"),  # GET=datos / POST=guardar
     path("ajustes/<int:pk>/eliminar/",
          produc.eliminar_ajuste, name="eliminar_ajuste"),
+    path("produccion/ajustes/nuevo/", produc.ajuste_nuevo, name="ajuste_nuevo"),
 
 
 

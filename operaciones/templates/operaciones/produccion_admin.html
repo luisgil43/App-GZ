@@ -42,27 +42,54 @@
   }
 </style>
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
+<style>
+  /* Overlay del modal: que él sea el scroll, no el body */
+  .modal-overlay {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    height: 100dvh;               /* evita el freeze en iOS con 100vh */
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Card del modal: área scrolleable interna */
+  .modal-card {
+    width: 100%;
+    max-width: 42rem;             /* ~672px desktop */
+    max-height: 92dvh;            /* que no pase del viewport */
+    overflow-y: auto;             /* ⬅️ scroll vertical del contenido */
+    overflow-x: auto;             /* por si hay contenido ancho */
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;          /* permite gesto vertical en iOS */
+  }
+  @media (max-width: 640px) {
+    .modal-card { max-width: calc(100vw - 1rem); }
+  }
+</style>
+
+<div class="mb-4">
   <h2 class="text-2xl font-bold text-gray-800">✅ Producción aprobada</h2>
 
-  <div class="flex items-center gap-2">
+  <div class="mt-3 sm:mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <!-- Mes actual -->
     <span class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></span>
-<a href="javascript:void(0)"
-   onclick="newAjuste()"
+
+    <!-- Acciones (wrap en móvil, ancho completo por botón) -->
+    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+    <a href="{% url 'operaciones:ajuste_nuevo' %}"
    class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
   ➕ Crear ajuste
 </a>
 
-
-  <a href="{% url 'operaciones:produccion_totales_a_pagar' %}?f_month={{ current_month }}"
+      <a href="{% url 'operaciones:produccion_totales_a_pagar' %}?f_month={{ current_month }}"
          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
         <span class="sm:hidden">💳 Total</span>
         <span class="hidden sm:inline">💳 Mostrar totales a pagar</span>
       </a>
-<a href="{% url 'operaciones:exportar_produccion_admin' %}?{{ filters_qs }}"
-   class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
-  ⬇ Exportar
-</a>
+
+      <a href="{% url 'operaciones:exportar_produccion_admin' %}?{{ filters_qs }}"
+         class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
+        ⬇ Exportar
+      </a>
+    </div>
   </div>
 </div>
 
@@ -119,11 +146,9 @@
         </td>
 
         <!-- Monto prorrateado por técnico -->
- <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-  $ {{ r.monto_tecnico|miles_dec }} CLP
-</td>
-
-
+        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+          $ {{ r.monto_tecnico|miles_dec }} CLP
+        </td>
 
         <!-- Asignado (solo 1 técnico por fila) -->
         <td class="p-2 text-left">
@@ -138,53 +163,47 @@
           {% if r.fecha_fin %}{{ r.fecha_fin|date:"d/m/Y H:i" }}{% else %}—{% endif %}
         </td>
 
-  <td class="p-2 text-sm">
-  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
-    {% if r.status == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-    {% elif r.status == 'aprobado_pm' %}bg-green-100 text-green-800
-    {% elif r.status == 'aprobado_finanzas' %}bg-teal-100 text-teal-800
-    {% elif r.status == 'ajuste_bono' %}bg-blue-100 text-blue-800
-    {% elif r.status == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-    {% elif r.status == 'ajuste_descuento' %}bg-red-100 text-red-800
-    {% else %}bg-gray-100 text-gray-800{% endif %}">
-    {% if r.status == 'aprobado_supervisor' %}✅ Aprobado por Supervisor
-    {% elif r.status == 'aprobado_pm' %}✅ Aprobado por PM
-    {% elif r.status == 'aprobado_finanzas' %}✅ Aprobado por Finanzas
-    {% elif r.status == 'ajuste_bono' %}🎁 Bono
-    {% elif r.status == 'ajuste_adelanto' %}⏩ Adelanto
-    {% elif r.status == 'ajuste_descuento' %}➖ Descuento
-    {% else %}{{ r.status }}{% endif %}
-  </div>
-</td>
+        <td class="p-2 text-sm">
+          <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+            {% if r.status == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+            {% elif r.status == 'aprobado_pm' %}bg-green-100 text-green-800
+            {% elif r.status == 'aprobado_finanzas' %}bg-teal-100 text-teal-800
+            {% elif r.status == 'ajuste_bono' %}bg-blue-100 text-blue-800
+            {% elif r.status == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+            {% elif r.status == 'ajuste_descuento' %}bg-red-100 text-red-800
+            {% else %}bg-gray-100 text-gray-800{% endif %}">
+            {% if r.status == 'aprobado_supervisor' %}✅ Aprobado por Supervisor
+            {% elif r.status == 'aprobado_pm' %}✅ Aprobado por PM
+            {% elif r.status == 'aprobado_finanzas' %}✅ Aprobado por Finanzas
+            {% elif r.status == 'ajuste_bono' %}🎁 Bono
+            {% elif r.status == 'ajuste_adelanto' %}⏩ Adelanto
+            {% elif r.status == 'ajuste_descuento' %}➖ Descuento
+            {% else %}{{ r.status }}{% endif %}
+          </div>
+        </td>
 
-<td class="p-2">
-  {% if request.user.is_superuser or request.user.es_admin_general %}
-    {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
-      {% if not r.pagado %}
-        <button type="button"
-                class="text-blue-600 hover:underline"
-                onclick="editAjuste({{ r.id }})">✏️</button>
-        <button type="button"
-                class="text-red-600 hover:underline"
-                onclick="openDelModal('{{ r.id }}')">🗑️</button>
-      {% else %}
-        <span class="text-gray-400 italic">—</span>
-      {% endif %}
-    {% else %}
-      <span class="text-gray-400 italic">—</span>
-    {% endif %}
-  {% else %}
-    <span class="text-gray-400 italic">—</span>
-  {% endif %}
-</td>
-
-
-
-
+        <td class="p-2">
+          {% if request.user.is_superuser or request.user.es_admin_general %}
+            {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
+              {% if not r.pagado %}
+                <a class="text-blue-600 hover:underline"
+   href="{% url 'operaciones:editar_ajuste' r.id %}">✏️</a>
+                <button type="button"
+                        class="text-red-600 hover:underline"
+                        onclick="openDelModal('{{ r.id }}')">🗑️</button>
+              {% else %}
+                <span class="text-gray-400 italic">—</span>
+              {% endif %}
+            {% else %}
+              <span class="text-gray-400 italic">—</span>
+            {% endif %}
+          {% else %}
+            <span class="text-gray-400 italic">—</span>
+          {% endif %}
+        </td>
       </tr>
       {% empty %}
       <tr><td colspan="11" class="p-4 text-center text-gray-500">No hay producción para mostrar.</td></tr>
-
 
         <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
           {% csrf_token %}
@@ -202,7 +221,6 @@
     </div>
 {% endfor %}
 
-      
     </tbody>
   </table>
 
@@ -245,94 +263,83 @@
   {% endif %}
 {% endfor %}
 
-<!-- Modal: Crear Ajuste (centrado, con scroll interno) -->
+<!-- Modal: Crear Ajuste (centrado, con scroll interno y horizontal en móvil) -->
 <div id="ajuste-modal"
-     class="fixed inset-0 z-50 hidden items-start justify-center p-4 bg-black/40 overflow-y-auto">
+     class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/40 modal-overlay">
+  <div class="bg-white rounded-2xl shadow p-6 modal-card">
+    <h3 class="text-xl font-semibold mb-1">Crear ajuste</h3>
+    <p class="text-sm text-gray-600 mb-4">
+      Genera un Bono / Adelanto / Descuento para uno o más técnicos.
+    </p>
 
-  <!-- wrapper para mantener margen top/bottom cuando hay scroll -->
-  <div class="w-full max-w-xl mx-auto my-6">
-    <!-- caja del modal: altura máx + scroll propio -->
-    <div class="bg-white rounded-2xl shadow p-6 max-h-[92vh] overflow-y-auto">
-      <h3 class="text-xl font-semibold mb-1">Crear ajuste</h3>
-      <p class="text-sm text-gray-600 mb-4">
-        Genera un Bono / Adelanto / Descuento para uno o más técnicos.
-      </p>
+    <form id="ajuste-form">
+      {% csrf_token %}
+      <input type="hidden" name="ajuste_id" id="ajuste_id" value="">
 
-      <form id="ajuste-form">
-        {% csrf_token %}
-<input type="hidden" name="ajuste_id" id="ajuste_id" value="">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div class="md:col-span-2">
-            <label class="block text-sm font-medium">Tipo</label>
-            <select name="tipo" class="w-full border rounded-xl px-3 py-2" required>
-              <option value="ajuste_bono">Bono</option>
-              <option value="ajuste_adelanto">Adelanto</option>
-              <option value="ajuste_descuento">Descuento</option>
-            </select>
-          </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Tipo</label>
+          <select name="tipo" class="w-full border rounded-xl px-3 py-2" required>
+            <option value="ajuste_bono">Bono</option>
+            <option value="ajuste_adelanto">Adelanto</option>
+            <option value="ajuste_descuento">Descuento</option>
+          </select>
+        </div>
 
-          <div>
-            <label class="block text-sm font-medium">Mes producción o descuento</label>
-            <!-- guardamos en texto "Mes Año" -->
-            <input type="hidden" id="ajuste_mes_texto" name="mes_texto" required>
-            <input id="ajuste_mes_picker" type="month" class="w-full border rounded-xl px-3 py-2" required>
-          </div>
+        <div>
+          <label class="block text-sm font-medium">Mes producción o descuento</label>
+          <input type="hidden" id="ajuste_mes_texto" name="mes_texto" required>
+          <input id="ajuste_mes_picker" type="month" class="w-full border rounded-xl px-3 py-2" required>
+        </div>
 
-          <div>
-            <label class="block text-sm font-medium">Monto (CLP)</label>
-            <input name="monto" type="number" step="0.01" min="0" class="w-full border rounded-xl px-3 py-2" required>
-            <p class="text-xs text-gray-500 mt-1">
-              Para <b>Descuento</b> el sistema aplicará el signo negativo automáticamente.
-            </p>
-          </div>
+        <div>
+          <label class="block text-sm font-medium">Monto (CLP)</label>
+          <input name="monto" type="number" step="0.01" min="0" class="w-full border rounded-xl px-3 py-2" required>
+          <p class="text-xs text-gray-500 mt-1">
+            Para <b>Descuento</b> el sistema aplicará el signo negativo automáticamente.
+          </p>
+        </div>
 
-          <div class="md:col-span-2">
-            <label class="block text-sm font-medium">Observación / Detalle</label>
-            <textarea name="detalle" class="w-full border rounded-xl px-3 py-2" rows="3"
-                      placeholder="Motivo del ajuste" required></textarea>
-          </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Observación / Detalle</label>
+          <textarea name="detalle" class="w-full border rounded-xl px-3 py-2" rows="3"
+                    placeholder="Motivo del ajuste" required></textarea>
+        </div>
 
-          <div class="md:col-span-2">
-            <label class="block text-sm font-medium">Asignados (uno o más)</label>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium">Asignados (uno o más)</label>
 
-            <!-- Buscador -->
-            <input id="filtro-usuarios" type="text"
-                   class="w-full border rounded-xl px-3 py-2 mb-2"
-                   placeholder="Buscar técnico por nombre o usuario…">
+          <input id="filtro-usuarios" type="text"
+                 class="w-full border rounded-xl px-3 py-2 mb-2"
+                 placeholder="Buscar técnico por nombre o usuario…">
 
-            <!-- Lista de checkboxes -->
-            <div id="ajuste_asignados_wrap"
-                 class="border rounded-xl p-2 max-h-52 overflow-auto space-y-1">
-
-              <!-- Maestro: seleccionar todo (afecta solo los visibles con el filtro) -->
-              <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
-                <input type="checkbox" id="chk-all-usuarios">
-                <span class="text-sm font-medium">Seleccionar todo</span>
+          <div id="ajuste_asignados_wrap"
+               class="border rounded-xl p-2 max-h-52 overflow-auto space-y-1">
+            <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+              <input type="checkbox" id="chk-all-usuarios">
+              <span class="text-sm font-medium">Seleccionar todo</span>
+            </label>
+            {% for u in usuarios %}
+              <label class="flex items-center gap-2 usuario-item cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+                <input type="checkbox" name="asignados" value="{{ u.id }}">
+                <span class="text-sm">{{ u.get_full_name|default:u.username }}</span>
               </label>
-
-              {% for u in usuarios %}
-                <label class="flex items-center gap-2 usuario-item cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
-                  <input type="checkbox" name="asignados" value="{{ u.id }}">
-                  <span class="text-sm">{{ u.get_full_name|default:u.username }}</span>
-                </label>
-              {% endfor %}
-            </div>
-
-            <p class="text-xs text-gray-500 mt-1">
-              Se creará un registro separado por cada usuario seleccionado.
-            </p>
+            {% endfor %}
           </div>
-        </div>
 
-        <div class="mt-5 flex justify-end gap-2">
-          <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeAjusteModal()">Cancelar</button>
-          <button type="submit" class="px-4 py-2 rounded bg-amber-600 text-white">Crear ajuste</button>
+          <p class="text-xs text-gray-500 mt-1">
+            Se creará un registro separado por cada usuario seleccionado.
+          </p>
         </div>
-      </form>
-    </div>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeAjusteModal()">Cancelar</button>
+        <button type="submit" class="px-4 py-2 rounded bg-amber-600 text-white">Crear ajuste</button>
+      </div>
+    </form>
   </div>
 </div>
-
 
 <!-- Selector cantidad (idéntico a tu UX) -->
 <form method="get" class="mt-4 flex items-center gap-2">
@@ -430,24 +437,46 @@
     }
   })();
 
-  // Modal open/close
-  function openAjusteModal(){
-    const m = document.getElementById('ajuste-modal');
-    if(!m) return;
-    m.classList.remove('hidden'); m.classList.add('flex');
-    // bloquear scroll del fondo
-    document.documentElement.classList.add('overflow-hidden');
-    document.body.classList.add('overflow-hidden');
-  }
+  // ===== Fix iOS/Android scroll en modal de AJUSTE =====
+  (function(){
+    const overlay = document.getElementById('ajuste-modal');
 
-  function closeAjusteModal(){
-    const m = document.getElementById('ajuste-modal');
-    if(!m) return;
-    m.classList.add('hidden'); m.classList.remove('flex');
-    // restaurar scroll del fondo
-    document.documentElement.classList.remove('overflow-hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
+    // Evita que el gesto de scroll en el overlay (fuera de la tarjeta) “arrastre” la página.
+    function preventBgScroll(e){
+      if (e.target === overlay) {
+        e.preventDefault();                    // necesario en iOS
+      }
+    }
+
+    // Exponemos helpers para open/close
+    window.__aj_modal = {
+      open(){
+        if(!overlay) return;
+        overlay.classList.remove('hidden');
+        overlay.classList.add('flex');
+
+        // engancha el fix de gestos (vertical y horizontal)
+        overlay.addEventListener('touchmove', preventBgScroll, { passive: false });
+
+        // asegura estar arriba del todo y con inercia iOS
+        const card = overlay.querySelector('.modal-card');
+        if (card) {
+          card.scrollTop = 0;
+          card.style.webkitOverflowScrolling = 'touch';
+        }
+      },
+      close(){
+        if(!overlay) return;
+        overlay.classList.add('hidden');
+        overlay.classList.remove('flex');
+        overlay.removeEventListener('touchmove', preventBgScroll);
+      }
+    };
+  })();
+
+  // API usada por los botones/acciones
+  function openAjusteModal(){ window.__aj_modal?.open(); }
+  function closeAjusteModal(){ window.__aj_modal?.close(); }
 
   // Cerrar con ESC y click fuera
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeAjusteModal(); }});
@@ -468,13 +497,12 @@
       e.preventDefault();
       const fd=new FormData(form);
 
-      // Asignados múltiple → lista
       // Asignados múltiples → checkboxes marcados
-const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
-const users  = Array.from(checks).map(c => c.value);
-if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
-fd.delete('asignados');
-users.forEach(u => fd.append('asignados', u));
+      const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
+      const users  = Array.from(checks).map(c => c.value);
+      if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
+      fd.delete('asignados');
+      users.forEach(u => fd.append('asignados', u));
       try{
         const resp = await fetch("{% url 'operaciones:crear_ajuste' %}", {
           method:'POST',
@@ -485,23 +513,23 @@ users.forEach(u => fd.append('asignados', u));
         if(!resp.ok) throw new Error(text.slice(0,200));
         let data; try{ data=JSON.parse(text); }catch{ throw new Error('Respuesta no JSON'); }
         if(!data.ok) throw new Error(data.error||'Error creando ajuste');
-  closeAjusteModal();
-// redirige con flag para que el base muestre el toast
-const url = new URL(window.location.href);
-url.searchParams.set('flash','ajuste_ok');
-window.location.href = url.toString();
+
+        closeAjusteModal();
+        // redirige con flag para que el base muestre el toast
+        const url = new URL(window.location.href);
+        url.searchParams.set('flash','ajuste_ok');
+        window.location.href = url.toString();
 
       }catch(err){
         console.error(err);
-    closeAjusteModal();
-const url = new URL(window.location.href);
-url.searchParams.set('flash','ajuste_err');
-window.location.href = url.toString();
+        closeAjusteModal();
+        const url = new URL(window.location.href);
+        url.searchParams.set('flash','ajuste_err');
+        window.location.href = url.toString();
       }
     });
   })();
 </script>
-
 <script>
   (function(){
     const wrap  = document.getElementById('ajuste_asignados_wrap');
@@ -558,7 +586,6 @@ window.location.href = url.toString();
 // === URLs ===
 const AJ_URL_CREATE = "{% url 'operaciones:crear_ajuste' %}";
 function urlEditar(pk){
-  // Ajusta el nombre de la URL si es distinto en tu urls.py
   return "{% url 'operaciones:editar_ajuste' 0 %}".replace("/0/","/"+pk+"/");
 }
 
@@ -596,12 +623,10 @@ function newAjuste(){
   form?.reset();
   document.getElementById('ajuste_id').value = '';
 
-  // set mes por defecto
   const ym = yyyyMmNow();
   if (picker) picker.value = ym;
   if (hidden) hidden.value = monthLabelFromYYYYMM(ym);
 
-  // desmarcar checkboxes
   document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb => cb.checked = false);
 
   setModalMode('create');
@@ -615,7 +640,6 @@ async function editAjuste(id){
     const data = await resp.json();
     if(!resp.ok || !data.ok){ throw new Error(data.error || 'No se pudo cargar el ajuste'); }
 
-    // Precargar campos
     document.getElementById('ajuste_id').value = data.id;
     document.querySelector('#ajuste-form select[name="tipo"]').value = data.tipo;
 
@@ -627,17 +651,12 @@ async function editAjuste(id){
     document.querySelector('#ajuste-form input[name="monto"]').value   = data.monto;
     document.querySelector('#ajuste-form textarea[name="detalle"]').value = data.detalle;
 
-    // Checkboxes asignados
     const asignados = Array.isArray(data.asignados) ? data.asignados.map(Number) : [];
     document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb=>{
       cb.checked = asignados.includes(parseInt(cb.value));
     });
 
-    // 👉 Cambiar textos del modal (lo que pediste):
-    document.querySelector('#ajuste-modal h3').textContent = 'Editar ajuste';
-    document.querySelector('#ajuste-form button[type="submit"]').textContent = 'Guardar cambios';
-    // (equivalente a setModalMode('edit');)
-
+    setModalMode('edit');
     openAjusteModal();
   }catch(err){
     console.error(err);
@@ -645,48 +664,7 @@ async function editAjuste(id){
   }
 }
 
-// === Submit único (crear o editar según 'ajuste_id') ===
-(function(){
-  const form = document.getElementById('ajuste-form');
-  if(!form) return;
-
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const fd = new FormData(form);
-
-    // Compactar asignados (marcados)
-    const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
-    const users  = Array.from(checks).map(c => c.value);
-    if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
-    fd.delete('asignados'); users.forEach(u => fd.append('asignados', u));
-
-    const ajusteId = (fd.get('ajuste_id') || '').trim();
-    const url = ajusteId ? urlEditar(ajusteId) : AJ_URL_CREATE;
-
-    try{
-      const resp = await fetch(url, {
-        method:'POST',
-        headers:{'X-CSRFToken': (document.cookie.match('(^|;)\\s*csrftoken\\s*=\\s*([^;]+)')||[]).pop() || '',
-                 'X-Requested-With':'XMLHttpRequest',
-                 'Accept':'application/json'},
-        body: fd
-      });
-      const data = await resp.json();
-      if(!resp.ok || !data.ok) throw new Error(data.error || 'Error');
-
-      closeAjusteModal();
-      const u = new URL(window.location.href);
-      u.searchParams.set('flash', ajusteId ? 'ajuste_edit_ok' : 'ajuste_ok');
-      window.location.href = u.toString();
-    }catch(err){
-      console.error(err);
-      closeAjusteModal();
-      const u = new URL(window.location.href);
-      u.searchParams.set('flash', 'ajuste_err');
-      window.location.href = u.toString();
-    }
-  });
-})();
+// (el submit ya está en el bloque anterior)
 </script>
 
 <script>

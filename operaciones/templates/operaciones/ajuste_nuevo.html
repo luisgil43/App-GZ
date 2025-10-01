@@ -1,0 +1,237 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Nuevo ajuste{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">➕ Crear ajuste</h1>
+    <a href="{% url 'operaciones:produccion_admin' %}"
+       class="rounded-full px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm">← Volver</a>
+  </div>
+
+  <p class="text-sm text-gray-600 mb-4">
+    Genera un <b>Bono</b>, <b>Adelanto</b> o <b>Descuento</b> para uno o más técnicos.
+  </p>
+
+  <form id="ajuste-form" class="space-y-4">
+    {% csrf_token %}
+    <input type="hidden" name="ajuste_id" id="ajuste_id" value="">
+    <input type="hidden" id="ajuste_mes_texto" name="mes_texto" required>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium">Tipo</label>
+        <select name="tipo" class="w-full border rounded-xl px-3 py-2" required>
+          <option value="ajuste_bono">Bono</option>
+          <option value="ajuste_adelanto">Adelanto</option>
+          <option value="ajuste_descuento">Descuento</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium">Mes producción o descuento</label>
+        <input id="ajuste_mes_picker" type="month" class="w-full border rounded-xl px-3 py-2" required>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium">Monto (CLP)</label>
+        <input name="monto" type="number" step="0.01" min="0" class="w-full border rounded-xl px-3 py-2" required>
+        <p class="text-xs text-gray-500 mt-1">
+          Para <b>Descuento</b> el sistema aplicará el signo negativo automáticamente.
+        </p>
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium">Observación / Detalle</label>
+        <textarea name="detalle" class="w-full border rounded-xl px-3 py-2" rows="3"
+                  placeholder="Motivo del ajuste" required></textarea>
+      </div>
+
+      <div class="md:col-span-2">
+        <label class="block text-sm font-medium">Asignados (uno o más)</label>
+
+        <input id="filtro-usuarios" type="text"
+               class="w-full border rounded-xl px-3 py-2 mb-2"
+               placeholder="Buscar técnico por nombre o usuario…">
+
+        <div id="ajuste_asignados_wrap"
+             class="border rounded-xl p-2 max-h-64 overflow-auto space-y-1">
+          <label class="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+            <input type="checkbox" id="chk-all-usuarios">
+            <span class="text-sm font-medium">Seleccionar todo</span>
+          </label>
+
+          {% for u in usuarios %}
+            <label class="flex items-center gap-2 usuario-item cursor-pointer hover:bg-gray-50 rounded px-1 py-1">
+              <input type="checkbox" name="asignados" value="{{ u.id }}">
+              <span class="text-sm">{{ u.get_full_name|default:u.username }}</span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <p class="text-xs text-gray-500 mt-1">
+          Se creará un registro separado por cada usuario seleccionado.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <a href="{% url 'operaciones:produccion_admin' %}"
+         class="px-4 py-2 rounded bg-gray-200">Cancelar</a>
+      <button type="submit" class="px-4 py-2 rounded bg-amber-600 text-white">Crear ajuste</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // ===== Helpers Mes Año =====
+  (function(){
+    const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    const picker = document.getElementById('ajuste_mes_picker');
+    const hidden = document.getElementById('ajuste_mes_texto');
+
+    function toLabel(yyyyMm){
+      if(!/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
+      const [y,m]=yyyyMm.split("-");
+      const i=parseInt(m,10)-1;
+      return (MONTHS_ES[i]||"")+" "+y;
+    }
+    function initDefault(){
+      if(!picker || !hidden) return;
+      const now=new Date();
+      const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,"0");
+      picker.value=`${y}-${m}`;
+      hidden.value=toLabel(picker.value);
+    }
+    document.addEventListener('DOMContentLoaded', initDefault);
+    picker?.addEventListener('change', ()=>{ hidden.value = toLabel(picker.value); });
+  })();
+
+  // ===== Buscador + seleccionar todo =====
+  (function(){
+    const wrap  = document.getElementById('ajuste_asignados_wrap');
+    const input = document.getElementById('filtro-usuarios');
+    const master= document.getElementById('chk-all-usuarios');
+    const items = Array.from(wrap.querySelectorAll('.usuario-item'));
+
+    function eachBox() {
+      return Array.from(wrap.querySelectorAll('.usuario-item input[type="checkbox"]'));
+    }
+    function updateMaster() {
+      const boxes = eachBox();
+      const visible = boxes.filter(cb => cb.closest('.usuario-item').style.display !== 'none');
+      const allChecked = visible.length > 0 && visible.every(cb => cb.checked);
+      const someChecked = visible.some(cb => cb.checked);
+      master.checked = allChecked;
+      master.indeterminate = !allChecked && someChecked;
+    }
+    function setAllOnVisible(checked) {
+      eachBox().forEach(cb => {
+        const row = cb.closest('.usuario-item');
+        if (row.style.display === 'none') return;
+        cb.checked = checked;
+      });
+      updateMaster();
+    }
+    master?.addEventListener('change', () => setAllOnVisible(master.checked));
+    input?.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      items.forEach(li => {
+        const show = li.textContent.toLowerCase().includes(q);
+        li.style.display = show ? '' : 'none';
+      });
+      updateMaster();
+    });
+    wrap.addEventListener('change', (e) => {
+      if (e.target.matches('.usuario-item input[type="checkbox"]')) updateMaster();
+    });
+    updateMaster();
+  })();
+
+  // ===== Submit (usa el endpoint existente que ya tenías) =====
+  function getCookie(name){const v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v? v.pop() : '';}
+  const CSRF = getCookie('csrftoken');
+
+  document.getElementById('ajuste-form')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+
+    // Asignados múltiples → checkboxes marcados
+    const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
+    const users  = Array.from(checks).map(c => c.value);
+    if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
+    fd.delete('asignados'); users.forEach(u => fd.append('asignados', u));
+
+    try{
+      const resp = await fetch("{% url 'operaciones:crear_ajuste' %}", {
+        method:'POST',
+        headers:{ 'X-CSRFToken': CSRF, 'X-Requested-With':'XMLHttpRequest', 'Accept':'application/json' },
+        body: fd
+      });
+      const text = await resp.text();
+      if(!resp.ok) throw new Error(text.slice(0,200));
+      let data; try{ data = JSON.parse(text); }catch{ throw new Error('Respuesta no JSON'); }
+      if(!data.ok) throw new Error(data.error||'Error creando ajuste');
+
+      // Redirige a la lista con flash
+      const url = new URL("{% url 'operaciones:produccion_admin' %}", window.location.origin);
+      url.searchParams.set('flash','ajuste_ok');
+      window.location.href = url.toString();
+    }catch(err){
+      console.error(err);
+      const url = new URL("{% url 'operaciones:produccion_admin' %}", window.location.origin);
+      url.searchParams.set('flash','ajuste_err');
+      window.location.href = url.toString();
+    }
+  });
+</script>
+
+{% if modo == "edit" %}
+{{ initial|json_script:"ajuste-initial" }}
+<script>
+  (function(){
+    const init = JSON.parse(document.getElementById('ajuste-initial').textContent || "{}");
+    // Tipo
+    const sel = document.querySelector('#ajuste-form select[name="tipo"]');
+    if (sel && init.tipo) sel.value = init.tipo;
+
+    // Mes
+    const picker = document.getElementById('ajuste_mes_picker');
+    const hidden = document.getElementById('ajuste_mes_texto');
+    if (picker && init.mes_yyyy_mm) picker.value = init.mes_yyyy_mm;
+    if (hidden && init.mes_texto) hidden.value = init.mes_texto;
+
+    // Monto / Detalle
+    const monto = document.querySelector('#ajuste-form input[name="monto"]');
+    const det   = document.querySelector('#ajuste-form textarea[name="detalle"]');
+    if (monto && init.monto) monto.value = init.monto;
+    if (det && init.detalle) det.value = init.detalle;
+
+    // Checkboxes asignados
+    const ids = Array.isArray(init.asignados_ids) ? init.asignados_ids.map(String) : [];
+    document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb=>{
+      cb.checked = ids.includes(String(cb.value));
+    });
+
+    // Títulos / botón
+    const h1 = document.querySelector('h1');
+    const submit = document.querySelector('#ajuste-form button[type="submit"]');
+    if (h1) h1.textContent = '✏️ Editar ajuste';
+    if (submit) submit.textContent = 'Guardar cambios';
+
+    // El submit seguirá usando el mismo endpoint de crear si así lo prefieres.
+    // Si quieres enviar al endpoint de edición, descomenta estas líneas:
+    // document.getElementById('ajuste-form').addEventListener('submit', (e)=>{
+    //   e.preventDefault();
+    //   const form = e.currentTarget;
+    //   const action = "{% url 'operaciones:editar_ajuste' 0 %}".replace('/0/', '/'+(init.id||'')+'/');
+    //   enviarA(action); // implementa igual que tu fetch de crear, cambiando la URL
+    // }, {once:true});
+  })();
+</script>
+{% endif %}
+{% endblock %}

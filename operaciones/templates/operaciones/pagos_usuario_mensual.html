@@ -89,9 +89,14 @@
           <!-- Acciones -->
           <td class="p-2">
             {% if r.status == "pending_user" %}
-              <form method="post" action="{% url 'operaciones:user_approve_monthly' r.id %}" class="inline">
+              <form id="approve-form-{{ r.id }}" method="post" action="{% url 'operaciones:user_approve_monthly' r.id %}" class="inline">
                 {% csrf_token %}
-                <button class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded">Aprobar</button>
+                <!-- El submit real lo hace el modal -->
+                <button type="button"
+                        class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+                        onclick="openApprove({{ r.id }})">
+                  Aprobar
+                </button>
               </form>
               <button type="button"
                       class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"
@@ -122,15 +127,15 @@
                 <tbody>
                   {% for d in r.details %}
                   <tr class="border-t">
-<td class="p-2">
-  {% with du=d.du proj=d.project_id %}
-    {% if proj and proj != '-' and proj != '—' and proj != du %}
-      {{ du }} — {{ proj }}
-    {% else %}
-      {{ du }}
-    {% endif %}
-  {% endwith %}
-</td>
+                    <td class="p-2">
+                      {% with du=d.du proj=d.project_id %}
+                        {% if proj and proj != '-' and proj != '—' and proj != du %}
+                          {{ du }} — {{ proj }}
+                        {% else %}
+                          {{ du }}
+                        {% endif %}
+                      {% endwith %}
+                    </td>
                     <td class="p-2 text-right">
                       {% if d.subtotal < 0 %}
                         <span class="text-red-600">-${{ d.subtotal|floatformat:"-2"|intcomma|cut:"-" }}</span>
@@ -155,6 +160,27 @@
   </div>
 </div>
 
+<!-- Modal: Confirmar aprobación -->
+<div id="approve-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-2xl shadow max-w-lg w-full p-6">
+    <div class="flex items-start gap-3">
+      <div class="shrink-0 mt-0.5 rounded-full w-8 h-8 flex items-center justify-center bg-yellow-100 text-yellow-700">⚠️</div>
+      <div>
+        <h3 class="text-xl font-semibold">Confirma tu aprobación</h3>
+        <p class="text-gray-700 mt-2 leading-relaxed">
+          <b>Los cierres de producción son los días 28.</b> Si apruebas tu producción
+          antes de esa fecha, <b>estás aceptando el monto total a pagar</b> y
+          adicionalmente <b>podrían quedar proyectos por fuera</b> de este mes.
+        </p>
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-6">
+      <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeApprove()">Volver</button>
+      <button type="button" class="px-4 py-2 rounded bg-emerald-600 text-white" id="approve-continue">Continuar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Motivo de rechazo -->
 <div id="reject-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
   <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
@@ -171,7 +197,7 @@
   </div>
 </div>
 
-<!-- Toggle + Modal -->
+<!-- Toggle + Modales -->
 <script>
   // Toggle de filas (chevron)
   document.addEventListener('click', function(e){
@@ -186,7 +212,26 @@
     btn.setAttribute('aria-expanded', (!open).toString());
   });
 
-  // Modal de rechazo
+  // ===== Modal de APROBACIÓN =====
+  let approveTargetId = null;
+  function openApprove(id) {
+    approveTargetId = id;
+    const m = document.getElementById('approve-modal');
+    m.classList.remove('hidden'); m.classList.add('flex');
+  }
+  function closeApprove() {
+    approveTargetId = null;
+    const m = document.getElementById('approve-modal');
+    m.classList.add('hidden'); m.classList.remove('flex');
+  }
+  document.getElementById('approve-continue').addEventListener('click', function(){
+    if (!approveTargetId) return closeApprove();
+    const fm = document.getElementById('approve-form-' + approveTargetId);
+    if (fm) fm.submit();
+    closeApprove();
+  });
+
+  // ===== Modal de RECHAZO =====
   function openReject(id) {
     const fm = document.getElementById('reject-form');
     fm.action = "{% url 'operaciones:user_reject_monthly' 0 %}".replace('/0/', '/' + id + '/');

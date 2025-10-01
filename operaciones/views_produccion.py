@@ -913,9 +913,10 @@ def _prev_month(yyyy_mm: str) -> str:
 @login_required
 def admin_monthly_payments(request):
     current_month = _yyyy_mm(timezone.localdate())
+    today = timezone.localdate()
+    day = today.day
 
     # ---------- Filtros del formulario ----------
-    # 👈 solo si el form aplicó filtros
     applied = (request.GET.get("filters") == "1")
     f_month_raw = (request.GET.get("f_month") or "").strip()
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
@@ -925,17 +926,31 @@ def admin_monthly_payments(request):
     f_paid_month = (request.GET.get("f_paid_month") or "").strip()
     cantidad = (request.GET.get("cantidad") or "10").strip().lower()
 
-    # ---------- TOP: SIEMPRE el mes por defecto (mes anterior) ----------
-    top_month = _prev_month(current_month)  # ← usa el “mes a pagar” típico
-    _sync_monthly_totals(top_month, create_missing=True)
+    # ---------- TOP: lógica de pendientes ----------
+    prev_month = _prev_month(current_month)
 
+    # Siempre sincroniza el mes anterior (para asegurar pendientes correctos)
+    _sync_monthly_totals(prev_month, create_missing=True)
+    # Solo del 26 en adelante sincroniza también el mes actual
+    if day >= 26:
+        _sync_monthly_totals(current_month, create_missing=True)
+
+    # Base: todos los no pagados con monto > 0
     top_qs = (
         MonthlyPayment.objects
-        .filter(month=top_month, amount__gt=0)
+        .filter(amount__gt=0)
         .exclude(status="paid")
         .select_related("technician")
-        .order_by("status", "technician__first_name", "technician__last_name")
     )
+
+    # Mostrar todos los meses anteriores siempre;
+    # el mes actual solo a partir del 26.
+    if day < 26:
+        top_qs = top_qs.filter(month__lt=current_month)
+    else:
+        top_qs = top_qs.filter(month__lte=current_month)
+
+    # Filtro por técnico en el bloque superior
     if f_tecnico:
         top_qs = top_qs.filter(
             Q(technician__first_name__icontains=f_tecnico) |
@@ -943,6 +958,11 @@ def admin_monthly_payments(request):
             Q(technician__username__icontains=f_tecnico)
         )
 
+    top_qs = top_qs.order_by(
+        "status", "month", "technician__first_name", "technician__last_name"
+    )
+
+    # Helper para armar el detalle por DU para un técnico/mes
     def _details_for(tech_id: int, month: str):
         aliases = _month_aliases(month)
         cond = Q()
@@ -975,7 +995,7 @@ def admin_monthly_payments(request):
         r.week = r.month
         r.details = _details_for(r.technician_id, r.month)
 
-    # ---------- HISTORIAL: solo aplicamos f_month cuando applied == True ----------
+    # ---------- HISTORIAL (pagados) con filtros opcionales ----------
     bottom_qs = (
         MonthlyPayment.objects
         .filter(status="paid")
@@ -993,7 +1013,7 @@ def admin_monthly_payments(request):
             Q(technician__username__icontains=f_tecnico)
         )
 
-    # DU en memoria
+    # Filtro DU en memoria
     def _match_du(detalles, needle: str) -> bool:
         if not needle:
             return True
@@ -1056,13 +1076,14 @@ def admin_monthly_payments(request):
         }.items() if v
     })
 
+    # selected_month: muestra el mes actual en la cabecera
     return render(request, "operaciones/produccion_totales_admin.html", {
         "current_month": current_month,
-        "selected_month": top_month,   # mostrado arriba
+        "selected_month": current_month,
         "top": top,
         "pagina": pagina,
         "cantidad": cantidad,
-        "f_month": f_month_input,      # input vacío si no aplicaste filtro
+        "f_month": f_month_input,
         "f_tecnico": f_tecnico,
         "f_project": f_project,
         "f_region": f_region,
@@ -1385,11 +1406,42 @@ def produccion_tecnico(request):
                        Q(id_new__icontains=q_text) |
                        Q(detalle_tarea__icontains=q_text))
 
+    # === Construcción de filas (primero mes actual, luego septiembre, agosto, etc.) ===
     filas, total_estimado = [], Decimal("0.00")
-    for s in qs:
+
+    qs_mes_actual = qs.filter(_cond_mes)
+    qs_otros = qs.exclude(_cond_mes)
+
+    # Parser robusto para "mes_produccion": "YYYY-MM" o "Octubre 2025"
+    def _ym_from_mes(txt: str):
+        import re
+        if not txt:
+            return (0, 0)
+        t = str(txt).strip()
+        # 1) Formato "YYYY-MM"
+        m = re.match(r"^\s*(\d{4})-(\d{1,2})\s*$", t)
+        if m:
+            y, mm = int(m.group(1)), int(m.group(2))
+            return (y, mm)
+        # 2) Formato "Mes YYYY" en español
+        mes_map = {
+            "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
+            "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9,
+            "octubre": 10, "noviembre": 11, "diciembre": 12
+        }
+        m2 = re.match(r"^\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+(\d{4})\s*$", t)
+        if m2:
+            mes_txt = m2.group(1).lower()
+            y = int(m2.group(2))
+            mm = mes_map.get(mes_txt, 0)
+            return (y, mm)
+        return (0, 0)
+
+    def _push(s):
+        nonlocal total_estimado
         asignados = list(s.trabajadores_asignados.all())
         if not asignados:
-            continue
+            return
         parte = (Decimal(str(s.monto_mmoo or 0)) /
                  len(asignados)).quantize(Decimal("0.01"))
         filas.append({
@@ -1404,6 +1456,17 @@ def produccion_tecnico(request):
             "monto_tecnico": parte,
         })
         total_estimado += parte
+
+    # 1) Mes actual (respetando el order_by original del queryset)
+    for s in qs_mes_actual:
+        _push(s)
+
+    # 2) Resto de meses, ordenados de más reciente a más antiguo por mes_produccion
+    otros_ordenados = sorted(list(qs_otros), key=lambda s: _ym_from_mes(
+        s.mes_produccion), reverse=True)
+    for s in otros_ordenados:
+        _push(s)
+    # ====================================================================
 
     if cantidad == "todos":
         pagina = filas
@@ -1696,69 +1759,76 @@ def _yyyymm_from_mes_texto(txt: str) -> str:
 @transaction.atomic
 def editar_ajuste(request, pk: int):
     """
-    GET  -> devuelve JSON para precargar el modal de ajustes
-    POST -> actualiza el ajuste y devuelve JSON {ok: True}
+    GET  -> muestra la página de edición (misma UI que 'nuevo ajuste', pre-rellena valores)
+    POST -> actualiza el ajuste y redirige a la lista con un flash
     """
     s = get_object_or_404(
         ServicioCotizado,
         pk=pk,
         estado__in=AJUSTES_SET
     )
+    User = get_user_model()
 
     if request.method == "GET":
         # monto positivo para la UI
-        monto = Decimal(str(abs(s.monto_mmoo or 0))).quantize(Decimal('0.01'))
-        asignados_ids = list(
-            s.trabajadores_asignados.values_list('id', flat=True))
-        data = {
-            "ok": True,
+        monto_pos = Decimal(str(abs(s.monto_mmoo or 0))
+                            ).quantize(Decimal('0.01'))
+        init = {
             "id": s.id,
-            "tipo": s.estado,                 # ajuste_bono / ajuste_adelanto / ajuste_descuento
+            "tipo": s.estado,  # ajuste_bono / ajuste_adelanto / ajuste_descuento
             "mes_texto": s.mes_produccion or "",
             "mes_yyyy_mm": _yyyymm_from_mes_texto(s.mes_produccion or ""),
             "detalle": s.detalle_tarea or "",
-            "monto": str(monto),
-            "asignados": asignados_ids,       # array de ids
+            "monto": str(monto_pos),
+            "asignados_ids": list(s.trabajadores_asignados.values_list('id', flat=True)),
         }
-        return JsonResponse(data)
+        usuarios = User.objects.filter(is_active=True).order_by(
+            "first_name", "last_name", "username")
 
-    # POST -> guardar cambios
-    User = get_user_model()
+        # Usamos el mismo template de "nuevo", pero en modo edición
+        return render(request, "operaciones/ajuste_nuevo.html", {
+            "usuarios": usuarios,
+            "modo": "edit",
+            "initial": init,
+        })
+
+    # ===== POST -> guardar cambios =====
     tipo = (request.POST.get('tipo') or '').strip()
     mes_texto = (request.POST.get('mes_texto') or '').strip()
     detalle = (request.POST.get('detalle') or '').strip()
+    asignados = request.POST.getlist('asignados')
+
     try:
         monto = Decimal(str(request.POST.get('monto') or '0')
                         ).quantize(Decimal('0.01'))
     except Exception:
-        return JsonResponse({"ok": False, "error": "Monto inválido"}, status=400)
-
-    asignados = request.POST.getlist('asignados')
+        return HttpResponseBadRequest("Monto inválido")
 
     # Validaciones
     if tipo not in AJUSTES_SET:
-        return JsonResponse({"ok": False, "error": "Tipo inválido"}, status=400)
+        return HttpResponseBadRequest("Tipo inválido")
     if not mes_texto or not detalle or not asignados:
-        return JsonResponse({"ok": False, "error": "Faltan campos"}, status=400)
+        return HttpResponseBadRequest("Faltan campos")
     if monto <= 0:
-        return JsonResponse({"ok": False, "error": "El monto debe ser > 0"}, status=400)
+        return HttpResponseBadRequest("El monto debe ser > 0")
 
-    # Signo
+    # Signo y campos
     s.monto_mmoo = -monto if tipo == 'ajuste_descuento' else monto
     s.estado = tipo
     s.mes_produccion = mes_texto
     s.detalle_tarea = detalle
 
-    # Reasignación (permitimos 1+ técnicos como en la creación)
     users = list(User.objects.filter(id__in=asignados, is_active=True))
     if not users:
-        return JsonResponse({"ok": False, "error": "Asignados inválidos"}, status=400)
+        return HttpResponseBadRequest("Asignados inválidos")
+
     s.save(update_fields=["monto_mmoo", "estado",
            "mes_produccion", "detalle_tarea", "updated_at"])
     s.trabajadores_asignados.set(users)
 
     messages.success(request, "Ajuste actualizado.")
-    return JsonResponse({"ok": True})
+    # Redirige a la lista
+    return redirect(f"{reverse('operaciones:produccion_admin')}?flash=ajuste_edit_ok")
 
 
 AJUSTE_ESTADOS = {"ajuste_bono", "ajuste_adelanto", "ajuste_descuento"}
@@ -1797,3 +1867,19 @@ def eliminar_ajuste(request, pk: int):
     # Lleva un flash simple por querystring como usas en JS (opcionalmente usa messages)
     url = reverse("operaciones:produccion_admin")
     return redirect(f"{url}?flash=ajuste_del_ok")
+
+
+@login_required
+def ajuste_nuevo(request):
+    """
+    Renderiza una página para crear un Bono/Adelanto/Descuento sin usar modal.
+    El envío se hace por fetch POST al endpoint existente 'operaciones:crear_ajuste'
+    (que ya usabas desde el modal).
+    """
+    usuarios = User.objects.filter(is_active=True).order_by(
+        "first_name", "last_name", "username")
+    current_month = timezone.localdate().strftime("%Y-%m")
+    return render(request, "operaciones/ajuste_nuevo.html", {
+        "usuarios": usuarios,
+        "current_month": current_month,
+    })
