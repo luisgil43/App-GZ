@@ -109,10 +109,9 @@ class Command(BaseCommand):
         asign_qs = asign_qs.prefetch_related(
             Prefetch(
                 "requisitos",
-                queryset=RequisitoFoto.objects.filter(
-                    Q(activo=True) | Q(activo__isnull=True)
-                ).order_by("orden", "id"),
+                queryset=RequisitoFoto.objects.all().order_by("orden", "id"),
             ),
+
             Prefetch(
                 "evidencias",
                 queryset=EvidenciaFoto.objects.all().order_by("tomada_en", "id"),
