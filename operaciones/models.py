@@ -386,6 +386,7 @@ class RequisitoFoto(models.Model):
     descripcion = models.TextField(blank=True, default="")
     obligatorio = models.BooleanField(default=True)
     orden = models.PositiveIntegerField(default=0)
+    activo = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['orden', 'id']

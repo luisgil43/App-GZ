@@ -41,47 +41,50 @@
             <th class="p-2 w-16"></th>
           </tr>
         </thead>
-        <tbody id="req-body">
-          {% if requirements %}
-            {% for r in requirements %}
-            <tr class="border-t">
-              <td class="p-2">
-                <input type="number" name="order[]" value="{{ r.orden }}" class="w-20 border rounded px-2 py-1">
-              </td>
-              <td class="p-2">
-                <input type="text" name="name[]" value="{{ r.titulo }}" class="w-full border rounded px-2 py-1">
-              </td>
-              <td class="p-2">
-                <select name="mandatory[]" class="border rounded px-2 py-1">
-                  <option value="1" {% if r.obligatorio %}selected{% endif %}>Sí</option>
-                  <option value="0" {% if not r.obligatorio %}selected{% endif %}>No</option>
-                </select>
-              </td>
-              <td class="p-2 text-right">
-                <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr class="border-t">
-              <td class="p-2">
-                <input type="number" name="order[]" value="0" class="w-20 border rounded px-2 py-1">
-              </td>
-              <td class="p-2">
-                <input type="text" name="name[]" value="" placeholder="Nombre del requisito" class="w-full border rounded px-2 py-1">
-              </td>
-              <td class="p-2">
-                <select name="mandatory[]" class="border rounded px-2 py-1">
-                  <option value="1" selected>Sí</option>
-                  <option value="0">No</option>
-                </select>
-              </td>
-              <td class="p-2 text-right">
-                <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
-              </td>
-            </tr>
-          {% endif %}
-        </tbody>
+       {# operciones/fotos_configurar_requisitos.html #}
+<tbody id="req-body">
+  {% if requirements %}
+    {% for r in requirements %}
+    <tr class="border-t">
+      <td class="p-2">
+        <input type="hidden" name="id[]" value="{{ r.id }}">   {# ⬅️ NUEVO #}
+        <input type="number" name="order[]" value="{{ r.orden }}" class="w-20 border rounded px-2 py-1">
+      </td>
+      <td class="p-2">
+        <input type="text" name="name[]" value="{{ r.titulo }}" class="w-full border rounded px-2 py-1">
+      </td>
+      <td class="p-2">
+        <select name="mandatory[]" class="border rounded px-2 py-1">
+          <option value="1" {% if r.obligatorio %}selected{% endif %}>Sí</option>
+          <option value="0" {% if not r.obligatorio %}selected{% endif %}>No</option>
+        </select>
+      </td>
+      <td class="p-2 text-right">
+        <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
+      </td>
+    </tr>
+    {% endfor %}
+  {% else %}
+    <tr class="border-t">
+      <td class="p-2">
+        <input type="hidden" name="id[]" value="">            {# ⬅️ NUEVO (vacío) #}
+        <input type="number" name="order[]" value="0" class="w-20 border rounded px-2 py-1">
+      </td>
+      <td class="p-2">
+        <input type="text" name="name[]" value="" placeholder="Nombre del requisito" class="w-full border rounded px-2 py-1">
+      </td>
+      <td class="p-2">
+        <select name="mandatory[]" class="border rounded px-2 py-1">
+          <option value="1" selected>Sí</option>
+          <option value="0">No</option>
+        </select>
+      </td>
+      <td class="p-2 text-right">
+        <button type="button" class="btn-del-row text-red-600 hover:underline">🗑</button>
+      </td>
+    </tr>
+  {% endif %}
+</tbody>
       </table>
     </div>
 
@@ -119,19 +122,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Crea una <tr> nueva de forma segura (sin innerHTML con datos del usuario)
-  function makeRow(orderValue) {
-    const tr = document.createElement('tr');
-    tr.className = 'border-t';
+function makeRow(orderValue) {
+  const tr = document.createElement('tr');
+  tr.className = 'border-t';
 
-    // --- TD: order ---
-    const tdOrder = document.createElement('td');
-    tdOrder.className = 'p-2';
-    const inpOrder = document.createElement('input');
-    inpOrder.type = 'number';
-    inpOrder.name = 'order[]';
-    inpOrder.className = 'w-20 border rounded px-2 py-1';
-    inpOrder.value = String(orderValue);
-    tdOrder.appendChild(inpOrder);
+  // TD Orden
+  const tdOrder = document.createElement('td');
+  tdOrder.className = 'p-2';
+  const hid = document.createElement('input');  // ⬅️ hidden id[]
+  hid.type = 'hidden';
+  hid.name = 'id[]';
+  hid.value = '';  // nuevo
+  const inpOrder = document.createElement('input');
+  inpOrder.type = 'number';
+  inpOrder.name = 'order[]';
+  inpOrder.className = 'w-20 border rounded px-2 py-1';
+  inpOrder.value = String(orderValue);
+  tdOrder.appendChild(hid);
+  tdOrder.appendChild(inpOrder);
 
     // --- TD: name ---
     const tdName = document.createElement('td');

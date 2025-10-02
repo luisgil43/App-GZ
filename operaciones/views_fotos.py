@@ -1,4 +1,6 @@
 # operaciones/views_fotos.py
+import unicodedata
+from django.db.models import Prefetch
 import boto3
 import mimetypes
 import uuid
@@ -104,17 +106,40 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
 # ============================
 
 
+# views.py
+
+
+def _norm_title(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
 def configurar_requisitos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
-    asignaciones = list(sesion.asignaciones.select_related(
-        "tecnico").prefetch_related("requisitos"))
+
+    # Prefetch solo activos y ordenados
+    asignaciones = list(
+        sesion.asignaciones
+        .select_related("tecnico")
+        .prefetch_related(
+            Prefetch(
+                "requisitos",
+                queryset=RequisitoFoto.objects.filter(
+                    activo=True).order_by("orden", "id")
+            )
+        )
+    )
 
     canonical = []
     if asignaciones and asignaciones[0].requisitos.exists():
-        canonical = list(asignaciones[0].requisitos.order_by("orden", "id"))
+        # ya viene activo=True, ordenado
+        canonical = list(asignaciones[0].requisitos.all())
 
     if request.method == "POST":
         try:
@@ -123,11 +148,13 @@ def configurar_requisitos(request, servicio_id):
                     request.POST.get("proyecto_especial"))
                 sesion.save(update_fields=["proyecto_especial"])
 
+                ids = request.POST.getlist("id[]")        # ← NUEVO
                 names = request.POST.getlist("name[]")
                 orders = request.POST.getlist("order[]")
                 mand = request.POST.getlist("mandatory[]")  # "0"/"1"
 
-                normalized = []
+                # Normalizar payload
+                desired = []  # [(id_str_or_empty, orden, titulo, obligatorio)]
                 for i, nm in enumerate(names):
                     name = (nm or "").strip()
                     if not name:
@@ -137,26 +164,57 @@ def configurar_requisitos(request, servicio_id):
                     except Exception:
                         order = i
                     mandatory = (mand[i] == "1") if i < len(mand) else True
-                    normalized.append((order, name, mandatory))
+                    rid = ids[i] if i < len(ids) else ""
+                    desired.append((rid, order, name, mandatory))
 
-                # Replica a todos los técnicos: borra y crea
+                # Para cada asignación, aplicar upsert sin borrar
                 for a in asignaciones:
-                    RequisitoFoto.objects.filter(tecnico_sesion=a).delete()
-                    objs = [
-                        RequisitoFoto(
-                            tecnico_sesion=a,
-                            titulo=name,
-                            descripcion="",
-                            obligatorio=mandatory,
-                            orden=order,
-                        )
-                        for (order, name, mandatory) in normalized
-                    ]
-                    if objs:
-                        RequisitoFoto.objects.bulk_create(objs)
+                    existentes = list(
+                        RequisitoFoto.objects.filter(tecnico_sesion=a)
+                    )
+                    by_id = {str(r.id): r for r in existentes}
+                    vistos_ids = set()
+
+                    # UPSERT
+                    for rid, orden, titulo, obligatorio in desired:
+                        if rid and rid in by_id:
+                            r = by_id[rid]
+                            cambios = []
+                            if r.titulo != titulo:
+                                r.titulo = titulo
+                                cambios.append("titulo")
+                            if r.orden != orden:
+                                r.orden = orden
+                                cambios.append("orden")
+                            if r.obligatorio != obligatorio:
+                                r.obligatorio = obligatorio
+                                cambios.append("obligatorio")
+                            if not r.activo:
+                                r.activo = True
+                                cambios.append("activo")
+                            if cambios:
+                                r.save(update_fields=cambios)
+                            vistos_ids.add(rid)
+                        else:
+                            # nuevo requisito
+                            nuevo = RequisitoFoto.objects.create(
+                                tecnico_sesion=a,
+                                titulo=titulo,
+                                descripcion="",
+                                obligatorio=obligatorio,
+                                orden=orden,
+                                activo=True,
+                            )
+                            vistos_ids.add(str(nuevo.id))
+
+                    # Desactivar los que ya no están en la lista (soft-delete)
+                    for r in existentes:
+                        if str(r.id) not in vistos_ids and r.activo:
+                            r.activo = False
+                            r.save(update_fields=["activo"])
 
             messages.success(
-                request, "Requerimientos guardados para todo el proyecto.")
+                request, "Requerimientos actualizados sin desenganchar fotos.")
             return redirect('operaciones:listar_servicios_supervisor')
 
         except Exception as e:
@@ -168,7 +226,7 @@ def configurar_requisitos(request, servicio_id):
         {
             "servicio": servicio,
             "sesion": sesion,
-            "requirements": canonical,
+            "requirements": canonical,   # activos, ordenados
             "is_special": bool(sesion.proyecto_especial),
         },
     )
@@ -331,7 +389,7 @@ def importar_requisitos(request, servicio_id):
         messages.warning(request, "No se encontraron filas válidas.")
         return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
 
-    # ---- A N E X A R  (no borrar lo existente)
+    # ---- A N E X A R  (no borrar lo existente) + reactivar si corresponde
     try:
         with transaction.atomic():
             asignaciones = list(
@@ -342,52 +400,75 @@ def importar_requisitos(request, servicio_id):
 
             total_creados = 0
             total_omitidos = 0
+            total_reactivados = 0
 
             for a in asignaciones:
-                # punto de partida = último orden + 1
-                max_orden = (
-                    RequisitoFoto.objects
-                    .filter(tecnico_sesion=a)
-                    .aggregate(m=Max("orden"))
-                    .get("m")
-                )
+                # punto de partida = último orden + 1 (considera activos si existen)
+                qs_max = RequisitoFoto.objects.filter(tecnico_sesion=a)
+                if hasattr(RequisitoFoto, "activo"):
+                    qs_max = qs_max.filter(activo=True)
+                max_orden = qs_max.aggregate(m=Max("orden")).get("m")
                 base = (max_orden or -1) + 1
 
-                # set para evitar duplicados por nombre (normalizado)
-                existentes = {
-                    _norm_title(x.titulo)
-                    for x in RequisitoFoto.objects
-                                          .filter(tecnico_sesion=a)
-                                          .only("titulo")
-                }
+                # mapa por nombre normalizado -> requisito existente (activo o no)
+                existentes_map = {}
+                for x in RequisitoFoto.objects.filter(tecnico_sesion=a).only("id", "titulo", "obligatorio", "orden"):
+                    existentes_map[_norm_title(x.titulo)] = x
 
                 nuevos = []
                 omitidos_local = 0
+                reactivados_local = 0
 
                 # respetamos el orden del archivo, pero “desplazado” al final
                 for i, (_o, name, mandatory) in enumerate(normalized):
                     key = _norm_title(name)
-                    if key in existentes:
-                        omitidos_local += 1
+                    exist = existentes_map.get(key)
+
+                    if exist:
+                        # si el modelo tiene 'activo' y está desactivado, reactivar + actualizar
+                        if hasattr(exist, "activo") and getattr(exist, "activo") is False:
+                            cambios = []
+                            if exist.obligatorio != mandatory:
+                                exist.obligatorio = mandatory
+                                cambios.append("obligatorio")
+                            # lo mandamos al final del bloque importado
+                            if exist.orden != (base + i):
+                                exist.orden = (base + i)
+                                cambios.append("orden")
+                            exist.activo = True
+                            cambios.append("activo")
+                            if cambios:
+                                exist.save(update_fields=cambios)
+                            reactivados_local += 1
+                        else:
+                            # ya existe activo con ese nombre -> lo omitimos (no duplicamos)
+                            omitidos_local += 1
                         continue
+
+                        # (no cae aquí porque 'exist' evalúa True y ya hicimos continue)
+
+                    # crear nuevo al final
                     nuevos.append(
                         RequisitoFoto(
                             tecnico_sesion=a,
                             titulo=name,
                             descripcion="",
                             obligatorio=mandatory,
-                            orden=base + i,   # se agregan al final
+                            orden=base + i,
                         )
                     )
-                    # evita duplicar dentro del mismo import
-                    existentes.add(key)
+                    # registra en el mapa para evitar duplicados dentro del mismo import
+                    existentes_map[key] = True  # marcador simple
 
                 if nuevos:
                     RequisitoFoto.objects.bulk_create(nuevos)
                     total_creados += len(nuevos)
                 total_omitidos += omitidos_local
+                total_reactivados += reactivados_local
 
         msg = f"Importados: {total_creados} agregados"
+        if total_reactivados:
+            msg += f", {total_reactivados} reactivados"
         if total_omitidos:
             msg += f", {total_omitidos} omitidos por duplicado"
         msg += "."
