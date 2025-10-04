@@ -124,7 +124,7 @@
                       {% endwith %}
                     </td>
 
-                    <td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
+                    <td class="p-2 text-right">$ {{ d.subtotal|miles_dec }} CLP</td>
                   </tr>
                   {% empty %}
                   <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
@@ -243,7 +243,7 @@
             <td class="p-2">{{ r.display_name }}</td>
             <td class="p-2">{{ r.week }}</td>
        
-<td class="p-2 text-right">$ {{ r.amount|miles_decimales }} CLP</td>
+<td class="p-2 text-right">$ {{ r.amount|miles_dec }} CLP</td>
             <td class="p-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800">Pagado</span>
             </td>
@@ -286,7 +286,7 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-<td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
+<td class="p-2 text-right">$ {{ d.subtotal|miles_dec }} CLP</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
