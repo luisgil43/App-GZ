@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from decimal import Decimal, InvalidOperation
 from django import template
 
@@ -95,3 +96,16 @@ def miles_dec(value):
         s = s.rstrip("0").rstrip(",")
 
     return s
+
+
+register = template.Library()
+
+
+@register.filter
+def clp_round(value):
+    try:
+        d = Decimal(str(value or 0)).quantize(
+            Decimal('1'), rounding=ROUND_HALF_UP)
+        return f"{int(d):,}".replace(",", ".")
+    except Exception:
+        return value
