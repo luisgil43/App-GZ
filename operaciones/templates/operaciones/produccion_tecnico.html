@@ -15,7 +15,7 @@
       <div class="text-sm text-gray-600">
         Mes actual: <b>{{ current_month_label|default:"—" }}</b>
         · Total del mes (CLP):
-        <b>$ {{ total_current_month|default:0|miles_dec }}</b>
+        <b>$ {{ total_current_month|default:0|formato_clp }}</b>
       </div>
 
       <a href="{% url 'operaciones:user_monthly_payments' %}"
@@ -96,7 +96,7 @@
   </div>
 </td>
 
-          <td class="p-2 text-right">$ {{ r.monto_tecnico|miles_dec }} CLP</td>
+          <td class="p-2 text-right">$ {{ r.monto_tecnico|formato_clp }} CLP</td>
         </tr>
 
         <!-- Detalle simple -->

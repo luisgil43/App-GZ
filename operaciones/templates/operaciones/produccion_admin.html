@@ -147,7 +147,7 @@
 
         <!-- Monto prorrateado por técnico -->
         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-          $ {{ r.monto_tecnico|miles_dec }} CLP
+          $ {{ r.monto_tecnico|formato_clp }} CLP
         </td>
 
         <!-- Asignado (solo 1 técnico por fila) -->
@@ -245,7 +245,7 @@
             <li><b>Tipo:</b>
               {% if r.status == 'ajuste_bono' %}Bono{% elif r.status == 'ajuste_adelanto' %}Adelanto{% else %}Descuento{% endif %}
             </li>
-            <li><b>Monto MMOO:</b> $ {{ r.monto_tecnico|miles_dec }} CLP</li>
+            <li><b>Monto MMOO:</b> $ {{ r.monto_tecnico|formato_clp }} CLP</li>
             <li><b>Técnico:</b> {% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</li>
           </ul>
         </div>

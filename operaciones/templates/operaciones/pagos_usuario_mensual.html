@@ -48,7 +48,7 @@
           <td class="p-2">{{ r.month }}</td>
 
           <!-- Total -->
-         <td class="p-2 text-right">$ {{ r.amount|miles_dec }} CLP</td>
+         <td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
 
           <!-- Estado (badges estilo Hyperlink) -->
           <td class="p-2">
@@ -131,7 +131,7 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-                 <td class="p-2 text-right">$ {{ d.subtotal|miles_dec }} CLP</td>
+                 <td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
                   </tr>
                   {% empty %}
                   <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
