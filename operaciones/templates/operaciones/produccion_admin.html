@@ -204,19 +204,21 @@
       </tr>
       {% empty %}
       <tr><td colspan="11" class="p-4 text-center text-gray-500">No hay producción para mostrar.</td></tr>
+{% if r.id %}
+  <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
+    {% csrf_token %}
+    <div class="flex items-center justify-end gap-2">
+      <button type="button"
+              class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+              onclick="closeDelModal('{{ r.id }}')">Cancelar</button>
+      <button type="submit"
+              class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+        Eliminar
+      </button>
+    </div>
+  </form>
+{% endif %}
 
-        <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
-          {% csrf_token %}
-          <div class="flex items-center justify-end gap-2">
-            <button type="button"
-                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
-                    onclick="closeDelModal('{{ r.id }}')">Cancelar</button>
-            <button type="submit"
-                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
-              Eliminar
-            </button>
-          </div>
-        </form>
       </div>
     </div>
 {% endfor %}

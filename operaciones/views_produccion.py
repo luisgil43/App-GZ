@@ -67,6 +67,29 @@ from datetime import date
 import re
 
 from .models import ServicioCotizado
+from reportlab.lib.pagesizes import A4
+
+
+# === Estados producción + ajustes (usar en TODO el módulo) ===
+EST_PROD = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
+AJ_POS = {"ajuste_bono", "ajuste_adelanto"}   # suman
+AJ_NEG = {"ajuste_descuento"}                 # restan
+ESTADOS_PROD_Y_AJUSTES = EST_PROD | AJ_POS | AJ_NEG
+
+
+def _monto_firmado_por_estado(monto, estado: str) -> Decimal:
+    """
+    Normaliza el signo según el estado:
+      - descuento => negativo
+      - bono/adelanto => positivo
+      - producción normal => tal cual
+    """
+    base = Decimal(str(monto or 0))
+    if estado in AJ_NEG:
+        return -abs(base)
+    if estado in AJ_POS:
+        return abs(base)
+    return base
 
 
 @login_required
@@ -114,7 +137,13 @@ def produccion_admin(request):
 
     # ---------- Aplicar filtros de cabecera ----------
     if filtros["du"]:
-        qs = qs.filter(du__icontains=filtros["du"])
+        # Normaliza: "DU000062", "du 62", "62" -> "62"
+        raw_du = filtros["du"]
+        m = re.search(r"du\s*0*([0-9]+)", raw_du, re.IGNORECASE)
+        term = m.group(1) if m else re.sub(r"\D+", "", raw_du)
+        if term:
+            qs = qs.filter(du__icontains=term)
+
     if filtros["id_claro"]:
         qs = qs.filter(id_claro__icontains=filtros["id_claro"])
     if filtros["id_new"]:
@@ -214,7 +243,7 @@ def produccion_admin(request):
         ym = parse_mes_token(r["mes_produccion"])
         r["_ym_key"] = ym if ym is not None else -1
 
-    # Normalizar fecha_fin a date para evitar comparar datetime vs date
+        # Normalizar fecha_fin a date para evitar comparar datetime vs date
         fin = r["fecha_fin"]
         if isinstance(fin, datetime):
             dkey = fin.date()
@@ -224,7 +253,7 @@ def produccion_admin(request):
             dkey = date(1900, 1, 1)
         r["_date_key"] = dkey
 
-# Orden final: mes (YYYYMM) desc y, a igualdad, fecha_fin desc
+    # Orden final: mes (YYYYMM) desc y, a igualdad, fecha_fin desc
     filas.sort(key=lambda x: (x["_ym_key"], x["_date_key"]), reverse=True)
 
     # ---------- Paginación ----------
@@ -277,7 +306,8 @@ def produccion_admin(request):
 @login_required
 def exportar_produccion_admin(request):
     """
-    Export a Excel (respeta filtros). Una fila por técnico con monto prorrateado.
+    Export a Excel (respeta filtros). Una fila por técnico con monto prorrateado,
+    incluyendo ajustes (bono/adelanto/descuento).
     """
     filtros = {
         "du": (request.GET.get("du") or "").strip(),
@@ -289,7 +319,8 @@ def exportar_produccion_admin(request):
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
     f_region = (request.GET.get("f_region") or "").strip()
 
-    estados_ok = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
+    # ⬅️ incluir producción + ajustes
+    estados_ok = ESTADOS_PROD_Y_AJUSTES
 
     qs = (
         ServicioCotizado.objects
@@ -298,8 +329,14 @@ def exportar_produccion_admin(request):
         .order_by('-fecha_aprobacion_supervisor', '-id')
     )
 
+    # Filtros
     if filtros["du"]:
-        qs = qs.filter(du__icontains=filtros["du"])
+        raw_du = filtros["du"]
+        m = re.search(r"du\s*0*([0-9]+)", raw_du, re.IGNORECASE)
+        term = m.group(1) if m else re.sub(r"\D+", "", raw_du)
+        if term:
+            qs = qs.filter(du__icontains=term)
+
     if filtros["id_claro"]:
         qs = qs.filter(id_claro__icontains=filtros["id_claro"])
     if filtros["id_new"]:
@@ -319,8 +356,10 @@ def exportar_produccion_admin(request):
     for s in qs:
         asignados = list(s.trabajadores_asignados.all())
         n = len(asignados) or 1
-        total = Decimal(str(s.monto_mmoo or 0))
-        parte = (total / n).quantize(Decimal('0.01'))
+
+        # ⬅️ monto con signo según el estado (descuento negativo, bono/adelanto positivo)
+        firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
+        parte = (Decimal(str(firmado)) / n).quantize(Decimal('0.01'))
 
         if asignados:
             for tec in asignados:
@@ -395,51 +434,6 @@ def exportar_produccion_admin(request):
     resp["Content-Disposition"] = 'attachment; filename="produccion_aprobada.xlsx"'
     wb.save(resp)
     return resp
-
-
-def _yyyy_mm(dt) -> str:
-    d = dt.date() if hasattr(dt, "date") else dt
-    return f"{d.year:04d}-{d.month:02d}"
-
-
-def _month_aliases(month_token: str) -> list[str]:
-    """
-    Devuelve alias de búsqueda para un mes. Soporta:
-      - 'YYYY-MM'  -> también 'Mes Año' en español (p.ej. 'Septiembre 2025')
-      - cualquier otro texto queda tal cual
-    """
-    s = (month_token or "").strip()
-    if not s:
-        return []
-    m = re.match(r"^(\d{4})-(\d{1,2})$", s)
-    if not m:
-        return [s]  # ya es texto ('Septiembre 2025', etc.)
-    y = int(m.group(1))
-    mm = int(m.group(2))
-    meses_es = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
-    ]
-    if 1 <= mm <= 12:
-        nombre_es = meses_es[mm - 1]
-        return [s, f"{nombre_es} {y}"]
-    return [s]
-
-
-# === Estados producción + ajustes ===
-EST_PROD = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
-AJ_POS = {"ajuste_bono", "ajuste_adelanto"}        # SUMAN
-AJ_NEG = {"ajuste_descuento"}                      # SOLO DESCUENTO RESTA
-ESTADOS_PROD_Y_AJUSTES = EST_PROD | AJ_POS | AJ_NEG
-
-
-def _monto_firmado_por_estado(monto, estado: str) -> Decimal:
-    base = Decimal(str(monto or 0))
-    if estado in AJ_NEG:
-        return -abs(base)     # descuento resta
-    if estado in AJ_POS:
-        return abs(base)     # bono/adelanto suman
-    return base               # producción normal
 
 
 @login_required
@@ -895,10 +889,25 @@ def _sync_monthly_totals(month: str, create_missing: bool = True) -> dict:
                 )
                 created += 1
 
+    # NO borrar rechazados; mantenerlos para poder restablecerlos.
     for _key, mp in existing.items():
-        if mp.status != "paid":
-            mp.delete()
-            deleted += 1
+        if mp.status == "paid":
+            # nunca tocar pagados
+            continue
+
+        if mp.status == "rejected_user":
+            # conservar el registro rechazado, pero sincronizar monto (por si cambió)
+            new_amount = totals.get(mp.technician_id, Decimal("0.00"))
+            if mp.amount != new_amount:
+                mp.amount = new_amount
+                mp.save(update_fields=["amount", "updated_at"])
+                updated += 1
+            continue
+
+        # para los demás estados no pagados (pending_user/approved_user/pending_payment):
+        # si ya no hay total para ese técnico-mes, se elimina
+        mp.delete()
+        deleted += 1
 
     return {"updated": updated, "created": created, "deleted": deleted}
 
@@ -914,7 +923,7 @@ def _prev_month(yyyy_mm: str) -> str:
 def admin_monthly_payments(request):
     current_month = _yyyy_mm(timezone.localdate())
     today = timezone.localdate()
-    day = today.day
+    day = today.day  # (ya no se usa para decidir qué mostrar)
 
     # ---------- Filtros del formulario ----------
     applied = (request.GET.get("filters") == "1")
@@ -929,11 +938,9 @@ def admin_monthly_payments(request):
     # ---------- TOP: lógica de pendientes ----------
     prev_month = _prev_month(current_month)
 
-    # Siempre sincroniza el mes anterior (para asegurar pendientes correctos)
+    # Siempre sincroniza mes anterior Y mes actual
     _sync_monthly_totals(prev_month, create_missing=True)
-    # Solo del 26 en adelante sincroniza también el mes actual
-    if day >= 26:
-        _sync_monthly_totals(current_month, create_missing=True)
+    _sync_monthly_totals(current_month, create_missing=True)
 
     # Base: todos los no pagados con monto > 0
     top_qs = (
@@ -943,12 +950,8 @@ def admin_monthly_payments(request):
         .select_related("technician")
     )
 
-    # Mostrar todos los meses anteriores siempre;
-    # el mes actual solo a partir del 26.
-    if day < 26:
-        top_qs = top_qs.filter(month__lt=current_month)
-    else:
-        top_qs = top_qs.filter(month__lte=current_month)
+    # Mostrar SIEMPRE todos los meses pendientes hasta el mes actual (incluido)
+    top_qs = top_qs.filter(month__lte=current_month)
 
     # Filtro por técnico en el bloque superior
     if f_tecnico:
@@ -1214,6 +1217,7 @@ def user_monthly_payments(request):
     Vista del técnico:
     - Sincroniza el registro del mes actual (con ajustes).
     - Lista sus MonthlyPayment con desglose (DU/AJUSTE) y TOTAL (amount/display_amount).
+    - Habilita botones Aprobar/Rechazar solo desde el día 26 en adelante.
     """
     current_month = _yyyy_mm(timezone.localdate())
     _sync_monthly_totals(current_month, create_missing=True)
@@ -1278,9 +1282,14 @@ def user_monthly_payments(request):
             mp.display_amount = totals.get(
                 mp.month, Decimal("0.00")).quantize(Decimal("0.01"))
 
+    # 👇 Nuevo: flag para habilitar los botones solo desde el 26
+    can_approve_today = timezone.localdate().day >= 26
+
     return render(request, "operaciones/pagos_usuario_mensual.html", {
         "current_month": current_month,
         "mine": mine,
+        # ← usar en el template para habilitar/ocultar acciones
+        "can_approve_today": can_approve_today,
     })
 
 
@@ -1288,6 +1297,16 @@ def user_monthly_payments(request):
 @require_POST
 @transaction.atomic
 def user_approve_monthly(request, pk: int):
+    """
+    El técnico aprueba su monto mensual.
+    Solo permitido desde el día 26 de cada mes.
+    """
+    # Guardia de fecha (anti fuerza bruta por URL)
+    if timezone.localdate().day < 26:
+        messages.info(
+            request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes.")
+        return redirect("operaciones:user_monthly_payments")
+
     mp = get_object_or_404(MonthlyPayment, pk=pk, technician=request.user)
     if mp.status != "pending_user":
         messages.info(
@@ -1305,8 +1324,19 @@ def user_approve_monthly(request, pk: int):
 @require_POST
 @transaction.atomic
 def user_reject_monthly(request, pk: int):
+    """
+    El técnico rechaza su monto mensual (debe indicar motivo).
+    Solo permitido desde el día 26 de cada mes.
+    """
+    # Guardia de fecha (anti fuerza bruta por URL)
+    if timezone.localdate().day < 26:
+        messages.info(
+            request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes.")
+        return redirect("operaciones:user_monthly_payments")
+
     mp = get_object_or_404(MonthlyPayment, pk=pk, technician=request.user)
     reason = (request.POST.get("reason") or "").strip()
+
     if mp.status != "pending_user":
         messages.info(
             request, "Sólo puedes rechazar cuando está 'Pendiente de mi aprobación'.")
@@ -1320,7 +1350,6 @@ def user_reject_monthly(request, pk: int):
     mp.save(update_fields=["status", "reject_reason", "updated_at"])
     messages.success(request, "Monto rechazado. Motivo guardado.")
     return redirect("operaciones:user_monthly_payments")
-
 # --- NUEVA / ACTUALIZADA: Producción del TÉCNICO (flujo mensual) ---
 # --- Mi PRODUCCIÓN (técnico) ---
 
@@ -1883,3 +1912,43 @@ def ajuste_nuevo(request):
         "usuarios": usuarios,
         "current_month": current_month,
     })
+
+
+@require_POST
+@login_required
+@transaction.atomic
+def admin_restore_user_pending_monthly(request, pk: int):
+    """
+    Permite al admin restaurar un MonthlyPayment rechazado por el técnico
+    a 'pending_user' para que el técnico vuelva a aprobar/rechazar.
+    """
+    mp = get_object_or_404(MonthlyPayment, pk=pk)
+
+    # Señales de que esperan JSON (igual que en otras vistas)
+    xrw = (request.headers.get('X-Requested-With')
+           or request.META.get('HTTP_X_REQUESTED_WITH') or '')
+    accept = (request.headers.get('Accept') or '')
+    is_ajax = (
+        request.GET.get('ajax') == '1'
+        or xrw.lower() == 'xmlhttprequest'
+        or 'application/json' in accept.lower()
+        or 'json' in accept.lower()
+    )
+
+    if mp.status != "rejected_user":
+        if is_ajax:
+            return JsonResponse({"ok": False, "error": "only_rejected_can_be_restored"}, status=400)
+        messages.info(
+            request, "Sólo puedes restaurar pagos en estado 'Rechazado por el técnico'.")
+        return redirect("operaciones:admin_monthly_payments")
+
+    # No borramos el motivo; queda como historial. (Si prefieres, limpia: mp.reject_reason="")
+    mp.status = "pending_user"
+    mp.save(update_fields=["status", "updated_at"])
+
+    if is_ajax:
+        return JsonResponse({"ok": True})
+
+    messages.success(
+        request, "Restaurado a 'Pendiente de aprobación del técnico'.")
+    return redirect("operaciones:admin_monthly_payments")

@@ -47,26 +47,38 @@
 
           <td class="p-2">{{ r.display_name }}</td>
           <td class="p-2">{{ r.week }}</td>
-          <td class="p-2 text-right">$ {{ r.amount|miles_decimales }} CLP</td>
-          <td class="p-2">
-            {% if r.status == "pending_user" %}
-              <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
-            {% elif r.status == "approved_user" or r.status == "pending_payment" %}
-              <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Pendiente de pago</span>
-            {% elif r.status == "rejected_user" %}
-              <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full" title="{{ r.reject_reason|default:'—' }}">Rechazado por el técnico</span>
-            {% elif r.status == "paid" %}
-              <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Pagado</span>
-            {% else %}
-              <span class="text-gray-400">—</span>
-            {% endif %}
-          </td>
+          <td class="p-2 text-right">$ {{ r.amount|miles_dec }} CLP</td>
+         <td class="p-2">
+  {% if r.status == "pending_user" %}
+    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
+
+  {% elif r.status == "approved_user" or r.status == "pending_payment" %}
+    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Pendiente de pago</span>
+
+  {% elif r.status == "rejected_user" %}
+    <div class="space-y-1">
+      <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full">Rechazado por el técnico</span>
+      <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+        <b>Motivo:</b> {{ r.reject_reason|default:"(sin motivo)" }}
+      </div>
+      <div class="text-[11px] text-gray-500">
+        Puedes restablecerlo para que el técnico vuelva a aprobar/rechazar.
+      </div>
+    </div>
+
+  {% elif r.status == "paid" %}
+    <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Pagado</span>
+
+  {% else %}
+    <span class="text-gray-400">—</span>
+  {% endif %}
+</td>
           <td class="p-2">
             {% if r.receipt %}
               <a class="text-blue-600 underline" href="{{ r.receipt.url }}" target="_blank" rel="noopener">Ver</a>
             {% else %}—{% endif %}
           </td>
-     <td class="p-2">
+<td class="p-2">
   {% if r.status == "pending_payment" or r.status == "approved_user" %}
     <button type="button"
             class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
@@ -74,11 +86,16 @@
       Marcar como pagado
     </button>
   {% elif r.status == "rejected_user" %}
-    <span class="text-gray-500">—</span>
+    <button type="button"
+            class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
+            onclick="restoreRejected({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+      Restablecer
+    </button>
   {% else %}
     <span class="text-gray-400">—</span>
   {% endif %}
 </td>
+
 
         </tr>
 
@@ -97,7 +114,16 @@
                 <tbody>
                   {% for d in r.details %}
                   <tr class="border-t">
-                    <td class="p-2">{{ d.du|default:"—" }}</td>
+                   <td class="p-2">
+                      {% with du=d.du proj=d.project_id %}
+                        {% if proj and proj != '-' and proj != '—' and proj != du %}
+                          {{ du }} — {{ proj }}
+                        {% else %}
+                          {{ du }}
+                        {% endif %}
+                      {% endwith %}
+                    </td>
+
                     <td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
                   </tr>
                   {% empty %}
@@ -251,7 +277,15 @@
                   <tbody>
                     {% for d in r.details %}
                     <tr class="border-t">
-                      <td class="p-2">{{ d.du|default:"—" }}</td>
+                          <td class="p-2">
+                      {% with du=d.du proj=d.project_id %}
+                        {% if proj and proj != '-' and proj != '—' and proj != du %}
+                          {{ du }} — {{ proj }}
+                        {% else %}
+                          {{ du }}
+                        {% endif %}
+                      {% endwith %}
+                    </td>
 <td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
                     </tr>
                     {% empty %}
@@ -544,6 +578,23 @@ async function fetchJSON(url, opts){
   catch { throw new Error('JSON inválido del servidor'); }
 }
 
+</script>
+
+<script>
+  async function restoreRejected(id, month, tech){
+    try{
+      const url = "{% url 'operaciones:admin_restore_user_pending_monthly' 0 %}".replace('/0/','/'+id+'/') + '?ajax=1';
+      await fetchJSON(url, {
+        method: 'POST',
+        headers: {'X-CSRFToken': CSRF}
+      });
+      toast(`Restaurado: ${tech} — ${month} ✅`, 'ok');
+      setTimeout(()=>window.location.reload(), 500);
+    }catch(e){
+      console.error(e);
+      toast('No se pudo restablecer: ' + e.message, 'error');
+    }
+  }
 </script>
 
 {% endblock %}

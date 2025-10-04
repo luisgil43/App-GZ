@@ -1,5 +1,6 @@
 {% extends "dashboard/base.html" %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Mis Pagos Mensuales{% endblock %}
 
@@ -47,13 +48,7 @@
           <td class="p-2">{{ r.month }}</td>
 
           <!-- Total -->
-          <td class="p-2 text-right">
-            {% if r.display_amount < 0 %}
-              <span class="text-red-600">-${{ r.display_amount|floatformat:"-2"|intcomma|cut:"-" }}</span>
-            {% else %}
-              $ {{ r.display_amount|floatformat:"-2"|intcomma }}
-            {% endif %}
-          </td>
+         <td class="p-2 text-right">$ {{ r.amount|miles_dec }} CLP</td>
 
           <!-- Estado (badges estilo Hyperlink) -->
           <td class="p-2">
@@ -136,13 +131,7 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-                    <td class="p-2 text-right">
-                      {% if d.subtotal < 0 %}
-                        <span class="text-red-600">-${{ d.subtotal|floatformat:"-2"|intcomma|cut:"-" }}</span>
-                      {% else %}
-                        $ {{ d.subtotal|floatformat:"-2"|intcomma }}
-                      {% endif %}
-                    </td>
+                 <td class="p-2 text-right">$ {{ d.subtotal|miles_decimales }} CLP</td>
                   </tr>
                   {% empty %}
                   <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>

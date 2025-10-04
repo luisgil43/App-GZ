@@ -153,6 +153,9 @@ urlpatterns = [
          produc.eliminar_ajuste, name="eliminar_ajuste"),
     path("produccion/ajustes/nuevo/", produc.ajuste_nuevo, name="ajuste_nuevo"),
 
+    path("pagos/mensuales/<int:pk>/restore/", produc.admin_restore_user_pending_monthly,
+         name="admin_restore_user_pending_monthly",),
+
 
 
 
