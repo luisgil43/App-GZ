@@ -47,7 +47,7 @@
 
           <td class="p-2">{{ r.display_name }}</td>
           <td class="p-2">{{ r.week }}</td>
-          <td class="p-2 text-right">$ {{ r.amount|clp_round }} CLP</td>
+          <td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
          <td class="p-2">
   {% if r.status == "pending_user" %}
     <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
@@ -124,7 +124,7 @@
                       {% endwith %}
                     </td>
 
-                    <td class="p-2 text-right">$ {{ d.subtotal|clp_round }} CLP</td>
+                    <td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
                   </tr>
                   {% empty %}
                   <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
@@ -243,7 +243,7 @@
             <td class="p-2">{{ r.display_name }}</td>
             <td class="p-2">{{ r.week }}</td>
        
-<td class="p-2 text-right">$ {{ r.amount|clp_round }} CLP</td>
+<td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
             <td class="p-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800">Pagado</span>
             </td>
@@ -286,7 +286,7 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-<td class="p-2 text-right">$ {{ d.subtotal|clp_round }} CLP</td>
+<td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
