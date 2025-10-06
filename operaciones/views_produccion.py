@@ -1812,7 +1812,8 @@ def editar_ajuste(request, pk: int):
             "asignados_ids": list(s.trabajadores_asignados.values_list('id', flat=True)),
         }
         usuarios = User.objects.filter(is_active=True).order_by(
-            "first_name", "last_name", "username")
+            "first_name", "last_name", "username"
+        )
 
         # Usamos el mismo template de "nuevo", pero en modo edición
         return render(request, "operaciones/ajuste_nuevo.html", {
@@ -1851,12 +1852,19 @@ def editar_ajuste(request, pk: int):
     if not users:
         return HttpResponseBadRequest("Asignados inválidos")
 
-    s.save(update_fields=["monto_mmoo", "estado",
-           "mes_produccion", "detalle_tarea", "updated_at"])
+    # ⬇️ Guardar SOLO con campos existentes
+    fields = ["monto_mmoo", "estado", "mes_produccion", "detalle_tarea"]
+    # agrega 'updated_at' solo si tu modelo realmente lo tiene
+    try:
+        if any(getattr(f, "name", "") == "updated_at" for f in s._meta.get_fields()):
+            fields.append("updated_at")
+    except Exception:
+        pass
+
+    s.save(update_fields=fields)
     s.trabajadores_asignados.set(users)
 
     messages.success(request, "Ajuste actualizado.")
-    # Redirige a la lista
     return redirect(f"{reverse('operaciones:produccion_admin')}?flash=ajuste_edit_ok")
 
 
