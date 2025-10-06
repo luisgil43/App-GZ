@@ -382,20 +382,26 @@ def obtener_datos_sitio(request):
 
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
+@require_POST
 def aprobar_cotizacion(request, pk):
     cotizacion = get_object_or_404(ServicioCotizado, pk=pk)
+
+    # solo permite aprobar si está en 'cotizado'
+    if cotizacion.estado != 'cotizado':
+        messages.warning(
+            request, "Esta cotización ya no está en estado 'cotizado'.")
+        return redirect('operaciones:listar_servicios_pm')
+
     cotizacion.estado = 'aprobado_pendiente'
     cotizacion.pm_aprueba = request.user
     cotizacion.save()
 
-    # Formatear DU con ceros a la izquierda
     du_formateado = f"DU{str(cotizacion.du).zfill(8)}"
 
-    # ✅ Notificar a los supervisores REALES
+    # Notificar supervisores reales
     from usuarios.models import CustomUser
     supervisores = CustomUser.objects.filter(
         roles__nombre='supervisor', is_active=True)
-
     for supervisor in supervisores:
         crear_notificacion(
             usuario=supervisor,
@@ -403,7 +409,8 @@ def aprobar_cotizacion(request, pk):
             url=reverse('operaciones:asignar_cotizacion', args=[cotizacion.pk])
         )
 
-    messages.success(request, "Cotización aprobada correctamente.")
+    messages.success(
+        request, f"Cotización {du_formateado} aprobada correctamente.")
     return redirect('operaciones:listar_servicios_pm')
 
 
@@ -552,16 +559,21 @@ def advertencia_cotizaciones_omitidas(request):
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
+    # ✅ finalizado_trabajador se trata con la MISMA prioridad que en_revision_supervisor
     estado_prioridad = Case(
         When(estado='aprobado_pendiente', then=Value(1)),
         When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
-        When(estado='en_revision_supervisor', then=Value(3)),
+        When(estado__in=['en_revision_supervisor',
+             'finalizado_trabajador'], then=Value(3)),
         When(estado__in=[
-            'finalizado_trabajador',
             'informe_subido',
             'finalizado',
             'aprobado_supervisor',
-            'rechazado_supervisor'
+            'rechazado_supervisor',
+            # Nuevos estados (no afectan el flujo del supervisor)
+            'ajuste_bono',
+            'ajuste_adelanto',
+            'ajuste_descuento',
         ], then=Value(4)),
         default=Value(5),
         output_field=IntegerField()
@@ -577,7 +589,11 @@ def listar_servicios_supervisor(request):
             'aprobado_supervisor',
             'rechazado_supervisor',
             'informe_subido',
-            'finalizado'
+            'finalizado',
+            # ✅ se listan también los nuevos (no cambian orden de trabajo)
+            'ajuste_bono',
+            'ajuste_adelanto',
+            'ajuste_descuento',
         ]
     ).annotate(
         prioridad=estado_prioridad

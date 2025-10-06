@@ -40,8 +40,7 @@
     white-space: nowrap;
     min-width: 1100px;
   }
-
-.modal-copy{
+  .modal-copy{
     overflow-wrap: anywhere;
     word-break: break-word;
     hyphens: auto;
@@ -94,7 +93,7 @@
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">MONTO MMOO</th>
         <th class="p-2">ASIGNADOS</th>
-	<th class="p-2">FECHA FIN</th>
+        <th class="p-2">FECHA FIN</th>
         <th class="p-2">STATUS</th>
         <th class="p-2">ACCIONES</th>
       </tr>
@@ -116,144 +115,133 @@
             <span class="italic text-gray-400">Sin asignar</span>
           {% endfor %}
         </td>
-<td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
-    <td class="p-2 text-sm">
-  <div class="flex flex-col gap-1 text-left">
+        <td class="p-2">
+          {% if servicio.estado == 'aprobado_supervisor' and servicio.fecha_aprobacion_supervisor %}
+            {{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}
+          {% elif servicio.fecha_fin %}
+            {{ servicio.fecha_fin|date:"d/m/Y H:i" }}
+          {% else %}—{% endif %}
+        </td>
 
-    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
-      {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-      {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
-      {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
-      {% elif servicio.estado == 'en_revision_supervisor' %}bg-yellow-100 text-emerald-800
-      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-      {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
-      {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-      {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
-      {% else %}bg-gray-100 text-gray-800{% endif %}">
+        <!-- ====== STATUS (badge) ====== -->
+        <td class="p-2 text-sm">
+          <div class="flex flex-col gap-1 text-left">
 
-      {% if servicio.estado == 'aprobado_pendiente' %}
-        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif servicio.estado == 'asignado' %}
-        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-      {% elif servicio.estado == 'en_progreso' %}
-        {% if servicio.tecnico_aceptado %}
-          🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
-        {% else %}
-          🔁 Reabierto — pendiente re-aceptación del técnico
-        {% endif %}
-      {% elif servicio.estado == 'en_revision_supervisor' %}
-        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
-      {% elif servicio.estado == 'rechazado_supervisor' %}
-        ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
-      {% elif servicio.estado == 'aprobado_supervisor' %}
-        ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
-      {% elif servicio.estado == 'ajuste_bono' %}
-        🎁 Bono
-      {% elif servicio.estado == 'ajuste_adelanto' %}
-        ⏩ Adelanto
-      {% elif servicio.estado == 'ajuste_descuento' %}
-        ➖ Descuento
-      {% else %}
-        {{ servicio.estado }}
-      {% endif %}
-    </div>
+            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+              {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+              {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+              {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
+              {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
+              {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+              {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+              {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+              {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+              {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+              {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+              {% else %}bg-gray-100 text-gray-800{% endif %}">
 
-    {% if servicio.estado == 'en_revision_supervisor' %}
-      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-        📝 Pendiente revisión del supervisor
-      </div>
-    {% endif %}
-  </div>
+              {% if servicio.estado == 'aprobado_pendiente' %}
+                ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
 
-  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
-      <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
-    </div>
-  {% endif %}
-</td>
+              {% elif servicio.estado == 'asignado' %}
+                ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
 
+              {% elif servicio.estado == 'en_progreso' %}
+                {% if servicio.tecnico_aceptado %}
+                  🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
+                {% else %}
+                  🔁 Reabierto — pendiente re-aceptación del técnico
+                {% endif %}
+
+              {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+                ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+
+              {% elif servicio.estado == 'rechazado_supervisor' %}
+                ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+
+              {% elif servicio.estado == 'aprobado_supervisor' %}
+                ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+
+              {% elif servicio.estado == 'ajuste_bono' %}
+                🎁 Bono
+
+              {% elif servicio.estado == 'ajuste_adelanto' %}
+                ⏩ Adelanto
+
+              {% elif servicio.estado == 'ajuste_descuento' %}
+                ➖ Descuento
+
+              {% else %}
+                {{ servicio.estado }}
+              {% endif %}
+            </div>
+
+            {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+              <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                📝 Pendiente revisión del supervisor
+              </div>
+            {% endif %}
+          </div>
+
+          {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
+              <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
+            </div>
+          {% endif %}
+        </td>
+
+        <!-- ====== ACCIONES ====== -->
 <td class="p-2 space-y-1">
+  {# 1) Aprobado por PM -> Asignar #}
   {% if servicio.estado == 'aprobado_pendiente' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">
-      👥 Asignar
-    </a>
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">👥 Asignar</a>
 
-  {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'rechazado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
-       class="text-sky-700 hover:underline block">📋 Requerimientos fotos</a>
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}"
-       class="text-emerald-700 hover:underline block">🔎 Revisión</a>
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}"
-       class="text-indigo-600 hover:underline block">🔁 Reasignar</a>
+  {# 2) SOLO estos tres NO tienen acciones #}
+  {% elif servicio.estado == 'ajuste_bono' or servicio.estado == 'ajuste_adelanto' or servicio.estado == 'ajuste_descuento' %}
+    <span class="text-gray-400 italic">Sin acciones</span>
 
+  {# 3) Flujo normal con acciones (como antes) #}
+  {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' or servicio.estado == 'rechazado_supervisor' %}
+    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}" class="text-sky-700 hover:underline block">📋 Requerimientos fotos</a>
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}" class="text-emerald-700 hover:underline block">🔎 Revisión</a>
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-indigo-600 hover:underline block">🔁 Reasignar</a>
     {% if servicio.motivo_rechazo %}
       <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
         <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
       </div>
     {% endif %}
 
+  {# 4) Aprobado por supervisor -> revisar + reabrir (igual que antes) #}
   {% elif servicio.estado == 'aprobado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}"
-       class="text-emerald-700 hover:underline block">🔎 Revisar</a>
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}" class="text-emerald-700 hover:underline block">🔎 Revisar</a>
+    <button type="button" class="text-red-600 hover:underline block" onclick="abrirModalReabrir('{{ servicio.id }}')">🔓 Reabrir servicio</button>
 
-    <button type="button"
-            class="text-red-600 hover:underline block"
-            onclick="abrirModalReabrir('{{ servicio.id }}')">
-      🔓 Reabrir servicio
-    </button>
-
-    <div id="modal-reabrir-{{ servicio.id }}"
-         class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
+    <div id="modal-reabrir-{{ servicio.id }}" class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
       <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
         <div class="px-5 py-4 border-b flex items-center justify-between">
           <h3 class="text-lg font-semibold text-gray-800">Reabrir servicio</h3>
-          <button type="button" class="text-gray-500 hover:text-gray-700"
-                  onclick="cerrarModalReabrir('{{ servicio.id }}')">✕</button>
+          <button type="button" class="text-gray-500 hover:text-gray-700" onclick="cerrarModalReabrir('{{ servicio.id }}')">✕</button>
         </div>
-
-        <form method="post"
-              action="{% url 'operaciones:reabrir_servicio' servicio.pk %}"
-              class="px-5 pt-4 pb-5 space-y-3">
+        <form method="post" action="{% url 'operaciones:reabrir_servicio' servicio.pk %}" class="px-5 pt-4 pb-5 space-y-3">
           {% csrf_token %}
-          <p class="text-sm text-gray-600 break-words whitespace-normal leading-relaxed modal-copy">
-            Indica el motivo por el cual se reabre la asignación, por ejemplo: rechazo del cliente o fotos faltantes.
-          </p>
-
+          <p class="text-sm text-gray-600 leading-relaxed modal-copy">Indica el motivo por el cual se reabre la asignación.</p>
           <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
-          <textarea name="motivo" rows="4" required pattern=".*\S.*"
-                    oninput="this.value = this.value.replace(/^\s+/, '')"
-                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-
+          <textarea name="motivo" rows="4" required pattern=".*\S.*" oninput="this.value = this.value.replace(/^\s+/, '')" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
           <div class="flex items-center justify-end gap-2 pt-2">
-            <button type="button"
-                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
-                    onclick="cerrarModalReabrir('{{ servicio.id }}')">Cancelar</button>
-            <button type="submit"
-                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
-              Reabrir servicio
-            </button>
+            <button type="button" class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700" onclick="cerrarModalReabrir('{{ servicio.id }}')">Cancelar</button>
+            <button type="submit" class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">Reabrir servicio</button>
           </div>
         </form>
       </div>
     </div>
 
+  {# 5) Resto igual que antes (si lo tenías sin acciones, se mantiene) #}
   {% else %}
     <span class="text-gray-400 italic">Sin acciones</span>
   {% endif %}
 </td>
 
 
-<!-- Script para capturar el motivo antes de enviar el formulario -->
-<script>
-  function confirmarReapertura(form) {
-    const motivo = prompt('Motivo para reabrir el servicio (por ejemplo: rechazo del cliente):');
-    if (motivo === null) return false; // Si el usuario cancela
-    form.motivo.value = (motivo || '').trim(); // Guardamos el texto ingresado en el input hidden
-    return true;
-  }
-</script>
 
       </tr>
       {% endfor %}
@@ -279,191 +267,22 @@
 </form>
 
 <script>
-  function abrirModalAsignacion(id) {
-    const modal = document.getElementById('modal-rechazo-' + id);
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-    const ta = modal.querySelector('textarea[name="motivo_rechazo"]');
-    if (ta) setTimeout(() => ta.focus(), 50);
-  }
-
-  function cerrarModalAsignacion(id) {
-    const modal = document.getElementById('modal-rechazo-' + id);
-    if (!modal) return;
-    modal.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
-
-  document.addEventListener('click', (e) => {
-    const modal = e.target.closest('[id^="modal-rechazo-"]');
-    if (modal && e.target === modal) {
-      modal.classList.add('hidden');
-      document.body.classList.remove('overflow-hidden');
-    }
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('[id^="modal-rechazo-"]:not(.hidden)').forEach(m => m.classList.add('hidden'));
-      document.body.classList.remove('overflow-hidden');
-    }
-  });
-</script>
-
-<script>
-  (function() {
-    const selectAll = document.getElementById('select-all');
-    if (!selectAll) return;
-    selectAll.addEventListener('change', function() {
-      document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
-    });
-  })();
-</script>
-
-<script>
-(function () {
-  const form = document.getElementById('form-filtros');
-  if (!form) return;
-
-  const inputs  = form.querySelectorAll('input[type="text"]');
-  const selects = form.querySelectorAll('select');
-
-  const KEY = 'svc_sup_filtros_focus';
-  function rememberCaret(el) {
-    try {
-      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
-      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
-    } catch (_) {}
-  }
-  function restoreCaret() {
-    try {
-      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-      if (!data) return;
-      const el = form.elements[data.name];
-      if (!el) return;
-      el.focus({ preventScroll: true });
-      const len = (el.value || '').length;
-      const p = Math.min((data.pos ?? len), len);
-      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
-    } catch (_) {}
-  }
-
-  let t;
-  const submitDebounced = (el) => {
-    rememberCaret(el);
-    clearTimeout(t);
-    t = setTimeout(() => form.requestSubmit(), 450);
-  };
-
-  inputs.forEach(el => {
-    el.addEventListener('input',  () => submitDebounced(el));
-    el.addEventListener('change', () => submitDebounced(el));
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
-    });
-  });
-
-  selects.forEach(el => el.addEventListener('change', () => { rememberCaret(el); form.requestSubmit(); }));
-
-  window.addEventListener('DOMContentLoaded', restoreCaret);
-})();
-</script>
-<script>
-(function () {
-  function getCookie(name) {
-    const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
-    return m ? m.pop() : '';
-  }
-  const CSRF = getCookie('csrftoken');
-
-  document.addEventListener('dblclick', function (e) {
-    const wrapper = e.target.closest('.editable-motivo');
-    if (!wrapper) return;
-
-    const span = wrapper.querySelector('.motivo-text');
-    if (!span) return;
-
-    const oldText = span.textContent === 'Doble clic para editar…' ? '' : span.textContent;
-
-    const ta = document.createElement('textarea');
-    ta.value = oldText;
-    ta.rows = Math.max(3, Math.min(8, (oldText.split('\n').length || 1)));
-    ta.className = 'w-full border rounded p-2 text-xs';
-    span.replaceWith(ta);
-    ta.focus();
-
-    const servicioId = wrapper.getAttribute('data-id');
-    let saving = false;
-
-    function save() {
-      if (saving) return;
-      saving = true;
-      const nuevoTexto = ta.value.trim();
-
-      fetch(`/operaciones/servicios/${servicioId}/actualizar-motivo/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': CSRF,
-          'X-Requested-With': 'XMLHttpRequest',
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ 'motivo': nuevoTexto })
-      })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(data => {
-        const newSpan = document.createElement('span');
-        newSpan.className = 'motivo-text';
-        newSpan.textContent = (data && data.motivo) ? data.motivo : (nuevoTexto || 'Doble clic para editar…');
-        if (!nuevoTexto) newSpan.classList.add('italic', 'text-gray-400');
-        ta.replaceWith(newSpan);
-      })
-      .catch(() => {
-        alert('Error al guardar el motivo.');
-        ta.focus();
-        saving = false;
-      });
-    }
-
-    ta.addEventListener('blur', save);
-    ta.addEventListener('keydown', function (ev) {
-      if (ev.key === 'Enter' && !ev.shiftKey) {
-        ev.preventDefault();
-        save();
-      } else if (ev.key === 'Escape') {
-        const back = document.createElement('span');
-        back.className = 'motivo-text';
-        back.textContent = oldText || 'Doble clic para editar…';
-        if (!oldText) back.classList.add('italic', 'text-gray-400');
-        ta.replaceWith(back);
-      }
-    });
-  });
-})();
-</script>
-
-<script>
   function abrirModalReabrir(id) {
     const modal = document.getElementById('modal-reabrir-' + id);
     if (!modal) return;
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
-
-    // Autofocus al textarea cuando se abre
     setTimeout(() => {
       const ta = modal.querySelector('textarea[name="motivo"]');
       if (ta) ta.focus();
     }, 30);
   }
-
   function cerrarModalReabrir(id) {
     const modal = document.getElementById('modal-reabrir-' + id);
     if (!modal) return;
     modal.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
   }
-
-  // Cerrar al hacer clic fuera de la caja o presionar ESC
   document.addEventListener('click', (e) => {
     const modal = e.target.closest('[id^="modal-reabrir-"]');
     if (modal && e.target === modal) {
@@ -471,7 +290,6 @@
       document.body.classList.remove('overflow-hidden');
     }
   });
-
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('[id^="modal-reabrir-"]:not(.hidden)')
@@ -481,5 +299,74 @@
   });
 </script>
 
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
 
+  const isTouch = matchMedia('(pointer:coarse)').matches;
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'svc_sup_filtros_focus_v2';
+
+  function rememberCaret(el){
+    try{
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({name: el.name, pos}));
+    }catch(_){}
+  }
+  function submitNow(fromEl){
+    rememberCaret(fromEl);
+    form.requestSubmit();
+  }
+
+  // TEXT INPUTS
+  inputs.forEach(el => {
+    if (isTouch) {
+      // móvil: al salir del input
+      el.addEventListener('blur', () => submitNow(el));
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); submitNow(el); }
+      });
+    } else {
+      // desktop: debounce mientras escribes
+      let t, composing = false;
+      function doSubmit(){
+        clearTimeout(t);
+        t = setTimeout(() => { if (!composing) submitNow(el); }, 500);
+      }
+      el.addEventListener('compositionstart', () => composing = true);
+      el.addEventListener('compositionend',   () => { composing = false; doSubmit(); });
+      el.addEventListener('input',  doSubmit);
+      el.addEventListener('change', doSubmit);
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); submitNow(el); }
+      });
+    }
+  });
+
+  // SELECTS: enviar al cambiar
+  selects.forEach(el => el.addEventListener('change', () => submitNow(el)));
+
+  // Restaurar foco/caret tras recargar
+  function restoreCaret(){
+    try{
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    }catch(_){}
+  }
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+  window.addEventListener('pageshow', restoreCaret);
+})();
+</script>
+
+
+</div>
 {% endblock %}
