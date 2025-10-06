@@ -1,3 +1,6 @@
+from django.db.models import Count, Q
+from django.db import transaction
+from operaciones.models import ServicioCotizado, MonthlyPayment
 from django.db.models import Prefetch
 from uuid import uuid4
 import unicodedata
@@ -93,10 +96,24 @@ def listar_ordenes_compra(request):
         .order_by('-fecha_creacion')
     )
 
-    # 🔎 Filtrado por estado: SOLO si el usuario lo elige
+    # 🚫 NO mostrar bonos / adelantos / descuentos en este listado
+    servicios = servicios.exclude(
+        estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento']
+    )
+
+    # ✅ contadores para decidir correctamente cuándo mostrar “Sin orden de compra”
+    servicios = servicios.annotate(
+        oc_total=Count('ordenes_compra', distinct=True),
+        oc_sin_fact=Count(
+            'ordenes_compra',
+            filter=~Q(ordenes_compra__id__in=oc_facturadas_ids),
+            distinct=True
+        )
+    )
+
+    # 🔎 Filtrado por estado (si el usuario lo elige)
     if estado:
         servicios = servicios.filter(estado=estado)
-    # (si no hay estado → NO se filtra: muestra todos)
 
     # Filtros de texto
     if du:
@@ -116,6 +133,29 @@ def listar_ordenes_compra(request):
         per_page = 10
     pagina = Paginator(servicios, per_page).get_page(q.get("page"))
 
+    # === MonthlyPayment (como ya lo tenías)
+    visibles = list(pagina.object_list)
+
+    def _pick_tech_id(s):
+        return s.tecnico_finalizo_id or s.tecnico_aceptado_id
+
+    tech_ids = {tid for tid in (_pick_tech_id(s) for s in visibles) if tid}
+    months = {(s.mes_produccion or "")[:7]
+              for s in visibles if (s.mes_produccion or "")[:7]}
+
+    mp_map = {}
+    if tech_ids and months:
+        for mp in MonthlyPayment.objects.filter(technician_id__in=tech_ids, month__in=months):
+            mp_map[(mp.technician_id, mp.month)] = mp.status
+
+    status_label_map = dict(MonthlyPayment.STATUS)
+    for s in visibles:
+        tid = _pick_tech_id(s)
+        mm = (s.mes_produccion or "")[:7]
+        st = mp_map.get((tid, mm))
+        s.payment_status = st or ""
+        s.payment_status_label = status_label_map.get(st, "")
+
     # --- Querystrings persistentes ---
     qs_pag = q.copy()
     qs_pag.pop("page", None)
@@ -133,6 +173,7 @@ def listar_ordenes_compra(request):
             'estado': estado,
         },
         'estado_choices': ServicioCotizado.ESTADOS,
+        'monthly_status_choices': status_label_map,
         'qs_pag': qs_pag.urlencode(),
         'qs_cant': qs_cant.urlencode(),
     }
@@ -615,52 +656,55 @@ def listar_facturas(request):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def enviar_a_facturacion(request):
-    if request.method == "POST":
-        ids = request.POST.getlist('seleccionados')
-        if not ids:
-            messages.error(request, "Debes seleccionar al menos una orden.")
-            return redirect('facturacion:listar_oc_facturacion')
+    if request.method != "POST":
+        return redirect('facturacion:listar_oc_facturacion')
 
-        enviados, omitidos = [], []
+    ids = request.POST.getlist('seleccionados') or []
+    if not ids:
+        messages.error(request, "Debes seleccionar al menos una orden.")
+        return redirect('facturacion:listar_oc_facturacion')
 
-        for oc_id in ids:
-            oc = OrdenCompraFacturacion.objects.filter(id=oc_id).first()
-            if not oc:
-                continue
+    enviados, omitidos = [], []
 
-            # Validar que tenga los campos requeridos
-            if not all([oc.orden_compra, oc.pos, oc.cantidad, oc.unidad_medida,
-                        oc.material_servicio, oc.descripcion_sitio,
-                        oc.fecha_entrega, oc.precio_unitario, oc.monto]):
+    # Hacemos la operación atómica e idempotente
+    with transaction.atomic():
+        ocs = (OrdenCompraFacturacion.objects
+               .select_related('du')
+               .filter(id__in=ids))
+
+        for oc in ocs:
+            # Validar campos requeridos (si falta algo, no la mandamos)
+            if not all([
+                oc.orden_compra, oc.pos, oc.cantidad, oc.unidad_medida,
+                oc.material_servicio, oc.descripcion_sitio,
+                oc.fecha_entrega, oc.precio_unitario, oc.monto
+            ]):
                 omitidos.append(f"DU {oc.du.du} - POS {oc.pos}")
                 continue
 
-            # Evitar duplicados
-            factura_existente = FacturaOC.objects.filter(
-                orden_compra=oc).first()
-            if factura_existente:
+            # Evitar duplicados en facturación (idempotente)
+            _, created = FacturaOC.objects.get_or_create(
+                orden_compra=oc,
+                defaults={'mes_produccion': oc.du.mes_produccion}
+            )
+            if created:
+                enviados.append(str(oc.id))
+            else:
                 omitidos.append(
                     f"DU {oc.du.du} - POS {oc.pos} (ya en facturación)")
-                continue
 
-            # Crear registro de facturación
-            FacturaOC.objects.create(
-                orden_compra=oc,
-                mes_produccion=oc.du.mes_produccion
-            )
-            enviados.append(oc_id)
+    if enviados:
+        messages.success(
+            request, f"{len(enviados)} órdenes fueron movidas a facturación correctamente."
+        )
+    if omitidos:
+        messages.warning(
+            request, "Las siguientes órdenes no fueron movidas:<br>" +
+            "<br>".join(omitidos)
+        )
 
-        # Mensajes flash
-        if enviados:
-            messages.success(
-                request, f"{len(enviados)} órdenes fueron movidas a facturación correctamente.")
-        if omitidos:
-            messages.warning(
-                request, "Las siguientes órdenes no fueron movidas:<br>" + "<br>".join(omitidos))
-
-        return redirect('facturacion:listar_facturas')
-
-    return redirect('facturacion:listar_oc_facturacion')
+    # Vamos a la lista de facturas (lo que esperas al “mover” a facturación)
+    return redirect('facturacion:listar_facturas')
 
 
 def limpiar_fecha(valor):

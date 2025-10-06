@@ -169,10 +169,7 @@ class ServicioCotizado(models.Model):
         ('rechazado_supervisor', 'Rechazado por supervisor'),
         ('aprobado_supervisor', 'Aprobado por supervisor'),
 
-        # ⬇️ NUEVOS: ajustes
-        ('ajuste_bono', 'Ajuste: Bono'),
-        ('ajuste_adelanto', 'Ajuste: Adelanto'),
-        ('ajuste_descuento', 'Ajuste: Descuento'),
+
 
     ]
 

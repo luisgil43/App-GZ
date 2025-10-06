@@ -23,28 +23,24 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  /* ✅ Compacta los filtros: sin scroll horizontal, una fila en desktop */
   .filtros-compactos .campo-filtro { 
     width: auto; 
-    min-width: 8.5rem;   /* tamaño mínimo cómodo */
-    max-width: 12rem;    /* evita que crezcan de más */
+    min-width: 8.5rem;
+    max-width: 12rem;
   }
   @media (max-width: 640px) {
     .filtros-compactos .campo-filtro { max-width: 10.5rem; }
   }
-
-/* === Tabla responsive: el scroll queda dentro del recuadro === */
-.tabla-responsive{
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
-  max-width: 100%;
-}
-.tabla-responsive table{
-  white-space: nowrap;     /* mantiene columnas en una línea */
-  min-width: 1100px;       /* ajusta si quieres; evita empujar el layout */
-}
-
+  .tabla-responsive{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+  .tabla-responsive table{
+    white-space: nowrap;
+    min-width: 1100px;
+  }
 </style>
 
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
@@ -65,7 +61,6 @@
   </div>
 </div>
 
-
 <!-- Filtros -->
 <form id="form-filtros" method="get" class="filtros-compactos mb-6">
   <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
@@ -81,31 +76,28 @@
       {% endfor %}
     </select>
 
-  <div class="flex gap-2 w-full sm:w-auto">
-   <!-- Único botón -->
-    <a href="{% url 'facturacion:listar_oc_facturacion' %}"
-       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
-      ❌ Limpiar
-    </a>
-  </div>
-<input type="hidden" name="cantidad" value="{{ cantidad }}">
+    <div class="flex gap-2 w-full sm:w-auto">
+      <a href="{% url 'facturacion:listar_oc_facturacion' %}"
+         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+        ❌ Limpiar
+      </a>
+    </div>
+    <input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
 
-
-
-<!-- Formulario que envuelve la tabla -->
+<!-- Form tabla -->
 <form id="enviar-a-facturacion-form" method="POST" action="{% url 'facturacion:enviar_a_facturacion' %}">
 {% csrf_token %}
 <div class="rounded-xl border border-gray-200 tabla-responsive">
   <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-       <tr>
-         <th class="p-2"><input type="checkbox" id="select-all" class="w-4 h-4"></th>
+      <tr>
+        <th class="p-2"><input type="checkbox" id="select-all" class="w-4 h-4"></th>
         <th class="p-2">DU</th>
         <th class="p-2">ID CLARO</th>
         <th class="p-2">ID NEW</th>
-<th class="p-2">MES PRODUCCIÓN</th>
+        <th class="p-2">MES PRODUCCIÓN</th>
         <th class="p-2">DETALLE TAREA</th>
         <th class="p-2">ASIGNADOS</th>
         <th class="p-2">M. COTIZADO (UF)</th>
@@ -124,167 +116,174 @@
         <th class="p-2">ACCIÓN</th>
       </tr>
     </thead>
-<tbody class="text-center">
-  {% for servicio in pagina %}
-    {% if servicio.ordenes_compra.all|length %}
-      {% for oc in servicio.ordenes_compra.all %}
-      <tr class="border-t">
-        <td class="p-2 text-center"><input type="checkbox" name="seleccionados" value="{{ oc.id }}" class="w-4 h-4"></td>
-        <td class="p-2 font-mono">DU{{ servicio.du }}</td>
-        <td class="p-2">{{ servicio.id_claro }}</td>
-        <td class="p-2">{{ servicio.id_new }}</td>
-<td class="p-2">{{ servicio.mes_produccion }}</td>
-        <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
-        <td class="p-2">
-          {% for user in servicio.trabajadores_asignados.all %}
-            {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
-          {% endfor %}
-        </td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|formato_uf }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|formato_clp }} CLP</td>
-        <td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
-        <td class="p-2 text-sm">
-          <div class="flex flex-col gap-1 text-left">
-            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-              {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-              {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-              {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-              {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-              {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-              {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-              {% else %}bg-gray-100 text-gray-800{% endif %}">
-              {% if servicio.estado == 'aprobado_pendiente' %}
-               ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'asignado' %}
-               ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'en_progreso' %}
-               🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
-              {% elif servicio.estado == 'finalizado_trabajador' %}
-               ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'rechazado_supervisor' %}
-               ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'aprobado_supervisor' %}
-               ✅  Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'informe_subido' %}
-                📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'finalizado' %}
-                ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% else %}
-                {{ servicio.estado }}
-              {% endif %}
-            </div>
-            {% if servicio.estado == 'finalizado_trabajador' %}
-              <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                📝 Pendiente revisión del supervisor
+
+    {# ====== TBOBY con lógica corregida ====== #}
+    <tbody class="text-center">
+      {% for servicio in pagina %}
+
+        {# 1) Mostrar OCs NO FACTURADAS si existen #}
+        {% if servicio.oc_sin_fact %}
+          {% for oc in servicio.ordenes_compra.all %}
+          <tr class="border-t">
+            <td class="p-2 text-center">
+              <input type="checkbox" name="seleccionados" value="{{ oc.id }}" class="w-4 h-4">
+            </td>
+            <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+            <td class="p-2">{{ servicio.id_claro }}</td>
+            <td class="p-2">{{ servicio.id_new }}</td>
+            <td class="p-2">{{ servicio.mes_produccion }}</td>
+            <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">
+              {{ servicio.detalle_tarea }}
+            </td>
+            <td class="p-2">
+              {% for user in servicio.trabajadores_asignados.all %}
+                {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+              UF {{ servicio.monto_cotizado|formato_uf }}
+            </td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+              $ {{ servicio.monto_mmoo|formato_clp }} CLP
+            </td>
+            <td class="p-2">
+              {% if servicio.fecha_aprobacion_supervisor %}
+                {{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}
+              {% else %}—{% endif %}
+            </td>
+
+            {# Píldoras de estado (igual que tenías) #}
+            <td class="p-2 text-sm">
+              <div class="flex flex-col gap-1 text-left">
+                <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+                  {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+                  {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+                  {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
+                  {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
+                  {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+                  {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+                  {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+                  {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
+                  {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
+                  {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+                  {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+                  {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+                  {% else %}bg-gray-100 text-gray-800{% endif %}">
+                  {% if servicio.estado == 'aprobado_pendiente' %}
+                    ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+                  {% elif servicio.estado == 'asignado' %}
+                    ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+                  {% elif servicio.estado == 'en_progreso' %}
+                    {% if servicio.tecnico_aceptado %} 🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
+                    {% else %} 🔁 Reabierto — pendiente re-aceptación del técnico {% endif %}
+                  {% elif servicio.estado == 'finalizado_trabajador' %}
+                    ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+                  {% elif servicio.estado == 'rechazado_supervisor' %}
+                    ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+                  {% elif servicio.estado == 'aprobado_supervisor' %}
+                    ✅  Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+                  {% elif servicio.estado == 'informe_subido' %}
+                    📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+                  {% elif servicio.estado == 'finalizado' %}
+                    ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+                  {% elif servicio.estado == 'ajuste_bono' %} 🎁 Bono
+                  {% elif servicio.estado == 'ajuste_adelanto' %} ⏩ Adelanto
+                  {% elif servicio.estado == 'ajuste_descuento' %} ➖ Descuento
+                  {% else %} {{ servicio.get_estado_display|default:servicio.estado }} {% endif %}
+                </div>
+
+                {% if servicio.payment_status %}
+                  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+                    {% if servicio.payment_status == 'pending_user' %} bg-amber-100 text-amber-800
+                    {% elif servicio.payment_status == 'approved_user' %} bg-blue-100 text-blue-800
+                    {% elif servicio.payment_status == 'rejected_user' %} bg-red-100 text-red-800
+                    {% elif servicio.payment_status == 'pending_payment' %} bg-purple-100 text-purple-800
+                    {% elif servicio.payment_status == 'paid' %} bg-emerald-100 text-emerald-800
+                    {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                    💳 {{ servicio.payment_status_label }}
+                  </div>
+                {% endif %}
               </div>
-            {% endif %}
-          </div>
+            </td>
 
-          {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
-                style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
-                data-id="{{ servicio.id }}">
-              <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
-            </div>
-          {% endif %}
-        </td>
+            <td class="p-2">{{ oc.orden_compra }}</td>
+            <td class="p-2">{{ oc.pos }}</td>
+            <td class="p-2">{{ oc.cantidad }}</td>
+            <td class="p-2">{{ oc.unidad_medida }}</td>
+            <td class="p-2">{{ oc.material_servicio }}</td>
+            <td class="p-2">{{ oc.descripcion_sitio }}</td>
+            <td class="p-2">{{ oc.fecha_entrega }}</td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.precio_unitario|formato_uf }}</td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.monto|formato_uf }}</td>
+            <td class="p-2">
+              <a href="{% url 'facturacion:editar_orden_compra' oc.pk %}" class="text-blue-600 hover:underline text-xs">✏️</a>
+              <a href="{% url 'facturacion:eliminar_orden_compra' oc.pk %}" class="text-red-600 hover:underline text-xs">🗑️</a>
+            </td>
+          </tr>
+          {% endfor %}
 
-        <td class="p-2">{{ oc.orden_compra }}</td>
-        <td class="p-2">{{ oc.pos }}</td>
-        <td class="p-2">{{ oc.cantidad }}</td>
-        <td class="p-2">{{ oc.unidad_medida }}</td>
-        <td class="p-2">{{ oc.material_servicio }}</td>
-        <td class="p-2">{{ oc.descripcion_sitio }}</td>
-        <td class="p-2">{{ oc.fecha_entrega }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.precio_unitario|formato_uf }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ oc.monto|formato_uf }}</td>
-        <td class="p-2">
-          <a href="{% url 'facturacion:editar_orden_compra' oc.pk %}" class="text-blue-600 hover:underline text-xs">✏️</a>
-          <a href="{% url 'facturacion:eliminar_orden_compra' oc.pk %}" class="text-red-600 hover:underline text-xs">🗑️</a>
-        </td>
-      </tr>
+        {# 2) Si NUNCA tuvo OC, mostramos “Sin orden de compra” #}
+        {% elif servicio.oc_total == 0 %}
+          <tr class="border-t">
+            <td class="p-2 text-center">—</td>
+            <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+            <td class="p-2">{{ servicio.id_claro }}</td>
+            <td class="p-2">{{ servicio.id_new }}</td>
+            <td class="p-2">{{ servicio.mes_produccion }}</td>
+            <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
+            <td class="p-2">
+              {% for user in servicio.trabajadores_asignados.all %}
+                {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
+              {% empty %}<span class="italic text-gray-400">Sin asignar</span>{% endfor %}
+            </td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|formato_uf }}</td>
+            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|formato_clp }} CLP</td>
+            <td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
+            <td class="p-2 text-sm">
+              <div class="flex flex-col gap-1 text-left">
+                {# mismas píldoras de estado, idénticas a arriba #}
+                <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+                  {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+                  {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+                  {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
+                  {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
+                  {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+                  {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+                  {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+                  {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
+                  {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
+                  {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+                  {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+                  {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+                  {% else %}bg-gray-100 text-gray-800{% endif %}">
+                  {{ servicio.get_estado_display|default:servicio.estado }}
+                </div>
+                {% if servicio.payment_status %}
+                  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+                    {% if servicio.payment_status == 'pending_user' %} bg-amber-100 text-amber-800
+                    {% elif servicio.payment_status == 'approved_user' %} bg-blue-100 text-blue-800
+                    {% elif servicio.payment_status == 'rejected_user' %} bg-red-100 text-red-800
+                    {% elif servicio.payment_status == 'pending_payment' %} bg-purple-100 text-purple-800
+                    {% elif servicio.payment_status == 'paid' %} bg-emerald-100 text-emerald-800
+                    {% else %} bg-gray-100 text-gray-800 {% endif %}">
+                    💳 {{ servicio.payment_status_label }}
+                  </div>
+                {% endif %}
+              </div>
+            </td>
+            <td colspan="7" class="p-2 italic text-gray-400">Sin orden de compra</td>
+            <td class="p-2">
+              <a href="{% url 'facturacion:editar_orden_compra' servicio.id %}" class="text-blue-600 hover:underline text-xs">✏️</a>
+            </td>
+          </tr>
+        {% endif %}
       {% endfor %}
-    {% else %}
-      <tr class="border-t">
-        <td class="p-2 text-center">—</td>
-        <td class="p-2 font-mono">DU{{ servicio.du }}</td>
-        <td class="p-2">{{ servicio.id_claro }}</td>
-        <td class="p-2">{{ servicio.id_new }}</td>
-<td class="p-2">{{ servicio.mes_produccion }}</td>
-        <td class="p-2 text-xs whitespace-pre-line break-words min-w-[300px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
-        <td class="p-2">
-          {% for user in servicio.trabajadores_asignados.all %}
-            {{ user.get_full_name }}{% if not forloop.last %}, {% endif %}
-          {% empty %}
-            <span class="italic text-gray-400">Sin asignar</span>
-          {% endfor %}
-        </td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">UF {{ servicio.monto_cotizado|formato_uf }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|formato_clp }} CLP</td>
-        <td class="p-2">{% if servicio.fecha_aprobacion_supervisor %}{{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}{% else %}—{% endif %}</td>
-        <td class="p-2 text-sm">
-          <div class="flex flex-col gap-1 text-left">
-            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-              {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-              {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-              {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-              {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-              {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-              {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-              {% else %}bg-gray-100 text-gray-800{% endif %}">
-              {% if servicio.estado == 'aprobado_pendiente' %}
-               ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'asignado' %}
-               ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'en_progreso' %}
-               🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
-              {% elif servicio.estado == 'finalizado_trabajador' %}
-               ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'rechazado_supervisor' %}
-               ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'aprobado_supervisor' %}
-               ✅  Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }} {% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'informe_subido' %}
-                📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }} ({{ servicio.usuario_informe.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% elif servicio.estado == 'finalizado' %}
-                ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }} ({{ servicio.tecnico_finalizo.rol|capfirst }}){% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-              {% else %}
-                {{ servicio.estado }}
-              {% endif %}
-            </div>
-            {% if servicio.estado == 'finalizado_trabajador' %}
-              <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                📝 Pendiente revisión del supervisor
-              </div>
-            {% endif %}
-          </div>
-
-          {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" 
-                style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;"
-                data-id="{{ servicio.id }}">
-              <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
-            </div>
-          {% endif %}
-        </td>
-
-        <td colspan="7" class="p-2 italic text-gray-400">Sin orden de compra</td>
-        <!-- ACCIÓN cuando NO hay OC -->
-        <td class="p-2">
-          <a href="{% url 'facturacion:editar_orden_compra' servicio.id %}" class="text-blue-600 hover:underline text-xs">✏️</a>
-        </td>
-      </tr>
-    {% endif %}
-  {% endfor %}
-</tbody>
-
+    </tbody>
   </table>
 </div>
-
 </form>
 
-
-<!-- Selector cantidad (idéntico al listar supervisor) -->
+<!-- Selector cantidad -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
@@ -294,7 +293,6 @@
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
 
-  <!-- preserva filtros actuales -->
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
   <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
@@ -302,10 +300,9 @@
   <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
 
-
 <script>
 document.getElementById('select-all').addEventListener('change', function() {
-    document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
+  document.querySelectorAll('input[name="seleccionados"]').forEach(cb => cb.checked = this.checked);
 });
 </script>
 
@@ -313,22 +310,14 @@ document.getElementById('select-all').addEventListener('change', function() {
 (function () {
   const form = document.getElementById('form-filtros');
   if (!form) return;
-
   const inputs = form.querySelectorAll('input[type="text"]');
   const selects = form.querySelectorAll('select');
-
   let t;
-  const submitDebounced = () => {
-    clearTimeout(t);
-    t = setTimeout(() => form.requestSubmit(), 400);
-  };
-
+  const submitDebounced = () => { clearTimeout(t); t = setTimeout(() => form.requestSubmit(), 400); };
   inputs.forEach(el => {
     el.addEventListener('input', submitDebounced);
     el.addEventListener('change', submitDebounced);
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }
-    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); form.requestSubmit(); }});
   });
   selects.forEach(el => el.addEventListener('change', submitDebounced));
 })();

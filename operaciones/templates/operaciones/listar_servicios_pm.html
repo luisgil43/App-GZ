@@ -102,56 +102,68 @@
         <td class="p-2 font-semibold text-emerald-700">UF {{ servicio.monto_cotizado|intcomma }}</td>
         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
 
-        <td class="p-2 text-sm text-left">
-          <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
-            {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
-            {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-            {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-            {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-            {% elif servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-            {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-            {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-            {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
-            {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
-            {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
-            {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-            {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
-            {% else %}bg-gray-100 text-gray-800{% endif %}">
-            {% if servicio.estado == 'cotizado' %}
-              📝 Cotizado (pendiente aprobación)
-            {% elif servicio.estado == 'aprobado_pendiente' %}
-              ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'asignado' %}
-              ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'en_progreso' %}
-              🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
-            {% elif servicio.estado == 'finalizado_trabajador' %}
-              ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'rechazado_supervisor' %}
-              ❌ Rechazado por {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'aprobado_supervisor' %}
-              ✅ Aprobado por: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'informe_subido' %}
-              📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'finalizado' %}
-              ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
-            {% elif servicio.estado == 'ajuste_bono' %}
-              🎁 Bono
-            {% elif servicio.estado == 'ajuste_adelanto' %}
-              ⏩ Adelanto
-            {% elif servicio.estado == 'ajuste_descuento' %}
-              ➖ Descuento
-            {% else %}
-              Estatus desconocido
-            {% endif %}
-          </div>
+<td class="p-2 text-sm">
+  <div class="flex flex-col gap-1 text-left">
 
-          {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words">
-              <strong>Motivo:</strong> {{ servicio.motivo_rechazo }}
-            </div>
-          {% endif %}
-        </td>
+    {# Badge principal #}
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium 
+      {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
+      {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+      {% elif servicio.estado == 'finalizado_trabajador' or servicio.estado == 'en_revision_supervisor' %}bg-yellow-100 text-emerald-800
+      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+      {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
+      {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
+      {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+      {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
+      {% if servicio.estado == 'cotizado' %}
+        📝 Cotizado (pendiente aprobación)
+      {% elif servicio.estado == 'aprobado_pendiente' %}
+        ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'asignado' %}
+        ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'en_progreso' %}
+        🕓 En ejecución (aceptado por {% if servicio.tecnico_aceptado %}{{ servicio.tecnico_aceptado.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %})
+      {% elif servicio.estado == 'finalizado_trabajador' or servicio.estado == 'en_revision_supervisor' %}
+        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'rechazado_supervisor' %}
+        ❌ Rechazado por {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'aprobado_supervisor' %}
+        ✅ Aprobado por: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'informe_subido' %}
+        📄 Informe cargado por {% if servicio.usuario_informe %}{{ servicio.usuario_informe.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'finalizado' %}
+        ✅ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'ajuste_bono' %}
+        🎁 Bono
+      {% elif servicio.estado == 'ajuste_adelanto' %}
+        ⏩ Adelanto
+      {% elif servicio.estado == 'ajuste_descuento' %}
+        ➖ Descuento
+      {% else %}
+        Estatus desconocido
+      {% endif %}
+    </div>
+
+    {# Pill secundario, igual que en Supervisor #}
+    {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        📝 Pendiente revisión del supervisor
+      </div>
+    {% endif %}
+  </div>
+
+  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words">
+      <strong>Motivo:</strong> {{ servicio.motivo_rechazo }}
+    </div>
+  {% endif %}
+</td>
+
 
         <!-- ACCIONES -->
         <td class="p-2 space-x-1">

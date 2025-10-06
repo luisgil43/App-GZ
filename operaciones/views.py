@@ -240,7 +240,7 @@ def importar_sitios_excel(request):
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
 def listar_servicios_pm(request):
-    # Definir prioridad: 1 = cotizado, 2 = en_ejecucion, 3 = pendiente_por_asignar, 4 = otros
+    # prioridad para PM
     estado_prioridad = Case(
         When(estado='cotizado', then=Value(1)),
         When(estado='en_ejecucion', then=Value(2)),
@@ -250,9 +250,13 @@ def listar_servicios_pm(request):
         output_field=IntegerField()
     )
 
-    servicios = ServicioCotizado.objects.annotate(
-        prioridad=estado_prioridad
-    ).order_by('prioridad', '-fecha_creacion')
+    # queryset base (excluye bonos/adelantos/descuentos)
+    servicios = (
+        ServicioCotizado.objects
+        .exclude(estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'])
+        .annotate(prioridad=estado_prioridad)
+        .order_by('prioridad', '-fecha_creacion')
+    )
 
     # Filtros
     du = request.GET.get('du', '')
@@ -271,14 +275,12 @@ def listar_servicios_pm(request):
     if id_new:
         servicios = servicios.filter(id_new__icontains=id_new)
     if estado:
+        # si piden un estado de ajuste, no aparecerá por el exclude del queryset base
         servicios = servicios.filter(estado=estado)
 
     # Paginación
     cantidad = request.GET.get("cantidad", "10")
-    if cantidad == "todos":
-        cantidad = 999999
-    else:
-        cantidad = int(cantidad)
+    cantidad = 999999 if cantidad == "todos" else int(cantidad)
     paginator = Paginator(servicios, cantidad)
     page_number = request.GET.get("page")
     pagina = paginator.get_page(page_number)
@@ -559,28 +561,22 @@ def advertencia_cotizaciones_omitidas(request):
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
-    # ✅ finalizado_trabajador se trata con la MISMA prioridad que en_revision_supervisor
+    # prioridad para ordenar
     estado_prioridad = Case(
         When(estado='aprobado_pendiente', then=Value(1)),
         When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
         When(estado__in=['en_revision_supervisor',
              'finalizado_trabajador'], then=Value(3)),
-        When(estado__in=[
-            'informe_subido',
-            'finalizado',
-            'aprobado_supervisor',
-            'rechazado_supervisor',
-            # Nuevos estados (no afectan el flujo del supervisor)
-            'ajuste_bono',
-            'ajuste_adelanto',
-            'ajuste_descuento',
-        ], then=Value(4)),
+        When(estado__in=['informe_subido', 'finalizado',
+             'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
         default=Value(5),
         output_field=IntegerField()
     )
 
-    servicios = ServicioCotizado.objects.filter(
-        estado__in=[
+    # queryset base (excluye bonos/adelantos/descuentos)
+    servicios = (
+        ServicioCotizado.objects
+        .filter(estado__in=[
             'aprobado_pendiente',
             'asignado',
             'en_progreso',
@@ -590,14 +586,11 @@ def listar_servicios_supervisor(request):
             'rechazado_supervisor',
             'informe_subido',
             'finalizado',
-            # ✅ se listan también los nuevos (no cambian orden de trabajo)
-            'ajuste_bono',
-            'ajuste_adelanto',
-            'ajuste_descuento',
-        ]
-    ).annotate(
-        prioridad=estado_prioridad
-    ).order_by('prioridad', '-du')
+        ])
+        .exclude(estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'])
+        .annotate(prioridad=estado_prioridad)
+        .order_by('prioridad', '-du')
+    )
 
     # Filtros
     du = request.GET.get('du', '')
@@ -616,14 +609,12 @@ def listar_servicios_supervisor(request):
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
     if estado:
+        # aunque elijan ajuste_*, igual no aparecerán porque ya están excluidos arriba
         servicios = servicios.filter(estado=estado)
 
     # Paginación
     cantidad = request.GET.get("cantidad", "10")
-    if cantidad == "todos":
-        cantidad = 999999
-    else:
-        cantidad = int(cantidad)
+    cantidad = 999999 if cantidad == "todos" else int(cantidad)
     paginator = Paginator(servicios, cantidad)
     page_number = request.GET.get("page")
     pagina = paginator.get_page(page_number)
