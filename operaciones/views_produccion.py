@@ -1293,24 +1293,91 @@ def user_monthly_payments(request):
     })
 
 
+# ---- Helper para detectar (año, mes) del MonthlyPayment ----
+
+def _mp_period_ym(mp) -> tuple[int, int]:
+    """
+    Devuelve (year, month) del período del MonthlyPayment 'mp' intentando varios esquemas:
+    - mp.year / mp.month        -> ints
+    - mp.period (date/datetime) -> toma .year/.month
+    - mp.month (str "YYYY-MM")  -> parsea
+    Si no se puede, devuelve el mes actual (fallback seguro).
+    """
+    # 1) year / month int
+    if hasattr(mp, "year") and hasattr(mp, "month"):
+        try:
+            y = int(getattr(mp, "year"))
+            m = int(getattr(mp, "month"))
+            if 1 <= m <= 12:
+                return y, m
+        except Exception:
+            pass
+
+    # 2) period date/datetime
+    if hasattr(mp, "period"):
+        per = getattr(mp, "period")
+        try:
+            if per is not None:
+                return per.year, per.month
+        except Exception:
+            pass
+
+    # 3) month string "YYYY-MM"
+    if hasattr(mp, "month"):
+        mm = getattr(mp, "month")
+        if isinstance(mm, str) and len(mm) >= 7 and mm[4] == "-":
+            try:
+                y = int(mm[:4])
+                m = int(mm[5:7])
+                if 1 <= m <= 12:
+                    return y, m
+            except Exception:
+                pass
+
+    # Fallback: hoy
+    today = timezone.localdate()
+    return today.year, today.month
+
+
+def _is_current_period(mp) -> bool:
+    y, m = _mp_period_ym(mp)
+    today = timezone.localdate()
+    return (y == today.year) and (m == today.month)
+
+
+def _is_past_period(mp) -> bool:
+    y, m = _mp_period_ym(mp)
+    today = timezone.localdate()
+    # Comparación por (año, mes)
+    return (y, m) < (today.year, today.month)
+
+
 @login_required
 @require_POST
 @transaction.atomic
 def user_approve_monthly(request, pk: int):
     """
     El técnico aprueba su monto mensual.
-    Solo permitido desde el día 26 de cada mes.
+    - Mes en curso: permitido desde el día 26 inclusive.
+    - Meses anteriores: siempre permitido (mientras esté pending_user).
     """
-    # Guardia de fecha (anti fuerza bruta por URL)
-    if timezone.localdate().day < 26:
-        messages.info(
-            request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes.")
-        return redirect("operaciones:user_monthly_payments")
-
     mp = get_object_or_404(MonthlyPayment, pk=pk, technician=request.user)
+
     if mp.status != "pending_user":
         messages.info(
             request, "Sólo puedes aprobar cuando está 'Pendiente de mi aprobación'.")
+        return redirect("operaciones:user_monthly_payments")
+
+    today = timezone.localdate()
+    if _is_current_period(mp):
+        if today.day < 26:
+            messages.info(
+                request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes (mes en curso).")
+            return redirect("operaciones:user_monthly_payments")
+    elif not _is_past_period(mp):
+        # Caso futuro (no debería ocurrir normalmente)
+        messages.info(
+            request, "Este período aún no está habilitado para aprobación.")
         return redirect("operaciones:user_monthly_payments")
 
     mp.reject_reason = ""
@@ -1326,14 +1393,9 @@ def user_approve_monthly(request, pk: int):
 def user_reject_monthly(request, pk: int):
     """
     El técnico rechaza su monto mensual (debe indicar motivo).
-    Solo permitido desde el día 26 de cada mes.
+    - Mes en curso: permitido desde el día 26 inclusive.
+    - Meses anteriores: siempre permitido (mientras esté pending_user).
     """
-    # Guardia de fecha (anti fuerza bruta por URL)
-    if timezone.localdate().day < 26:
-        messages.info(
-            request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes.")
-        return redirect("operaciones:user_monthly_payments")
-
     mp = get_object_or_404(MonthlyPayment, pk=pk, technician=request.user)
     reason = (request.POST.get("reason") or "").strip()
 
@@ -1345,13 +1407,23 @@ def user_reject_monthly(request, pk: int):
         messages.error(request, "Debes indicar un motivo.")
         return redirect("operaciones:user_monthly_payments")
 
+    today = timezone.localdate()
+    if _is_current_period(mp):
+        if today.day < 26:
+            messages.info(
+                request, "Sólo puedes aprobar/rechazar desde el día 26 de cada mes (mes en curso).")
+            return redirect("operaciones:user_monthly_payments")
+    elif not _is_past_period(mp):
+        # Caso futuro (no debería ocurrir normalmente)
+        messages.info(
+            request, "Este período aún no está habilitado para rechazo.")
+        return redirect("operaciones:user_monthly_payments")
+
     mp.reject_reason = reason
     mp.status = "rejected_user"
     mp.save(update_fields=["status", "reject_reason", "updated_at"])
     messages.success(request, "Monto rechazado. Motivo guardado.")
     return redirect("operaciones:user_monthly_payments")
-# --- NUEVA / ACTUALIZADA: Producción del TÉCNICO (flujo mensual) ---
-# --- Mi PRODUCCIÓN (técnico) ---
 
 
 APROBADOS_OK = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
