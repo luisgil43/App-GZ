@@ -1215,20 +1215,56 @@ def admin_unpay_monthly(request, pk: int):
 def user_monthly_payments(request):
     """
     Vista del técnico:
-    - Sincroniza el registro del mes actual (con ajustes).
-    - Lista sus MonthlyPayment con desglose (DU/AJUSTE) y TOTAL (amount/display_amount).
-    - Habilita botones Aprobar/Rechazar solo desde el día 26 en adelante.
+    - Sincroniza TODOS los meses (hasta el mes actual) donde el técnico tenga producción/ajustes.
+    - Lista sus MonthlyPayment con desglose (DU/AJUSTE) y TOTAL.
+    - Botones Aprobar/Rechazar: mes en curso desde el 26; meses anteriores, siempre.
     """
-    current_month = _yyyy_mm(timezone.localdate())
-    _sync_monthly_totals(current_month, create_missing=True)
+    today = timezone.localdate()
+    current_month = _yyyy_mm(today)
 
+    # === 1) Descubrir meses a sincronizar para ESTE técnico ===
+    # Incluye producción aprobada + ajustes (bono/adelanto/descuento)
+    qs_serv = (
+        ServicioCotizado.objects
+        .filter(estado__in=ESTADOS_PROD_Y_AJUSTES, trabajadores_asignados=request.user)
+        .only("mes_produccion")
+    )
+
+    meses_detectados: set[str] = set()
+    for s in qs_serv:
+        txt = (s.mes_produccion or "").strip()
+        if not txt:
+            continue
+        # Intenta normalizar a "YYYY-MM" (si falla, usa alias tal cual)
+        norm = _yyyymm_from_mes_texto(txt) if ' ' in txt else txt
+        if isinstance(norm, str) and len(norm) >= 7 and norm[4] == "-":
+            meses_detectados.add(norm[:7])
+        else:
+            # fallback: si viene "2025-9" o similar, intenta normalizar
+            m = re.match(r"^\s*(\d{4})[/-](\d{1,2})\s*$", txt)
+            if m:
+                y, mm = int(m.group(1)), int(m.group(2))
+                meses_detectados.add(f"{y:04d}-{mm:02d}")
+
+    # Garantiza al menos mes actual
+    meses_detectados.add(current_month)
+
+    # Mantén sólo meses <= actual
+    meses_a_sync = sorted([m for m in meses_detectados if m <= current_month])
+
+    # === 2) Sincronizar cada mes detectado para este técnico ===
+    # Nota: _sync_monthly_totals crea/actualiza para todos los técnicos, lo cual está OK.
+    for m in meses_a_sync:
+        _sync_monthly_totals(m, create_missing=True)
+
+    # === 3) Cargar mis MonthlyPayment (ahora sí deberían incluir septiembre, etc.) ===
     mine = (
         MonthlyPayment.objects
         .filter(technician=request.user)
         .order_by("-month")
     )
 
-    # Prepara desglose y totales por mes (para este usuario)
+    # === 4) Preparar desglose y totales por mes sólo para ESTE usuario ===
     by_month = {mp.month for mp in mine}
     details: dict[str, list] = {}
     totals: dict[str, Decimal] = {}
@@ -1241,7 +1277,7 @@ def user_monthly_payments(request):
 
         servicios = (
             ServicioCotizado.objects
-            .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)   # ← incluir ajustes
+            .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
             .filter(cond)
             .prefetch_related("trabajadores_asignados")
             .only("du", "id_claro", "id_new", "monto_mmoo", "estado")
@@ -1258,37 +1294,29 @@ def user_monthly_payments(request):
             firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
             parte = (Decimal(str(firmado)) / len(tecs)
                      ).quantize(Decimal("0.01"))
-
             du_label, project_id = _fmt_du_and_pid(s)
 
-            det_m.append({
-                "du": du_label,
-                "project_id": project_id,
-                "subtotal": parte,
-            })
+            det_m.append(
+                {"du": du_label, "project_id": project_id, "subtotal": parte})
             tot_m += parte
 
         if det_m:
             details[m] = det_m
         totals[m] = tot_m
 
-    # Inyecta 'details' y 'display_amount' en cada MonthlyPayment
+    # Inyecta 'details' y un 'display_amount' robusto
     for mp in mine:
         mp.details = details.get(mp.month, [])
-        if hasattr(mp, "amount") and mp.amount is not None:
-            mp.display_amount = Decimal(
-                str(mp.amount)).quantize(Decimal("0.01"))
-        else:
-            mp.display_amount = totals.get(
-                mp.month, Decimal("0.00")).quantize(Decimal("0.01"))
+        mp.display_amount = (
+            Decimal(str(mp.amount)).quantize(Decimal("0.01"))
+            if getattr(mp, "amount", None) is not None
+            else totals.get(mp.month, Decimal("0.00")).quantize(Decimal("0.01"))
+        )
 
-    # 👇 Nuevo: flag para habilitar los botones solo desde el 26
-    can_approve_today = timezone.localdate().day >= 26
-
+    can_approve_today = today.day >= 26
     return render(request, "operaciones/pagos_usuario_mensual.html", {
         "current_month": current_month,
         "mine": mine,
-        # ← usar en el template para habilitar/ocultar acciones
         "can_approve_today": can_approve_today,
     })
 
