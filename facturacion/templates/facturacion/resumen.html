@@ -1,0 +1,213 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+{% block title %}Resumen Operaciones & Finanzas{% endblock %}
+
+{% block dashboard_content %}
+<style>
+  /* Evita crecimiento infinito de los canvas */
+  .chart-box { height: 340px; }
+  .chart-box canvas { width: 100% !important; height: 100% !important; }
+  .campo-filtro {
+    border: 1px solid #E5E7EB; border-radius: 0.75rem; padding: 0 0.75rem; height: 2.25rem;
+  }
+</style>
+
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <h1 class="text-2xl font-bold">📊 Resumen: Operaciones & Finanzas</h1>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <label class="text-sm text-gray-600">Mes:</label>
+      <input id="monthPicker" type="month" value="{{ month_str }}" class="campo-filtro" />
+      <label class="text-sm text-gray-600 ml-3">Tasa de cierre:</label>
+      <input id="winRate" type="number" step="0.05" min="0" max="1" value="{{ default_win_rate }}" class="campo-filtro w-24" />
+      <label class="text-sm text-gray-600 ml-3">Horizonte (meses):</label>
+      <input id="horizon" type="number" min="1" max="12" value="{{ default_horizon }}" class="campo-filtro w-24" />
+      <button id="applyBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl shadow">Aplicar</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-5">
+    <div class="p-4 rounded-2xl border bg-gray-50">
+      <div class="text-sm text-gray-500">Cotizados</div>
+      <div class="mt-1 text-3xl font-bold" id="kpiCotizados">—</div>
+      <div class="text-sm text-gray-600">Monto: <span id="amtCotizados">—</span></div>
+    </div>
+    <div class="p-4 rounded-2xl border bg-gray-50">
+      <div class="text-sm text-gray-500">En proceso</div>
+      <div class="mt-1 text-3xl font-bold" id="kpiProceso">—</div>
+      <div class="text-sm text-gray-600">Monto: <span id="amtProceso">—</span></div>
+    </div>
+    <div class="p-4 rounded-2xl border bg-gray-50">
+      <div class="text-sm text-gray-500">Finalizados</div>
+      <div class="mt-1 text-3xl font-bold" id="kpiFinalizados">—</div>
+      <div class="text-sm text-gray-600">Monto: <span id="amtFinalizados">—</span></div>
+    </div>
+  </div>
+
+  <!-- Gastos comparativa -->
+  <div class="mt-6 p-4 rounded-2xl border bg-gray-50">
+    <div class="text-sm text-gray-500">Gasto del mes</div>
+    <div class="text-2xl font-bold" id="gastoMes">—</div>
+    <div class="text-sm text-gray-600">
+      Anterior: <span id="gastoPrev">—</span> ·
+      Δ <span id="gastoDelta">—</span> (<span id="gastoPct">—</span>)
+    </div>
+  </div>
+
+  <!-- Gráficos -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+    <div class="p-4 rounded-2xl border">
+      <div class="text-sm text-gray-600 mb-2">Conteo de proyectos (últimos 6 meses)</div>
+      <div class="chart-box"><canvas id="chartCounts"></canvas></div>
+    </div>
+
+    <div class="p-4 rounded-2xl border">
+      <div class="text-sm text-gray-600 mb-2">Montos por estado (últimos 6 meses)</div>
+      <div class="chart-box"><canvas id="chartAmounts"></canvas></div>
+    </div>
+
+    <div class="p-4 rounded-2xl border lg:col-span-2">
+      <div class="text-sm text-gray-600 mb-2">Gastos por mes (últimos 6 meses)</div>
+      <div class="chart-box"><canvas id="chartExpenses"></canvas></div>
+    </div>
+
+    <div class="p-4 rounded-2xl border lg:col-span-2">
+      <div class="text-sm text-gray-600 mb-2">Proyección (cotizaciones * tasa de cierre)</div>
+      <div class="chart-box"><canvas id="chartProjection"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const fmtCLP = (v) => {
+    try { return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v || 0); }
+    catch { return v; }
+  };
+  const $ = (id) => document.getElementById(id);
+
+  let chartCounts, chartAmounts, chartExpenses, chartProjection;
+
+  async function loadData() {
+    const month = $("monthPicker").value;
+    const winRate = $("winRate").value || 0.6;
+    const horizon = $("horizon").value || 3;
+
+    const params = new URLSearchParams({ month, win_rate: winRate, horizon });
+    const res = await fetch(`{% url 'facturacion:facturacion_resumen_api' %}?` + params.toString());
+    const data = await res.json();
+
+    // KPIs
+    $("kpiCotizados").textContent   = data.kpis.cotizados.count;
+    $("kpiProceso").textContent     = data.kpis.en_proceso.count;
+    $("kpiFinalizados").textContent = data.kpis.finalizados.count;
+
+    $("amtCotizados").textContent   = fmtCLP(data.kpis.cotizados.amount);
+    $("amtProceso").textContent     = fmtCLP(data.kpis.en_proceso.amount);
+    $("amtFinalizados").textContent = fmtCLP(data.kpis.finalizados.amount);
+
+    $("gastoMes").textContent   = fmtCLP(data.expenses.current);
+    $("gastoPrev").textContent  = fmtCLP(data.expenses.previous);
+    $("gastoDelta").textContent = fmtCLP(data.expenses.delta);
+    $("gastoPct").textContent   = (data.expenses.pct_change === null) ? "—" : (data.expenses.pct_change.toFixed(1) + "%");
+
+    const months = data.series.months;
+
+    // Config común de ejes
+    const yCurrency = {
+      beginAtZero: true,
+      ticks: { callback: (v) => fmtCLP(v) },
+      grid: { color: 'rgba(0,0,0,0.05)' }
+    };
+    const yCount = {
+      beginAtZero: true,
+      precision: 0,
+      grid: { color: 'rgba(0,0,0,0.05)' }
+    };
+
+    // Conteos
+    const countsCfg = {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'Cotizados', data: data.series.counts.cotizados },
+          { label: 'En proceso', data: data.series.counts.en_proceso },
+          { label: 'Finalizados', data: data.series.counts.finalizados },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom' } },
+        scales: { y: yCount }
+      }
+    };
+
+    // Montos por estado
+    const amountsCfg = {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [
+          { label: 'Cotizados', data: data.series.amounts.cotizados },
+          { label: 'En proceso', data: data.series.amounts.en_proceso },
+          { label: 'Finalizados', data: data.series.amounts.finalizados },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtCLP(ctx.parsed.y)}` } }
+        },
+        scales: { y: yCurrency }
+      }
+    };
+
+    // Gastos
+    const expensesCfg = {
+      type: 'line',
+      data: { labels: months, datasets: [{ label: 'Gasto neto', data: data.series.expenses }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtCLP(ctx.parsed.y)}` } }
+        },
+        scales: { y: yCurrency }
+      }
+    };
+
+    // Proyección
+    const projCfg = {
+      type: 'bar',
+      data: { labels: data.projections.months, datasets: [{ label: 'Proyección', data: data.projections.values }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtCLP(ctx.parsed.y)}` } }
+        },
+        scales: { y: yCurrency }
+      }
+    };
+
+    // Render/Update
+    const ensure = (ref, id, cfg) => {
+      const ctx = $(id).getContext('2d');
+      if (ref) ref.destroy();
+      return new Chart(ctx, cfg);
+    };
+
+    chartCounts     = ensure(chartCounts, 'chartCounts', countsCfg);
+    chartAmounts    = ensure(chartAmounts, 'chartAmounts', amountsCfg);
+    chartExpenses   = ensure(chartExpenses, 'chartExpenses', expensesCfg);
+    chartProjection = ensure(chartProjection, 'chartProjection', projCfg);
+  }
+
+  $("applyBtn").addEventListener("click", loadData);
+  document.addEventListener("DOMContentLoaded", loadData);
+</script>
+{% endblock %}

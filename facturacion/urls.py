@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views_resumen import View_resumen_dato, ViewResumenDatoAPI
 
 
 app_name = 'facturacion'
@@ -55,6 +56,11 @@ urlpatterns = [
          name='exportar_cartola_finanzas'),
     path('saldos/exportar/', views.exportar_saldos_disponibles,
          name='exportar_saldos_disponibles'),
+
+    path("admin/resumen/", View_resumen_dato.as_view(),
+         name="facturacion_resumen"),
+    path("admin/resumen/api/", ViewResumenDatoAPI.as_view(),
+         name="facturacion_resumen_api"),
 
 
 
