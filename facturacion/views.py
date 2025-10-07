@@ -66,7 +66,7 @@ User = get_user_model()
 def listar_ordenes_compra(request):
     q = request.GET.copy()
 
-    # --- Filtros ---
+    # --- Filtros de texto (raw para mantener DU con prefijo en inputs) ---
     du_raw = (q.get('du') or '')
     du = du_raw.strip().upper().replace('DU', '') if du_raw else ''
     id_claro = (q.get('id_claro') or '').strip()
@@ -103,7 +103,7 @@ def listar_ordenes_compra(request):
         estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento']
     )
 
-    # ✅ contadores
+    # ✅ contadores para decidir correctamente cuándo mostrar “Sin orden de compra”
     servicios = servicios.annotate(
         oc_total=Count('ordenes_compra', distinct=True),
         oc_sin_fact=Count(
@@ -117,7 +117,7 @@ def listar_ordenes_compra(request):
     if estado:
         servicios = servicios.filter(estado=estado)
 
-    # Filtros de texto
+    # 🔎 Filtros de texto
     if du:
         servicios = servicios.filter(du__iexact=du)
     if id_claro:
@@ -127,6 +127,12 @@ def listar_ordenes_compra(request):
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
 
+    # 🔎 **Filtro clave ANTES de paginar**:
+    # Solo paginamos lo que el tbody realmente muestra:
+    # - servicios con OC no facturada (oc_sin_fact > 0)
+    # - servicios que nunca tuvieron OC (oc_total == 0)
+    servicios = servicios.filter(Q(oc_sin_fact__gt=0) | Q(oc_total=0))
+
     # --- Paginación ---
     cantidad = (q.get("cantidad") or "10")
     try:
@@ -135,7 +141,7 @@ def listar_ordenes_compra(request):
         per_page = 10
     pagina = Paginator(servicios, per_page).get_page(q.get("page"))
 
-    # === MonthlyPayment
+    # === MonthlyPayment (como ya lo tenías)
     visibles = list(pagina.object_list)
 
     def _pick_tech_id(s):
@@ -147,7 +153,9 @@ def listar_ordenes_compra(request):
 
     mp_map = {}
     if tech_ids and months:
-        for mp in MonthlyPayment.objects.filter(technician_id__in=tech_ids, month__in=months):
+        for mp in MonthlyPayment.objects.filter(
+            technician_id__in=tech_ids, month__in=months
+        ):
             mp_map[(mp.technician_id, mp.month)] = mp.status
 
     status_label_map = dict(MonthlyPayment.STATUS)
