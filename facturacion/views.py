@@ -1,3 +1,5 @@
+from django.db.models import Q, Prefetch, Count
+from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Count, Q
 from django.db import transaction
 from operaciones.models import ServicioCotizado, MonthlyPayment
@@ -101,7 +103,7 @@ def listar_ordenes_compra(request):
         estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento']
     )
 
-    # ✅ contadores para decidir correctamente cuándo mostrar “Sin orden de compra”
+    # ✅ contadores
     servicios = servicios.annotate(
         oc_total=Count('ordenes_compra', distinct=True),
         oc_sin_fact=Count(
@@ -133,7 +135,7 @@ def listar_ordenes_compra(request):
         per_page = 10
     pagina = Paginator(servicios, per_page).get_page(q.get("page"))
 
-    # === MonthlyPayment (como ya lo tenías)
+    # === MonthlyPayment
     visibles = list(pagina.object_list)
 
     def _pick_tech_id(s):
@@ -180,6 +182,10 @@ def listar_ordenes_compra(request):
     return render(request, 'facturacion/listar_ordenes_compra.html', context)
 
 
+# =========================
+#  IMPORTAR / PREVIEW OC
+# =========================
+
 @login_required
 @rol_requerido('facturacion', 'admin')
 def importar_orden_compra(request):
@@ -192,24 +198,20 @@ def importar_orden_compra(request):
         datos_extraidos = []
         nombres_archivos = []
 
-        # --- helper local para normalizar guiones/Ñ en una línea ---
         def _norm_line(s: str) -> str:
             s = unicodedata.normalize("NFKC", s or "")
-            # Homogeneiza guiones en-dash/em-dash a guion normal
             s = s.replace("–", "-").replace("—", "-")
             return s
 
-        # --- helper local: extraer de 1 PDF (devuelve lista de dicts) ---
         def _extraer_de_pdf(ruta_absoluta: str) -> list[dict]:
             filas = []
             with pdfplumber.open(ruta_absoluta) as pdf:
                 for pagina in pdf.pages:
                     texto = pagina.extract_text() or ""
-                    # normaliza por línea y descarta vacías
                     lineas = [_norm_line(l).strip()
                               for l in texto.split("\n") if l.strip()]
 
-                    # 1) Detectar número de OC en esta página
+                    # 1) Número de OC
                     numero_oc = None
                     for idx, linea in enumerate(lineas[:40]):
                         if 'ORDEN DE COMPRA' in linea.upper():
@@ -223,7 +225,6 @@ def importar_orden_compra(request):
                             if numero_oc:
                                 break
                     if not numero_oc:
-                        # Fallback: primer 10 dígitos en la “cabecera”
                         for cab in lineas[:60]:
                             m = re.search(r'\b(\d{10})\b', cab)
                             if m:
@@ -232,7 +233,7 @@ def importar_orden_compra(request):
                     if not numero_oc:
                         numero_oc = 'NO_ENCONTRADO'
 
-                    # 2) Extraer filas de detalle (misma lógica que ya tenías)
+                    # 2) Filas detalle
                     i = 0
                     while i < len(lineas):
                         linea = lineas[i]
@@ -240,7 +241,6 @@ def importar_orden_compra(request):
                             partes = re.split(r'\s{2,}', linea.strip())
                             if len(partes) < 7:
                                 partes = linea.split()
-
                             if len(partes) >= 8:
                                 pos = partes[0]
                                 cantidad = partes[1]
@@ -250,8 +250,6 @@ def importar_orden_compra(request):
                                 fecha_entrega = partes[-3]
                                 precio_unitario = partes[-2].replace(',', '.')
                                 monto = partes[-1].replace(',', '.')
-
-                                # ID NEW en la siguiente línea (acepta Ñ/ñ y guiones varios)
                                 id_new = None
                                 if i + 1 < len(lineas):
                                     siguiente = lineas[i + 1]
@@ -259,7 +257,6 @@ def importar_orden_compra(request):
                                     m2 = re.search(
                                         pat, siguiente, flags=re.IGNORECASE)
                                     if m2:
-                                        # normaliza mayúsculas y guiones a tu formato
                                         id_new = m2.group(1).upper()
 
                                 filas.append({
@@ -278,41 +275,57 @@ def importar_orden_compra(request):
                         i += 1
             return filas
 
-        # --- procesar todos los PDFs seleccionados ---
+        # Procesar PDFs
         for archivo in archivos:
             nombre_archivo = archivo.name
             nombres_archivos.append(nombre_archivo)
-
-            # guarda cada PDF con un nombre único
             ruta_temporal = default_storage.save(
                 f"temp_oc/{uuid4().hex}_{nombre_archivo}",
                 ContentFile(archivo.read())
             )
             ruta_absoluta = default_storage.path(ruta_temporal)
-
             try:
                 datos_extraidos.extend(_extraer_de_pdf(ruta_absoluta))
             finally:
-                # limpieza del temporal
                 default_storage.delete(ruta_temporal)
 
-        # Guardar todo en sesión para el preview
+        # ====== Construir filas de PREVIEW con candidatos ======
+        filas_preview = []
+        ids_no_encontrados = set()
+
+        for idx, fila in enumerate(datos_extraidos):
+            idn = (fila.get('id_new') or "").strip().upper()
+            candidatos = []
+            if idn:
+                # 👉 SOLO servicios que NO tienen OC (ya sea facturada o no)
+                qs = (
+                    ServicioCotizado.objects
+                    .filter(id_new=idn, ordenes_compra__isnull=True)
+                    .order_by('-du', '-fecha_creacion')
+                    .distinct()
+                )
+                for s in qs:
+                    label = f"DU{s.du or ''} — {s.id_claro or '—'} — {s.mes_produccion or '—'}"
+                    candidatos.append({'id': s.id, 'label': label})
+            else:
+                ids_no_encontrados.add("SIN_ID")
+
+            if not candidatos:
+                ids_no_encontrados.add(idn or "SIN_ID")
+
+            fila_dict = dict(fila)
+            fila_dict['idx'] = idx
+            fila_dict['candidatos'] = candidatos
+            fila_dict['selected_id'] = candidatos[0]['id'] if len(
+                candidatos) == 1 else ""
+            filas_preview.append(fila_dict)
+
+        # Guardar datos crudos en sesión para usarlos al guardar
         request.session['ordenes_previsualizadas'] = datos_extraidos
 
-        # Verificar IDs NEW sin servicio (opcional: muestra en preview)
-        ids_no_encontrados = set()
-        for fila in datos_extraidos:
-            idn = (fila.get('id_new') or "").strip().upper()
-            if not idn:
-                ids_no_encontrados.add("SIN_ID")
-                continue
-            # Nota: si en DB guardas con guiones normales, esto ya está normalizado
-            if not ServicioCotizado.objects.filter(id_new=idn).exists():  # pylint: disable=no-member
-                ids_no_encontrados.add(idn)
-
         return render(request, 'facturacion/preview_oc.html', {
-            'datos': datos_extraidos,
-            'nombre_archivo': ", ".join(nombres_archivos),  # muestra todos
+            'datos': filas_preview,
+            'nombre_archivo': ", ".join(nombres_archivos),
             'ids_no_encontrados': ids_no_encontrados,
         })
 
@@ -323,108 +336,108 @@ def importar_orden_compra(request):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def guardar_ordenes_compra(request):
-    if request.method == 'POST':
-        datos_previsualizados = request.session.get('ordenes_previsualizadas')
-        if not datos_previsualizados:
-            messages.error(request, "No hay datos para guardar.")
-            return redirect('facturacion:importar_orden_compra')
+    if request.method != 'POST':
+        return redirect('facturacion:listar_oc_facturacion')
 
-        ordenes_guardadas = 0
-        ordenes_sin_oc_libre = []
-        ordenes_sin_servicio = []
+    datos_previsualizados = request.session.get('ordenes_previsualizadas')
+    if not datos_previsualizados:
+        messages.error(request, "No hay datos para guardar.")
+        return redirect('facturacion:importar_orden_compra')
 
-        for item in datos_previsualizados:
-            id_new = item.get('id_new')
-            if not id_new:
-                continue
+    ordenes_guardadas = 0
+    ordenes_sin_oc_libre = []
+    ordenes_sin_servicio = []
 
-            # Buscar todos los servicios con ese ID_NEW (sin considerar el mes)
-            servicios = ServicioCotizado.objects.filter(
-                id_new=id_new).order_by('du')
+    for idx, item in enumerate(datos_previsualizados):
+        id_new = item.get('id_new')
+        if not id_new:
+            continue
 
+        # 1) Si el usuario eligió explícitamente un DU
+        target_du_id = request.POST.get(f"target_du_{idx}", "").strip()
+        servicio_sin_oc = None
+
+        if target_du_id.isdigit():
+            try:
+                s = ServicioCotizado.objects.get(pk=int(target_du_id))
+                # Validamos que aún no tenga OC
+                if not s.ordenes_compra.exists():
+                    servicio_sin_oc = s
+            except ServicioCotizado.DoesNotExist:
+                servicio_sin_oc = None
+
+        # 2) Fallback: tomar el más reciente SIN OC
+        if servicio_sin_oc is None:
+            servicios = (
+                ServicioCotizado.objects
+                .filter(id_new=id_new, ordenes_compra__isnull=True)
+                .order_by('-du', '-fecha_creacion')
+                .distinct()
+            )
             if not servicios.exists():
                 ordenes_sin_servicio.append(f"ID NEW: {id_new}")
                 continue
+            servicio_sin_oc = servicios.first()
 
-            # Buscar el primer servicio sin OC ya registrada (usando relación inversa)
-            servicio_sin_oc = None
-            for s in servicios:
-                if not s.ordenes_compra.exists():
-                    servicio_sin_oc = s
-                    break
+        # 3) Crear OC
+        try:
+            cantidad = Decimal(
+                str(item.get('cantidad') or '0').replace(',', '.'))
+            precio_unitario = Decimal(
+                str(item.get('precio_unitario') or '0').replace(',', '.'))
+            monto = Decimal(str(item.get('monto') or '0').replace(',', '.'))
 
-            if not servicio_sin_oc:
-                ordenes_sin_oc_libre.append(
-                    f"ID NEW: {id_new} - POS: {item.get('pos')}")
-                continue
+            fecha_entrega = None
+            fecha_texto = item.get('fecha_entrega')
+            if fecha_texto:
+                try:
+                    fecha_entrega = datetime.strptime(
+                        fecha_texto, '%d.%m.%Y').date()
+                except ValueError:
+                    pass
 
-            # Rellenar y guardar nueva OC
-            try:
-                cantidad = Decimal(
-                    str(item.get('cantidad') or '0').replace(',', '.'))
-                precio_unitario = Decimal(
-                    str(item.get('precio_unitario') or '0').replace(',', '.'))
-                monto = Decimal(
-                    str(item.get('monto') or '0').replace(',', '.'))
-
-                fecha_entrega = None
-                fecha_texto = item.get('fecha_entrega')
-                if fecha_texto:
-                    try:
-                        fecha_entrega = datetime.strptime(
-                            fecha_texto, '%d.%m.%Y').date()
-                    except ValueError:
-                        pass
-
-                # Crear nueva OC asociada
-                OrdenCompraFacturacion.objects.create(
-                    du=servicio_sin_oc,
-                    orden_compra=item.get('orden_compra'),
-                    pos=item.get('pos'),
-                    cantidad=cantidad,
-                    unidad_medida=item.get('unidad_medida'),
-                    material_servicio=item.get('material_servicio'),
-                    descripcion_sitio=item.get('descripcion_sitio'),
-                    fecha_entrega=fecha_entrega,
-                    precio_unitario=precio_unitario,
-                    monto=monto,
-                )
-
-                ordenes_guardadas += 1
-
-            except Exception as e:
-                print(f"❌ Error al guardar datos de OC: {e}")
-                continue
-
-        # Limpiar la sesión
-        request.session.pop('ordenes_previsualizadas', None)
-
-        if ordenes_guardadas > 0:
-            messages.success(
-                request,
-                f"{ordenes_guardadas} líneas de la orden de compra fueron guardadas correctamente."
+            OrdenCompraFacturacion.objects.create(
+                du=servicio_sin_oc,
+                orden_compra=item.get('orden_compra'),
+                pos=item.get('pos'),
+                cantidad=cantidad,
+                unidad_medida=item.get('unidad_medida'),
+                material_servicio=item.get('material_servicio'),
+                descripcion_sitio=item.get('descripcion_sitio'),
+                fecha_entrega=fecha_entrega,
+                precio_unitario=precio_unitario,
+                monto=monto,
             )
+            ordenes_guardadas += 1
 
-        if ordenes_sin_oc_libre:
-            messages.warning(
-                request,
-                "Se omitieron las siguientes líneas porque ya no hay servicios disponibles sin OC para asociar:<br>" +
-                "<br>".join(ordenes_sin_oc_libre)
-            )
+        except Exception as e:
+            print(f"❌ Error al guardar datos de OC: {e}")
+            continue
 
-        if ordenes_sin_servicio:
-            messages.error(
-                request,
-                "Las siguientes líneas no se pudieron asociar porque no existe un servicio creado para esos ID NEW:<br>" +
-                "<br>".join(set(ordenes_sin_servicio)) +
-                "<br><br>Comunícate con el PM para que cree el servicio y vuelve a importar la OC."
-            )
-       # ⬇️ Redirige al LISTADO de OCs
-        return redirect('facturacion:listar_oc_facturacion')
+    # Limpiar sesión
+    request.session.pop('ordenes_previsualizadas', None)
 
-    # Si no es POST, también al listado
+    if ordenes_guardadas > 0:
+        messages.success(
+            request, f"{ordenes_guardadas} líneas de la orden de compra fueron guardadas correctamente.")
+    if ordenes_sin_oc_libre:
+        messages.warning(request,
+                         "Se omitieron líneas porque ya no hay servicios disponibles sin OC para asociar:<br>" +
+                         "<br>".join(ordenes_sin_oc_libre)
+                         )
+    if ordenes_sin_servicio:
+        messages.error(request,
+                       "No existe servicio creado (o todos ya tienen OC) para estos ID NEW:<br>" +
+                       "<br>".join(set(ordenes_sin_servicio)) +
+                       "<br><br>Comunícate con el PM para que cree el servicio y vuelve a importar la OC."
+                       )
+
     return redirect('facturacion:listar_oc_facturacion')
 
+
+# =========================
+#  CRUD OC
+# =========================
 
 @login_required
 @rol_requerido('facturacion', 'admin')
@@ -441,7 +454,7 @@ def editar_orden_compra(request, pk):
     if oc is None:
         # pk no es OC -> interpretarlo como id de Servicio
         servicio = get_object_or_404(ServicioCotizado, pk=pk)
-        # Instancia SIN GUARDAR para poder renderizar el form sin crear registros
+        # Instancia SIN GUARDAR para renderizar el form sin crear registros
         oc = OrdenCompraFacturacion(du=servicio)
 
     if request.method == 'POST':
@@ -460,7 +473,7 @@ def editar_orden_compra(request, pk):
 
     return render(request, 'facturacion/editar_orden_compra.html', {
         'form': form,
-        'oc': oc,  # por si quieres usarlo en el template
+        'oc': oc,
     })
 
 
@@ -476,6 +489,10 @@ def eliminar_orden_compra(request, pk):
 
     return render(request, 'facturacion/eliminar_orden_compra.html', {'orden': orden})
 
+
+# =========================
+#  EXPORTAR EXCEL
+# =========================
 
 @login_required
 @rol_requerido('facturacion', 'admin')
@@ -534,7 +551,6 @@ def exportar_ordenes_compra_excel(request):
     ]
     ws.append(columnas)
 
-    # Estilo encabezados
     header_fill = PatternFill(start_color="D9D9D9",
                               end_color="D9D9D9", fill_type="solid")
     for col_num, col_name in enumerate(columnas, 1):
@@ -543,7 +559,6 @@ def exportar_ordenes_compra_excel(request):
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Datos
     for servicio in servicios:
         asignados = ", ".join([u.get_full_name()
                               for u in servicio.trabajadores_asignados.all()]) or ''
@@ -572,7 +587,6 @@ def exportar_ordenes_compra_excel(request):
                     oc.monto or 0,
                 ])
         else:
-            # Si no tiene órdenes, llenar con datos del servicio y vacíos para los campos de OC
             ws.append([
                 f"DU{servicio.du or ''}",
                 servicio.id_claro or '',
@@ -587,7 +601,6 @@ def exportar_ordenes_compra_excel(request):
                 '', '', '', '', '', '', '', '', ''
             ])
 
-    # Ajustar ancho de columnas automáticamente
     for col in ws.columns:
         max_length = 0
         col_letter = get_column_letter(col[0].column)
@@ -595,11 +608,10 @@ def exportar_ordenes_compra_excel(request):
             try:
                 if cell.value and len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except:
+            except Exception:
                 pass
         ws.column_dimensions[col_letter].width = max_length + 2
 
-    # Respuesta HTTP
     response = HttpResponse(content_type='application/ms-excel')
     response['Content-Disposition'] = 'attachment; filename="ordenes_compra.xlsx"'
     wb.save(response)

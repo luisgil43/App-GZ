@@ -5,85 +5,84 @@
 <div class="max-w-7xl mx-auto bg-white p-6 rounded-xl shadow mt-6">
   <h2 class="text-xl font-bold mb-4">📄 Previsualización de Datos Extraídos</h2>
 
-  {% if datos %}
-    <div class="overflow-x-auto">
-      <table class="min-w-full border text-sm text-left">
-        <thead class="bg-gray-100 font-semibold">
-          <tr>
-            <th class="border px-2 py-1">OC</th>
-            <th class="border px-2 py-1">POS</th>
-            <th class="border px-2 py-1">Cantidad</th>
-            <th class="border px-2 py-1">UM</th>
-            <th class="border px-2 py-1">Material</th>
-            <th class="border px-2 py-1">Descripción / Sitio</th>
-            <th class="border px-2 py-1">Fecha Entrega</th>
-            <th class="border px-2 py-1">P. Unitario</th>
-            <th class="border px-2 py-1">Monto</th>
-            <th class="border px-2 py-1">ID NEW</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for fila in datos %}
-            <tr class="border-b hover:bg-gray-50 {% if fila.id_new in ids_no_encontrados %}bg-red-100 text-red-800{% endif %}">
-              <td class="border px-2 py-1">{{ fila.orden_compra }}</td>
-              <td class="border px-2 py-1">{{ fila.pos }}</td>
-              <td class="border px-2 py-1">{{ fila.cantidad }}</td>
-              <td class="border px-2 py-1">{{ fila.unidad_medida }}</td>
-              <td class="border px-2 py-1">{{ fila.material_servicio }}</td>
-              <td class="border px-2 py-1">{{ fila.descripcion_sitio }}</td>
-              <td class="border px-2 py-1">{{ fila.fecha_entrega }}</td>
-              <td class="border px-2 py-1">{{ fila.precio_unitario }}</td>
-              <td class="border px-2 py-1">{{ fila.monto }}</td>
-              <td class="border px-2 py-1 font-semibold">
-                {{ fila.id_new }}
-                {% if fila.id_new in ids_no_encontrados %}
-                  <span class="text-xs text-red-700 font-normal">[Sin servicio]</span>
-                {% endif %}
-              </td>
+  {% if datos and datos|length > 0 %}
+    <form method="post" action="{% url 'facturacion:guardar_ordenes_compra' %}">
+      {% csrf_token %}
+
+      <div class="overflow-x-auto">
+        <table class="min-w-full border text-sm text-left">
+          <thead class="bg-gray-100 font-semibold">
+            <tr>
+              <th class="border px-2 py-1">OC</th>
+              <th class="border px-2 py-1">POS</th>
+              <th class="border px-2 py-1">Cant</th>
+              <th class="border px-2 py-1">UM</th>
+              <th class="border px-2 py-1">Material</th>
+              <th class="border px-2 py-1">Descripción / Sitio</th>
+              <th class="border px-2 py-1">Fecha Entrega</th>
+              <th class="border px-2 py-1">P. Unitario</th>
+              <th class="border px-2 py-1">Monto</th>
+              <th class="border px-2 py-1">ID NEW</th>
+              <th class="border px-2 py-1">Asociar a DU</th>
             </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {% for fila in datos %}
+              {% with candidatos=fila.candidatos %}
+              <tr class="border-b hover:bg-gray-50
+                         {% if fila.id_new in ids_no_encontrados %}bg-red-100 text-red-800{% endif %}">
+                <td class="border px-2 py-1">{{ fila.orden_compra }}</td>
+                <td class="border px-2 py-1">{{ fila.pos }}</td>
+                <td class="border px-2 py-1">{{ fila.cantidad }}</td>
+                <td class="border px-2 py-1">{{ fila.unidad_medida }}</td>
+                <td class="border px-2 py-1">{{ fila.material_servicio }}</td>
+                <td class="border px-2 py-1">{{ fila.descripcion_sitio }}</td>
+                <td class="border px-2 py-1">{{ fila.fecha_entrega }}</td>
+                <td class="border px-2 py-1">{{ fila.precio_unitario }}</td>
+                <td class="border px-2 py-1">{{ fila.monto }}</td>
+                <td class="border px-2 py-1 font-semibold">{{ fila.id_new }}</td>
 
-    <div class="mt-6 flex gap-4">
-      <a href="{% url 'facturacion:importar_orden_compra' %}" 
-         class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
-        ← Volver
-      </a>
-
-      <!-- Botón que abre el modal -->
-      <button type="button" onclick="document.getElementById('confirm-modal').classList.remove('hidden')"
-        class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-        Guardar en base de datos
-      </button>
-    </div>
-
-    <!-- Modal -->
-    <div id="confirm-modal" class="hidden fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white p-6 rounded-xl shadow max-w-md w-full">
-        <h3 class="text-lg font-bold mb-4 text-gray-800">¿Confirmar guardado?</h3>
-        <p class="text-sm text-gray-600 mb-6">
-          Algunas líneas podrían ser omitidas si no tienen un servicio creado o ya están asignadas.
-          ¿Deseas continuar con el guardado?
-        </p>
-        <div class="flex justify-end gap-4">
-          <button type="button" onclick="document.getElementById('confirm-modal').classList.add('hidden')"
-            class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 text-gray-800">
-            Cancelar
-          </button>
-
-          <form method="post" action="{% url 'facturacion:guardar_ordenes_compra' %}">
-            {% csrf_token %}
-            <button type="submit" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">
-              Confirmar y Guardar
-            </button>
-          </form>
-        </div>
+                <td class="border px-2 py-1">
+                  {% if candidatos|length == 0 %}
+                    <span class="text-xs text-red-700">Sin servicio</span>
+                  {% elif candidatos|length == 1 %}
+                    <span class="text-xs">{{ candidatos.0.label }}</span>
+                    <input type="hidden" name="target_du_{{ fila.idx }}" value="{{ candidatos.0.id }}">
+                  {% else %}
+                    <select name="target_du_{{ fila.idx }}" class="border rounded px-2 py-1 text-xs">
+                      <option value="">— Selecciona DU —</option>
+                      {% for c in candidatos %}
+                        <option value="{{ c.id }}"
+                                {% if fila.selected_id and fila.selected_id == c.id %}selected{% endif %}>
+                          {{ c.label }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      <div class="mt-6 flex gap-3">
+        <a href="{% url 'facturacion:importar_orden_compra' %}"
+           class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+          ← Volver
+        </a>
+        <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+          Confirmar y Guardar
+        </button>
+      </div>
+    </form>
   {% else %}
     <p class="text-red-500">❌ No se encontraron datos válidos.</p>
+    <a href="{% url 'facturacion:importar_orden_compra' %}"
+       class="inline-block mt-4 bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400">
+      ← Volver
+    </a>
   {% endif %}
 </div>
 {% endblock %}
