@@ -632,15 +632,22 @@ def listar_facturas(request):
     # Traer solo facturas existentes, no órdenes vacías
     facturas = FacturaOC.objects.select_related("orden_compra__du")
 
-    # Filtros dinámicos
-    du = request.GET.get("du", "")
-    id_claro = request.GET.get("id_claro", "")
-    id_new = request.GET.get("id_new", "")
-    mes_produccion = request.GET.get("mes_produccion", "")
-    estado = request.GET.get("estado", "")
+    # Filtros dinámicos (raw para mantener lo que escribe el usuario en el input)
+    du_raw = (request.GET.get("du", "") or "").strip()
+    id_claro = (request.GET.get("id_claro", "") or "").strip()
+    id_new = (request.GET.get("id_new", "") or "").strip()
+    mes_produccion = (request.GET.get("mes_produccion", "") or "").strip()
+    estado = (request.GET.get("estado", "") or "").strip()
 
-    if du:
-        facturas = facturas.filter(orden_compra__du__du__icontains=du)
+    # --- DU: normalizar para aceptar "DU00000020", "DU20", "20", etc.
+    if du_raw:
+        du_digits = re.sub(r"\D+", "", du_raw.upper())  # solo dígitos
+        if du_digits:
+            facturas = facturas.filter(
+                Q(orden_compra__du__du__iexact=du_digits) |
+                Q(orden_compra__du__du__endswith=du_digits)
+            )
+
     if id_claro:
         facturas = facturas.filter(
             orden_compra__du__id_claro__icontains=id_claro)
@@ -654,7 +661,11 @@ def listar_facturas(request):
 
     # Paginación (usa 'cantidad' del GET)
     cantidad = request.GET.get("cantidad", "10")
-    per_page = 999999 if cantidad == "todos" else int(cantidad)
+    try:
+        per_page = 999_999 if cantidad == "todos" else int(cantidad)
+    except ValueError:
+        per_page = 10
+
     paginator = Paginator(facturas, per_page)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
@@ -662,7 +673,7 @@ def listar_facturas(request):
     return render(request, "facturacion/listar_facturas.html", {
         "pagina": pagina,
         "filtros": {
-            "du": du,
+            "du": du_raw,  # mantenemos lo que escribió el usuario
             "id_claro": id_claro,
             "id_new": id_new,
             "mes_produccion": mes_produccion,
