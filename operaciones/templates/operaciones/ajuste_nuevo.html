@@ -6,6 +6,38 @@
 {% block dashboard_content %}
 <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
 
+  {# ====== CSS para modales sobrepuestos (no interfiere con nada existente) ====== #}
+  <style>
+    .modal-overlay{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;        /* MUY por encima de todo */
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.5);
+    }
+    .modal-overlay.is-open{ display:flex; }
+    .modal-card{
+      max-width: 28rem;
+      width: 100%;
+      background: #fff;
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,.2);
+    }
+    .no-scroll{ overflow:hidden; height:100dvh; }
+
+    /* Compatibilidad con el estilo de "Mis Cotizaciones" */
+    [id^="modal-"] {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+
   <div class="flex items-center justify-between mb-4">
     <h1 class="text-2xl font-bold">
       {% if modo == "edit" %}✏️ Editar ajuste{% else %}➕ Crear ajuste{% endif %}
@@ -210,6 +242,106 @@
       const to = new URL("{% url 'operaciones:produccion_admin' %}", window.location.origin);
       to.searchParams.set('flash', '{% if modo == "edit" %}ajuste_edit_err{% else %}ajuste_err{% endif %}');
       window.location.href = to.toString();
+    }
+  });
+
+  // ===== Utilidades de modal con PORTAL a <body> (soluciona clipping en iOS) =====
+
+  // Guardamos el contenedor original para poder devolver el modal a su sitio
+  function __ensureAnchor(modal){
+    if (!modal.dataset.anchorId){
+      const anchor = document.createElement('span');
+      anchor.style.display = 'none';
+      anchor.id = 'anchor-' + (modal.id || ('m-' + Math.random().toString(36).slice(2)));
+      modal.after(anchor);
+      modal.dataset.anchorId = anchor.id;
+    }
+  }
+  function __portalToBody(modal){
+    __ensureAnchor(modal);
+    if (modal.parentElement !== document.body){
+      document.body.appendChild(modal);
+    }
+    // Asegura overlay y z-index alto
+    modal.style.position = 'fixed';
+    modal.style.inset = '0';
+    modal.style.zIndex = '9999';
+  }
+  function __restoreFromPortal(modal){
+    const anchorId = modal.dataset.anchorId;
+    const anchor = anchorId ? document.getElementById(anchorId) : null;
+    if (anchor){
+      anchor.after(modal);
+      // opcional: no removemos el anchor para futuras aperturas
+    }
+  }
+
+  // Versión compatible con tus modales "Mis Cotizaciones" (toggling de 'hidden')
+  function abrirModal(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    __portalToBody(el);
+    el.classList.remove('hidden');
+    document.documentElement.classList.add('no-scroll');
+    document.body.classList.add('no-scroll');
+  }
+  function cerrarModal(id){
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.classList.add('hidden');
+    __restoreFromPortal(el);
+    document.documentElement.classList.remove('no-scroll');
+    document.body.classList.remove('no-scroll');
+  }
+
+  // También mantenemos API openModal/closeModal por si los usas en otras vistas
+  function openModal(id){
+    const m = document.getElementById(id);
+    if(!m) return;
+    __portalToBody(m);
+    m.classList.add('is-open');
+    document.documentElement.classList.add('no-scroll');
+    document.body.classList.add('no-scroll');
+  }
+  function closeModal(id){
+    const m = document.getElementById(id);
+    if(!m) return;
+    m.classList.remove('is-open');
+    __restoreFromPortal(m);
+    document.documentElement.classList.remove('no-scroll');
+    document.body.classList.remove('no-scroll');
+  }
+
+  // Cerrar tocando fuera (funciona para ambos estilos)
+  document.addEventListener('click', (e) => {
+    // Caso estilo "Mis Cotizaciones"
+    const modalA = e.target.closest('[id^="modal-"]');
+    if (modalA && e.target === modalA) {
+      modalA.classList.add('hidden');
+      __restoreFromPortal(modalA);
+      document.documentElement.classList.remove('no-scroll');
+      document.body.classList.remove('no-scroll');
+      return;
+    }
+    // Caso .modal-overlay
+    const modalB = e.target.closest('.modal-overlay.is-open');
+    if (modalB && e.target === modalB) {
+      modalB.classList.remove('is-open');
+      __restoreFromPortal(modalB);
+      document.documentElement.classList.remove('no-scroll');
+      document.body.classList.remove('no-scroll');
+    }
+  });
+
+  // Cerrar con Escape (para ambos estilos)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape'){
+      document.querySelectorAll('[id^="modal-"]:not(.hidden)')
+        .forEach(m => { m.classList.add('hidden'); __restoreFromPortal(m); });
+      document.querySelectorAll('.modal-overlay.is-open')
+        .forEach(m => { m.classList.remove('is-open'); __restoreFromPortal(m); });
+      document.documentElement.classList.remove('no-scroll');
+      document.body.classList.remove('no-scroll');
     }
   });
 </script>

@@ -40,44 +40,36 @@
     white-space: nowrap;
     min-width: 1100px;
   }
-</style>
 
-<style>
   /* Overlay del modal: que él sea el scroll, no el body */
-  .modal-overlay {
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    height: 100dvh;               /* evita el freeze en iOS con 100vh */
-    -webkit-overflow-scrolling: touch;
-  }
+  .modal-overlay { overflow-y: auto; overscroll-behavior: contain; height: 100dvh; -webkit-overflow-scrolling: touch; }
   /* Card del modal: área scrolleable interna */
   .modal-card {
     width: 100%;
-    max-width: 42rem;             /* ~672px desktop */
-    max-height: 92dvh;            /* que no pase del viewport */
-    overflow-y: auto;             /* ⬅️ scroll vertical del contenido */
-    overflow-x: auto;             /* por si hay contenido ancho */
+    max-width: 42rem;
+    max-height: 92dvh;
+    overflow-y: auto;
+    overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;          /* permite gesto vertical en iOS */
+    touch-action: pan-y;
   }
-  @media (max-width: 640px) {
-    .modal-card { max-width: calc(100vw - 1rem); }
-  }
+
+  /* importancia alta para que el modal quede arriba de todo */
+  [id^="del-modal-"] { z-index: 9999; }
+  @media (max-width: 640px) { .modal-card { max-width: calc(100vw - 1rem); } }
 </style>
 
 <div class="mb-4">
   <h2 class="text-2xl font-bold text-gray-800">✅ Producción aprobada</h2>
 
   <div class="mt-3 sm:mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-    <!-- Mes actual -->
     <span class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></span>
 
-    <!-- Acciones (wrap en móvil, ancho completo por botón) -->
     <div class="flex flex-wrap gap-2 w-full sm:w-auto">
-    <a href="{% url 'operaciones:ajuste_nuevo' %}"
-   class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
-  ➕ Crear ajuste
-</a>
+      <a href="{% url 'operaciones:ajuste_nuevo' %}"
+         class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
+        ➕ Crear ajuste
+      </a>
 
       <a href="{% url 'operaciones:produccion_totales_a_pagar' %}?f_month={{ current_month }}"
          class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-full shadow w-full sm:w-auto whitespace-nowrap text-sm text-center">
@@ -100,8 +92,6 @@
     <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
     <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
     <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
-
-    <!-- ⬇️ aquí el nombre correcto -->
     <input type="text" name="f_tecnico" value="{{ f_tecnico }}" placeholder="Técnico (nombre o usuario)" class="campo-filtro">
 
     <div class="flex gap-2">
@@ -145,12 +135,10 @@
           {{ r.detalle_tarea|default:"—" }}
         </td>
 
-        <!-- Monto prorrateado por técnico -->
         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
           $ {{ r.monto_tecnico|formato_clp }} CLP
         </td>
 
-        <!-- Asignado (solo 1 técnico por fila) -->
         <td class="p-2 text-left">
           {% if r.tecnico %}
             - {{ r.tecnico.get_full_name|default:r.tecnico.username }}
@@ -186,11 +174,8 @@
           {% if request.user.is_superuser or request.user.es_admin_general %}
             {% if r.status == 'ajuste_bono' or r.status == 'ajuste_adelanto' or r.status == 'ajuste_descuento' %}
               {% if not r.pagado %}
-                <a class="text-blue-600 hover:underline"
-   href="{% url 'operaciones:editar_ajuste' r.id %}">✏️</a>
-                <button type="button"
-                        class="text-red-600 hover:underline"
-                        onclick="openDelModal('{{ r.id }}')">🗑️</button>
+                <a class="text-blue-600 hover:underline" href="{% url 'operaciones:editar_ajuste' r.id %}">✏️</a>
+                <button type="button" class="text-red-600 hover:underline" onclick="openDelModal('{{ r.id }}')">🗑️</button>
               {% else %}
                 <span class="text-gray-400 italic">—</span>
               {% endif %}
@@ -204,27 +189,10 @@
       </tr>
       {% empty %}
       <tr><td colspan="11" class="p-4 text-center text-gray-500">No hay producción para mostrar.</td></tr>
-{% if r.id %}
-  <form method="post" action="{% url 'operaciones:eliminar_ajuste' r.id %}" class="px-5 pb-4 pt-2">
-    {% csrf_token %}
-    <div class="flex items-center justify-end gap-2">
-      <button type="button"
-              class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
-              onclick="closeDelModal('{{ r.id }}')">Cancelar</button>
-      <button type="submit"
-              class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
-        Eliminar
-      </button>
-    </div>
-  </form>
-{% endif %}
-
-      </div>
-    </div>
-{% endfor %}
-
+      {% endfor %}
     </tbody>
   </table>
+</div>
 
 {# === Modales de eliminación (FUERA de la tabla) === #}
 {% for r in pagina %}
@@ -265,7 +233,7 @@
   {% endif %}
 {% endfor %}
 
-<!-- Modal: Crear Ajuste (centrado, con scroll interno y horizontal en móvil) -->
+<!-- Modal: Crear Ajuste -->
 <div id="ajuste-modal"
      class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/40 modal-overlay">
   <div class="bg-white rounded-2xl shadow p-6 modal-card">
@@ -343,7 +311,6 @@
   </div>
 </div>
 
-<!-- Selector cantidad (idéntico a tu UX) -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
@@ -353,7 +320,6 @@
     <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
   </select>
 
-  <!-- mantener filtros al cambiar cantidad -->
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
   <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
@@ -363,7 +329,6 @@
   <input type="hidden" name="f_region" value="{{ f_region }}">
 </form>
 
-<!-- === JS idéntico a tu lista (auto-submit con debounce, caret restore) === -->
 <script>
 (function () {
   const form = document.getElementById('form-filtros');
@@ -414,7 +379,6 @@
 </script>
 
 <script>
-  // Mes Año helpers (igual que usaste en otras vistas)
   (function(){
     const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
     const picker = document.getElementById('ajuste_mes_picker');
@@ -438,34 +402,25 @@
       picker.addEventListener('change', ()=>{ if(hidden) hidden.value=toLabel(picker.value); });
     }
   })();
+</script>
 
-  // ===== Fix iOS/Android scroll en modal de AJUSTE =====
+<script>
   (function(){
     const overlay = document.getElementById('ajuste-modal');
 
-    // Evita que el gesto de scroll en el overlay (fuera de la tarjeta) “arrastre” la página.
     function preventBgScroll(e){
-      if (e.target === overlay) {
-        e.preventDefault();                    // necesario en iOS
-      }
+      if (e.target === overlay) { e.preventDefault(); }
     }
 
-    // Exponemos helpers para open/close
     window.__aj_modal = {
       open(){
         if(!overlay) return;
         overlay.classList.remove('hidden');
         overlay.classList.add('flex');
-
-        // engancha el fix de gestos (vertical y horizontal)
         overlay.addEventListener('touchmove', preventBgScroll, { passive: false });
 
-        // asegura estar arriba del todo y con inercia iOS
         const card = overlay.querySelector('.modal-card');
-        if (card) {
-          card.scrollTop = 0;
-          card.style.webkitOverflowScrolling = 'touch';
-        }
+        if (card) { card.scrollTop = 0; card.style.webkitOverflowScrolling = 'touch'; }
       },
       close(){
         if(!overlay) return;
@@ -476,21 +431,17 @@
     };
   })();
 
-  // API usada por los botones/acciones
   function openAjusteModal(){ window.__aj_modal?.open(); }
   function closeAjusteModal(){ window.__aj_modal?.close(); }
 
-  // Cerrar con ESC y click fuera
   document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeAjusteModal(); }});
   document.getElementById('ajuste-modal')?.addEventListener('click', (e)=>{
     if(e.target.id==='ajuste-modal'){ closeAjusteModal(); }
   });
 
-  // CSRF
   function getCookie(name){const v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v? v.pop() : '';}
   const CSRF = getCookie('csrftoken');
 
-  // Submit del ajuste (AJAX)
   (function(){
     const form=document.getElementById('ajuste-form');
     if(!form) return;
@@ -499,12 +450,10 @@
       e.preventDefault();
       const fd=new FormData(form);
 
-      // Asignados múltiples → checkboxes marcados
       const checks = document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]:checked');
       const users  = Array.from(checks).map(c => c.value);
       if (!users.length) { alert('Selecciona al menos un usuario.'); return; }
-      fd.delete('asignados');
-      users.forEach(u => fd.append('asignados', u));
+      fd.delete('asignados'); users.forEach(u => fd.append('asignados', u));
       try{
         const resp = await fetch("{% url 'operaciones:crear_ajuste' %}", {
           method:'POST',
@@ -517,7 +466,6 @@
         if(!data.ok) throw new Error(data.error||'Error creando ajuste');
 
         closeAjusteModal();
-        // redirige con flag para que el base muestre el toast
         const url = new URL(window.location.href);
         url.searchParams.set('flash','ajuste_ok');
         window.location.href = url.toString();
@@ -532,6 +480,7 @@
     });
   })();
 </script>
+
 <script>
   (function(){
     const wrap  = document.getElementById('ajuste_asignados_wrap');
@@ -539,9 +488,7 @@
     const master= document.getElementById('chk-all-usuarios');
     const items = Array.from(wrap.querySelectorAll('.usuario-item'));
 
-    function eachBox() {
-      return Array.from(wrap.querySelectorAll('.usuario-item input[type="checkbox"]'));
-    }
+    function eachBox() { return Array.from(wrap.querySelectorAll('.usuario-item input[type="checkbox"]')); }
 
     function updateMaster() {
       const boxes = eachBox();
@@ -555,16 +502,14 @@
     function setAllOnVisible(checked) {
       eachBox().forEach(cb => {
         const row = cb.closest('.usuario-item');
-        if (row.style.display === 'none') return; // solo visibles
+        if (row.style.display === 'none') return;
         cb.checked = checked;
       });
       updateMaster();
     }
 
-    // Maestro: marca/desmarca solo los visibles
     master?.addEventListener('change', () => setAllOnVisible(master.checked));
 
-    // Al escribir en el buscador, mostrar/ocultar y recalcular estado del maestro
     input?.addEventListener('input', () => {
       const q = input.value.trim().toLowerCase();
       items.forEach(li => {
@@ -574,137 +519,78 @@
       updateMaster();
     });
 
-    // Cuando un checkbox individual cambie, recalcula el maestro
     wrap.addEventListener('change', (e) => {
       if (e.target.matches('.usuario-item input[type="checkbox"]')) updateMaster();
     });
 
-    // Estado inicial
     updateMaster();
   })();
 </script>
 
 <script>
-// === URLs ===
-const AJ_URL_CREATE = "{% url 'operaciones:crear_ajuste' %}";
-function urlEditar(pk){
-  return "{% url 'operaciones:editar_ajuste' 0 %}".replace("/0/","/"+pk+"/");
-}
-
-// === Helpers ===
-function setModalMode(mode){
-  const h3 = document.querySelector('#ajuste-modal h3');
-  const btn = document.querySelector('#ajuste-form button[type="submit"]');
-  if(!h3 || !btn) return;
-  if(mode === 'edit'){
-    h3.textContent = 'Editar ajuste';
-    btn.textContent = 'Guardar cambios';
-  }else{
-    h3.textContent = 'Crear ajuste';
-    btn.textContent = 'Crear ajuste';
+/* ========= Delete modal con PORTAL al <body> ========= */
+function __ensureAnchor(modal){
+  if (!modal.dataset.anchorId){
+    const anchor = document.createElement('span');
+    anchor.style.display = 'none';
+    anchor.id = 'anchor-' + (modal.id || ('m-' + Math.random().toString(36).slice(2)));
+    modal.after(anchor);
+    modal.dataset.anchorId = anchor.id;
   }
 }
-
-function yyyyMmNow(){
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-}
-function monthLabelFromYYYYMM(yyyyMm){
-  const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-  if(!/^\d{4}-\d{2}$/.test(yyyyMm)) return "";
-  const [y,m] = yyyyMm.split("-");
-  return `${MONTHS_ES[parseInt(m,10)-1]} ${y}`;
-}
-
-// === Crear (limpia y abre modal) ===
-function newAjuste(){
-  const form   = document.getElementById('ajuste-form');
-  const picker = document.getElementById('ajuste_mes_picker');
-  const hidden = document.getElementById('ajuste_mes_texto');
-
-  form?.reset();
-  document.getElementById('ajuste_id').value = '';
-
-  const ym = yyyyMmNow();
-  if (picker) picker.value = ym;
-  if (hidden) hidden.value = monthLabelFromYYYYMM(ym);
-
-  document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb => cb.checked = false);
-
-  setModalMode('create');
-  openAjusteModal();
-}
-
-// === Editar (precarga, cambia textos y abre modal) ===
-async function editAjuste(id){
-  try{
-    const resp = await fetch(urlEditar(id), {headers: {'Accept':'application/json'}});
-    const data = await resp.json();
-    if(!resp.ok || !data.ok){ throw new Error(data.error || 'No se pudo cargar el ajuste'); }
-
-    document.getElementById('ajuste_id').value = data.id;
-    document.querySelector('#ajuste-form select[name="tipo"]').value = data.tipo;
-
-    const picker = document.getElementById('ajuste_mes_picker');
-    const hidden = document.getElementById('ajuste_mes_texto');
-    if (picker) picker.value = data.mes_yyyy_mm || "";
-    if (hidden) hidden.value = data.mes_texto || "";
-
-    document.querySelector('#ajuste-form input[name="monto"]').value   = data.monto;
-    document.querySelector('#ajuste-form textarea[name="detalle"]').value = data.detalle;
-
-    const asignados = Array.isArray(data.asignados) ? data.asignados.map(Number) : [];
-    document.querySelectorAll('#ajuste_asignados_wrap input[name="asignados"]').forEach(cb=>{
-      cb.checked = asignados.includes(parseInt(cb.value));
-    });
-
-    setModalMode('edit');
-    openAjusteModal();
-  }catch(err){
-    console.error(err);
-    alert('No se pudo cargar el ajuste.');
+function __portalToBody(modal){
+  __ensureAnchor(modal);
+  if (modal.parentElement !== document.body){
+    document.body.appendChild(modal);
   }
+  modal.style.position = 'fixed';
+  modal.style.inset = '0';
+  modal.style.zIndex = '9999';
+}
+function __restoreFromPortal(modal){
+  const anchorId = modal.dataset.anchorId;
+  const anchor = anchorId ? document.getElementById(anchorId) : null;
+  if (anchor){ anchor.after(modal); }
 }
 
-// (el submit ya está en el bloque anterior)
-</script>
+function openDelModal(id) {
+  const m = document.getElementById('del-modal-' + id);
+  if (!m) return;
+  __portalToBody(m);
+  m.classList.remove('hidden');
+  m.classList.add('flex');
+  document.documentElement.classList.add('overflow-hidden');
+  document.body.classList.add('overflow-hidden');
+}
+function closeDelModal(id) {
+  const m = document.getElementById('del-modal-' + id);
+  if (!m) return;
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+  __restoreFromPortal(m);
+  document.documentElement.classList.remove('overflow-hidden');
+  document.body.classList.remove('overflow-hidden');
+}
 
-<script>
-  function openDelModal(id) {
-    const m = document.getElementById('del-modal-' + id);
-    if (!m) return;
-    m.classList.remove('hidden');
-    m.classList.add('flex');
-    document.documentElement.classList.add('overflow-hidden');
-    document.body.classList.add('overflow-hidden');
-  }
-  function closeDelModal(id) {
-    const m = document.getElementById('del-modal-' + id);
-    if (!m) return;
-    m.classList.add('hidden');
-    m.classList.remove('flex');
+// Cerrar con ESC y clic fuera
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('[id^="del-modal-"]:not(.hidden)')
+      .forEach(m => { m.classList.add('hidden'); m.classList.remove('flex'); __restoreFromPortal(m); });
     document.documentElement.classList.remove('overflow-hidden');
     document.body.classList.remove('overflow-hidden');
   }
-
-  // Cerrar con ESC y clic fuera
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('[id^="del-modal-"]:not(.hidden)')
-        .forEach(m => { m.classList.add('hidden'); m.classList.remove('flex'); });
-      document.documentElement.classList.remove('overflow-hidden');
-      document.body.classList.remove('overflow-hidden');
-    }
-  });
-  document.addEventListener('click', (e) => {
-    const modal = e.target.closest('[id^="del-modal-"]');
-    if (modal && e.target === modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
-      document.documentElement.classList.remove('overflow-hidden');
-      document.body.classList.remove('overflow-hidden');
-    }
-  });
+});
+document.addEventListener('click', (e) => {
+  const modal = e.target.closest('[id^="del-modal-"]');
+  if (modal && e.target === modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    __restoreFromPortal(modal);
+    document.documentElement.classList.remove('overflow-hidden');
+    document.body.classList.remove('overflow-hidden');
+  }
+});
 </script>
 
 </div>
