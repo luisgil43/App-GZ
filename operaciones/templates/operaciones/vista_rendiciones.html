@@ -117,12 +117,13 @@
     {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
         {# Supervisor: solo si pendiente_supervisor #}
         {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                    ✅ Aprobar
-                </button>
-            </form>
+            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}?next={{ request.get_full_path|urlencode }}"
+      method="post" class="inline">
+  {% csrf_token %}
+  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+    ✅ Aprobar
+  </button>
+</form>
             <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
                 ❌ Rechazar
             </button>
@@ -130,12 +131,13 @@
 
         {# PM: solo si ya pasó por el supervisor y aún no fue aprobado por PM #}
         {% if user.es_pm and mov.status == "aprobado_supervisor" %}
-            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                    ✅ Aprobar
-                </button>
-            </form>
+         <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}?next={{ request.get_full_path|urlencode }}"
+      method="post" class="inline">
+  {% csrf_token %}
+  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+    ✅ Aprobar
+  </button>
+</form>
             <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
                 ❌ Rechazar
             </button>
@@ -196,15 +198,18 @@
         </div>
     </div>
 
-    <script>
-    function abrirModalRechazo(id) {
-        document.getElementById('formRechazo').action = `/operaciones/rendiciones/rechazar/${id}/`;
-        document.getElementById('modalRechazo').classList.remove('hidden');
-    }
-    function cerrarModalRechazo() {
-        document.getElementById('modalRechazo').classList.add('hidden');
-    }
-    </script>
+<script>
+  function abrirModalRechazo(id) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    document.getElementById('formRechazo').action =
+      `/operaciones/rendiciones/rechazar/${id}/?next=${next}`;
+    document.getElementById('modalRechazo').classList.remove('hidden');
+  }
+  function cerrarModalRechazo() {
+    document.getElementById('modalRechazo').classList.add('hidden');
+  }
+</script>
+
 
     <!-- Paginación -->
     <div class="mt-4 flex flex-wrap justify-between items-center text-sm">

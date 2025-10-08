@@ -1,3 +1,6 @@
+from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
+from django.shortcuts import redirect, get_object_or_404
 from django.db.models import Q, Prefetch, Count
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Count, Q
@@ -1103,8 +1106,8 @@ def listar_cartola(request):
     cantidad = request.GET.get('cantidad', '10')
     cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
 
-    # Capturar filtros
-    du = request.GET.get('du', '').strip()
+    # Filtros
+    usuario = request.GET.get('usuario', '').strip()
     fecha = request.GET.get('fecha', '').strip()
     proyecto = request.GET.get('proyecto', '').strip()
     categoria = request.GET.get('categoria', '').strip()
@@ -1114,17 +1117,18 @@ def listar_cartola(request):
 
     movimientos = CartolaMovimiento.objects.all().order_by('-fecha')
 
-    # Filtrar por usuario (busca en rut, nombre y apellido)
-    if du:
+    # Filtrar por usuario (username, nombre y apellido)
+    if usuario:
         movimientos = movimientos.filter(
-            Q(usuario__username__icontains=du) |
-            Q(usuario__first_name__icontains=du) |
-            Q(usuario__last_name__icontains=du)
+            Q(usuario__username__icontains=usuario) |
+            Q(usuario__first_name__icontains=usuario) |
+            Q(usuario__last_name__icontains=usuario)
         )
 
-    # Filtrar por fecha con validación segura (dd-mm-yyyy → yyyy-mm-dd)
+    # Filtrar por fecha (DD-MM-YYYY)
     if fecha:
         try:
+            from datetime import datetime
             fecha_valida = datetime.strptime(fecha, "%d-%m-%Y").date()
             movimientos = movimientos.filter(fecha__date=fecha_valida)
         except ValueError:
@@ -1149,14 +1153,13 @@ def listar_cartola(request):
 
     estado_choices = CartolaMovimiento.ESTADOS
     filtros = {
-        'du': du,
+        'usuario': usuario,
         'fecha': fecha,
         'proyecto': proyecto,
         'categoria': categoria,
         'tipo': tipo,
         'rut_factura': rut_factura,
         'estado': estado,
-
     }
 
     return render(request, 'facturacion/listar_cartola.html', {
@@ -1296,12 +1299,18 @@ def eliminar_proyecto(request, pk):
     return redirect('facturacion:crear_proyecto')
 
 
+def _is_ajax(request):
+    # Soporta fetch(), XMLHttpRequest y también HTMX si algún día lo usas
+    hdr = request.headers.get('x-requested-with', '') or ''
+    return hdr.lower() in ('xmlhttprequest', 'fetch') or request.headers.get('Hx-Request') == 'true'
+
+
 @login_required
 @rol_requerido('facturacion', 'supervisor', 'pm', 'admin')
 def aprobar_movimiento(request, pk):
     mov = get_object_or_404(CartolaMovimiento, pk=pk)
+
     if mov.tipo and mov.tipo.categoria != "abono":
-        # Asignar aprobador según el rol
         if request.user.es_supervisor and mov.status == 'pendiente_supervisor':
             mov.status = 'aprobado_supervisor'
             mov.aprobado_por_supervisor = request.user
@@ -1310,19 +1319,35 @@ def aprobar_movimiento(request, pk):
             mov.aprobado_por_pm = request.user
         elif request.user.es_facturacion and mov.status == 'aprobado_pm':
             mov.status = 'aprobado_finanzas'
-            # <<< Aquí asignamos el usuario de finanzas
             mov.aprobado_por_finanzas = request.user
 
-        mov.motivo_rechazo = ''  # Limpiar cualquier rechazo previo
+        mov.motivo_rechazo = ''
         mov.save()
         messages.success(request, "Gasto aprobado correctamente.")
-    return redirect('facturacion:listar_cartola')
+
+        # ⬇️ NUEVO: si es AJAX, no redirijas
+        if _is_ajax(request):
+            return JsonResponse({
+                "ok": True,
+                "id": mov.pk,
+                "new_status": mov.status,
+            })
+
+    # comportamiento original (redirigir)
+    next_url = (
+        request.POST.get('next')
+        or request.GET.get('next')
+        or request.META.get('HTTP_REFERER')
+        or reverse('facturacion:listar_cartola')
+    )
+    return redirect(next_url)
 
 
 @login_required
 @rol_requerido('facturacion', 'supervisor', 'pm', 'admin')
 def rechazar_movimiento(request, pk):
     mov = get_object_or_404(CartolaMovimiento, pk=pk)
+
     if request.method == 'POST':
         motivo = request.POST.get('motivo_rechazo', '').strip()
         if mov.tipo and mov.tipo.categoria != "abono":
@@ -1334,13 +1359,29 @@ def rechazar_movimiento(request, pk):
                 mov.aprobado_por_pm = request.user
             elif request.user.es_facturacion and mov.status == 'aprobado_pm':
                 mov.status = 'rechazado_finanzas'
-                # <<< Aquí asignamos el usuario de finanzas
                 mov.aprobado_por_finanzas = request.user
 
             mov.motivo_rechazo = motivo
             mov.save()
             messages.success(request, "Gasto rechazado correctamente.")
-    return redirect('facturacion:listar_cartola')
+
+            # ⬇️ NUEVO: si es AJAX, no redirijas
+            if _is_ajax(request):
+                return JsonResponse({
+                    "ok": True,
+                    "id": mov.pk,
+                    "new_status": mov.status,
+                    "motivo": mov.motivo_rechazo,
+                })
+
+    # comportamiento original (redirigir)
+    next_url = (
+        request.POST.get('next')
+        or request.GET.get('next')
+        or request.META.get('HTTP_REFERER')
+        or reverse('facturacion:listar_cartola')
+    )
+    return redirect(next_url)
 
 
 @login_required
@@ -1348,7 +1389,6 @@ def rechazar_movimiento(request, pk):
 def editar_movimiento(request, pk):
     movimiento = get_object_or_404(CartolaMovimiento, pk=pk)
 
-    # Determinar qué formulario usar según la categoría
     if movimiento.tipo and movimiento.tipo.categoria == "abono":
         FormClass = CartolaAbonoForm
         estado_restaurado = 'pendiente_abono_usuario'
@@ -1361,17 +1401,32 @@ def editar_movimiento(request, pk):
         if form.is_valid():
             campos_editados = form.changed_data
             if campos_editados:
-                # Restablecer el estado solo si se editó algo
                 movimiento.status = estado_restaurado
-                # Limpiar el motivo de rechazo si lo tenía
                 movimiento.motivo_rechazo = ""
             form.save()
             messages.success(request, "Movimiento actualizado correctamente.")
-            return redirect('facturacion:listar_cartola')
+
+            next_url = (
+                request.POST.get('next')
+                or request.GET.get('next')
+                or request.META.get('HTTP_REFERER')
+                or reverse('facturacion:listar_cartola')
+            )
+            return redirect(next_url)
     else:
         form = FormClass(instance=movimiento)
 
-    return render(request, 'facturacion/editar_movimiento.html', {'form': form, 'movimiento': movimiento})
+    # para el botón "Cancelar", también usamos GET next / Referer
+    next_url = (
+        request.GET.get('next')
+        or request.META.get('HTTP_REFERER')
+        or reverse('facturacion:listar_cartola')
+    )
+    return render(
+        request,
+        'facturacion/editar_movimiento.html',
+        {'form': form, 'movimiento': movimiento, 'next': next_url}
+    )
 
 
 @login_required

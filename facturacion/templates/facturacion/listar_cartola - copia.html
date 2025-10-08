@@ -1,0 +1,345 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Cartola de Movimientos{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    height: 2.25rem;
+    width: 100%;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+  .campo-filtro:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+  .tabla-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table {
+    white-space: nowrap;
+    min-width: 1200px;
+  }
+</style>
+<!-- Título y botones -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">📑 Cartola de Movimientos</h2>
+     <div class="flex gap-2">
+ <a href="{% url 'facturacion:crear_tipo' %}"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+  + Crear Tipo
+</a>
+ <a href="{% url 'facturacion:crear_proyecto' %}"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+  + Crear Proyecto 
+</a>
+ <a href="{% url 'facturacion:registrar_abono' %}"
+   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+  + Registrar Abono
+</a>
+ <a href="{% url 'facturacion:exportar_cartola_finanzas' %}" 
+   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+    📥 Export to Excel
+</a>
+     </div>  
+    </div>
+
+<!-- Filtros estilo pill -->
+<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
+  <input type="text" name="du" value="{{ filtros.usuario }}" placeholder="Filtrar Usuario"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+ <input type="text" name="fecha" value="{{ filtros.fecha }}" placeholder="DD-MM-YYYY"
+       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="proyecto" value="{{ filtros.proyecto }}" placeholder="Filtrar por Proyecto"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="categoria" value="{{ filtros.categoria }}" placeholder="Filtrar por Categoria"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+  <input type="text" name="tipo" value="{{ filtros.tipo }}" placeholder="Filtrar por Tipo"
+         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+<input type="text" name="rut_factura" value="{{ filtros.rut_factura }}" placeholder="Filtrar por RUT"
+       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+
+  <select name="estado"
+          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+    <option value="">Todos los estados</option>
+    {% for codigo, nombre in estado_choices %}
+      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+    {% endfor %}
+  </select>
+
+  <div class="flex gap-2">
+    <button type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
+      🔍 Filtrar
+    </button>
+    <a href="{% url 'facturacion:listar_cartola' %}"
+       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
+      ❌ Limpiar
+    </a>
+  </div>
+</form>
+
+
+<!-- Tabla responsive -->
+<div class="rounded-xl border border-gray-200 tabla-responsive">
+      <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                <tr>
+                    <th class="p-2 border">Usuario</th>
+                    <th class="p-2 border">Fecha</th>
+                    <th class="p-2 border">Proyecto</th>
+                    <th class="p-2 border">Categoría</th>
+                    <th class="p-2 border">Tipo</th>
+<th class="p-2 border">RUT Factura</th>
+<th class="p-2 border">Tipo de Documento</th>
+<th class="p-2 border">Número de Documento</th>
+                    <th class="p-2 border">Observaciones</th>
+			<th class="p-2 border">N° Transferencia</th>
+                    <th class="p-2 border">Comprobante</th>
+                    <th class="p-2 border">Cargos</th>
+                    <th class="p-2 border">Abonos</th>
+                    <th class="p-2 border">Status</th>
+                    <th class="p-2 border">Acciones</th>
+                </tr>
+            </thead>
+
+           <tbody class="text-center">
+                {% for mov in pagina %}
+                <tr class="border-t">
+<!-- Servicio -->
+                    <td class="p-2 border">{{ mov.usuario }}</td>
+                    <td class="p-2 border">{{ mov.fecha }}</td>
+                    <td class="p-2 border">{{ mov.proyecto }}</td>
+                    <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
+                    <td class="p-2 border">{{ mov.tipo }}</td>
+<td class="p-2 border">{{ mov.rut_factura|default:"—" }}</td>
+<td class="p-2 border">{{ mov.tipo_doc|default:"—" }}</td>
+<td class="p-2 border">{{ mov.numero_doc|default:"—" }}</td>
+                    <td class="p-2 border">{{ mov.observaciones }}</td>
+<td class="p-2 border">{{ mov.numero_transferencia|default:"—" }}</td>
+                    <td class="p-2 border">
+                        {% if mov.comprobante %}
+                            <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="p-2 border text-right">{{ mov.cargos|default:0|formato_clp }}</td>
+                    <td class="p-2 border text-right">{{ mov.abonos|default:0|formato_clp }}</td>
+                
+  <td class="p-2 text-sm">
+    <div class="flex flex-col gap-1 text-left leading-tight">
+        {% if mov.status == 'pendiente_supervisor' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ⏳ Pendiente aprobación del Supervisor
+            </span>
+        {% elif mov.status == 'aprobado_supervisor' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ⏳ Pendiente aprobación del PM
+            </span>
+        {% elif mov.status == 'rechazado_supervisor' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por Supervisor
+            </span>
+        {% elif mov.status == 'aprobado_pm' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                ⏳ Pendiente aprobación de Finanzas
+            </span>
+        {% elif mov.status == 'rechazado_pm' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por PM
+            </span>
+        {% elif mov.status == 'aprobado_finanzas' %}
+            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
+            </span>
+        {% elif mov.status == 'rechazado_finanzas' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Rechazado por Finanzas
+            </span>
+        {% elif mov.status == 'pendiente_abono_usuario' %}
+            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                ⏳ Pendiente aprobación del Usuario
+            </span>
+        {% elif mov.status == 'aprobado_abono_usuario' %}
+            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                ✅ Abono aprobado por Usuario
+            </span>
+        {% elif mov.status == 'rechazado_abono_usuario' %}
+            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                ❌ Abono rechazado por Usuario
+            </span>
+        {% else %}
+            {{ mov.get_status_display }}
+        {% endif %}
+
+        {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
+            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
+                 style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+                <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+            </div>
+        {% endif %}
+    </div>
+</td>
+
+
+<td class="p-2 border">
+    {% if user.is_superuser %}
+        {# Superusuario: puede editar/eliminar siempre #}
+        <a href="{% url 'facturacion:editar_movimiento' mov.id %}" 
+           class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
+           ✏️ Editar
+        </a>
+        <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}" 
+           class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+           🗑️ Eliminar
+        </a>
+        {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,pendiente_pm,aprobado_pm" %}
+            <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+               class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+               ✅ Aprobar gasto
+            </a>
+            <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+               class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+               ❌ Rechazar gasto
+            </a>
+        {% endif %}
+    {% else %}
+        {% if mov.tipo.categoria != "abono" %}
+            {# Supervisor: solo si está pendiente de él #}
+            {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                   ❌ Rechazar gasto
+                </a>
+            {% endif %}
+
+            {# PM: solo si ya lo aprobó el supervisor #}
+            {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                   ❌ Rechazar gasto
+                </a>
+            {% endif %}
+
+            {# Finanzas: solo si ya lo aprobó el PM #}
+            {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
+                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+                   ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                   ❌ Rechazar gasto
+                </a>
+            {% endif %}
+        {% endif %}
+    {% endif %}
+</td>
+
+
+
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="11" class="p-4 text-center">No hay movimientos registrados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+<!-- Controles de paginación -->
+<div class="mt-4 flex flex-wrap justify-between items-center text-sm">
+    <!-- Selector de cantidad -->
+    <form method="get" class="flex items-center gap-2">
+        <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+        <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+            <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+            <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+            <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+            <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+        </select>
+        {% if filtros.estado %}
+            <input type="hidden" name="estado" value="{{ filtros.estado }}">
+        {% endif %}
+    </form>
+
+<!-- Texto centrado de página -->
+<div class="mt-2 flex justify-center text-sm">
+    {% if cantidad == 'todos' %}
+        <span>Página 1 de 1</span>
+    {% else %}
+        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% endif %}
+</div>
+
+<!-- Botones de navegación -->
+<div class="mt-2 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+        <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+    {% if pagina.has_next %}
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+</div>
+
+<!-- Modal de rechazo -->
+<div id="modalRechazo" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+    <h2 class="text-lg font-bold text-gray-800 mb-4">Motivo del Rechazo</h2>
+    <form id="formRechazo" method="POST">
+      {% csrf_token %}
+      <textarea name="motivo_rechazo" rows="4" required
+        class="w-full border rounded-lg p-2 mb-4"
+        placeholder="Escribe el motivo del rechazo"></textarea>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="cerrarModalRechazo()" 
+                class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rechazar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function abrirModalRechazo(id) {
+    const modal = document.getElementById('modalRechazo');
+    const form = document.getElementById('formRechazo');
+    form.action = /facturacion/cartola/rechazar/${id}/; // URL dinámica
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+  function cerrarModalRechazo() {
+    const modal = document.getElementById('modalRechazo');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+</script>
+
+</div>
+{% endblock %}

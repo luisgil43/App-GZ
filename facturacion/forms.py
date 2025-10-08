@@ -127,7 +127,7 @@ class CartolaAbonoForm(forms.ModelForm):
         widgets = {
             'usuario': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
-            'observaciones': forms.Textarea(attrs={
+            'observaciones': forms.Textarea({
                 'class': 'w-full border rounded-xl px-3 py-2',
                 'rows': 2,
                 'placeholder': 'Escribe una breve observación...'
@@ -138,23 +138,26 @@ class CartolaAbonoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['usuario'].label_from_instance = lambda obj: f"{obj.identidad} - {obj.first_name} {obj.last_name}"
-        for field in self.fields.values():
-            field.required = True
 
-        # Preformatear para edición
+        has_old = bool(
+            self.instance and self.instance.pk and self.instance.comprobante)
+        self.fields['comprobante'].required = not has_old
+
+        self.fields['usuario'].required = True
+        self.fields['proyecto'].required = True
+        self.fields['observaciones'].required = True
+        self.fields['numero_transferencia'].required = True
+        self.fields['abonos'].required = True
+
         if self.instance and self.instance.pk and self.instance.abonos is not None:
             self.initial['abonos'] = f"{self.instance.abonos:,.2f}".replace(
                 ",", "X").replace(".", ",").replace("X", ".")
 
-    def clean_abonos(self):
-        valor = self.cleaned_data.get('abonos', '0')
-        valor = str(valor).replace(" ", "").replace(".", "").replace(",", ".")
-        try:
-            return Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        except InvalidOperation:
-            raise forms.ValidationError(
-                "Ingrese un número válido para Abonos.")
+    def clean_comprobante(self):
+        file = self.cleaned_data.get('comprobante')
+        if not file and self.instance and self.instance.comprobante:
+            return self.instance.comprobante
+        return file
 
 
 class CartolaGastoForm(forms.ModelForm):
@@ -173,7 +176,7 @@ class CartolaGastoForm(forms.ModelForm):
             'usuario': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'tipo': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
-            'observaciones': forms.Textarea(attrs={
+            'observaciones': forms.Textarea({
                 'class': 'w-full border rounded-xl px-3 py-2',
                 'rows': 2,
                 'placeholder': 'Escribe una breve observación...'
@@ -184,23 +187,31 @@ class CartolaGastoForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['usuario'].label_from_instance = lambda obj: f"{obj.identidad} - {obj.first_name} {obj.last_name}"
-        for field in self.fields.values():
-            field.required = True
 
-        # Preformatear para edición
+        # ✅ requerir comprobante sólo si no existe uno guardado
+        has_old = bool(
+            self.instance and self.instance.pk and self.instance.comprobante)
+        self.fields['comprobante'].required = not has_old
+
+        # marca los otros campos que sí deben ser obligatorios
+        self.fields['usuario'].required = True
+        self.fields['proyecto'].required = True
+        self.fields['tipo'].required = True
+        self.fields['observaciones'].required = True
+        self.fields['numero_transferencia'].required = True
+        self.fields['cargos'].required = True
+
+        # preformateo para edición
         if self.instance and self.instance.pk and self.instance.cargos is not None:
             self.initial['cargos'] = f"{self.instance.cargos:,.2f}".replace(
                 ",", "X").replace(".", ",").replace("X", ".")
 
-    def clean_cargos(self):
-        valor = self.cleaned_data.get('cargos', '0')
-        valor = str(valor).replace(" ", "").replace(".", "").replace(",", ".")
-        try:
-            return Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        except InvalidOperation:
-            raise forms.ValidationError(
-                "Ingrese un número válido para Cargos.")
+    def clean_comprobante(self):
+        file = self.cleaned_data.get('comprobante')
+        # ✅ si no suben uno nuevo y ya había, conservar
+        if not file and self.instance and self.instance.comprobante:
+            return self.instance.comprobante
+        return file
 
 
 class CartolaMovimientoCompletoForm(forms.ModelForm):

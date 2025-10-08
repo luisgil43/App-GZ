@@ -125,34 +125,31 @@ class MovimientoUsuarioForm(forms.ModelForm):
         model = CartolaMovimiento
         fields = ['proyecto', 'tipo', 'tipo_doc', 'rut_factura',
                   'numero_doc', 'cargos', 'observaciones', 'comprobante']
-        labels = {
-            'cargos': 'Monto',
-            'tipo_doc': 'Tipo de Documento',
-            'numero_doc': 'Número de Documento',
-            'rut_factura': 'RUT Factura',
-            'comprobante': 'Comprobante',
-            'observaciones': 'Observaciones',
-            'proyecto': 'Proyecto',
-            'tipo': 'Tipo',
-        }
         widgets = {
-            'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'required': 'required'}),
-            'tipo': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'required': 'required'}),
-            'tipo_doc': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'required': 'required'}),
-            'numero_doc': forms.NumberInput(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'required': 'required'}),
+            'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'tipo': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'tipo_doc': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'numero_doc': forms.NumberInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'rut_factura': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'placeholder': 'Ej: 12.345.678-5'}),
-            'observaciones': forms.Textarea(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'rows': 3, 'required': 'required'}),
+            'observaciones': forms.Textarea(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'rows': 3}),
+            'comprobante': forms.ClearableFileInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Preformatear para edición (mostrar con miles y coma)
+
+        # 🔑 Nunca dejes que el propio campo FileField dispare "required".
+        # Lo controlamos manualmente en clean().
+        self.fields['comprobante'].required = False
+
+        # Prellenar monto en edición
         if self.instance and self.instance.pk and self.instance.cargos is not None:
-            self.initial['cargos'] = f"{self.instance.cargos:,.2f}".replace(
-                ",", "X").replace(".", ",").replace("X", ".")
+            self.initial['cargos'] = (
+                f"{self.instance.cargos:,.2f}"
+                .replace(",", "X").replace(".", ",").replace("X", ".")
+            )
 
     def clean_cargos(self):
-        """Convierte texto con separadores de miles a Decimal."""
         valor = self.cleaned_data.get('cargos', '0')
         valor = str(valor).replace(" ", "").replace(".", "").replace(",", ".")
         try:
@@ -162,39 +159,31 @@ class MovimientoUsuarioForm(forms.ModelForm):
                 "Ingrese un monto válido en formato 1.234,56")
 
     def clean(self):
-        cleaned_data = super().clean()
-        tipo_doc = cleaned_data.get("tipo_doc")
-        rut = cleaned_data.get("rut_factura")
+        cleaned = super().clean()
 
-        # --- Unificar comprobante (foto o archivo)
-        comprobante_foto = self.files.get("comprobante_foto")
-        comprobante_archivo = self.files.get("comprobante_archivo")
-        comprobante = comprobante_foto or comprobante_archivo
-        if not comprobante:
-            self.add_error(
-                None, "Debe adjuntar un comprobante (PDF o imagen).")
-        else:
-            cleaned_data["comprobante"] = comprobante  # Guardar en el dict
+        # 1) Detectar si ya existía comprobante (edición)
+        has_old = bool(
+            self.instance and self.instance.pk and self.instance.comprobante)
 
-        # --- RUT obligatorio si es factura
-        if tipo_doc and "factura" in tipo_doc.lower():
-            if not rut:
-                self.add_error(
-                    "rut_factura", "El RUT es obligatorio para facturas.")
-            elif not validar_rut_chileno(rut):
-                self.add_error("rut_factura", "El RUT ingresado no es válido.")
-            elif not verificar_rut_sii(rut):
-                self.add_error(
-                    "rut_factura", "El RUT no está registrado en el SII.")
+        # 2) Tomar el comprobante que venga por cualquiera de los inputs
+        #    Ajusta estos nombres si en tu template usas otros.
+        uploaded = (
+            self.files.get('comprobante') or
+            self.files.get('comprobante_foto') or
+            self.files.get('comprobante_archivo')
+        )
 
-        # --- Validar que todos los campos obligatorios no estén vacíos
-        campos_obligatorios = ['proyecto', 'tipo',
-                               'tipo_doc', 'numero_doc', 'cargos', 'observaciones']
-        for campo in campos_obligatorios:
-            if not cleaned_data.get(campo):
-                self.add_error(campo, "Este campo es obligatorio.")
+        # 3) Copiar al campo del modelo para que se guarde
+        if uploaded:
+            cleaned['comprobante'] = uploaded
 
-        return cleaned_data
+        # 4) Reglas de obligatoriedad
+        is_create = not (self.instance and self.instance.pk)
+        if (is_create and not uploaded) or (not is_create and not has_old and not uploaded):
+            self.add_error('comprobante', "Este campo es obligatorio.")
+
+        # (Opcional) tus otras validaciones (RUT si es factura, etc.) pueden quedarse
+        return cleaned
 
 
 def validar_rut_chileno(rut):

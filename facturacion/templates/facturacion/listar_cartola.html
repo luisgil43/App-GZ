@@ -2,7 +2,6 @@
 {% load humanize %}
 {% load custom_filters %}
 
-
 {% block title %}Cartola de Movimientos{% endblock %}
 
 {% block dashboard_content %}
@@ -56,9 +55,9 @@
     </div>
 
 <!-- Filtros estilo pill -->
-<form method="get" class="mb-6 flex flex-wrap gap-2 items-center">
-  <input type="text" name="du" value="{{ filtros.usuario }}" placeholder="Filtrar Usuario"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
+<form id="form-filtros" method="get" class="mb-6 flex flex-wrap gap-2 items-center">
+  <input type="text" name="usuario" value="{{ filtros.usuario }}" placeholder="Filtrar Usuario"
+       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
  <input type="text" name="fecha" value="{{ filtros.fecha }}" placeholder="DD-MM-YYYY"
        class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <input type="text" name="proyecto" value="{{ filtros.proyecto }}" placeholder="Filtrar por Proyecto"
@@ -66,10 +65,7 @@
   <input type="text" name="categoria" value="{{ filtros.categoria }}" placeholder="Filtrar por Categoria"
          class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <input type="text" name="tipo" value="{{ filtros.tipo }}" placeholder="Filtrar por Tipo"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-<input type="text" name="rut_factura" value="{{ filtros.rut_factura }}" placeholder="Filtrar por RUT"
-       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-
+               class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
   <select name="estado"
           class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
     <option value="">Todos los estados</option>
@@ -79,18 +75,15 @@
   </select>
 
   <div class="flex gap-2">
-    <button type="submit"
-            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-full shadow">
-      🔍 Filtrar
-    </button>
     <a href="{% url 'facturacion:listar_cartola' %}"
        class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
       ❌ Limpiar
     </a>
   </div>
+  <input type="hidden" name="cantidad" value="{{ cantidad }}">
 </form>
 
-
+<div id="cartolaZone">
 <!-- Tabla responsive -->
 <div class="rounded-xl border border-gray-200 tabla-responsive">
       <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
@@ -200,66 +193,71 @@
 
 
 <td class="p-2 border">
-    {% if user.is_superuser %}
-        {# Superusuario: puede editar/eliminar siempre #}
-        <a href="{% url 'facturacion:editar_movimiento' mov.id %}" 
-           class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
-           ✏️ Editar
-        </a>
-        <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}" 
-           class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-           🗑️ Eliminar
-        </a>
-        {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,pendiente_pm,aprobado_pm" %}
-            <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
-               class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-               ✅ Aprobar gasto
-            </a>
-            <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
-               class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-               ❌ Rechazar gasto
-            </a>
-        {% endif %}
-    {% else %}
-        {% if mov.tipo.categoria != "abono" %}
-            {# Supervisor: solo si está pendiente de él #}
-            {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
-                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-                   ✅ Aprobar gasto
-                </a>
-                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
-                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-                   ❌ Rechazar gasto
-                </a>
-            {% endif %}
+  {% if user.is_superuser %}
+    {# Superusuario: puede editar/eliminar siempre #}
+    <a href="{% url 'facturacion:editar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+       class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
+       ✏️ Editar
+    </a>
+    <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+       class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+       🗑️ Eliminar
+    </a>
 
-            {# PM: solo si ya lo aprobó el supervisor #}
-            {% if user.es_pm and mov.status == "aprobado_supervisor" %}
-                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
-                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-                   ✅ Aprobar gasto
-                </a>
-                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
-                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-                   ❌ Rechazar gasto
-                </a>
-            {% endif %}
-
-            {# Finanzas: solo si ya lo aprobó el PM #}
-            {% if user.es_facturacion and mov.status == "aprobado_pm" %}
-                <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}" 
-                   class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-                   ✅ Aprobar gasto
-                </a>
-                <a href="#" onclick="abrirModalRechazo({{ mov.id }})"
-                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-                   ❌ Rechazar gasto
-                </a>
-            {% endif %}
-        {% endif %}
+   {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,aprobado_supervisor,aprobado_pm" %}
+  <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+  ✅ Aprobar gasto
+</a>
+      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+   ❌ Rechazar gasto
+</a>
     {% endif %}
+
+  {% else %}
+    {% if mov.tipo.categoria != "abono" %}
+
+      {# Supervisor #}
+      {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+       <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+  ✅ Aprobar gasto
+</a>
+       <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+   ❌ Rechazar gasto
+</a>
+      {% endif %}
+
+      {# PM #}
+      {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+    <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+  ✅ Aprobar gasto
+</a>
+      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+   ❌ Rechazar gasto
+</a>
+      {% endif %}
+
+      {# Finanzas #}
+      {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+      <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+  ✅ Aprobar gasto
+</a>
+       <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+   ❌ Rechazar gasto
+</a>
+      {% endif %}
+
+    {% endif %}
+  {% endif %}
 </td>
+
 
 
 
@@ -274,73 +272,288 @@
     </div>
 <!-- Controles de paginación -->
 <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
-    <!-- Selector de cantidad -->
-    <form method="get" class="flex items-center gap-2">
-        <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-        <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-            <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
-            <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-            <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-            <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
-        </select>
-        {% if filtros.estado %}
-            <input type="hidden" name="estado" value="{{ filtros.estado }}">
-        {% endif %}
-    </form>
 
-<!-- Texto centrado de página -->
-<div class="mt-2 flex justify-center text-sm">
+  <!-- Selector de cantidad -->
+  <form method="get" class="flex items-center gap-2">
+    <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+      <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+    </select>
+
+    <!-- 🔒 Preservar filtros actuales -->
+    <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
+    <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
+    <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
+    <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
+    <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
+    <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
+    <input type="hidden" name="estado"      value="{{ filtros.estado }}">
+  </form>
+
+  <!-- Texto centrado de página -->
+  <div class="mt-2 flex justify-center text-sm">
     {% if cantidad == 'todos' %}
-        <span>Página 1 de 1</span>
+      <span>Página 1 de 1</span>
     {% else %}
-        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+      <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
     {% endif %}
-</div>
+  </div>
 
-<!-- Botones de navegación -->
+ 
+ <!-- Botones de navegación -->
+{% with base_qs=request.GET.urlencode %}
 <div class="mt-2 flex justify-center gap-2 text-sm">
-    {% if pagina.has_previous %}
-        <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-    {% endif %}
-    {% if pagina.has_next %}
-        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-    {% endif %}
+  {% if pagina.has_previous %}
+    <a href="?{{ base_qs }}&page=1" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?{{ base_qs }}&page={{ pagina.previous_page_number }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  {% if pagina.has_next %}
+    <a href="?{{ base_qs }}&page={{ pagina.next_page_number }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?{{ base_qs }}&page={{ pagina.paginator.num_pages }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+{% endwith %}
+
+
 </div>
 
 <!-- Modal de rechazo -->
 <div id="modalRechazo" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
   <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
     <h2 class="text-lg font-bold text-gray-800 mb-4">Motivo del Rechazo</h2>
-    <form id="formRechazo" method="POST">
-      {% csrf_token %}
-      <textarea name="motivo_rechazo" rows="4" required
-        class="w-full border rounded-lg p-2 mb-4"
-        placeholder="Escribe el motivo del rechazo"></textarea>
-      <div class="flex justify-end gap-2">
-        <button type="button" onclick="cerrarModalRechazo()" 
-                class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
-        <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rechazar</button>
-      </div>
-    </form>
+   <form id="formRechazo" method="POST" action="">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <textarea name="motivo_rechazo" rows="4" required
+    class="w-full border rounded-lg p-2 mb-4"
+    placeholder="Escribe el motivo del rechazo"></textarea>
+  <div class="flex justify-end gap-2">
+    <button type="button" onclick="cerrarModalRechazo()" 
+            class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
+    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rechazar</button>
+  </div>
+</form>
+
   </div>
 </div>
 
 <script>
   function abrirModalRechazo(id) {
     const modal = document.getElementById('modalRechazo');
-    const form = document.getElementById('formRechazo');
-    form.action = `/facturacion/cartola/rechazar/${id}/`;  // URL dinámica
+    const form  = document.getElementById('formRechazo');
+
+    // Opción A: usando path fijo
+    form.action = `/facturacion/cartola/rechazar/${id}/`;
+
+    // Opción B (mejor): usando la URL nombrada y reemplazando el ID.
+    // form.action = `{% url 'facturacion:rechazar_movimiento' 0 %}`.replace('/0/', `/${id}/`);
+
+    // Refresca el 'next' por si cambió la query (paginación/filtros actuales)
+    const nextInput = form.querySelector('input[name="next"]');
+    if (nextInput) {
+      nextInput.value = location.pathname + location.search;
+    }
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+    return false; // <- evita que el <a href="#"> navegue
   }
+
   function cerrarModalRechazo() {
     const modal = document.getElementById('modalRechazo');
     modal.classList.add('hidden');
     modal.classList.remove('flex');
   }
 </script>
+
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  let zone = document.getElementById('cartolaZone');
+  if (!form || !zone) return;
+
+  function qsFromForm() {
+    const fd = new FormData(form);
+    const params = new URLSearchParams(fd);
+
+    // Borra parámetros vacíos para “resetear” filtros al limpiar el campo
+    form.querySelectorAll('input[type="text"], select').forEach(el => {
+      const v = (el.value || '').trim();
+      if (v === '') params.delete(el.name);
+    });
+    return params;
+  }
+
+  async function refreshList(extraParams = {}) {
+    // guarda foco y caret
+    const active = document.activeElement;
+    const activeName = active && active.name;
+    const caretPos = (active && active.selectionStart) ?? null;
+
+    const params = qsFromForm();
+    Object.entries(extraParams).forEach(([k, v]) => params.set(k, v));
+
+    const url = `${location.pathname}?${params.toString()}`;
+    const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' }});
+    const html = await res.text();
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const newZone = doc.querySelector('#cartolaZone');
+    if (!newZone) { location.href = url; return; }
+
+    zone.replaceWith(newZone);
+    zone = document.getElementById('cartolaZone'); // actualizar referencia
+    wirePagination(zone);
+
+    // restaurar foco/caret
+    if (activeName) {
+      const again = form.querySelector(`[name="${activeName}"]`);
+      if (again) {
+        again.focus();
+        if (caretPos !== null && again.setSelectionRange) {
+          const end = again.value.length;
+          const pos = Math.min(caretPos, end);
+          again.setSelectionRange(pos, pos);
+        }
+      }
+    }
+
+    // actualizar URL (compartible/recargable)
+    history.replaceState(null, '', url);
+  }
+
+  function wirePagination(scope) {
+    (scope || document).querySelectorAll('a[href*="page="]').forEach(a => {
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const u = new URL(a.href, location.href);
+        const page = u.searchParams.get('page') || '1';
+        refreshList({ page });
+      });
+    });
+  }
+  wirePagination(zone);
+
+  // Debounce suave
+  let t;
+  const debouncedRefresh = (extra = {}) => {
+    clearTimeout(t);
+    t = setTimeout(() => refreshList({ page: 1, ...extra }), 300);
+  };
+
+  // Autofiltrado (incluye limpiar al dejar vacío)
+  form.addEventListener('input', (e) => {
+    if (e.target.matches('input[type="text"], select')) debouncedRefresh();
+  });
+  form.addEventListener('change', (e) => {
+    if (e.target.matches('input[type="text"], select')) debouncedRefresh();
+  });
+  form.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.matches('input[type="text"]')) {
+      e.preventDefault();
+      refreshList({ page: 1 });
+    }
+  });
+})();
+</script>
+
+<script>
+  // --- CSRF helper ---
+  function getCookie(name){const v=`; ${document.cookie}`.split(`; ${name}=`);if(v.length===2)return v.pop().split(';').shift();}
+  const csrftoken = getCookie('csrftoken');
+
+  // ----- PARCHA TU refreshList -----
+  async function refreshList(extraParams = {}) {
+    const prevY = window.scrollY;           // 👈 guarda scroll
+    const form = document.getElementById('form-filtros');
+    let zone = document.getElementById('cartolaZone');
+
+    const fd = new FormData(form);
+    const params = new URLSearchParams(fd);
+
+    form.querySelectorAll('input[type="text"], select').forEach(el => {
+      const v = (el.value || '').trim();
+      if (v === '') params.delete(el.name);
+    });
+    Object.entries(extraParams).forEach(([k, v]) => params.set(k, v));
+
+    // Mantén página actual si existe
+    const current = new URLSearchParams(location.search);
+    const currentPage = current.get('page');
+    if (currentPage && !params.has('page')) params.set('page', currentPage);
+
+    const url = `${location.pathname}?${params.toString()}`;
+    const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' }});
+    const html = await res.text();
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const newZone = doc.querySelector('#cartolaZone');
+    if (!newZone) { location.href = url; return; }
+
+    zone.replaceWith(newZone);
+    history.replaceState(null, '', url);
+
+    // reengancha la paginación dentro de la zona nueva
+    wirePagination(document.getElementById('cartolaZone'));
+
+    window.scrollTo(0, prevY);             // 👈 restaura scroll
+  }
+
+  // Paginación por AJAX (igual a lo que ya tienes)
+  function wirePagination(scope) {
+    (scope || document).querySelectorAll('a[href*="page="]').forEach(a => {
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const u = new URL(a.href, location.href);
+        const page = u.searchParams.get('page') || '1';
+        refreshList({ page });
+      });
+    });
+  }
+  wirePagination(document.getElementById('cartolaZone'));
+
+  // ----- INTERCEPTA APROBAR PARA HACER POST SIN NAVEGAR -----
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest('a.js-approve');
+    if (!a) return;
+    e.preventDefault();
+
+    const prevY = window.scrollY; // 👈 por si el refresh tarda
+    // envía POST a la misma URL (ignora el GET)
+    const url = new URL(a.href, location.href);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrftoken,
+        'X-Requested-With': 'fetch'
+      }
+    });
+    // refresca solo la tabla (mantiene filtros, página y scroll)
+    await refreshList();
+    window.scrollTo(0, prevY);   // 👈 doble seguridad
+  });
+
+  // ----- Modal de rechazo por fetch (mantiene scroll igual) -----
+  document.addEventListener('submit', async (e) => {
+    const form = e.target;
+    if (form.id !== 'formRechazo') return;
+    e.preventDefault();
+    const prevY = window.scrollY;
+    await fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: { 'X-Requested-With': 'fetch' }
+    });
+    cerrarModalRechazo();
+    await refreshList();
+    window.scrollTo(0, prevY);
+  });
+
+</script>
+
 
 </div>
 {% endblock %}

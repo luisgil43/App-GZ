@@ -1195,48 +1195,51 @@ def eliminar_rendicion(request, pk):
 def vista_rendiciones(request):
     user = request.user
 
+    # --- Qué ve cada rol
     if user.is_superuser:
         movimientos = CartolaMovimiento.objects.all()
     elif getattr(user, 'es_supervisor', False):
-        # Supervisor: solo pendientes y rechazados, excluyendo abonos
-        movimientos = CartolaMovimiento.objects.filter(
-            Q(status__startswith='pendiente') | Q(
-                status__startswith='rechazado')
-        ).exclude(tipo__categoria='abono')
+        movimientos = (
+            CartolaMovimiento.objects
+            .filter(Q(status__startswith='pendiente') | Q(status__startswith='rechazado'))
+            .exclude(tipo__categoria='abono')
+        )
     elif getattr(user, 'es_pm', False):
-        # PM: ve todas
         movimientos = CartolaMovimiento.objects.all()
     else:
         movimientos = CartolaMovimiento.objects.none()
 
-    # Orden personalizado: pendientes -> rechazados -> aprobados
+    # --- Orden: pendientes -> rechazados -> aprobados, luego por fecha desc
     movimientos = movimientos.annotate(
         orden_status=Case(
             When(status__startswith='pendiente', then=Value(1)),
             When(status__startswith='rechazado', then=Value(2)),
             When(status__startswith='aprobado', then=Value(3)),
             default=Value(4),
-            output_field=IntegerField()
+            output_field=IntegerField(),
         )
     ).order_by('orden_status', '-fecha')
 
-    # Totales
+    # --- Totales (sobre el queryset ya filtrado por rol)
     total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
     pendientes = movimientos.filter(status__startswith='pendiente').aggregate(
         total=Sum('cargos'))['total'] or 0
     rechazados = movimientos.filter(status__startswith='rechazado').aggregate(
         total=Sum('cargos'))['total'] or 0
 
-    # Paginación
-    cantidad = request.GET.get('cantidad', '10')
-    cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
-    paginator = Paginator(movimientos, cantidad)
+    # --- Paginación
+    cantidad_param = request.GET.get(
+        'cantidad', '10')             # <- string para la UI
+    page_size = 1000000 if cantidad_param == 'todos' else int(
+        cantidad_param)  # <- entero para Paginator
+
+    paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
     return render(request, 'operaciones/vista_rendiciones.html', {
         'pagina': pagina,
-        'cantidad': cantidad,
+        'cantidad': cantidad_param,  # <- se compara con '5','10','20','todos' en el template
         'total': total,
         'pendientes': pendientes,
         'rechazados': rechazados,
@@ -1248,6 +1251,7 @@ def aprobar_rendicion(request, pk):
     mov = get_object_or_404(CartolaMovimiento, pk=pk)
     user = request.user
 
+    # Flujo de aprobaciones
     if getattr(user, 'es_supervisor', False) and mov.status == 'pendiente_supervisor':
         mov.status = 'aprobado_supervisor'
         mov.aprobado_por_supervisor = user
@@ -1256,38 +1260,53 @@ def aprobar_rendicion(request, pk):
         mov.aprobado_por_pm = user
     elif getattr(user, 'es_facturacion', False) and mov.status == 'aprobado_pm':
         mov.status = 'aprobado_finanzas'
-        mov.aprobado_por_finanzas = user  # ← aquí guardamos al usuario de finanzas
+        mov.aprobado_por_finanzas = user
 
-    # Limpiamos motivo de rechazo si fue aprobado
-    mov.motivo_rechazo = ''
+    mov.motivo_rechazo = ''  # limpiar rechazo previo si lo hubiera
     mov.save()
     messages.success(request, "Movimiento aprobado correctamente.")
-    return redirect('operaciones:vista_rendiciones')
+
+    # ← Redirige de vuelta a donde estaba (conserva page & cantidad)
+    next_url = (
+        request.POST.get('next')
+        or request.GET.get('next')
+        or request.META.get('HTTP_REFERER')
+        or reverse('operaciones:vista_rendiciones')
+    )
+    return redirect(next_url)
 
 
 @login_required
 def rechazar_rendicion(request, pk):
-    movimiento = get_object_or_404(CartolaMovimiento, pk=pk)
+    mov = get_object_or_404(CartolaMovimiento, pk=pk)
+
     if request.method == 'POST':
-        motivo = request.POST.get('motivo_rechazo')
-        if motivo:
-            movimiento.motivo_rechazo = motivo
-            # Detectar quién rechaza y actualizar el estado
-            if request.user.es_supervisor and movimiento.status == 'pendiente_supervisor':
-                movimiento.status = 'rechazado_supervisor'
-                movimiento.aprobado_por_supervisor = request.user
-            elif request.user.es_pm and movimiento.status == 'aprobado_supervisor':
-                movimiento.status = 'rechazado_pm'
-                movimiento.aprobado_por_pm = request.user
-            elif request.user.es_facturacion and movimiento.status == 'aprobado_pm':
-                movimiento.status = 'rechazado_finanzas'
-                # ← aquí guardamos al usuario de finanzas
-                movimiento.aprobado_por_finanzas = request.user
-            movimiento.save()
-            messages.success(request, "Movimiento rechazado correctamente.")
-        else:
+        motivo = (request.POST.get('motivo_rechazo') or '').strip()
+        if not motivo:
             messages.error(request, "Debe ingresar el motivo del rechazo.")
-    return redirect('operaciones:vista_rendiciones')
+        else:
+            if getattr(request.user, 'es_supervisor', False) and mov.status == 'pendiente_supervisor':
+                mov.status = 'rechazado_supervisor'
+                mov.aprobado_por_supervisor = request.user
+            elif getattr(request.user, 'es_pm', False) and mov.status == 'aprobado_supervisor':
+                mov.status = 'rechazado_pm'
+                mov.aprobado_por_pm = request.user
+            elif getattr(request.user, 'es_facturacion', False) and mov.status == 'aprobado_pm':
+                mov.status = 'rechazado_finanzas'
+                mov.aprobado_por_finanzas = request.user
+
+            mov.motivo_rechazo = motivo
+            mov.save()
+            messages.success(request, "Movimiento rechazado correctamente.")
+
+    # ← Redirige de vuelta a donde estaba (conserva page & cantidad)
+    next_url = (
+        request.POST.get('next')
+        or request.GET.get('next')
+        or request.META.get('HTTP_REFERER')
+        or reverse('operaciones:vista_rendiciones')
+    )
+    return redirect(next_url)
 
 
 @csrf_exempt
