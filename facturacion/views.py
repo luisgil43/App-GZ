@@ -1,3 +1,4 @@
+from django.db.models import Q, Case, When, Value, IntegerField
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.shortcuts import redirect, get_object_or_404
@@ -1103,21 +1104,23 @@ def exportar_facturacion_excel(request):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_cartola(request):
-    cantidad = request.GET.get('cantidad', '10')
-    cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
+    # --- Cantidad/paginación (mantén string para la UI)
+    cantidad_param = request.GET.get('cantidad', '10')
+    page_size = 1000000 if cantidad_param == 'todos' else int(cantidad_param)
 
-    # Filtros
-    usuario = request.GET.get('usuario', '').strip()
-    fecha = request.GET.get('fecha', '').strip()
-    proyecto = request.GET.get('proyecto', '').strip()
-    categoria = request.GET.get('categoria', '').strip()
-    tipo = request.GET.get('tipo', '').strip()
-    rut_factura = request.GET.get('rut_factura', '').strip()
-    estado = request.GET.get('estado', '').strip()
+    # --- Filtros (string trimming)
+    usuario = (request.GET.get('usuario') or '').strip()
+    fecha_txt = (request.GET.get('fecha') or '').strip()
+    proyecto = (request.GET.get('proyecto') or '').strip()
+    categoria = (request.GET.get('categoria') or '').strip()
+    tipo = (request.GET.get('tipo') or '').strip()
+    rut_factura = (request.GET.get('rut_factura') or '').strip()
+    estado = (request.GET.get('estado') or '').strip()
 
-    movimientos = CartolaMovimiento.objects.all().order_by('-fecha')
+    # --- Base queryset
+    movimientos = CartolaMovimiento.objects.all()
 
-    # Filtrar por usuario (username, nombre y apellido)
+    # --- Filtro usuario: username / nombres / apellidos
     if usuario:
         movimientos = movimientos.filter(
             Q(usuario__username__icontains=usuario) |
@@ -1125,16 +1128,16 @@ def listar_cartola(request):
             Q(usuario__last_name__icontains=usuario)
         )
 
-    # Filtrar por fecha (DD-MM-YYYY)
-    if fecha:
+    # --- Filtro fecha (DD-MM-YYYY)
+    if fecha_txt:
         try:
-            from datetime import datetime
-            fecha_valida = datetime.strptime(fecha, "%d-%m-%Y").date()
+            fecha_valida = datetime.strptime(fecha_txt, "%d-%m-%Y").date()
             movimientos = movimientos.filter(fecha__date=fecha_valida)
         except ValueError:
             messages.warning(
                 request, "Formato de fecha inválido. Use DD-MM-YYYY.")
 
+    # --- Otros filtros
     if proyecto:
         movimientos = movimientos.filter(proyecto__nombre__icontains=proyecto)
     if categoria:
@@ -1146,15 +1149,32 @@ def listar_cartola(request):
     if estado:
         movimientos = movimientos.filter(status=estado)
 
-    # Paginación
-    paginator = Paginator(movimientos, cantidad)
+    # --- ORDEN personalizado:
+    # 0 = 'aprobado_pm' (pendiente finanzas)  -> ARRIBA
+    # 1 = todos los 'pendiente_*'
+    # 2 = todos los 'rechazado_*'
+    # 3 = todos los 'aprobado_*' (incluye aprobado_finanzas) -> ABAJO
+    movimientos = movimientos.annotate(
+        prioridad=Case(
+            When(status='aprobado_pm', then=Value(0)),
+            When(status__startswith='pendiente', then=Value(1)),
+            When(status__startswith='rechazado', then=Value(2)),
+            When(status__startswith='aprobado', then=Value(3)),
+            default=Value(4),
+            output_field=IntegerField(),
+        )
+    ).order_by('prioridad', '-fecha')
+
+    # --- Paginación
+    paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
+    # --- Estado choices y eco de filtros a la plantilla
     estado_choices = CartolaMovimiento.ESTADOS
     filtros = {
         'usuario': usuario,
-        'fecha': fecha,
+        'fecha': fecha_txt,
         'proyecto': proyecto,
         'categoria': categoria,
         'tipo': tipo,
@@ -1162,12 +1182,16 @@ def listar_cartola(request):
         'estado': estado,
     }
 
-    return render(request, 'facturacion/listar_cartola.html', {
-        'pagina': pagina,
-        'cantidad': request.GET.get('cantidad', '10'),
-        'estado_choices': estado_choices,
-        'filtros': filtros
-    })
+    return render(
+        request,
+        'facturacion/listar_cartola.html',
+        {
+            'pagina': pagina,
+            'cantidad': cantidad_param,  # muestra el seleccionado en el selector
+            'estado_choices': estado_choices,
+            'filtros': filtros,
+        }
+    )
 
 
 @login_required

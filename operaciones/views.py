@@ -1,5 +1,6 @@
 # operaciones/views.py
 
+from django.db.models import Q, Sum, Case, When, Value, IntegerField
 from django.db.models import Q
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import ServicioCotizado, SesionFotoTecnico
@@ -1206,21 +1207,46 @@ def vista_rendiciones(request):
         )
     elif getattr(user, 'es_pm', False):
         movimientos = CartolaMovimiento.objects.all()
+    elif getattr(user, 'es_facturacion', False):
+        movimientos = CartolaMovimiento.objects.all()
     else:
         movimientos = CartolaMovimiento.objects.none()
 
-    # --- Orden: pendientes -> rechazados -> aprobados, luego por fecha desc
+    # --- Qué estado es "pendiente para mí"
+    if getattr(user, 'es_supervisor', False):
+        role_pending_status = 'pendiente_supervisor'
+    elif getattr(user, 'es_pm', False):
+        role_pending_status = 'aprobado_supervisor'   # esperando aprobación del PM
+    elif getattr(user, 'es_facturacion', False):
+        role_pending_status = 'aprobado_pm'           # esperando finanzas
+    else:
+        role_pending_status = None
+
+    # --- Orden:
+    # 1) prioridad_rol = 0 si es "pendiente para mí", 1 si no
+    # 2) luego pendientes -> rechazados -> aprobados
+    # 3) luego por fecha desc
+    if role_pending_status:
+        prioridad_rol_expr = Case(
+            When(status=role_pending_status, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    else:
+        prioridad_rol_expr = Value(1)
+
     movimientos = movimientos.annotate(
+        prioridad_rol=prioridad_rol_expr,
         orden_status=Case(
             When(status__startswith='pendiente', then=Value(1)),
             When(status__startswith='rechazado', then=Value(2)),
             When(status__startswith='aprobado', then=Value(3)),
             default=Value(4),
             output_field=IntegerField(),
-        )
-    ).order_by('orden_status', '-fecha')
+        ),
+    ).order_by('prioridad_rol', 'orden_status', '-fecha')
 
-    # --- Totales (sobre el queryset ya filtrado por rol)
+    # --- Totales
     total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
     pendientes = movimientos.filter(status__startswith='pendiente').aggregate(
         total=Sum('cargos'))['total'] or 0
@@ -1229,9 +1255,8 @@ def vista_rendiciones(request):
 
     # --- Paginación
     cantidad_param = request.GET.get(
-        'cantidad', '10')             # <- string para la UI
-    page_size = 1000000 if cantidad_param == 'todos' else int(
-        cantidad_param)  # <- entero para Paginator
+        'cantidad', '10')  # para el select del template
+    page_size = 1000000 if cantidad_param == 'todos' else int(cantidad_param)
 
     paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page')
@@ -1239,7 +1264,7 @@ def vista_rendiciones(request):
 
     return render(request, 'operaciones/vista_rendiciones.html', {
         'pagina': pagina,
-        'cantidad': cantidad_param,  # <- se compara con '5','10','20','todos' en el template
+        'cantidad': cantidad_param,
         'total': total,
         'pendientes': pendientes,
         'rechazados': rechazados,

@@ -116,59 +116,61 @@
 <td class="p-2 border text-center">
     {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
         {# Supervisor: solo si pendiente_supervisor #}
-        {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}?next={{ request.get_full_path|urlencode }}"
-      method="post" class="inline">
+       {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
   {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
   <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
     ✅ Aprobar
   </button>
 </form>
-            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                ❌ Rechazar
-            </button>
-        {% endif %}
+<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+  ❌ Rechazar
+</button>
+{% endif %}
 
-        {# PM: solo si ya pasó por el supervisor y aún no fue aprobado por PM #}
-        {% if user.es_pm and mov.status == "aprobado_supervisor" %}
-         <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}?next={{ request.get_full_path|urlencode }}"
-      method="post" class="inline">
+{# PM #}
+{% if user.es_pm and mov.status == "aprobado_supervisor" %}
+<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
   {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
   <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
     ✅ Aprobar
   </button>
 </form>
-            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                ❌ Rechazar
-            </button>
-        {% endif %}
+<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+  ❌ Rechazar
+</button>
+{% endif %}
 
-        {# Finanzas: solo si ya pasó por el PM #}
-        {% if user.es_facturacion and mov.status == "aprobado_pm" %}
-            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                    ✅ Aprobar
-                </button>
-            </form>
-            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                ❌ Rechazar
-            </button>
-        {% endif %}
-    {% else %}
-        {# Usuario: solo puede aprobar/rechazar abonos pendientes de él #}
-        {% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
-            <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-                {% csrf_token %}
-                <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                    ✅ Aprobar
-                </button>
-            </form>
-            <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                ❌ Rechazar
-            </button>
-        {% endif %}
-    {% endif %}
+{# Finanzas #}
+{% if user.es_facturacion and mov.status == "aprobado_pm" %}
+<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+  {% csrf_token %}
+ <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+    ✅ Aprobar
+  </button>
+</form>
+<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+  ❌ Rechazar
+</button>
+{% endif %}
+
+{# Abono aprobado por el usuario #}
+{% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
+<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+    ✅ Aprobar
+  </button>
+</form>
+<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+  ❌ Rechazar
+</button>
+{% endif %}
+{% endif %}
 </td>
 
 
