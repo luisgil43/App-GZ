@@ -1334,30 +1334,61 @@ def _is_ajax(request):
 def aprobar_movimiento(request, pk):
     mov = get_object_or_404(CartolaMovimiento, pk=pk)
 
+    changed = False  # <- solo guardamos si cambia algo
+
     if mov.tipo and mov.tipo.categoria != "abono":
-        if request.user.es_supervisor and mov.status == 'pendiente_supervisor':
+        # Nueva rama: superusuario puede avanzar en cualquier etapa del flujo
+        if request.user.is_superuser:
+            if mov.status == 'pendiente_supervisor':
+                mov.status = 'aprobado_supervisor'
+                mov.aprobado_por_supervisor = request.user
+                changed = True
+            elif mov.status == 'aprobado_supervisor':
+                mov.status = 'aprobado_pm'
+                mov.aprobado_por_pm = request.user
+                changed = True
+            elif mov.status == 'aprobado_pm':
+                mov.status = 'aprobado_finanzas'
+                mov.aprobado_por_finanzas = request.user
+                changed = True
+
+        # Ramas existentes (se mantienen tal cual)
+        elif request.user.es_supervisor and mov.status == 'pendiente_supervisor':
             mov.status = 'aprobado_supervisor'
             mov.aprobado_por_supervisor = request.user
+            changed = True
         elif request.user.es_pm and mov.status == 'aprobado_supervisor':
             mov.status = 'aprobado_pm'
             mov.aprobado_por_pm = request.user
+            changed = True
         elif request.user.es_facturacion and mov.status == 'aprobado_pm':
             mov.status = 'aprobado_finanzas'
             mov.aprobado_por_finanzas = request.user
+            changed = True
 
-        mov.motivo_rechazo = ''
-        mov.save()
-        messages.success(request, "Gasto aprobado correctamente.")
+        if changed:
+            mov.motivo_rechazo = ''
+            # Guardamos solo los campos que cambiaron
+            update_fields = ['status', 'motivo_rechazo']
+            if mov.status == 'aprobado_supervisor':
+                update_fields.append('aprobado_por_supervisor')
+            elif mov.status == 'aprobado_pm':
+                update_fields.append('aprobado_por_pm')
+            elif mov.status == 'aprobado_finanzas':
+                update_fields.append('aprobado_por_finanzas')
 
-        # ⬇️ NUEVO: si es AJAX, no redirijas
-        if _is_ajax(request):
-            return JsonResponse({
-                "ok": True,
-                "id": mov.pk,
-                "new_status": mov.status,
-            })
+            mov.save(update_fields=update_fields)
+            messages.success(request, "Gasto aprobado correctamente.")
 
-    # comportamiento original (redirigir)
+            if _is_ajax(request):
+                return JsonResponse({"ok": True, "id": mov.pk, "new_status": mov.status})
+        else:
+            # No hubo transición válida
+            if _is_ajax(request):
+                return JsonResponse({"ok": False, "error": "No autorizado o estado inválido."}, status=403)
+            messages.warning(
+                request, "No puedes aprobar este movimiento en su estado actual.")
+
     next_url = (
         request.POST.get('next')
         or request.GET.get('next')
@@ -1374,31 +1405,64 @@ def rechazar_movimiento(request, pk):
 
     if request.method == 'POST':
         motivo = request.POST.get('motivo_rechazo', '').strip()
+        changed = False
+
         if mov.tipo and mov.tipo.categoria != "abono":
-            if request.user.es_supervisor and mov.status == 'pendiente_supervisor':
+            # Nueva rama: superusuario puede rechazar según etapa actual
+            if request.user.is_superuser:
+                if mov.status == 'pendiente_supervisor':
+                    mov.status = 'rechazado_supervisor'
+                    mov.aprobado_por_supervisor = request.user
+                    changed = True
+                elif mov.status == 'aprobado_supervisor':
+                    mov.status = 'rechazado_pm'
+                    mov.aprobado_por_pm = request.user
+                    changed = True
+                elif mov.status == 'aprobado_pm':
+                    mov.status = 'rechazado_finanzas'
+                    mov.aprobado_por_finanzas = request.user
+                    changed = True
+
+            # Ramas existentes (se mantienen tal cual)
+            elif request.user.es_supervisor and mov.status == 'pendiente_supervisor':
                 mov.status = 'rechazado_supervisor'
                 mov.aprobado_por_supervisor = request.user
+                changed = True
             elif request.user.es_pm and mov.status == 'aprobado_supervisor':
                 mov.status = 'rechazado_pm'
                 mov.aprobado_por_pm = request.user
+                changed = True
             elif request.user.es_facturacion and mov.status == 'aprobado_pm':
                 mov.status = 'rechazado_finanzas'
                 mov.aprobado_por_finanzas = request.user
+                changed = True
 
-            mov.motivo_rechazo = motivo
-            mov.save()
-            messages.success(request, "Gasto rechazado correctamente.")
+            if changed:
+                mov.motivo_rechazo = motivo
+                update_fields = ['status', 'motivo_rechazo']
+                if mov.status == 'rechazado_supervisor':
+                    update_fields.append('aprobado_por_supervisor')
+                elif mov.status == 'rechazado_pm':
+                    update_fields.append('aprobado_por_pm')
+                elif mov.status == 'rechazado_finanzas':
+                    update_fields.append('aprobado_por_finanzas')
 
-            # ⬇️ NUEVO: si es AJAX, no redirijas
-            if _is_ajax(request):
-                return JsonResponse({
-                    "ok": True,
-                    "id": mov.pk,
-                    "new_status": mov.status,
-                    "motivo": mov.motivo_rechazo,
-                })
+                mov.save(update_fields=update_fields)
+                messages.success(request, "Gasto rechazado correctamente.")
 
-    # comportamiento original (redirigir)
+                if _is_ajax(request):
+                    return JsonResponse({
+                        "ok": True,
+                        "id": mov.pk,
+                        "new_status": mov.status,
+                        "motivo": mov.motivo_rechazo,
+                    })
+            else:
+                if _is_ajax(request):
+                    return JsonResponse({"ok": False, "error": "No autorizado o estado inválido."}, status=403)
+                messages.warning(
+                    request, "No puedes rechazar este movimiento en su estado actual.")
+
     next_url = (
         request.POST.get('next')
         or request.GET.get('next')
