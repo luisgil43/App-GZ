@@ -193,8 +193,8 @@
 
 
 <td class="p-2 border">
+  {# ===== SUPERUSUARIO ===== #}
   {% if user.is_superuser %}
-    {# Superusuario: puede editar/eliminar siempre #}
     <a href="{% url 'facturacion:editar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
        class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
        ✏️ Editar
@@ -204,60 +204,81 @@
        🗑️ Eliminar
     </a>
 
-   {% if mov.tipo.categoria != "abono" and mov.status in "pendiente_supervisor,aprobado_supervisor,aprobado_pm" %}
-  <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-  ✅ Aprobar gasto
-</a>
-      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-   ❌ Rechazar gasto
-</a>
-    {% endif %}
-
-  {% else %}
     {% if mov.tipo.categoria != "abono" %}
-
-      {# Supervisor #}
-      {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-       <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-  ✅ Aprobar gasto
-</a>
-       <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-   ❌ Rechazar gasto
-</a>
+      {% if mov.status == 'pendiente_supervisor' or mov.status == 'aprobado_supervisor' or mov.status == 'aprobado_pm' %}
+        <form method="post"
+              action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+              class="inline">
+          {% csrf_token %}
+          <button type="submit"
+                  class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+            ✅ Aprobar gasto
+          </button>
+        </form>
+        <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+           class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+           ❌ Rechazar gasto
+        </a>
       {% endif %}
-
-      {# PM #}
-      {% if user.es_pm and mov.status == "aprobado_supervisor" %}
-    <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-  ✅ Aprobar gasto
-</a>
-      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-   ❌ Rechazar gasto
-</a>
-      {% endif %}
-
-      {# Finanzas #}
-      {% if user.es_facturacion and mov.status == "aprobado_pm" %}
-      <a href="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-  ✅ Aprobar gasto
-</a>
-       <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-   ❌ Rechazar gasto
-</a>
-      {% endif %}
-
     {% endif %}
   {% endif %}
-</td>
 
+  {# ===== NO SUPERUSUARIO ===== #}
+  {% if not user.is_superuser and mov.tipo.categoria != "abono" %}
+
+    {# Supervisor #}
+    {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+      <form method="post"
+            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+            class="inline">
+        {% csrf_token %}
+        <button type="submit"
+                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+          ✅ Aprobar gasto
+        </button>
+      </form>
+      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+         ❌ Rechazar gasto
+      </a>
+    {% endif %}
+
+    {# PM #}
+    {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+      <form method="post"
+            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+            class="inline">
+        {% csrf_token %}
+        <button type="submit"
+                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+          ✅ Aprobar gasto
+        </button>
+      </form>
+      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+         ❌ Rechazar gasto
+      </a>
+    {% endif %}
+
+    {# Finanzas #}
+    {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+      <form method="post"
+            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+            class="inline">
+        {% csrf_token %}
+        <button type="submit"
+                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
+          ✅ Aprobar gasto
+        </button>
+      </form>
+      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+         ❌ Rechazar gasto
+      </a>
+    {% endif %}
+
+  {% endif %}
+</td>
 
 
 

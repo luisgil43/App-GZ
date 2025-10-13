@@ -1323,22 +1323,28 @@ def eliminar_proyecto(request, pk):
     return redirect('facturacion:crear_proyecto')
 
 
-def _is_ajax(request):
-    # Soporta fetch(), XMLHttpRequest y también HTMX si algún día lo usas
-    hdr = request.headers.get('x-requested-with', '') or ''
-    return hdr.lower() in ('xmlhttprequest', 'fetch') or request.headers.get('Hx-Request') == 'true'
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_protect
+from django.http import JsonResponse
 
+def _is_ajax(request):
+    hdr = (request.headers.get('x-requested-with') or '').lower()
+    return hdr in ('xmlhttprequest', 'fetch') or request.headers.get('Hx-Request') == 'true'
 
 @login_required
 @rol_requerido('facturacion', 'supervisor', 'pm', 'admin')
+@require_POST
+@csrf_protect
 def aprobar_movimiento(request, pk):
     mov = get_object_or_404(CartolaMovimiento, pk=pk)
+    changed = False
 
-    changed = False  # <- solo guardamos si cambia algo
+    # 👇 da poder a admin (staff) además del superusuario
+    es_admin = getattr(request.user, 'es_admin', False) or request.user.is_staff
 
     if mov.tipo and mov.tipo.categoria != "abono":
-        # Nueva rama: superusuario puede avanzar en cualquier etapa del flujo
-        if request.user.is_superuser:
+        # superuser o admin pueden avanzar en cualquier etapa
+        if request.user.is_superuser or es_admin:
             if mov.status == 'pendiente_supervisor':
                 mov.status = 'aprobado_supervisor'
                 mov.aprobado_por_supervisor = request.user
@@ -1352,23 +1358,22 @@ def aprobar_movimiento(request, pk):
                 mov.aprobado_por_finanzas = request.user
                 changed = True
 
-        # Ramas existentes (se mantienen tal cual)
-        elif request.user.es_supervisor and mov.status == 'pendiente_supervisor':
+        # flujo por roles específicos
+        elif getattr(request.user, 'es_supervisor', False) and mov.status == 'pendiente_supervisor':
             mov.status = 'aprobado_supervisor'
             mov.aprobado_por_supervisor = request.user
             changed = True
-        elif request.user.es_pm and mov.status == 'aprobado_supervisor':
+        elif getattr(request.user, 'es_pm', False) and mov.status == 'aprobado_supervisor':
             mov.status = 'aprobado_pm'
             mov.aprobado_por_pm = request.user
             changed = True
-        elif request.user.es_facturacion and mov.status == 'aprobado_pm':
+        elif getattr(request.user, 'es_facturacion', False) and mov.status == 'aprobado_pm':
             mov.status = 'aprobado_finanzas'
             mov.aprobado_por_finanzas = request.user
             changed = True
 
         if changed:
             mov.motivo_rechazo = ''
-            # Guardamos solo los campos que cambiaron
             update_fields = ['status', 'motivo_rechazo']
             if mov.status == 'aprobado_supervisor':
                 update_fields.append('aprobado_por_supervisor')
@@ -1376,18 +1381,19 @@ def aprobar_movimiento(request, pk):
                 update_fields.append('aprobado_por_pm')
             elif mov.status == 'aprobado_finanzas':
                 update_fields.append('aprobado_por_finanzas')
-
             mov.save(update_fields=update_fields)
-            messages.success(request, "Gasto aprobado correctamente.")
 
             if _is_ajax(request):
                 return JsonResponse({"ok": True, "id": mov.pk, "new_status": mov.status})
+            messages.success(request, "Gasto aprobado correctamente.")
         else:
-            # No hubo transición válida
             if _is_ajax(request):
                 return JsonResponse({"ok": False, "error": "No autorizado o estado inválido."}, status=403)
-            messages.warning(
-                request, "No puedes aprobar este movimiento en su estado actual.")
+            messages.warning(request, "No puedes aprobar este movimiento en su estado actual.")
+    else:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Movimiento inválido."}, status=400)
+        messages.error(request, "Movimiento inválido.")
 
     next_url = (
         request.POST.get('next')
