@@ -1,24 +1,41 @@
-# Python
+# =========================
+# Django / Python
+# =========================
 __pycache__/
 *.py[cod]
-*.sqlite3
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
 
-# Django static/media
-/staticfiles/
-media/
-staticfiles/
+# Base de datos local (además del comodín *.sqlite3)
+db.sqlite3
+db.sqlite3-*
 
-# Entorno virtual
+# Archivos de migración se versionan; NO ignores /migrations/
+# (excepto caches de bytecode)
+**/migrations/__pycache__/
+
+# =========================
+# Entornos virtuales
+# =========================
+.venv/
 venv/
 env/
 
-# Archivos de entorno (no subir nunca)
+# =========================
+# Variables de entorno / secretos
+# =========================
 .env
 .env.*
 !.env.example
 .envrc
 
-# Certificados / claves / CAF (no subir nunca)
+# Certificados / claves
 *.pfx
 *.p12
 *.pem
@@ -27,13 +44,61 @@ env/
 *.crt
 *.der
 *.caf
-*.xml  # si generas XML firmados para SII, mantenlos fuera del repo
+# XML firmados (si los generas y no quieres versionarlos)
+*.xml
+
+# =========================
+# Archivos de aplicación
+# =========================
+# Archivos estáticos generados por collectstatic
+staticfiles/
+static-root/
+
+# Media subida por usuarios (opcional mantener fuera del repo)
+media/
 
 # Logs y temporales
 *.log
 *.tmp
-*.DS_Store
+*.temp
+*.bak
+*.swp
+*.swo
 
-# Editor/IDE
+# Cobertura / pruebas / herramientas
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.mypy_cache/
+.pyre/
+.dmypy.json
+.cache/
+profiling/
+
+# =========================
+# SO / Editor / IDE
+# =========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# VSCode / JetBrains
 .vscode/
 .idea/
+
+# =========================
+# Docker (si aplicara; inofensivo si no)
+# =========================
+*.pid
+*.seed
