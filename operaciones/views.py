@@ -773,11 +773,13 @@ def exportar_servicios_supervisor(request):
     return response
 
 
-# operaciones/views.py
 @login_required
 @rol_requerido('usuario')
 def mis_servicios_tecnico(request):
     usuario = request.user
+
+    # Estados de ajustes que NO deben aparecer aquí
+    AJUSTES_SET = {'ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'}
 
     estado_prioridad = Case(
         When(estado='en_progreso', then=Value(1)),
@@ -790,7 +792,8 @@ def mis_servicios_tecnico(request):
     servicios = (
         ServicioCotizado.objects
         .filter(trabajadores_asignados=usuario)
-        .exclude(estado__in=['cotizado', 'aprobado_supervisor'])
+        # Oculta cotizados, aprobados por supervisor y TODOS los ajustes
+        .exclude(estado__in=['cotizado', 'aprobado_supervisor'] + list(AJUSTES_SET))
         .annotate(prioridad=estado_prioridad)
         .order_by('prioridad', '-du')
     )
@@ -815,8 +818,7 @@ def mis_servicios_tecnico(request):
         puedo_aceptar = (a.estado == 'asignado')
 
         # aceptados reales (quienes tienen aceptado_en registrado)
-        aceptados = sesion.asignaciones.filter(
-            aceptado_en__isnull=False).count()
+        aceptados = sesion.asignaciones.filter(aceptado_en__isnull=False).count()
         total = sesion.asignaciones.count()
 
         servicios_info.append({
@@ -935,8 +937,7 @@ def finalizar_servicio(request, servicio_id):
 
     # Debe ser un técnico asignado
     if request.user not in servicio.trabajadores_asignados.all():
-        messages.error(
-            request, "Solo los técnicos asignados pueden finalizar este servicio.")
+        messages.error(request, "Solo los técnicos asignados pueden finalizar este servicio.")
         return redirect('operaciones:mis_servicios_tecnico')
 
     if servicio.estado != 'en_progreso':
@@ -947,50 +948,92 @@ def finalizar_servicio(request, servicio_id):
     sesion = _get_or_create_sesion(servicio)
     a = sesion.asignaciones.filter(tecnico=request.user).first()
     if not a:
-        # si no existe, la creamos pero sin aceptar
-        a = SesionFotoTecnico.objects.create(
-            sesion=sesion, tecnico=request.user, estado='asignado'
+        a = SesionFotoTecnico.objects.create(sesion=sesion, tecnico=request.user, estado='asignado')
+
+    # 🔧 Import local para evitar NameError aun si no está en el tope del archivo
+    from .models import RequisitoFoto, EvidenciaFoto
+
+    # ==================== Helpers locales (activos + norma) ====================
+    import unicodedata, re
+    from django.db import transaction
+
+    def _norm_title(s: str) -> str:
+        s = (s or "").strip().lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    def _canon_requisitos_por_norma():
+        """
+        Reúne TODOS los requisitos ACTIVO=True de la sesión por título normalizado (norm):
+          norm -> {"id","titulo","obligatorio","orden","ids": set(ids_equivalentes)}
+        """
+        canon_by_norm = {}
+        qs = (RequisitoFoto.objects
+              .filter(tecnico_sesion__sesion=sesion, activo=True)
+              .values("id", "titulo", "obligatorio", "orden"))
+        for r in qs:
+            norm = _norm_title(r["titulo"])
+            b = canon_by_norm.get(norm)
+            if not b:
+                canon_by_norm[norm] = {
+                    "id": r["id"], "titulo": r["titulo"], "obligatorio": r["obligatorio"],
+                    "orden": r["orden"], "ids": {r["id"]}
+                }
+            else:
+                b["ids"].add(r["id"])
+                if (r["orden"], r["id"]) < (b["orden"], b["id"]):
+                    b["id"] = r["id"]; b["titulo"] = r["titulo"]
+                    b["obligatorio"] = r["obligatorio"]; b["orden"] = r["orden"]
+        return canon_by_norm
+
+    def _global_done_por_norma(canon_by_norm: dict):
+        """
+        True si existe al menos UNA evidencia para cualquiera de los IDs del bloque (norma).
+        """
+        done = {norm: False for norm in canon_by_norm.keys()}
+        if not canon_by_norm:
+            return done
+        all_ids = [rid for b in canon_by_norm.values() for rid in b["ids"]]
+        ids_with_ev = set(
+            EvidenciaFoto.objects
+            .filter(requisito_id__in=all_ids)
+            .values_list("requisito_id", flat=True)
         )
+        for norm, b in canon_by_norm.items():
+            if any(rid in ids_with_ev for rid in b["ids"]):
+                done[norm] = True
+        return done
+    # ==========================================================================
 
-    # 1) Validar fotos requeridas a nivel proyecto
-    req_titles = (
-        RequisitoFoto.objects
-        .filter(tecnico_sesion__sesion=sesion, obligatorio=True)
-        .values_list("titulo", flat=True)
-    )
-    required_set = {_norm_title(t) for t in req_titles if t}
+    # 1) Validar fotos requeridas a nivel proyecto (solo ACTIVO=True y por NORMA)
+    canon = _canon_requisitos_por_norma()
+    done_by_norm = _global_done_por_norma(canon)
 
-    taken_titles = (
-        sesion.asignaciones
-        .values("requisitos__titulo")
-        .annotate(c=Count("requisitos__evidencias"))
-        .filter(c__gt=0)
-        .values_list("requisitos__titulo", flat=True)
-    )
-    covered_set = {_norm_title(t) for t in taken_titles if t}
+    missing_titles = []
+    for norm, b in sorted(canon.items(), key=lambda x: (x[1]["orden"], x[1]["id"])):
+        if b["obligatorio"] and not done_by_norm.get(norm, False):
+            missing_titles.append(b["titulo"])
 
-    missing = sorted(required_set - covered_set)
-    if missing:
+    if missing_titles:
         messages.error(
             request,
-            "No puedes finalizar: faltan fotos requeridas de " + ", ".join(missing) +
+            "No puedes finalizar: faltan fotos requeridas de " + ", ".join(missing_titles) +
             ". Carga las evidencias para continuar."
         )
         return redirect('operaciones:fotos_upload', pk=a.pk)
 
     # 2) Validar que TODOS los técnicos hayan aceptado su asignación
     for asg in sesion.asignaciones.all():
-        # aceptado si tiene aceptado_en o su estado ya no es "asignado"
         if not (asg.aceptado_en or asg.estado != "asignado"):
-            messages.error(
-                request, "Aún hay técnicos sin aceptar la asignación. No se puede finalizar.")
+            messages.error(request, "Aún hay técnicos sin aceptar la asignación. No se puede finalizar.")
             return redirect('operaciones:fotos_upload', pk=a.pk)
 
-    # 3) Si todo ok, mover a revisión de supervisor (comportamiento igual a Hyperlink)
+    # 3) Si todo ok, mover a revisión de supervisor
     now_ = timezone.now()
     with transaction.atomic():
-        sesion.asignaciones.update(
-            estado="en_revision_supervisor", finalizado_en=now_)
+        sesion.asignaciones.update(estado="en_revision_supervisor", finalizado_en=now_)
         sesion.estado = "en_revision_supervisor"
         sesion.save(update_fields=["estado"])
 
@@ -998,8 +1041,7 @@ def finalizar_servicio(request, servicio_id):
         servicio.tecnico_finalizo = request.user
         servicio.save(update_fields=["estado", "tecnico_finalizo"])
 
-    messages.success(
-        request, "Enviado a revisión del supervisor (proyecto completo).")
+    messages.success(request, "Enviado a revisión del supervisor (proyecto completo).")
     return redirect('operaciones:mis_servicios_tecnico')
 
 

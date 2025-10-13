@@ -64,21 +64,22 @@ from django.db.models import Count  # ya lo tienes importado arriba
 def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
     sesion, _ = SesionFotos.objects.get_or_create(servicio=servicio)
 
-    # Asignaciones existentes y canon (primera que tenga requisitos)
     existentes = {a.tecnico_id for a in sesion.asignaciones.all()}
-    canon_asig = (sesion.asignaciones
-                  .filter(requisitos__isnull=False)
-                  .annotate(n=Count("requisitos"))
-                  .filter(n__gt=0)
-                  .first())
+    canon_asig = (
+        sesion.asignaciones
+        .filter(requisitos__isnull=False)
+        .annotate(n=Count("requisitos"))
+        .filter(n__gt=0)
+        .first()
+    )
     canon_reqs = []
     if canon_asig:
         canon_reqs = list(
-            RequisitoFoto.objects.filter(tecnico_sesion=canon_asig)
-                                 .order_by("orden", "id")
+            RequisitoFoto.objects
+            .filter(tecnico_sesion=canon_asig, activo=True)  # 👈 SOLO activos
+            .order_by("orden", "id")
         )
 
-    # Crea asignaciones que falten y clona requisitos si hay canónicos
     for user in servicio.trabajadores_asignados.all():
         if user.id in existentes:
             continue
@@ -86,21 +87,34 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
             sesion=sesion, tecnico=user, estado='asignado'
         )
         if canon_reqs:
-            RequisitoFoto.objects.bulk_create([
-                RequisitoFoto(
+            existing_norms = set(
+                _norm_title(t) for t in
+                RequisitoFoto.objects.filter(tecnico_sesion=a_nueva).values_list("titulo", flat=True)
+            )
+            to_create = []
+            for r in canon_reqs:
+                key = _norm_title(r.titulo)
+                if key in existing_norms:
+                    continue
+                to_create.append(RequisitoFoto(
                     tecnico_sesion=a_nueva,
                     titulo=r.titulo,
                     descripcion=r.descripcion,
                     obligatorio=r.obligatorio,
                     orden=r.orden,
-                ) for r in canon_reqs
-            ])
+                    activo=True,
+                ))
+                existing_norms.add(key)
+            if to_create:
+                RequisitoFoto.objects.bulk_create(to_create)
+
+        # Limpieza por si ya existían duplicados
+        _dedupe_requisitos(a_nueva)
 
     # Limpia asignaciones huérfanas si se desasignó un técnico
     actuales = {u.id for u in servicio.trabajadores_asignados.all()}
     sesion.asignaciones.exclude(tecnico_id__in=actuales).delete()
     return sesion
-
 # ============================
 # SUPERVISOR — CONFIGURAR REQUISITOS
 # ============================
@@ -109,12 +123,76 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
 # views.py
 
 
+# ========== Helpers ==========
+
+import unicodedata
+import re
+from django.db import transaction
+from django.db.models import Count
+
 def _norm_title(s: str) -> str:
+    """
+    Normaliza títulos para comparar:
+    - trim
+    - minúsculas
+    - quita tildes
+    - colapsa espacios internos
+    """
     s = (s or "").strip().lower()
     s = unicodedata.normalize("NFKD", s)
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = re.sub(r"\s+", " ", s)
     return s
+
+
+def _dedupe_requisitos(asig, allowed_norms: set | None = None):
+    """
+    En una asignación, deja a lo más 1 requisito activo por título normalizado.
+    - Si allowed_norms es None: deduplica “clásico” (mantiene 1 por norma).
+    - Si allowed_norms es un set: SOLO pueden quedar activos los de esas normas.
+      Los demás se desactivan, respetando así los borrados desde el formulario.
+    """
+    reqs = list(
+        RequisitoFoto.objects.filter(tecnico_sesion=asig).order_by("orden", "id")
+    )
+
+    # Elegimos el “ganador” por norma: preferimos (activo=True, menor orden, menor id)
+    best_for_norm: dict[str, RequisitoFoto] = {}
+    for r in reqs:
+        norm = _norm_title(r.titulo)
+        if allowed_norms is not None and norm not in allowed_norms:
+            # Este título fue eliminado por el supervisor: no puede quedar activo
+            continue
+        cur = best_for_norm.get(norm)
+        rank = (bool(getattr(r, "activo", True)), r.orden, r.id)
+        if cur is None:
+            best_for_norm[norm] = r
+        else:
+            cur_rank = (bool(getattr(cur, "activo", True)), cur.orden, cur.id)
+            if rank < cur_rank:
+                best_for_norm[norm] = r
+
+    # Activar solo el ganador y desactivar el resto (y todo lo fuera de allowed_norms si aplica)
+    to_activate, to_deactivate = [], []
+    for r in reqs:
+        norm = _norm_title(r.titulo)
+        keep_active = (allowed_norms is None or norm in allowed_norms) and (best_for_norm.get(norm) is r)
+        if keep_active:
+            if hasattr(r, "activo") and not r.activo:
+                r.activo = True
+                to_activate.append(r)
+        else:
+            if getattr(r, "activo", True):
+                r.activo = False
+                to_deactivate.append(r)
+
+    if to_activate:
+        for r in to_activate:
+            r.save(update_fields=["activo"])
+    if to_deactivate:
+        for r in to_deactivate:
+            r.save(update_fields=["activo"])
+
 
 
 @login_required
@@ -123,98 +201,137 @@ def configurar_requisitos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
 
-    # Prefetch solo activos y ordenados
     asignaciones = list(
         sesion.asignaciones
         .select_related("tecnico")
         .prefetch_related(
             Prefetch(
                 "requisitos",
-                queryset=RequisitoFoto.objects.filter(
-                    activo=True).order_by("orden", "id")
+                queryset=RequisitoFoto.objects.filter(activo=True).order_by("orden", "id")
             )
         )
     )
 
     canonical = []
     if asignaciones and asignaciones[0].requisitos.exists():
-        # ya viene activo=True, ordenado
         canonical = list(asignaciones[0].requisitos.all())
 
     if request.method == "POST":
         try:
             with transaction.atomic():
-                sesion.proyecto_especial = bool(
-                    request.POST.get("proyecto_especial"))
+                sesion.proyecto_especial = bool(request.POST.get("proyecto_especial"))
                 sesion.save(update_fields=["proyecto_especial"])
 
-                ids = request.POST.getlist("id[]")        # ← NUEVO
-                names = request.POST.getlist("name[]")
+                ids    = request.POST.getlist("id[]")
+                names  = request.POST.getlist("name[]")
                 orders = request.POST.getlist("order[]")
-                mand = request.POST.getlist("mandatory[]")  # "0"/"1"
+                mand   = request.POST.getlist("mandatory[]")
 
-                # Normalizar payload
-                desired = []  # [(id_str_or_empty, orden, titulo, obligatorio)]
+                # Normalizamos el payload del formulario
+                desired = []  # [(id_str_or_empty, orden, titulo, obligatorio, norm)]
                 for i, nm in enumerate(names):
-                    name = (nm or "").strip()
-                    if not name:
+                    titulo = (nm or "").strip()
+                    if not titulo:
                         continue
                     try:
-                        order = int(orders[i]) if i < len(orders) else i
+                        orden = int(orders[i]) if i < len(orders) else i
                     except Exception:
-                        order = i
-                    mandatory = (mand[i] == "1") if i < len(mand) else True
+                        orden = i
+                    obligatorio = (mand[i] == "1") if i < len(mand) else True
                     rid = ids[i] if i < len(ids) else ""
-                    desired.append((rid, order, name, mandatory))
+                    desired.append((rid, orden, titulo, obligatorio, _norm_title(titulo)))
 
-                # Para cada asignación, aplicar upsert sin borrar
+                # Conjunto de normas que DEBEN quedar activas tras guardar
+                desired_norms = {x[4] for x in desired}
+
                 for a in asignaciones:
-                    existentes = list(
-                        RequisitoFoto.objects.filter(tecnico_sesion=a)
-                    )
+                    existentes = list(RequisitoFoto.objects.filter(tecnico_sesion=a))
                     by_id = {str(r.id): r for r in existentes}
+
+                    # Mapa por norma para merges/colisiones (el “mejor” por (activo, orden, id))
+                    by_norm = {}
+                    for r in existentes:
+                        key = _norm_title(r.titulo)
+                        cur = by_norm.get(key)
+                        if cur is None:
+                            by_norm[key] = r
+                        else:
+                            if (getattr(r, "activo", True), r.orden, r.id) < (getattr(cur, "activo", True), cur.orden, cur.id):
+                                by_norm[key] = r
+
                     vistos_ids = set()
 
-                    # UPSERT
-                    for rid, orden, titulo, obligatorio in desired:
+                    for rid, orden, titulo, obligatorio, norm in desired:
                         if rid and rid in by_id:
                             r = by_id[rid]
                             cambios = []
+                            # Si el nuevo título colisiona con otro por norma, mergeamos
+                            collision = by_norm.get(norm)
+                            if collision and collision.id != r.id:
+                                c = collision
+                                upds = []
+                                if c.obligatorio != obligatorio:
+                                    c.obligatorio = obligatorio; upds.append("obligatorio")
+                                if c.orden != orden:
+                                    c.orden = orden; upds.append("orden")
+                                if hasattr(c, "activo") and not c.activo:
+                                    c.activo = True; upds.append("activo")
+                                if upds:
+                                    c.save(update_fields=upds)
+                                if getattr(r, "activo", True):
+                                    r.activo = False
+                                    r.save(update_fields=["activo"])
+                                vistos_ids.add(str(c.id))
+                                by_norm[norm] = c
+                                continue
+
                             if r.titulo != titulo:
-                                r.titulo = titulo
-                                cambios.append("titulo")
+                                r.titulo = titulo; cambios.append("titulo")
                             if r.orden != orden:
-                                r.orden = orden
-                                cambios.append("orden")
+                                r.orden = orden; cambios.append("orden")
                             if r.obligatorio != obligatorio:
-                                r.obligatorio = obligatorio
-                                cambios.append("obligatorio")
-                            if not r.activo:
-                                r.activo = True
-                                cambios.append("activo")
+                                r.obligatorio = obligatorio; cambios.append("obligatorio")
+                            if hasattr(r, "activo") and not r.activo:
+                                r.activo = True; cambios.append("activo")
                             if cambios:
                                 r.save(update_fields=cambios)
-                            vistos_ids.add(rid)
+                            vistos_ids.add(str(r.id))
+                            by_norm[norm] = r
                         else:
-                            # nuevo requisito
-                            nuevo = RequisitoFoto.objects.create(
-                                tecnico_sesion=a,
-                                titulo=titulo,
-                                descripcion="",
-                                obligatorio=obligatorio,
-                                orden=orden,
-                                activo=True,
-                            )
-                            vistos_ids.add(str(nuevo.id))
+                            exist = by_norm.get(norm)
+                            if exist:
+                                cambios = []
+                                if exist.obligatorio != obligatorio:
+                                    exist.obligatorio = obligatorio; cambios.append("obligatorio")
+                                if exist.orden != orden:
+                                    exist.orden = orden; cambios.append("orden")
+                                if hasattr(exist, "activo") and not exist.activo:
+                                    exist.activo = True; cambios.append("activo")
+                                if cambios:
+                                    exist.save(update_fields=cambios)
+                                vistos_ids.add(str(exist.id))
+                            else:
+                                nuevo = RequisitoFoto.objects.create(
+                                    tecnico_sesion=a,
+                                    titulo=titulo,
+                                    descripcion="",
+                                    obligatorio=obligatorio,
+                                    orden=orden,
+                                    activo=True,
+                                )
+                                vistos_ids.add(str(nuevo.id))
+                                by_norm[norm] = nuevo
 
-                    # Desactivar los que ya no están en la lista (soft-delete)
+                    # Desactivar (soft-delete) TODO lo no presente en el formulario
                     for r in existentes:
-                        if str(r.id) not in vistos_ids and r.activo:
+                        if str(r.id) not in vistos_ids and getattr(r, "activo", True):
                             r.activo = False
                             r.save(update_fields=["activo"])
 
-            messages.success(
-                request, "Requerimientos actualizados sin desenganchar fotos.")
+                    # Dedupe final, pero SOLO sobre las normas permitidas
+                    _dedupe_requisitos(a, allowed_norms=desired_norms)
+
+            messages.success(request, "Requerimientos actualizados.")
             return redirect('operaciones:listar_servicios_supervisor')
 
         except Exception as e:
@@ -230,7 +347,6 @@ def configurar_requisitos(request, servicio_id):
             "is_special": bool(sesion.proyecto_especial),
         },
     )
-
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
@@ -485,8 +601,7 @@ def importar_requisitos(request, servicio_id):
 # ============================
 
 
-def _norm_title(s: str) -> str:
-    return (s or "").strip().lower()
+
 
 
 def _to_jpeg_if_needed(uploaded_file):
@@ -621,11 +736,16 @@ def presign_put(request, asig_id: int):
 @login_required
 @require_POST
 def finalize_upload(request, asig_id: int):
+    """
+    Finaliza una subida (direct-to-S3): valida el objeto, crea EvidenciaFoto
+    y devuelve también el estado actual (faltantes por norma y can_finish)
+    considerando SOLO requisitos ACTivos y agrupados por norma de título.
+    """
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
     s = a.sesion
 
-    # ===== Helpers locales para límite de "extras" =====
-    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
+    # ========================= Helpers locales =========================
+    # Límite global de "extras" (None => ilimitado)
     EXTRA_MAX = None
     # EXTRA_MAX = 400
 
@@ -643,7 +763,74 @@ def finalize_upload(request, asig_id: int):
         if EXTRA_MAX is None:
             return None  # ilimitado
         return max(0, EXTRA_MAX - _extra_count(sesion))
-    # ===================================================
+
+    # ---- normalización y cómputo de faltantes/can_finish (solo activos) ----
+    import unicodedata, re
+
+    def _norm_title(s: str) -> str:
+        s = (s or "").strip().lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    def _canon_requisitos_por_norma():
+        """
+        Dict norm -> bloque canónico del requisito ACTIVO en la sesión:
+        {"id","titulo","obligatorio","orden","ids": set(ids_equivalentes)}
+        """
+        canon_by_norm = {}
+        qs = (RequisitoFoto.objects
+              .filter(tecnico_sesion__sesion=s, activo=True)
+              .values("id", "titulo", "obligatorio", "orden"))
+        for r in qs:
+            norm = _norm_title(r["titulo"])
+            b = canon_by_norm.get(norm)
+            if not b:
+                canon_by_norm[norm] = {
+                    "id": r["id"], "titulo": r["titulo"], "obligatorio": r["obligatorio"],
+                    "orden": r["orden"], "ids": {r["id"]}
+                }
+            else:
+                b["ids"].add(r["id"])
+                # Conserva el “mejor” por (orden, id)
+                if (r["orden"], r["id"]) < (b["orden"], b["id"]):
+                    b.update({"id": r["id"], "titulo": r["titulo"],
+                              "obligatorio": r["obligatorio"], "orden": r["orden"]})
+        return canon_by_norm
+
+    def _global_done_por_norma(canon_by_norm: dict):
+        """
+        Marca como done si existe al menos UNA evidencia para cualquiera de los IDs del bloque.
+        """
+        done = {norm: False for norm in canon_by_norm.keys()}
+        if not canon_by_norm:
+            return done
+
+        all_ids = [rid for b in canon_by_norm.values() for rid in b["ids"]]
+        ids_with_ev = set(
+            EvidenciaFoto.objects
+            .filter(requisito_id__in=all_ids)
+            .values_list("requisito_id", flat=True)
+        )
+        for norm, b in canon_by_norm.items():
+            if any(rid in ids_with_ev for rid in b["ids"]):
+                done[norm] = True
+        return done
+
+    def _compute_faltantes_y_can_finish():
+        canon = _canon_requisitos_por_norma()
+        done = _global_done_por_norma(canon)
+
+        faltantes = []
+        for _, b in sorted(canon.items(), key=lambda x: (x[1]["orden"], x[1]["id"])):
+            if b["obligatorio"] and not done.get(_, False):
+                faltantes.append(b["titulo"])
+
+        pendientes_aceptar = s.asignaciones.filter(estado="asignado").exists()
+        can_finish = (len(faltantes) == 0) and (not pendientes_aceptar)
+        return faltantes, can_finish
+    # ==================================================================
 
     key = request.POST.get("key") or ""
     req_id = request.POST.get("req_id") or None
@@ -674,11 +861,14 @@ def finalize_upload(request, asig_id: int):
         ct = (head.get("ContentType") or "").lower()
         if not ct.startswith("image/"):
             return JsonResponse({"ok": False, "error": "El objeto subido no es imagen."}, status=400)
-    except Exception as e:
-        return JsonResponse({"ok": False, "error": f"No se encontró el objeto en Wasabi."}, status=400)
+    except Exception:
+        return JsonResponse({"ok": False, "error": "No se encontró el objeto en Wasabi."}, status=400)
 
     taken_dt = parse_datetime(taken) if taken else None
 
+    # Si llega un req_id que quedó inactivo o fue mergeado, lo toleramos:
+    # - si existe activo con el mismo título normalizado, la foto igual contará
+    #   porque el cálculo de faltantes es por norma (no por id puntual).
     with transaction.atomic():
         ev = EvidenciaFoto(
             tecnico_sesion=a,
@@ -693,15 +883,17 @@ def finalize_upload(request, asig_id: int):
         ev.imagen.name = key
         ev.save()
 
-    # Respuesta para UI
+    # URL (firmada si corresponde)
     try:
-        url = default_storage.url(key)  # firmada si AWS_QUERYSTRING_AUTH=True
+        url = default_storage.url(key)
     except Exception:
         url = ""
 
-    titulo = ev.requisito.titulo if ev.requisito_id else (
-        ev.titulo_manual or "Extra")
+    titulo = ev.requisito.titulo if ev.requisito_id else (ev.titulo_manual or "Extra")
     fecha_txt = (ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M")
+
+    # Estado actualizado tras esta subida
+    faltantes, can_finish = _compute_faltantes_y_can_finish()
 
     return JsonResponse({
         "ok": True,
@@ -712,6 +904,8 @@ def finalize_upload(request, asig_id: int):
         },
         "extras_left": _extras_left(s),
         "max_extra": EXTRA_MAX,
+        "faltantes_global": faltantes,   # <- para banner
+        "can_finish": can_finish,        # <- para botón
     })
 
 # operaciones/views_direct_uploads.py
@@ -738,10 +932,7 @@ def upload_evidencias_fotos(request, pk):
         a.estado == "rechazado_supervisor" and a.reintento_habilitado
     )
 
-    # ===== Helpers locales para límite de "extras" =====
-    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
-    EXTRA_MAX = None
-    # EXTRA_MAX = 400
+    EXTRA_MAX = None  # o un entero si quieres tope
 
     def _extra_count(sesion):
         return EvidenciaFoto.objects.filter(
@@ -752,25 +943,19 @@ def upload_evidencias_fotos(request, pk):
         if EXTRA_MAX is None:
             return None
         return max(0, EXTRA_MAX - _extra_count(sesion))
-    # ===================================================
 
     if request.method == "POST":
         if not puede_subir:
-            messages.info(
-                request, "La asignación no está abierta para subir fotos.")
+            messages.info(request, "La asignación no está abierta para subir fotos.")
             return redirect("operaciones:fotos_upload", pk=a.pk)
 
         req_id = request.POST.get("req_id") or None
         nota = (request.POST.get("nota") or "").strip()
-
-        # Geo/fecha del cliente
         lat = request.POST.get("lat") or None
         lng = request.POST.get("lng") or None
         acc = request.POST.get("acc") or None
         taken = request.POST.get("client_taken_at")
         taken_dt = parse_datetime(taken) if taken else None
-
-        # Proyecto especial (sin requisito) → SOLO título
         titulo_manual = (request.POST.get("titulo_manual") or "").strip()
         direccion_manual = (request.POST.get("direccion_manual") or "").strip()
 
@@ -780,18 +965,15 @@ def upload_evidencias_fotos(request, pk):
 
         files = request.FILES.getlist("imagenes[]")
 
-        # >>> LÍMITE GLOBAL configurable de extras por sesión/proyecto <<<
         if not req_id and EXTRA_MAX is not None:
             total_extra = _extra_count(s)
             cupo = max(0, EXTRA_MAX - total_extra)
             if cupo <= 0:
-                messages.error(
-                    request, f"Ya se alcanzó el máximo de {EXTRA_MAX} fotos extra del proyecto.")
+                messages.error(request, f"Ya se alcanzó el máximo de {EXTRA_MAX} fotos extra del proyecto.")
                 return redirect("operaciones:fotos_upload", pk=a.pk)
             if len(files) > cupo:
                 files = files[:cupo]
-                messages.warning(
-                    request, f"Solo se aceptaron {cupo} foto(s) extra (límite {EXTRA_MAX} por proyecto).")
+                messages.warning(request, f"Solo se aceptaron {cupo} foto(s) extra (límite {EXTRA_MAX} por proyecto).")
 
         n = 0
         for f in files:
@@ -820,14 +1002,13 @@ def upload_evidencias_fotos(request, pk):
             )
             n += 1
 
-        messages.success(
-            request, f"{n} foto(s) subidas." if n else "No seleccionaste archivos.")
+        messages.success(request, f"{n} foto(s) subidas." if n else "No seleccionaste archivos.")
         return redirect("operaciones:fotos_upload", pk=a.pk)
 
-    # ---------------- GET: armar contexto ----------------
+    # ---------- GET: armar contexto ----------
 
-    # Si esta asignación NO tiene requisitos, clónalos desde otra asignación de la sesión
-    if not a.requisitos.exists():
+    # Si esta asignación NO tiene requisitos activos, clónalos (solo activos) desde otra asignación
+    if not a.requisitos.filter(activo=True).exists():  # 👈 SOLO activos
         canon_asig = (
             s.asignaciones
              .exclude(pk=a.pk)
@@ -839,8 +1020,8 @@ def upload_evidencias_fotos(request, pk):
         if canon_asig:
             base = list(
                 RequisitoFoto.objects
-                             .filter(tecnico_sesion=canon_asig)
-                             .order_by("orden", "id")
+                .filter(tecnico_sesion=canon_asig, activo=True)  # 👈 SOLO activos
+                .order_by("orden", "id")
             )
             RequisitoFoto.objects.bulk_create([
                 RequisitoFoto(
@@ -849,17 +1030,19 @@ def upload_evidencias_fotos(request, pk):
                     descripcion=r.descripcion,
                     obligatorio=r.obligatorio,
                     orden=r.orden,
+                    activo=True,
                 ) for r in base
             ])
 
-    # Requisitos de ESTA asignación con conteo "mío"
+    # Requisitos de ESTA asignación (solo activos) con conteo "mío"
     requisitos = (
         a.requisitos
+         .filter(activo=True)                # 👈 SOLO activos
          .annotate(uploaded=Count("evidencias"))
          .order_by("orden", "id")
     )
 
-    # ¿Qué títulos ya tiene *cualquier* técnico del equipo?  (match por título)
+    # ¿Qué títulos ya tiene *cualquier* técnico del equipo? (match por título)
     titles_done = set(
         _norm_title(t) for t in
         EvidenciaFoto.objects
@@ -868,19 +1051,16 @@ def upload_evidencias_fotos(request, pk):
         .distinct()
     )
 
-    # Marcar completed_global por título
     requisitos = list(requisitos)
     for r in requisitos:
         setattr(r, "completed_global", _norm_title(r.titulo) in titles_done)
 
-    # 🔒 IDs bloqueados (si quieres cerrar al resto cuando otro ya lo subió)
-    locked_ids = [
-        r.id for r in requisitos if r.completed_global and r.uploaded == 0]
+    locked_ids = [r.id for r in requisitos if r.completed_global and r.uploaded == 0]
 
-    # Faltantes globales (obligatorios que aún NO aparecen en ningún técnico)
+    # Faltantes globales: contar solo requisitos activos y obligatorios
     req_titles = (
         RequisitoFoto.objects
-        .filter(tecnico_sesion__sesion=s, obligatorio=True)
+        .filter(tecnico_sesion__sesion=s, obligatorio=True, activo=True)  # 👈 SOLO activos
         .values_list("titulo", flat=True)
     )
     taken_titles = (
@@ -894,7 +1074,7 @@ def upload_evidencias_fotos(request, pk):
     taken_titles_set = {_norm_title(t) for t in taken_titles if t}
     faltantes_global = sorted(required_set - taken_titles_set)
 
-    # ¿todos aceptaron?
+    # ¿quién no ha aceptado?
     pendientes_aceptar = []
     for asg in s.asignaciones.select_related("tecnico"):
         accepted = bool(asg.aceptado_en) or asg.estado != "asignado"
@@ -902,8 +1082,7 @@ def upload_evidencias_fotos(request, pk):
             nombre = asg.tecnico.get_full_name() or asg.tecnico.username
             pendientes_aceptar.append(nombre)
 
-    can_finish = (
-        a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar)
+    can_finish = (a.estado == "en_proceso" and not faltantes_global and not pendientes_aceptar)
 
     evidencias = _order_evidencias(a.evidencias.select_related("requisito"))
 
@@ -918,7 +1097,6 @@ def upload_evidencias_fotos(request, pk):
         "can_finish": can_finish,
         "is_proyecto_especial": s.proyecto_especial,
     })
-
 
 # ============================
 # SUPERVISOR — Revisión + generación Excel y Acta PDF
@@ -976,7 +1154,8 @@ def upload_evidencias_ajax(request, pk):
         return max(0, EXTRA_MAX - _extra_count(sesion))
     # ===================================================
 
-    req_id = request.POST.get("req_id") or None
+    # Meta recibida
+    req_id_raw = request.POST.get("req_id") or None
     nota = (request.POST.get("nota") or "").strip()
     lat = request.POST.get("lat") or None
     lng = request.POST.get("lng") or None
@@ -986,10 +1165,30 @@ def upload_evidencias_ajax(request, pk):
     titulo_manual = (request.POST.get("titulo_manual") or "").strip()
     direccion_manual = (request.POST.get("direccion_manual") or "").strip()
 
+    # Validar req_id: si viene, debe ser de ESTA asignación y estar ACTIVO
+    req_id = None
+    if req_id_raw:
+        try:
+            req_id_int = int(req_id_raw)
+        except Exception:
+            return JsonResponse({"ok": False, "error": "Requisito inválido."}, status=400)
+
+        req_ok = RequisitoFoto.objects.filter(
+            id=req_id_int,
+            tecnico_sesion=a,
+            activo=True,               # 👈 solo requisitos activos
+        ).exists()
+
+        if not req_ok:
+            return JsonResponse({"ok": False, "error": "El requisito no existe o fue desactivado."}, status=400)
+
+        req_id = req_id_int  # validado
+
+    # Proyecto especial: si NO hay req_id, exigir título
     if s.proyecto_especial and not req_id and not titulo_manual:
         return JsonResponse({"ok": False, "error": "Ingresa un Título (proyecto especial)."}, status=400)
 
-    # >>> Límite GLOBAL configurable de EXTRA <<<
+    # Límite GLOBAL de extras (solo aplica cuando NO hay req_id)
     if not req_id and _limit_reached(s, adding=1):
         lim = EXTRA_MAX
         return JsonResponse({"ok": False, "error": f"Límite alcanzado: máximo {lim} fotos extra por proyecto."}, status=400)
@@ -1014,7 +1213,7 @@ def upload_evidencias_ajax(request, pk):
     use_taken = taken_dt or exif_dt
 
     ev = a.evidencias.create(
-        requisito_id=req_id,
+        requisito_id=req_id,                 # 👈 solo llega si fue validado y activo
         imagen=f_conv,
         nota=nota,
         lat=use_lat, lng=use_lng, gps_accuracy_m=acc,
@@ -1023,11 +1222,14 @@ def upload_evidencias_ajax(request, pk):
         direccion_manual=direccion_manual or "",
     )
 
-    # extras_left GLOBAL después de esta subida
     extras_left = _extras_left(s)
 
-    titulo = ev.requisito.titulo if ev.requisito_id else (
-        ev.titulo_manual or "Extra")
+    # Título seguro
+    if ev.requisito_id and ev.requisito:
+        titulo = ev.requisito.titulo
+    else:
+        titulo = ev.titulo_manual or "Extra"
+
     fecha_txt = (ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M")
 
     return JsonResponse({
@@ -1038,24 +1240,45 @@ def upload_evidencias_ajax(request, pk):
             "titulo": titulo,
             "fecha": fecha_txt,
             "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
-            "req_id": int(req_id) if req_id else None,
+            "req_id": ev.requisito_id if ev.requisito_id else None,
         },
-        "extras_left": extras_left,   # global por proyecto
+        "extras_left": extras_left,
         "max_extra": EXTRA_MAX,
     })
 
 
-@rol_requerido('usuario')
+# views.py
+
+from django.http import JsonResponse
+from django.db.models import Count
+from django.contrib.auth.decorators import login_required
+from .models import SesionFotoTecnico, RequisitoFoto, EvidenciaFoto
+import unicodedata, re
+
+def _norm_title(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"\s+", " ", s)
+    return s
+
 @login_required
-def fotos_status_json(request, asig_id: int):
-    # Debe ser la asignación del técnico autenticado
-    a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
+def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs):
+    """
+    Acepta 'asignacion_id' o 'asig_id' según cómo esté definido el path().
+    """
+    asignacion_id = asignacion_id or asig_id
+
+    a = (SesionFotoTecnico.objects
+         .select_related("sesion")
+         .filter(pk=asignacion_id, tecnico__is_active=True)  # opcional
+         .first())
+    if not a:
+        return JsonResponse({"ok": False, "error": "Asignación no encontrada."}, status=404)
     s = a.sesion
 
-    # ===== Helpers locales para límite de "extras" =====
-    # Pon EXTRA_MAX = None para ILIMITADO, o un entero (p.ej., 400) para tope.
-    EXTRA_MAX = None
-    # EXTRA_MAX = 400
+    # ====== Límite global de EXTRAS ======
+    EXTRA_MAX = None  # o un entero (p.ej. 400)
 
     def _extra_count(sesion):
         return EvidenciaFoto.objects.filter(
@@ -1066,90 +1289,73 @@ def fotos_status_json(request, asig_id: int):
         if EXTRA_MAX is None:
             return None
         return max(0, EXTRA_MAX - _extra_count(sesion))
-    # ===================================================
+    # =====================================
 
-    # Para traer solo nuevas evidencias si quieres usarlo en el front
-    after = int(request.GET.get("after", "0") or 0)
-
-    # Requisitos SOLO de esta asignación (mismos que muestras en la página)
-    reqs = list(
-        a.requisitos
-        .order_by("orden")
-        .values("id", "titulo", "obligatorio")
+    # Requisitos activos de la sesión, consolidados por norma de título
+    reqs_session_qs = (
+        RequisitoFoto.objects
+        .filter(tecnico_sesion__sesion=s, activo=True)
+        .values("id", "titulo", "obligatorio", "orden")
     )
 
-    # Conteo propio del técnico (para mostrar "X subidas (tú)")
-    my_counts = {
-        x["requisito_id"]: x["c"]
-        for x in (EvidenciaFoto.objects
-                  .filter(tecnico_sesion=a, requisito_id__isnull=False)
-                  .values("requisito_id")
-                  .annotate(c=Count("id")))
-    }
+    canon_by_norm = {}  # norm -> {"id","titulo","obligatorio","orden","ids":set()}
+    for r in reqs_session_qs:
+        norm = _norm_title(r["titulo"])
+        b = canon_by_norm.get(norm)
+        if not b:
+            canon_by_norm[norm] = {
+                "id": r["id"], "titulo": r["titulo"], "obligatorio": r["obligatorio"],
+                "orden": r["orden"], "ids": {r["id"]}
+            }
+        else:
+            b["ids"].add(r["id"])
+            if (r["orden"], r["id"]) < (b["orden"], b["id"]):
+                b["id"] = r["id"]; b["titulo"] = r["titulo"]
+                b["obligatorio"] = r["obligatorio"]; b["orden"] = r["orden"]
 
-    # >>> CLAVE: títulos ya presentes en CUALQUIER técnico del equipo (match por título)
-    titles_done = {
-        _norm_title(t)
-        for t in (EvidenciaFoto.objects
-                  .filter(tecnico_sesion__sesion=s, requisito__isnull=False)
-                  .values_list("requisito__titulo", flat=True)
-                  .distinct())
-        if t
-    }
+    global_done_by_norm = {norm: False for norm in canon_by_norm.keys()}
+    if canon_by_norm:
+        all_ids = [rid for v in canon_by_norm.values() for rid in v["ids"]]
+        ids_with_ev = set(
+            EvidenciaFoto.objects
+            .filter(requisito_id__in=all_ids)
+            .values_list("requisito_id", flat=True)
+        )
+        for norm, b in canon_by_norm.items():
+            if any(rid in ids_with_ev for rid in b["ids"]):
+                global_done_by_norm[norm] = True
 
-    requisitos_json, faltantes = [], []
-    for r in reqs:
-        titulo = r["titulo"] or ""
-        global_done = (_norm_title(titulo) in titles_done)
-        my_count = my_counts.get(r["id"], 0)
-
-        if r["obligatorio"] and not global_done:
-            faltantes.append(titulo)
-
-        requisitos_json.append({
+    # Requisitos activos del técnico actual (para pintar badges por ID)
+    reqs_tech = list(
+        RequisitoFoto.objects
+        .filter(tecnico_sesion=a, activo=True)
+        .values("id", "titulo")
+        .order_by("orden", "id")
+    )
+    requisitos_resp = []
+    for r in reqs_tech:
+        requisitos_resp.append({
             "id": r["id"],
-            "titulo": titulo,
-            "obligatorio": r["obligatorio"],
-            "team_count": 1 if global_done else 0,
-            "my_count": my_count,
-            "global_done": global_done,
+            "global_done": bool(global_done_by_norm.get(_norm_title(r["titulo"]), False)),
         })
 
-    # Evidencias nuevas desde 'after'
-    nuevas_qs = (EvidenciaFoto.objects
-                 .filter(tecnico_sesion__sesion=s, id__gt=after)
-                 .order_by("id"))
-    evidencias_nuevas = [{
-        "id": ev.id,
-        "url": ev.imagen.url,
-        "req_id": ev.requisito_id,
-        "titulo": (ev.requisito.titulo if ev.requisito_id else (ev.titulo_manual or "Extra")),
-        "fecha": timezone.localtime(ev.client_taken_at or ev.tomada_en).strftime("%Y-%m-%d %H:%M"),
-        "lat": ev.lat, "lng": ev.lng, "acc": ev.gps_accuracy_m,
-    } for ev in nuevas_qs]
+    # Faltantes globales (solo obligatorios activos por norma)
+    faltantes_global = []
+    for norm, b in sorted(canon_by_norm.items(), key=lambda x: (x[1]["orden"], x[1]["id"])):
+        if b["obligatorio"] and not global_done_by_norm.get(norm, False):
+            faltantes_global.append(b["titulo"])
 
-    # Cupo global de extras (configurable; None = ilimitado)
-    extras_left = _extras_left(s)
+    # Técnicos pendientes de aceptar (ajusta el estado según tu flujo)
+    pendientes_aceptar = s.asignaciones.filter(estado="asignado").exists()
 
-    # ¿faltan aceptaciones?
-    pendientes_aceptar = []
-    for asg in s.asignaciones.select_related("tecnico"):
-        accepted = bool(asg.aceptado_en) or asg.estado != "asignado"
-        if not accepted:
-            nombre = asg.tecnico.get_full_name() or asg.tecnico.username
-            pendientes_aceptar.append(nombre)
-
-    # Botón finalizar
-    can_finish = (
-        a.estado == "en_proceso" and not faltantes and not pendientes_aceptar)
+    can_finish = (len(faltantes_global) == 0) and (not pendientes_aceptar)
 
     return JsonResponse({
         "ok": True,
+        "requisitos": requisitos_resp,
+        "faltantes_global": faltantes_global,
         "can_finish": can_finish,
-        "faltantes_global": faltantes,
-        "requisitos": requisitos_json,
-        "evidencias_nuevas": evidencias_nuevas,
-        "extras_left": extras_left,
+        "extras_left": _extras_left(s),
         "max_extra": EXTRA_MAX,
     })
 
