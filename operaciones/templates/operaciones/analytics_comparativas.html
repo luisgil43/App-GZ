@@ -1,0 +1,297 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Comparativas — Productividad (Mes/Año){% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+  <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+    <h1 class="text-2xl font-bold">📈 Comparativas de Productividad</h1>
+    <a href="{% url 'operaciones:resumen_operativo' %}"
+       class="px-3 py-1.5 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm shadow">
+      ← Volver al Resumen
+    </a>
+  </div>
+
+  <!-- Controles -->
+  <form method="get" id="filtersForm" class="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-6 relative">
+    <div class="lg:col-span-2">
+      <label class="block text-sm text-gray-600 mb-1">Granularidad</label>
+      <select name="g" id="g" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="toggleSelectors(); this.form.submit()">
+        <option value="month" {% if g == 'month' %}selected{% endif %}>Mes</option>
+        <option value="year"  {% if g == 'year' %}selected{% endif %}>Año</option>
+      </select>
+    </div>
+
+    <div class="lg:col-span-2">
+      <label class="block text-sm text-gray-600 mb-1">Métrica</label>
+      <select name="m" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm" onchange="this.form.submit()">
+        <option value="uf"    {% if m == 'uf' %}selected{% endif %}>UF</option>
+        <option value="count" {% if m == 'count' %}selected{% endif %}># Proyectos</option>
+      </select>
+    </div>
+
+    <!-- Estados dropdown con checkboxes -->
+    <div class="lg:col-span-4">
+      <label class="block text-sm text-gray-600 mb-1">Estados</label>
+      <div class="relative">
+        <button type="button" id="btnEstados"
+                class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white flex items-center justify-between"
+                onclick="document.getElementById('estadosMenu').classList.toggle('hidden');">
+          <span class="truncate">
+            {% if estados_sel %}
+              {{ estados_sel|length }} seleccionado{{ estados_sel|length|pluralize:"s" }}
+            {% else %}Todos{% endif %}
+          </span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
+        </button>
+
+        <div id="estadosMenu" class="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg p-2 hidden max-h-64 overflow-auto">
+          <div class="flex items-center justify-between px-2 pb-2">
+            <span class="text-xs text-gray-500">Selecciona uno o varios</span>
+            <a href="#" class="text-xs text-blue-600" onclick="clearEstados(); return false;">Limpiar</a>
+          </div>
+          {% for val, label in estados_opciones %}
+            <label class="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 rounded">
+              <input type="checkbox" class="chk-estado" value="{{ val }}" {% if val in estados_sel %}checked{% endif %}>
+              <span class="text-sm">{{ label }}</span>
+            </label>
+          {% endfor %}
+          <div class="flex items-center justify-end gap-2 pt-2 border-t mt-2">
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg bg-gray-100" onclick="document.getElementById('estadosMenu').classList.add('hidden');">Cancelar</button>
+            <button type="button" class="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white" onclick="applyEstados();">Aplicar</button>
+          </div>
+        </div>
+      </div>
+      <!-- contenedor para inputs hidden generados -->
+      <div id="estadosHidden"></div>
+    </div>
+
+    <!-- Hidden + checkbox para que al destildar se envíe auto=0 -->
+    <div class="lg:col-span-4 flex items-center gap-2">
+      <input type="hidden" name="auto" value="0">
+      <input type="checkbox" id="auto" name="auto" value="1"
+             {% if auto == '1' %}checked{% endif %}
+             onchange="toggleB(); this.form.submit()">
+      <label for="auto" class="text-sm text-gray-700">Comparar automáticamente con el período anterior</label>
+    </div>
+
+    <!-- Periodo A / B (meses) -->
+    <div id="selMonths" class="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-3 {% if g != 'month' %}hidden{% endif %}">
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Periodo A — Meses</label>
+        <select multiple name="A" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm h-48" onchange="this.form.submit()">
+          {% for mo in meses_disponibles %}
+            <option value="{{ mo }}" {% if mo in selA %}selected{% endif %}>{{ mo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Periodo B — Meses</label>
+        <select multiple name="B" id="selB_month" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm h-48" onchange="this.form.submit()">
+          {% for mo in meses_disponibles %}
+            <option value="{{ mo }}" {% if mo in selB %}selected{% endif %}>{{ mo }}</option>
+          {% endfor %}
+        </select>
+        <div class="text-[11px] text-gray-500 mt-1">* Si “auto” está activo y B está vacío, se calcula automáticamente (inmediatamente anterior a A).</div>
+      </div>
+    </div>
+
+    <!-- Periodo A / B (años) -->
+    <div id="selYears" class="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-3 {% if g != 'year' %}hidden{% endif %}">
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Periodo A — Años</label>
+        <select multiple name="A" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm h-48" onchange="this.form.submit()">
+          {% for y in anios_disponibles %}
+            <option value="{{ y }}" {% if y in selA %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-gray-600 mb-1">Periodo B — Años</label>
+        <select multiple name="B" id="selB_year" class="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm h-48" onchange="this.form.submit()">
+          {% for y in anios_disponibles %}
+            <option value="{{ y }}" {% if y in selB %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </form>
+
+  <!-- KPIs -->
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+    <div class="p-4 rounded-xl bg-gray-50">
+      <div class="text-sm text-gray-600">Total A</div>
+      <div class="text-2xl font-bold mt-1">
+        {% if m == 'uf' %}{{ cur_total|floatformat:2 }} UF{% else %}{{ cur_total|intcomma }}{% endif %}
+      </div>
+    </div>
+    <div class="p-4 rounded-xl bg-gray-50">
+      <div class="text-sm text-gray-600">Total B</div>
+      <div class="text-2xl font-bold mt-1">
+        {% if m == 'uf' %}{{ prev_total|floatformat:2 }} UF{% else %}{{ prev_total|intcomma }}{% endif %}
+      </div>
+    </div>
+    <div class="p-4 rounded-xl bg-gray-50">
+      <div class="text-sm text-gray-600">Δ (A − B)</div>
+      <div class="text-2xl font-bold mt-1">
+        {% if m == 'uf' %}{{ delta|floatformat:2 }} UF{% else %}{{ delta|intcomma }}{% endif %}
+      </div>
+    </div>
+    <div class="p-4 rounded-xl bg-gray-50">
+      <div class="text-sm text-gray-600">% Δ</div>
+      <div class="text-2xl font-bold mt-1">
+        {% if pct is not None %}{{ pct|floatformat:2 }}%{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid grid-cols-1 gap-6">
+    <div class="p-4 rounded-2xl border border-gray-200">
+      <canvas id="lineChart" height="90"></canvas>
+    </div>
+    <div class="p-4 rounded-2xl border border-gray-200">
+      <canvas id="barChart" height="90"></canvas>
+    </div>
+  </div>
+
+  <!-- Tabla por PAR -->
+  <div class="overflow-x-auto mt-6">
+    <table class="table-auto w-full text-sm">
+      <thead>
+        <tr class="text-left bg-gray-50">
+          <th class="px-3 py-2 rounded-l-lg">{% if g == 'year' %}Año A{% else %}Mes A{% endif %}</th>
+          <th class="px-3 py-2">A</th>
+          <th class="px-3 py-2">{% if g == 'year' %}Año B{% else %}Mes B{% endif %}</th>
+          <th class="px-3 py-2">B</th>
+          <th class="px-3 py-2">Δ</th>
+          <th class="px-3 py-2 rounded-r-lg">% Δ</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in table_rows %}
+          <tr class="border-b last:border-b-0">
+            <td class="px-3 py-2">{{ r.label_a|default:"—" }}</td>
+            <td class="px-3 py-2">{% if m == 'uf' %}{{ r.a|floatformat:2 }}{% else %}{{ r.a|intcomma }}{% endif %}</td>
+            <td class="px-3 py-2">{{ r.label_b|default:"—" }}</td>
+            <td class="px-3 py-2">{% if m == 'uf' %}{{ r.b|floatformat:2 }}{% else %}{{ r.b|intcomma }}{% endif %}</td>
+            <td class="px-3 py-2">{% if m == 'uf' %}{{ r.delta|floatformat:2 }}{% else %}{{ r.delta|intcomma }}{% endif %}</td>
+            <td class="px-3 py-2">
+              {% if r.pct is not None %}{{ r.pct|floatformat:2 }}%{% else %}—{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="px-3 py-4 text-gray-500">No hay datos para la selección.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const labels       = {{ labels_json|safe }};        // "Par 1", "Par 2", ...
+  const serieA       = {{ cur_values_json|safe }};    // valores A por par
+  const serieB       = {{ prev_values_json|safe }};   // valores B por par
+  const labelsA      = {{ labelsA_json|safe }};       // etiqueta real A por par
+  const labelsB      = {{ labelsB_json|safe }};       // etiqueta real B por par
+  const metricName   = "{{ m }}" === "uf" ? "UF" : "Proyectos";
+
+  // 🎨 Colores fijos
+  const colorA = 'rgba(37,99,235,1)';     const fillA = 'rgba(37,99,235,0.15)';
+  const colorB = 'rgba(239,68,68,1)';     const fillB = 'rgba(239,68,68,0.15)';
+
+  // COMMON tooltip para mostrar etiqueta real de cada dataset/par
+  const tooltipOpts = {
+    callbacks: {
+      title: (items) => {
+        const i = items[0].dataIndex;
+        return `Par ${i+1}`;
+      },
+      label: (ctx) => {
+        const i = ctx.dataIndex;
+        if (ctx.datasetIndex === 0) {
+          return `A (${labelsA[i] || '—'}): ${ctx.parsed.y}`;
+        } else {
+          return `B (${labelsB[i] || '—'}): ${ctx.parsed.y}`;
+        }
+      }
+    }
+  };
+
+  // Línea
+  new Chart(document.getElementById('lineChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Periodo A (' + metricName + ')', data: serieA, tension: 0.3, borderWidth: 2, borderColor: colorA, backgroundColor: fillA, pointBackgroundColor: colorA, pointBorderColor: colorA, pointRadius: 3 },
+        { label: 'Periodo B (' + metricName + ')', data: serieB, tension: 0.3, borderDash: [6,6], borderWidth: 2, borderColor: colorB, backgroundColor: fillB, pointBackgroundColor: colorB, pointBorderColor: colorB, pointRadius: 3 },
+      ]
+    },
+    options: { responsive: true, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: tooltipOpts }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // Barras (pares) — A azul, B rojo, MISMO eje por par
+  new Chart(document.getElementById('barChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Periodo A (' + metricName + ')', data: serieA, borderColor: colorA, backgroundColor: fillA, borderWidth: 1 },
+        { label: 'Periodo B (' + metricName + ')', data: serieB, borderColor: colorB, backgroundColor: fillB, borderWidth: 1 },
+      ]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: tooltipOpts }, scales: { y: { beginAtZero: true } } }
+  });
+
+  // --- Estados dropdown helpers ---
+  function applyEstados(){
+    const cont = document.getElementById('estadosHidden');
+    cont.innerHTML = '';
+    document.querySelectorAll('.chk-estado').forEach(chk=>{
+      if (chk.checked) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'estados';
+        input.value = chk.value;
+        cont.appendChild(input);
+      }
+    });
+    document.getElementById('estadosMenu').classList.add('hidden');
+    document.getElementById('filtersForm').submit();
+  }
+  function clearEstados(){
+    document.querySelectorAll('.chk-estado').forEach(chk=> chk.checked = false);
+  }
+  // cerrar dropdown al hacer click fuera
+  document.addEventListener('click', (e)=>{
+    const menu = document.getElementById('estadosMenu');
+    const btn  = document.getElementById('btnEstados');
+    if (!menu.contains(e.target) && !btn.contains(e.target)) {
+      menu.classList.add('hidden');
+    }
+  });
+
+  function toggleSelectors(){
+    const gSel = document.getElementById('g').value;
+    document.getElementById('selMonths').classList.toggle('hidden', gSel !== 'month');
+    document.getElementById('selYears').classList.toggle('hidden', gSel !== 'year');
+  }
+  function toggleB(){
+    const auto = document.getElementById('auto').checked;
+    const bMonth = document.getElementById('selB_month');
+    const bYear  = document.getElementById('selB_year');
+    [bMonth, bYear].forEach(el=>{
+      if(!el) return;
+      el.disabled = auto;
+      el.classList.toggle('opacity-60', auto);
+    });
+  }
+  toggleSelectors();
+  toggleB();
+</script>
+{% endblock %}

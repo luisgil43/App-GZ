@@ -1,0 +1,106 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load l10n %}
+
+{% block title %}Resumen Operativo — Proyectos por estado{% endblock %}
+
+{% block dashboard_content %}
+<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <div class="flex items-center justify-between mb-4 gap-4 flex-wrap">
+    <h1 class="text-2xl font-bold">📊 Resumen Operativo</h1>
+
+    <div class="flex items-center gap-3 flex-wrap">
+      <!-- Filtro de Mes -->
+      <form method="get" class="flex items-center gap-2">
+        <label for="mes" class="text-sm text-gray-600">Mes:</label>
+        <select id="mes" name="mes"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+                onchange="this.form.submit()">
+          <option value="" {% if not mes_sel and 'mes' in request.GET %}selected{% endif %}>Todos</option>
+          {% for m in meses_disponibles %}
+            <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button class="px-3 py-1.5 rounded-lg bg-gray-800 text-white text-sm">Aplicar</button></noscript>
+      </form>
+
+      <!-- Exportar a Excel -->
+      <a href="{% url 'operaciones:resumen_operativo_export' %}{% if current_query %}?{{ current_query }}{% endif %}"
+         class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm shadow">
+        ⬇️ Exportar Excel
+      </a>
+      <a href="{% url 'operaciones:comparativas_productividad' %}"
+   class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm shadow">
+  📈 Comparativas
+</a>
+      <div class="text-sm text-gray-600">
+        Total proyectos: <b>{{ total_global_count }}</b> ·
+        Total UF: <b>{% localize on %}{{ total_global_uf|floatformat:2 }}{% endlocalize %}</b>
+      </div>
+    </div>
+  </div>
+
+  <p class="text-gray-600 mb-6">
+    Haz clic en cada flecha para ver los DU que componen la fase.
+    {% if mes_sel or 'mes' in request.GET %} <span class="ml-2 text-gray-700">Mes: <b>{{ mes_sel|default:"Todos" }}</b></span>{% endif %}
+  </p>
+
+  <div class="space-y-3">
+    {% for s in secciones %}
+      <details class="group border border-gray-200 rounded-xl">
+        <summary class="cursor-pointer select-none list-none">
+          <div class="flex items-center justify-between p-4">
+            <div class="flex items-center gap-3">
+              <span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-700 text-sm group-open:rotate-90 transition-transform">➜</span>
+              <span class="font-semibold">{{ s.label }}</span>
+            </div>
+            <div class="text-sm text-gray-700 flex items-center gap-4">
+              <span>Proyectos: <b>{{ s.count }}</b></span>
+              <span>Total UF: <b>{% localize on %}{{ s.total_uf|floatformat:2 }}{% endlocalize %}</b></span>
+            </div>
+          </div>
+        </summary>
+
+        <div class="px-4 pb-4">
+          {% if s.items %}
+            <div class="overflow-x-auto">
+              <table class="table-auto w-full text-sm">
+                <thead>
+                  <tr class="text-left bg-gray-50">
+                    <th class="px-3 py-2 rounded-l-lg">DU</th>
+                    <th class="px-3 py-2">ID Claro</th>
+                    <th class="px-3 py-2 text-right rounded-r-lg">UF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for it in s.items %}
+                    <tr class="border-b last:border-b-0">
+                      <td class="px-3 py-2 font-mono">DU{{ it.du|stringformat:"s" }}</td>
+                      <td class="px-3 py-2">{{ it.id_claro|default:"—" }}</td>
+                      <td class="px-3 py-2 text-right">
+                        {% localize on %}{{ it.monto_cotizado|default:0|floatformat:2 }}{% endlocalize %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+                <tfoot>
+                  <tr class="bg-gray-50 font-semibold">
+                    <td class="px-3 py-2 rounded-bl-lg" colspan="2">Subtotal UF ({{ s.label }})</td>
+                    <td class="px-3 py-2 text-right rounded-br-lg">
+                      {% localize on %}{{ s.total_uf|floatformat:2 }}{% endlocalize %}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-gray-500 text-sm px-1 py-2">No hay proyectos en esta fase.</div>
+          {% endif %}
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
