@@ -1,9 +1,5 @@
-import io
-from datetime import datetime
-
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.core.files.base import ContentFile
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.utils.dateparse import parse_datetime
@@ -38,7 +34,7 @@ def upload(request):
     if not img:
         return HttpResponseBadRequest("Falta 'imagen'")
 
-    titulo_manual = request.POST.get("titulo_manual", "").strip() or "Extra"
+    titulo_manual = (request.POST.get("titulo_manual") or "").strip() or "Extra"
 
     # Metadatos (pueden venir vacíos)
     lat = request.POST.get("lat")
@@ -50,7 +46,7 @@ def upload(request):
     lat_dec = GeoPhoto._to_decimal_or_none(lat)
     lng_dec = GeoPhoto._to_decimal_or_none(lng)
     try:
-        acc_float = float(acc) if acc not in (None, "",) else None
+        acc_float = float(acc) if acc not in (None, "") else None
     except Exception:
         acc_float = None
 
@@ -61,7 +57,7 @@ def upload(request):
         if dt_client and dt_client.tzinfo is None:
             dt_client = make_aware(dt_client, get_current_timezone())
 
-    # Creamos instancia primero (necesita user para el upload_to)
+    # Crear y guardar archivo a través del ImageField (respeta upload_to)
     photo = GeoPhoto(
         user=request.user,
         titulo_manual=titulo_manual,
@@ -70,11 +66,7 @@ def upload(request):
         acc=acc_float,
         client_taken_at=dt_client,
     )
-
-    # Nombre base (el `upload_to` agregará carpeta/fecha)
     filename = f"foto_{int(now().timestamp())}.jpg"
-
-    # Guardar archivo a través del ImageField (esto respeta upload_to)
     photo.image.save(filename, img, save=True)
 
     return JsonResponse({

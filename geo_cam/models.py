@@ -23,23 +23,15 @@ class GeoPhoto(models.Model):
         db_index=True,
     )
 
-    image = models.ImageField(
-        upload_to=geo_upload_to,
-        verbose_name="Imagen"
-    )
+    image = models.ImageField(upload_to=geo_upload_to, verbose_name="Imagen")
 
     created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name="Creado en",
-        db_index=True,
+        auto_now_add=True, verbose_name="Creado en", db_index=True
     )
 
     # Metadatos
     titulo_manual = models.CharField(
-        "Título (manual)",
-        max_length=200,
-        blank=True,
-        default="",
+        "Título (manual)", max_length=200, blank=True, default=""
     )
 
     lat = models.DecimalField("Latitud", max_digits=9, decimal_places=6, null=True, blank=True)
@@ -50,7 +42,7 @@ class GeoPhoto(models.Model):
         "Tomada en (cliente)",
         null=True,
         blank=True,
-        help_text="Fecha/hora local del dispositivo al momento de la toma."
+        help_text="Fecha/hora local del dispositivo al momento de la toma.",
     )
 
     class Meta:
@@ -58,7 +50,7 @@ class GeoPhoto(models.Model):
         verbose_name = "Foto con GPS"
         verbose_name_plural = "Fotos con GPS"
         indexes = [
-            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["user", "created_at"]),  # sin el "-"
             models.Index(fields=["created_at"]),
         ]
 
@@ -70,7 +62,6 @@ class GeoPhoto(models.Model):
     def has_gps(self) -> bool:
         return self.lat is not None and self.lng is not None
 
-    # Helpers pequeños para castear seguro desde strings (por si llegan vacíos)
     @staticmethod
     def _to_decimal_or_none(v):
         try:
