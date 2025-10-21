@@ -19,7 +19,8 @@ def capture(request):
         "next_url": request.GET.get("next", ""),
         "titulo_required": request.GET.get("titulo_required") == "1",
         "titulo_default": request.GET.get("titulo_default", "Extra"),
-        "mapbox_token": getattr(settings, "MAPBOX_TOKEN", ""),
+        # ↓↓↓ clave de Google que inyectamos al template
+        "google_key": getattr(settings, "GOOGLE_MAPS_KEY", ""),
     }
     return render(request, "geo_cam/capture.html", ctx)
 

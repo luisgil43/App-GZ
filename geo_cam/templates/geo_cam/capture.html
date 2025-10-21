@@ -89,9 +89,9 @@ const CSRF = (document.querySelector('meta[name="csrf-token"]')?.content && "{{ 
   ? document.querySelector('meta[name="csrf-token"]').content
   : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
 
-/* endpoint y token de mapa */
+/* endpoint + GOOGLE KEY (inyectada desde Django) */
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
-const MAPBOX_TOKEN = "{{ mapbox_token|default:'' }}";
+const GOOGLE_KEY = "{{ google_key|default:'' }}";
 
 const v = document.getElementById('v');
 const m = document.getElementById('m');
@@ -120,45 +120,51 @@ async function startStream(){
   }
 }
 
+/* ===== Geocoding con Google ===== */
 async function geocode(lat,lng){
-  if(!MAPBOX_TOKEN){
+  if(!GOOGLE_KEY){
     addr = {title:'Ubicación', line2:''};
     if (mapBox) mapBox.style.display='none';
     paintHUD(); return;
   }
   try{
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?limit=1&language=es&access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
-    const r = await fetch(url,{cache:'no-store'}); const j=await r.json(); const f=j.features?.[0];
-    const ctx=(f?.context||[]).reduce((m,x)=>{m[x.id.split('.')[0]]=x;return m;}, {});
-    const country=(ctx.country?.text_es||ctx.country?.text||'').trim();
-    const region =(ctx.region?.text_es ||ctx.region?.text ||'').trim();
-    const place  =(ctx.place?.text_es  ||ctx.place?.text  ||f?.text_es||f?.text||'').trim();
-    const title=[place,region,country].filter(Boolean).join(', ');
-    const line2=(f?.place_name_es||f?.place_name||'').slice(0, 120);
-    addr={title,line2};
+    const url = "https://maps.googleapis.com/maps/api/geocode/json?"
+               + `latlng=${lat},${lng}&language=es&key=${encodeURIComponent(GOOGLE_KEY)}`;
+    const r = await fetch(url,{cache:'no-store'});
+    const j = await r.json();
+    const best = j.results?.[0];
+    const line2 = (best?.formatted_address || "").slice(0,120);
+
+    // Ciudad / Región / País
+    let city="", region="", country="";
+    (best?.address_components||[]).forEach(c=>{
+      if(c.types.includes("locality")) city=c.long_name;
+      if(c.types.includes("administrative_area_level_1")) region=c.long_name;
+      if(c.types.includes("country")) country=c.long_name;
+    });
+    const title=[city,region,country].filter(Boolean).join(", ");
+
+    addr={title: title || "Ubicación", line2};
   }catch{
-    addr={title:'Ubicación',line2:''};
+    addr={title:'Ubicación', line2:''};
   }
   paintHUD();
 }
 
+/* ===== Imagen estática con Google Static Maps ===== */
 function staticMap(lat,lng){
-  if(!MAPBOX_TOKEN){ mapReady=false; return; }
+  if(!GOOGLE_KEY){ mapReady=false; if(mapBox) mapBox.style.display='none'; return; }
   try{
+    const zoom = 18;
+    const size = "640x640";       // escala real
+    const maptype = "satellite";  // o "roadmap"
+    const url = "https://maps.googleapis.com/maps/api/staticmap?"
+              + `center=${lat},${lng}&zoom=${zoom}&size=${size}&scale=2&maptype=${maptype}`
+              + `&markers=color:red|${lat},${lng}&key=${encodeURIComponent(GOOGLE_KEY)}`;
+
     m.crossOrigin = "anonymous";
-    m.onload = ()=>{ mapReady=true; };
-    m.onerror= ()=>{ mapReady=false; };
-
-    // Estilo nuevo muy nítido + pin grande rojo + tamaño retina
-    const style = "mapbox/standard-satellite";
-    const zoom  = 18;                 // prueba 17–19 según zona
-    const size  = "640x640@2x";       // 1280x1280 efectivos
-
-    const url = `https://api.mapbox.com/styles/v1/${style}/static/` +
-                `pin-l+ff0000(${lng},${lat})/` +
-                `${lng},${lat},${zoom},0/${size}` +
-                `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
-
+    m.onload  = ()=>{ mapReady=true; };
+    m.onerror = ()=>{ mapReady=false; };
     m.src = url;
   }catch{ mapReady=false; }
 }

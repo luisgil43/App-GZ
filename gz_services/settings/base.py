@@ -370,9 +370,5 @@ REPORT_IMG_SIDE_PAD_PX = 9         # margen lateral mínimo
 REPORT_IMG_TOP_PAD_PX = 0         # 0 = llena el alto exacto
 
 
-MAPBOX_TOKEN = os.environ.get("MAPBOX_TOKEN", "")  # vacío si no está
+GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY", "")
 # (ya que estás en producción, recuerda)
-CSRF_TRUSTED_ORIGINS = [
-    "https://app-gz.onrender.com",
-    # agrega otros dominios si los usas
-]
