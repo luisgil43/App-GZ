@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -6,7 +7,7 @@ from django.db import models
 
 def geo_upload_to(instance, filename: str) -> str:
     """
-    Guarda como: geo_cam/<user_id>/<YYYY>/<MM>/<DD>/<HHMMSS>_<filename>
+    Guardará: geo_cam/<user_id>/<YYYY>/<MM>/<DD>/<HHMMSS>_<filename>
     """
     now = datetime.utcnow()
     stamp = now.strftime("%H%M%S")
@@ -41,26 +42,9 @@ class GeoPhoto(models.Model):
         default="",
     )
 
-    # Coordenadas y precisión (tipos correctos)
-    lat = models.DecimalField(
-        "Latitud",
-        max_digits=9,   # +/- 180.000000 (sobra para lat)
-        decimal_places=6,
-        null=True,
-        blank=True,
-    )
-    lng = models.DecimalField(
-        "Longitud",
-        max_digits=9,   # +/- 180.000000
-        decimal_places=6,
-        null=True,
-        blank=True,
-    )
-    acc = models.FloatField(
-        "Precisión GPS (m)",
-        null=True,
-        blank=True,
-    )
+    lat = models.DecimalField("Latitud", max_digits=9, decimal_places=6, null=True, blank=True)
+    lng = models.DecimalField("Longitud", max_digits=9, decimal_places=6, null=True, blank=True)
+    acc = models.FloatField("Precisión GPS (m)", null=True, blank=True)
 
     client_taken_at = models.DateTimeField(
         "Tomada en (cliente)",
@@ -74,7 +58,7 @@ class GeoPhoto(models.Model):
         verbose_name = "Foto con GPS"
         verbose_name_plural = "Fotos con GPS"
         indexes = [
-            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["user", "created_at"]),
             models.Index(fields=["created_at"]),
         ]
 
@@ -85,3 +69,11 @@ class GeoPhoto(models.Model):
     @property
     def has_gps(self) -> bool:
         return self.lat is not None and self.lng is not None
+
+    # Helpers pequeños para castear seguro desde strings (por si llegan vacíos)
+    @staticmethod
+    def _to_decimal_or_none(v):
+        try:
+            return Decimal(str(v))
+        except Exception:
+            return None

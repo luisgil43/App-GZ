@@ -11,7 +11,7 @@
     a.back{display:inline-flex;gap:8px;align-items:center;color:#93c5fd;text-decoration:none}
     .grid{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
     figure{background:#0f172a;border:1px solid #1f2a44;border-radius:12px;padding:8px}
-    img{width:100%;height:140px;object-fit:cover;border-radius:8px}
+    img{width:100%;height:140px;object-fit:cover;border-radius:8px;background:#0b1220}
     figcaption{font-size:12px;margin-top:6px;color:#94a3b8}
   </style>
 </head>
@@ -30,7 +30,8 @@
 <main class="grid">
   {% for p in photos %}
     <figure>
-      <img src="{{ p.image.url }}" alt="foto {{ forloop.counter }}">
+      <img src="{{ p.image.url }}" alt="foto {{ forloop.counter }}" loading="lazy"
+           onerror="this.src='{% static 'images/placeholder.png' %}'">
       <figcaption>
         {{ p.titulo_manual|default:"—" }}<br>
         {{ p.created_at|date:"Y-m-d H:i" }}<br>

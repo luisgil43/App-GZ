@@ -123,7 +123,12 @@
 
 <script>
 /* CSRF seguro desde la plantilla (no desde cookies HttpOnly) */
-const CSRF = "{{ csrf_token }}";
+{% csrf_token %}
+<script>
+const CSRF = "{{ csrf_token }}" !== "NOTPROVIDED"
+  ? "{{ csrf_token }}"
+  : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
+</script>
 
 /* next opcional */
 {% if next_url %} const NEXT = "{{ next_url|escapejs }}"; {% else %} const NEXT = ""; {% endif %}
