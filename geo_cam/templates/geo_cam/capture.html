@@ -150,40 +150,44 @@ async function geocode(lat,lng){
   paintHUD();
 }
 
-/* ===== Static Maps: centrado + marcador rojo, con fallback ===== */
+/* ===== Static Maps: pin rojo asegurado ===== */
 function staticMap(lat, lng){
   if(!GOOGLE_KEY){
     mapReady=false; if(mapBox) mapBox.style.display='none'; return;
   }
 
   const zoom = 18;
-  const size = "240x240";     // 120x120@2x para tu mini-mapa
-  const buildUrl = (maptype) => {
-    const params = new URLSearchParams({
-      key: GOOGLE_KEY,
-      center: `${lat},${lng}`,
-      visible: `${lat},${lng}`, // asegura que el punto esté dentro
-      zoom: String(zoom),
-      size: size,
-      scale: "2",
-      maptype: maptype
-    });
-    const markers = `size:mid|color:red|${lat},${lng}`;
-    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}&markers=${encodeURIComponent(markers)}`;
-  };
+  const size = "240x240";     // 120x120 @2x
+
+  // Construcción “clásica” de URL para evitar encodings raros.
+  // Se fuerza formato PNG y pin rojo.
+  const base = "https://maps.googleapis.com/maps/api/staticmap";
+  const build = (maptype) =>
+    `${base}?center=${lat},${lng}`
+    + `&zoom=${zoom}`
+    + `&size=${size}`
+    + `&scale=2`
+    + `&format=png`
+    + `&maptype=${maptype}`
+    + `&markers=color:red%7C${lat},${lng}`
+    + `&key=${encodeURIComponent(GOOGLE_KEY)}`;
 
   try{
-    // Google Static Maps no expone CORS; evita problemas de canvas
+    // Evitar tainting de canvas (Static Maps no expone CORS)
     m.removeAttribute('crossorigin');
+    m.loading = 'eager';
+    m.decoding = 'sync';
 
     m.onload  = ()=>{ mapReady=true; };
     m.onerror = ()=>{
+      // Fallback a roadmap si fallara satellite
       mapReady=false;
       m.onload  = ()=>{ mapReady=true; };
       m.onerror = ()=>{ mapReady=false; };
-      m.src = buildUrl("roadmap"); // fallback si falla satellite
+      m.src = build("roadmap");
     };
-    m.src = buildUrl("satellite");
+
+    m.src = build("satellite");
   }catch(e){
     console.error("Static map error:", e);
     mapReady=false;
