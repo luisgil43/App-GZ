@@ -40,7 +40,7 @@ def upload(request):
     lat = request.POST.get("lat")
     lng = request.POST.get("lng")
     acc = request.POST.get("acc")
-    client_taken_at = request.POST.get("client_taken_at")  # ISO-8601
+    client_taken_at = request.POST.get("client_taken_at")  # ISO-8601 (opcional)
 
     # Parseo seguro
     lat_dec = GeoPhoto._to_decimal_or_none(lat)
@@ -50,7 +50,6 @@ def upload(request):
     except Exception:
         acc_float = None
 
-    # Fecha cliente (si llega) → aware en TZ del server
     dt_client = None
     if client_taken_at:
         dt_client = parse_datetime(client_taken_at)
@@ -69,12 +68,14 @@ def upload(request):
     filename = f"foto_{int(now().timestamp())}.jpg"
     photo.image.save(filename, img, save=True)
 
-    return JsonResponse({
-        "ok": True,
-        "id": photo.id,
-        "url": photo.image.url,
-        "created_at": photo.created_at.isoformat(),
-    })
+    return JsonResponse(
+        {
+            "ok": True,
+            "id": photo.id,
+            "url": photo.image.url,
+            "created_at": photo.created_at.isoformat(),
+        }
+    )
 
 
 @login_required

@@ -23,15 +23,23 @@ class GeoPhoto(models.Model):
         db_index=True,
     )
 
-    image = models.ImageField(upload_to=geo_upload_to, verbose_name="Imagen")
+    image = models.ImageField(
+        upload_to=geo_upload_to,
+        verbose_name="Imagen",
+    )
 
     created_at = models.DateTimeField(
-        auto_now_add=True, verbose_name="Creado en", db_index=True
+        auto_now_add=True,
+        verbose_name="Creado en",
+        db_index=True,
     )
 
     # Metadatos
     titulo_manual = models.CharField(
-        "Título (manual)", max_length=200, blank=True, default=""
+        "Título (manual)",
+        max_length=200,
+        blank=True,
+        default="",
     )
 
     lat = models.DecimalField("Latitud", max_digits=9, decimal_places=6, null=True, blank=True)
@@ -50,7 +58,7 @@ class GeoPhoto(models.Model):
         verbose_name = "Foto con GPS"
         verbose_name_plural = "Fotos con GPS"
         indexes = [
-            models.Index(fields=["user", "created_at"]),  # sin el "-"
+            models.Index(fields=["user", "created_at"]),
             models.Index(fields=["created_at"]),
         ]
 

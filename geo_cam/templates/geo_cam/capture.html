@@ -4,6 +4,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>Tomar foto con GPS</title>
   <style>
     :root { --glass: rgba(0,0,0,.82); }
@@ -11,21 +12,17 @@
     .wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
     .box{width:100%;max-width:960px;aspect-ratio:9/16;background:#000;position:relative;overflow:hidden}
     video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
-
     .hud{position:absolute;inset:0;pointer-events:none}
     .panel{position:absolute;left:16px;right:16px;bottom:16px;background:var(--glass);border-radius:14px;display:flex;gap:12px;padding:12px}
     .map{width:120px;height:120px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
     .txt{font-size:13px;line-height:1.25}
     .ttl{font-weight:700;font-size:16px;margin-bottom:6px}
-
     .topbar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:12px 14px;gap:8px;pointer-events:none}
     .icons-right{display:flex;gap:8px}
     .btn-icon{pointer-events:auto;width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)}
     .btn-icon:active{transform:scale(.96)}
-
     .bar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;padding:10px 0}
     .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
-
     .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
     .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
@@ -86,20 +83,14 @@
   </div>
 </div>
 
-{% csrf_token %}
 <script>
-/* CSRF: usa el token de plantilla; si no, cae al cookie */
-const CSRF = "{{ csrf_token }}" !== "NOTPROVIDED"
-  ? "{{ csrf_token }}"
+/* CSRF desde meta (o cookie si no vino) */
+const CSRF = (document.querySelector('meta[name="csrf-token"]')?.content && "{{ csrf_token }}" !== "NOTPROVIDED")
+  ? document.querySelector('meta[name="csrf-token"]').content
   : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
 
-/* next opcional */
-{% if next_url %} const NEXT = "{{ next_url|escapejs }}"; {% else %} const NEXT = ""; {% endif %}
-
-/* endpoint */
+/* endpoint y token de mapa */
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
-
-/* Mapbox token (desde settings) */
 const MAPBOX_TOKEN = "{{ mapbox_token|default:'' }}";
 
 const v = document.getElementById('v');
@@ -118,14 +109,12 @@ function deg(v){return Number(v).toFixed(6)+'°'}
 async function startStream(){
   try{
     if(stream){stream.getTracks().forEach(t=>t.stop());}
-    // Safari iOS a veces ignora facingMode; hacemos un intento y si falla reintentamos sin facingMode.
     try{
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing }, audio:false });
     }catch{
       stream = await navigator.mediaDevices.getUserMedia({ video: true, audio:false });
     }
-    v.srcObject = stream;
-    await v.play().catch(()=>{});
+    v.srcObject = stream; await v.play().catch(()=>{});
   }catch(e){
     alert('No se pudo acceder a la cámara. Revisa permisos del navegador.');
   }
@@ -133,7 +122,7 @@ async function startStream(){
 
 async function geocode(lat,lng){
   if(!MAPBOX_TOKEN){
-    addr = {title:'Ubicación', line2:'', countryCode:''};
+    addr = {title:'Ubicación', line2:''};
     if (mapBox) mapBox.style.display='none';
     paintHUD(); return;
   }
@@ -145,7 +134,7 @@ async function geocode(lat,lng){
     const region =(ctx.region?.text_es ||ctx.region?.text ||'').trim();
     const place  =(ctx.place?.text_es  ||ctx.place?.text  ||f?.text_es||f?.text||'').trim();
     const title=[place,region,country].filter(Boolean).join(', ');
-    const line2=f?.place_name_es||f?.place_name||'';
+    const line2=(f?.place_name_es||f?.place_name||'').slice(0, 120);
     addr={title,line2};
   }catch{
     addr={title:'Ubicación',line2:''};
@@ -159,8 +148,17 @@ function staticMap(lat,lng){
     m.crossOrigin = "anonymous";
     m.onload = ()=>{ mapReady=true; };
     m.onerror= ()=>{ mapReady=false; };
-    // Satélite, zoom 17 (más nítido que 18 en varias zonas)
-    const url = `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/pin-s+fe3434(${lng},${lat})/${lng},${lat},17,0/512x512@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+
+    // Estilo nuevo muy nítido + pin grande rojo + tamaño retina
+    const style = "mapbox/standard-satellite";
+    const zoom  = 18;                 // prueba 17–19 según zona
+    const size  = "640x640@2x";       // 1280x1280 efectivos
+
+    const url = `https://api.mapbox.com/styles/v1/${style}/static/` +
+                `pin-l+ff0000(${lng},${lat})/` +
+                `${lng},${lat},${zoom},0/${size}` +
+                `?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+
     m.src = url;
   }catch{ mapReady=false; }
 }
@@ -212,6 +210,7 @@ function drawStampOnCanvas(ctx, W, H){
     ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath();
   }
 
+  // Panel
   ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#000';
   rrect(panelX,panelY,panelW,panelH,radius); ctx.fill(); ctx.restore();
 
@@ -220,8 +219,13 @@ function drawStampOnCanvas(ctx, W, H){
   const textX = panelX + pad + (mapReady ? (mapSize + pad) : 0);
   let y = panelY + pad;
 
+  // Mapa nítido sin suavizado
   if (mapReady) {
-    try { ctx.drawImage(m, panelX+pad, panelY+pad, mapSize, mapSize); } catch {}
+    try {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(m, panelX+pad, panelY+pad, mapSize, mapSize);
+      ctx.imageSmoothingEnabled = true;
+    } catch {}
   }
 
   const g = gps, a = addr || {};
