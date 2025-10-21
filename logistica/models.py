@@ -1,12 +1,11 @@
-from datetime import date
-from django.contrib.auth import get_user_model
 import os
-from datetime import datetime
-from django.db import models
-from django.conf import settings
-from cloudinary_storage.storage import RawMediaCloudinaryStorage
+from datetime import date, datetime
 
+from cloudinary_storage.storage import RawMediaCloudinaryStorage
+from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import models
+
 # Asumiendo que este es tu modelo de usuario
 from usuarios.models import CustomUser
 
@@ -212,6 +211,8 @@ def ruta_xml_firmado(instance, filename):
         '%Y-%m-%d') if instance.fecha_salida else date.today().strftime('%Y-%m-%d')
     return f"SalidasMateriales/{fecha}/{instance.numero_documento}/{filename}"
 
+from django.utils import timezone
+
 
 class SalidaMaterial(models.Model):
     fecha_salida = models.DateField(auto_now_add=True)
@@ -252,7 +253,7 @@ class SalidaMaterial(models.Model):
     direccion_receptor = models.CharField(max_length=255)
     comuna_receptor = models.CharField(max_length=100)
     ciudad_receptor = models.CharField(max_length=100)
-    fecha_emisión = models.DateField(auto_now_add=True)
+    fecha_emision = models.DateTimeField(default=timezone.now, verbose_name="Fecha emisión")
 
     # Transporte
 

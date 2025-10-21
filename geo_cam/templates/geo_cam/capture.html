@@ -5,40 +5,33 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Tomar foto con GPS</title>
-
-  {# Fuerza que Django genere el token y cookie CSRF #}
-  {% csrf_token %}
-  <meta name="csrf-token" content="{{ csrf_token }}"/>
-
   <style>
     :root { --glass: rgba(0,0,0,.82); }
+    *{box-sizing:border-box}
     body{margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter}
     .wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
     .box{width:100%;max-width:960px;aspect-ratio:9/16;background:#000;position:relative;overflow:hidden}
     video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-
     /* HUD */
     .hud{position:absolute;inset:0;pointer-events:none}
-    .panel{position:absolute;left:12px;right:12px;bottom:12px;background:var(--glass);
-      border-radius:14px;display:flex;gap:10px;padding:10px}
-    .map{width:132px;height:132px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
-    .txt{font-size:13px;line-height:1.25}
+    .panel{position:absolute;left:14px;right:14px;bottom:14px;background:var(--glass);border-radius:14px;display:flex;gap:12px;padding:12px}
+    .map{width:140px;height:140px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
+    .txt{font-size:13px;line-height:1.3;word-break:break-word}
     .ttl{font-weight:700;font-size:16px;margin-bottom:6px}
-
-    /* Botones superiores */
-    .topbar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;
-      padding:10px 12px;gap:8px;pointer-events:none}
-    .btn-icon{pointer-events:auto;width:40px;height:40px;border-radius:999px;display:grid;place-items:center;
-      background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)}
+    /* Barra superior */
+    .topbar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;gap:8px;pointer-events:none}
+    .btn-icon{pointer-events:auto;width:40px;height:40px;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)}
     .btn-icon:active{transform:scale(.96)}
+    /* Disparador */
     .bar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;padding:10px 0}
-    .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);
-      background:rgba(0,0,0,.15)}
-
-    /* Título opcional */
+    .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
+    /* Input título opcional */
     .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
     .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
+    /* Toast */
+    .toast{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(0,0,0,.8);padding:10px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .25s}
+    .toast.show{opacity:1}
   </style>
 </head>
 <body>
@@ -53,40 +46,28 @@
       <div class="note">Ingresa un título para esta foto</div>
     {% endif %}
 
-    <!-- Top bar -->
+    <!-- top bar -->
     <div class="topbar">
-      {% if next_url %}
-        <a class="btn-icon" href="{{ next_url|urlencode }}" title="Volver" aria-label="Volver">
-          <!-- Flecha izq -->
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 18l-6-6 6-6"></path>
-          </svg>
+      <!-- volver -->
+      <button id="close" class="btn-icon" type="button" title="Volver" aria-label="Volver">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <!-- derecha: galería + flip -->
+      <div style="display:flex;gap:8px;pointer-events:auto">
+        <a class="btn-icon" href="{% url 'geo_cam:gallery' %}" title="Galería" aria-label="Galería">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         </a>
-      {% else %}
-        <button id="close" class="btn-icon" type="button" title="Volver" aria-label="Volver">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M15 18l-6-6 6-6"></path>
+        <button id="flip" class="btn-icon" type="button" title="Cambiar cámara" aria-label="Cambiar cámara">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 1-9 9"/><path d="M3 12a9 9 0 0 1 9-9"/><polyline points="3 3 3 9 9 9"/><polyline points="21 21 21 15 15 15"/>
           </svg>
         </button>
-      {% endif %}
-
-      <button id="flip" class="btn-icon" type="button" title="Cambiar cámara" aria-label="Cambiar cámara">
-        <!-- Flechas circulares -->
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 0 1-9 9"></path>
-          <path d="M3 12a9 9 0 0 1 9-9"></path>
-          <polyline points="3 3 3 9 9 9"></polyline>
-          <polyline points="21 21 21 15 15 15"></polyline>
-        </svg>
-      </button>
+      </div>
     </div>
 
-    <!-- HUD visible sobre el video -->
+    <!-- HUD -->
     <div class="hud">
-      <div class="panel" id="hudPanel">
+      <div class="panel">
         <div class="map" id="mapBox"><img id="m" alt></div>
         <div class="txt">
           <div class="ttl" id="l1">—</div>
@@ -96,36 +77,32 @@
           <div id="l5">—</div>
         </div>
       </div>
-
-      <!-- disparador abajo -->
       <div class="bar">
         <button id="shot" class="shot" type="button" aria-label="Capturar"></button>
       </div>
     </div>
+
+    <div id="toast" class="toast">Foto guardada ✓</div>
   </div>
 </div>
 
 <script>
-{% if next_url %} const NEXT = "{{ next_url|escapejs }}"; {% else %} const NEXT = ""; {% endif %}
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
+const CSRF = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '';
 
-/* CSRF: cookie o meta-tag de respaldo */
-function readCookie(name){return (document.cookie.split('; ').find(r=>r.startsWith(name+'='))||'').split('=')[1]||''}
-const CSRF_COOKIE = readCookie('csrftoken');
-const CSRF_META   = document.querySelector('meta[name="csrf-token"]')?.content || '';
-const CSRF = CSRF_COOKIE || CSRF_META;
-
-const MAPBOX_TOKEN = "pk.eyJ1IjoiMjY3MjQ2NzkzIiwiYSI6ImNtZ3psNmlraDE0cWMya3B4OTgxcGt4ZGEifQ.D1HvNPiOQxLHHKTG7Glqbg"; // ← Coloca tu token. Si lo dejas vacío, se oculta el recuadro del mapa.
-const MAP_STYLE    = "mapbox/streets-v12"; // más nítido que satellite para referencia.
+/* TOKEN Mapbox: usa el tuyo; si lo dejas vacío, el recuadro se esconde */
+const MAPBOX_TOKEN = "pk.eyJ1IjoiMjY3MjQ2NzkzIiwiYSI6ImNtZ3psNmlraDE0cWMya3B4OTgxcGt4ZGEifQ.D1HvNPiOQxLHHKTG7Glqbg";  // ← PON TU TOKEN
 
 const v = document.getElementById('v');
 const m = document.getElementById('m');
 const mapBox = document.getElementById('mapBox');
+const toast = document.getElementById('toast');
 const l1=document.getElementById('l1'), l2=document.getElementById('l2'),
       l3=document.getElementById('l3'), l4=document.getElementById('l4'), l5=document.getElementById('l5');
 
 let stream=null, facing='environment', gps=null, addr=null, mapReady=false;
 
+function showToast(msg="Foto guardada ✓"){ toast.textContent=msg; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 1200); }
 function pad(n){return String(n).padStart(2,'0')}
 function tzStr(d=new Date()){const off=-d.getTimezoneOffset();const s=off>=0?'+':'-';const hh=pad(Math.floor(Math.abs(off)/60));const mm=pad(Math.abs(off)%60);return `GMT ${s}${hh}:${mm}`;}
 function fmtDT(d=new Date()){return new Intl.DateTimeFormat('es-CL',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(d)}
@@ -142,7 +119,7 @@ async function startStream(){
 async function geocode(lat,lng){
   if(!MAPBOX_TOKEN){
     addr = {title:'Ubicación', line2:'', countryCode:''};
-    if (mapBox) mapBox.style.display='none';
+    mapBox.style.display='none';
     paintHUD(); return;
   }
   try{
@@ -152,9 +129,10 @@ async function geocode(lat,lng){
     const country=(ctx.country?.text_es||ctx.country?.text||'').trim();
     const region =(ctx.region?.text_es ||ctx.region?.text ||'').trim();
     const place  =(ctx.place?.text_es  ||ctx.place?.text  ||f?.text_es||f?.text||'').trim();
+    const code=(ctx.country?.short_code||'').toUpperCase();
     const title=[place,region,country].filter(Boolean).join(', ');
     const line2=f?.place_name_es||f?.place_name||'';
-    addr={title,line2,countryCode:(ctx.country?.short_code||'').toUpperCase()};
+    addr={title,line2,countryCode:code};
   }catch{
     addr={title:'Ubicación',line2:'',countryCode:''};
   }
@@ -164,10 +142,11 @@ async function geocode(lat,lng){
 function staticMap(lat,lng,size=320,zoom=18){
   if(!MAPBOX_TOKEN){ mapReady=false; return; }
   try{
-    m.crossOrigin = "anonymous";  // evita canvas “tainted”
+    m.crossOrigin = "anonymous";     // para poder dibujar en canvas
     m.onload = ()=>{ mapReady=true; };
     m.onerror= ()=>{ mapReady=false; };
-    m.src=`https://api.mapbox.com/styles/v1/${MAP_STYLE}/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+    // pin rojo visible
+    m.src=`https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
   }catch{ mapReady=false; }
 }
 
@@ -205,31 +184,38 @@ async function demandGPS(){
   }
 }
 
-/* Dibuja la placa con mapa y textos sobre el frame capturado */
+/* Dibuja la placa estilo “plantilla avanzada” */
 function drawStampOnCanvas(ctx, W, H){
   const margin = Math.round(W*0.02);
   const panelH = Math.round(H*0.24);
   const panelW = Math.min(W - margin*2, Math.round(W*0.92));
-  const panelX = margin, panelY = H - panelH - margin, radius = Math.round(panelH*0.08);
+  const x = margin, y = H - panelH - margin, r = Math.round(panelH*0.08);
 
-  function rrect(x,y,w,h,r){
-    const rr=Math.min(r,w/2,h/2);
+  function rrect(x,y,w,h,rr){
+    rr=Math.min(rr,w/2,h/2);
     ctx.beginPath(); ctx.moveTo(x+rr,y);
     ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
     ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath();
   }
 
-  // panel
+  // panel translúcido
   ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#000';
-  rrect(panelX,panelY,panelW,panelH,radius); ctx.fill(); ctx.restore();
+  rrect(x,y,panelW,panelH,r); ctx.fill(); ctx.restore();
 
   const pad  = Math.round(panelH*.10);
-  const mapSize = Math.min(panelH - pad*2, Math.round(panelW*.30));
-  const textX = panelX + pad + (mapReady ? (mapSize + pad) : 0);
-  let y = panelY + pad;
+  const mapSize = Math.min(panelH - pad*2, Math.round(panelW*.33));
+  const tx = x + pad + (mapReady ? (mapSize + pad) : 0);
+  let ty = y + pad;
 
+  // mini-mapa (si cargó)
   if (mapReady) {
-    try { ctx.drawImage(m, panelX+pad, panelY+pad, mapSize, mapSize); } catch {}
+    try {
+      // recorte redondeado
+      ctx.save();
+      rrect(x+pad, y+pad, mapSize, mapSize, 10); ctx.clip();
+      ctx.drawImage(m, x+pad, y+pad, mapSize, mapSize);
+      ctx.restore();
+    } catch {}
   }
 
   const g = gps, a = addr || {};
@@ -238,16 +224,14 @@ function drawStampOnCanvas(ctx, W, H){
   const gap  = Math.max(6, Math.round(panelH*.07));
 
   ctx.fillStyle='#fff'; ctx.textBaseline='top';
-  ctx.font = `700 ${ttlF}px system-ui,-apple-system,Segoe UI,Roboto`;
-  ctx.fillText(a.title || 'Ubicación', textX, y); y += ttlF + gap;
+  ctx.font = `700 ${ttlF}px system-ui,-apple-system,Segoe UI,Roboto`; ctx.fillText(a.title || 'Ubicación', tx, ty); ty += ttlF + gap;
 
-  ctx.font = `${txtF}px system-ui,-apple-system,Segoe UI,Roboto`;
-  ctx.fillText(a.line2 || '—', textX, y); y += txtF + Math.round(gap*.6);
+  ctx.font = `${txtF}px system-ui,-apple-system,Segoe UI,Roboto`; ctx.fillText(a.line2 || '—', tx, ty); ty += txtF + Math.round(gap*.6);
 
   if (g) {
-    ctx.fillText(`Lat ${deg(g.lat)} Long ${deg(g.lng)}`, textX, y); y += txtF + Math.round(gap*.6);
+    ctx.fillText(`Lat ${deg(g.lat)} Long ${deg(g.lng)}`, tx, ty); ty += txtF + Math.round(gap*.6);
     const ts = g.ts ? new Date(g.ts) : new Date();
-    ctx.fillText(`${fmtDT(ts)} ${tzStr(ts)}`, textX, y);
+    ctx.fillText(`${fmtDT(ts)} ${tzStr(ts)}`, tx, ty);
   }
 }
 
@@ -263,7 +247,7 @@ async function captureAndUpload(){
   ctx.drawImage(v,0,0,W,H);
   drawStampOnCanvas(ctx, W, H);
 
-  const blob = await new Promise(res=>c.toBlob(res,'image/jpeg',0.88));
+  const blob = await new Promise(res=>c.toBlob(res,'image/jpeg',0.9));
   const file = new File([blob], `foto_${Date.now()}.jpg`, {type:'image/jpeg'});
 
   const fd = new FormData();
@@ -278,8 +262,7 @@ async function captureAndUpload(){
     {% if titulo_default %} fd.append('titulo_manual', "{{ titulo_default|escapejs }}"); {% endif %}
   {% endif %}
 
-  fd.append('lat', gps.lat);
-  fd.append('lng', gps.lng);
+  fd.append('lat', gps.lat); fd.append('lng', gps.lng);
   if(Number.isFinite(gps.acc)) fd.append('acc', Math.round(gps.acc));
   fd.append('client_taken_at', new Date().toISOString());
 
@@ -287,43 +270,27 @@ async function captureAndUpload(){
     method:'POST',
     body:fd,
     cache:'no-store',
-    credentials: 'same-origin',
-    headers: Object.assign(
-      { 'X-Requested-With': 'XMLHttpRequest' },
-      CSRF ? { 'X-CSRFToken': CSRF } : {}
-    )
+    credentials:'same-origin',
+    headers: CSRF ? { 'X-CSRFToken': CSRF } : {}
   });
-
-  // Si el backend devolvió HTML (e.g. login) no intentes parsear como JSON
-  const ct = (r.headers.get('content-type') || '').toLowerCase();
-  if (!ct.includes('application/json')) {
-    alert('Tu sesión puede haber expirado. Por favor vuelve a iniciar sesión.');
-    return;
-  }
 
   let j=null; try{ j = await r.json(); }catch{}
   if(r.ok && j && j.ok){
-    if(NEXT){ window.location.href = NEXT; }
-    else { alert('Foto enviada'); }
+    showToast();
+    // nos quedamos en cámara
   }else{
-    alert('No se pudo enviar la foto' + (j && j.error ? `: ${j.error}` : ` (HTTP ${r.status})`));
+    const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
+    alert('No se pudo enviar la foto: ' + msg);
   }
 }
 
-/* Wire de controles */
-document.getElementById('flip').addEventListener('click', async ()=>{
-  facing = (facing==='environment'?'user':'environment');
-  await startStream();
-});
+/* Controles */
+document.getElementById('flip').addEventListener('click', async ()=>{ facing = (facing==='environment'?'user':'environment'); await startStream(); });
 document.getElementById('shot').addEventListener('click', captureAndUpload);
-const closeBtn = document.getElementById('close');
-if(closeBtn) closeBtn.addEventListener('click', ()=>history.back());
+document.getElementById('close').addEventListener('click', ()=>history.back());
 
 /* Init */
-(async function init(){
-  await startStream();
-  await demandGPS();
-})();
+(async function(){ await startStream(); await demandGPS(); })();
 </script>
 </body>
 </html>
