@@ -150,18 +150,36 @@ async function geocode(lat,lng){
   paintHUD();
 }
 
-/* ===== Static Maps: pin rojo asegurado ===== */
+/* ===== Static Maps: pin + círculo (doble overlay) ===== */
 function staticMap(lat, lng){
   if(!GOOGLE_KEY){
     mapReady=false; if(mapBox) mapBox.style.display='none'; return;
   }
 
   const zoom = 18;
-  const size = "240x240";     // 120x120 @2x
-
-  // Construcción “clásica” de URL para evitar encodings raros.
-  // Se fuerza formato PNG y pin rojo.
+  const size = "240x240";  // 120x120 @2x
   const base = "https://maps.googleapis.com/maps/api/staticmap";
+  const cb = Date.now(); // cache-buster para Safari/iOS
+
+  // Pin oficial (HDPI) + círculo alrededor como refuerzo visual
+  const iconUrl = encodeURIComponent("https://maps.gstatic.com/mapfiles/api-3/images/spotlight-pin-v2_hdpi.png");
+  const markers1 = `markers=anchor:center|icon:${iconUrl}|${lat},${lng}`;
+  const markers2 = `markers=color:red|size:mid|${lat},${lng}`; // fallback adicional
+
+  // Un círculo pequeño (path) para que aun si fallara el pin, se vea la marca
+  const circle = [
+    "path=fillcolor:0xFF000080|color:0xFFFFFF00|weight:2",
+    `${lat+0.00040},${lng}`,
+    `${lat+0.00028},${lng+0.00028}`,
+    `${lat},${lng+0.00040}`,
+    `${lat-0.00028},${lng+0.00028}`,
+    `${lat-0.00040},${lng}`,
+    `${lat-0.00028},${lng-0.00028}`,
+    `${lat},${lng-0.00040}`,
+    `${lat+0.00028},${lng-0.00028}`,
+    `${lat+0.00040},${lng}`
+  ].join("|");
+
   const build = (maptype) =>
     `${base}?center=${lat},${lng}`
     + `&zoom=${zoom}`
@@ -169,24 +187,24 @@ function staticMap(lat, lng){
     + `&scale=2`
     + `&format=png`
     + `&maptype=${maptype}`
-    + `&markers=color:red%7C${lat},${lng}`
-    + `&key=${encodeURIComponent(GOOGLE_KEY)}`;
+    + `&${markers1}`
+    + `&${markers2}`
+    + `&${circle}`
+    + `&style=feature:poi|visibility:off`
+    + `&key=${encodeURIComponent(GOOGLE_KEY)}`
+    + `&cb=${cb}`;
 
   try{
-    // Evitar tainting de canvas (Static Maps no expone CORS)
+    // Evitar tainting (no CORS)
     m.removeAttribute('crossorigin');
-    m.loading = 'eager';
-    m.decoding = 'sync';
 
     m.onload  = ()=>{ mapReady=true; };
     m.onerror = ()=>{
-      // Fallback a roadmap si fallara satellite
       mapReady=false;
       m.onload  = ()=>{ mapReady=true; };
       m.onerror = ()=>{ mapReady=false; };
-      m.src = build("roadmap");
+      m.src = build("roadmap"); // fallback si falla satellite
     };
-
     m.src = build("satellite");
   }catch(e){
     console.error("Static map error:", e);
