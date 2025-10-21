@@ -150,32 +150,44 @@ async function geocode(lat,lng){
   paintHUD();
 }
 
-/* ===== Imagen estática con Google Static Maps (navegador) ===== */
-function staticMap(lat,lng){
-  if(!GOOGLE_KEY){ mapReady=false; if(mapBox) mapBox.style.display='none'; return; }
+/* ===== Static Maps: centrado + marcador rojo, con fallback ===== */
+function staticMap(lat, lng){
+  if(!GOOGLE_KEY){
+    mapReady=false; if(mapBox) mapBox.style.display='none'; return;
+  }
+
+  const zoom = 18;
+  const size = "240x240";     // 120x120@2x para tu mini-mapa
+  const buildUrl = (maptype) => {
+    const params = new URLSearchParams({
+      key: GOOGLE_KEY,
+      center: `${lat},${lng}`,
+      visible: `${lat},${lng}`, // asegura que el punto esté dentro
+      zoom: String(zoom),
+      size: size,
+      scale: "2",
+      maptype: maptype
+    });
+    const markers = `size:mid|color:red|${lat},${lng}`;
+    return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}&markers=${encodeURIComponent(markers)}`;
+  };
+
   try{
-    const zoom = 18;
-    const size = "640x640";
-    const maptypePrimary = "satellite";  // o "roadmap"
-    const maptypeFallback = "roadmap";
+    // Google Static Maps no expone CORS; evita problemas de canvas
+    m.removeAttribute('crossorigin');
 
-    const markersValue = encodeURIComponent(`color:red|${lat},${lng}`);
-    const makeUrl = (type) =>
-      "https://maps.googleapis.com/maps/api/staticmap?"
-      + `center=${lat},${lng}&zoom=${zoom}&size=${size}&scale=2&maptype=${type}`
-      + `&markers=${markersValue}&key=${encodeURIComponent(GOOGLE_KEY)}`;
-
-    m.crossOrigin = "anonymous";
     m.onload  = ()=>{ mapReady=true; };
     m.onerror = ()=>{
       mapReady=false;
-      const fallback = makeUrl(maptypeFallback);
-      m.onload = ()=>{ mapReady=true; };
+      m.onload  = ()=>{ mapReady=true; };
       m.onerror = ()=>{ mapReady=false; };
-      m.src = fallback;
+      m.src = buildUrl("roadmap"); // fallback si falla satellite
     };
-    m.src = makeUrl(maptypePrimary);
-  }catch(e){ console.error("Static map error:", e); mapReady=false; }
+    m.src = buildUrl("satellite");
+  }catch(e){
+    console.error("Static map error:", e);
+    mapReady=false;
+  }
 }
 
 function paintHUD(){

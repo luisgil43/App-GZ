@@ -1,4 +1,4 @@
-import requests  # <— para el proxy de geocoding
+import requests  # proxy geocoding
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, JsonResponse
@@ -38,15 +38,16 @@ def upload(request):
 
     titulo_manual = (request.POST.get("titulo_manual") or "").strip() or "Extra"
 
-    # Metadatos (pueden venir vacíos)
+    # Metadatos
     lat = request.POST.get("lat")
     lng = request.POST.get("lng")
     acc = request.POST.get("acc")
     client_taken_at = request.POST.get("client_taken_at")  # ISO-8601 (opcional)
 
     # Parseo seguro
-    lat_dec = GeoPhoto._to_decimal_or_none(lat)
-    lng_dec = GeoPhoto._to_decimal_or_none(lng)
+    from .models import GeoPhoto as _GP
+    lat_dec = _GP._to_decimal_or_none(lat)
+    lng_dec = _GP._to_decimal_or_none(lng)
     try:
         acc_float = float(acc) if acc not in (None, "") else None
     except Exception:
@@ -89,30 +90,20 @@ def gallery(request):
 @require_GET
 def geocode_google(request):
     """
-    Proxy seguro para Google Geocoding.
-    Usa clave de servidor (GOOGLE_MAPS_SERVER_KEY) y evita 'referer restrictions'.
+    Proxy seguro para Google Geocoding (usa GOOGLE_MAPS_SERVER_KEY).
     """
     import logging
-
-    import requests
     logger = logging.getLogger(__name__)
 
     lat = request.GET.get("lat")
     lng = request.GET.get("lng")
     if not lat or not lng:
-        return JsonResponse(
-            {"status": "INVALID_REQUEST", "error_message": "lat/lng requeridos"},
-            status=400,
-        )
+        return JsonResponse({"status": "INVALID_REQUEST", "error_message": "lat/lng requeridos"}, status=400)
 
     key = getattr(settings, "GOOGLE_MAPS_SERVER_KEY", "")
     if not key:
-        # No hagamos 500: devolvemos un JSON claro para que el front lo muestre.
         return JsonResponse(
-            {
-                "status": "REQUEST_DENIED",
-                "error_message": "Falta GOOGLE_MAPS_SERVER_KEY en el entorno del servidor.",
-            },
+            {"status": "REQUEST_DENIED", "error_message": "Falta GOOGLE_MAPS_SERVER_KEY en el servidor."},
             status=200,
         )
 
@@ -127,13 +118,9 @@ def geocode_google(request):
         except ValueError:
             data = {"status": "ERROR", "error_message": f"Respuesta no JSON ({r.status_code})."}
 
-        # Log útil para depurar en Render
         if r.status_code != 200 or data.get("status") != "OK":
             logger.warning("Geocoding fallo: code=%s status=%s msg=%s",
                            r.status_code, data.get("status"), data.get("error_message"))
-
-        # Siempre respondemos 200 al front con el JSON real de Google;
-        # el front decide qué mostrar.
         return JsonResponse(data, status=200)
 
     except requests.Timeout:
