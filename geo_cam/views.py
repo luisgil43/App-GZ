@@ -1,3 +1,4 @@
+import requests  # <— para el proxy de geocoding
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, JsonResponse
@@ -19,7 +20,7 @@ def capture(request):
         "next_url": request.GET.get("next", ""),
         "titulo_required": request.GET.get("titulo_required") == "1",
         "titulo_default": request.GET.get("titulo_default", "Extra"),
-        # ↓↓↓ clave de Google que inyectamos al template
+        # Clave de navegador para Static Maps
         "google_key": getattr(settings, "GOOGLE_MAPS_KEY", ""),
     }
     return render(request, "geo_cam/capture.html", ctx)
@@ -57,7 +58,7 @@ def upload(request):
         if dt_client and dt_client.tzinfo is None:
             dt_client = make_aware(dt_client, get_current_timezone())
 
-    # Crear y guardar archivo a través del ImageField (respeta upload_to)
+    # Crear y guardar
     photo = GeoPhoto(
         user=request.user,
         titulo_manual=titulo_manual,
@@ -70,12 +71,7 @@ def upload(request):
     photo.image.save(filename, img, save=True)
 
     return JsonResponse(
-        {
-            "ok": True,
-            "id": photo.id,
-            "url": photo.image.url,
-            "created_at": photo.created_at.isoformat(),
-        }
+        {"ok": True, "id": photo.id, "url": photo.image.url, "created_at": photo.created_at.isoformat()}
     )
 
 
@@ -87,3 +83,30 @@ def gallery(request):
     """
     qs = GeoPhoto.objects.filter(user=request.user).order_by("-created_at")[:200]
     return render(request, "geo_cam/gallery.html", {"photos": qs})
+
+
+@login_required
+@require_GET
+def geocode_google(request):
+    """
+    Proxy seguro para Google Geocoding.
+    Usa clave de servidor (GOOGLE_MAPS_SERVER_KEY) y evita 'referer restrictions'.
+    """
+    lat = request.GET.get("lat")
+    lng = request.GET.get("lng")
+    if not lat or not lng:
+        return JsonResponse({"status": "INVALID_REQUEST", "error_message": "lat/lng requeridos"}, status=400)
+
+    key = getattr(settings, "GOOGLE_MAPS_SERVER_KEY", "")
+    if not key:
+        return JsonResponse({"status": "REQUEST_DENIED", "error_message": "Falta GOOGLE_MAPS_SERVER_KEY"}, status=500)
+
+    try:
+        r = requests.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"latlng": f"{lat},{lng}", "language": "es", "key": key},
+            timeout=10,
+        )
+        return JsonResponse(r.json(), status=r.status_code)
+    except Exception as e:
+        return JsonResponse({"status": "ERROR", "error_message": str(e)}, status=500)

@@ -370,5 +370,7 @@ REPORT_IMG_SIDE_PAD_PX = 9         # margen lateral mínimo
 REPORT_IMG_TOP_PAD_PX = 0         # 0 = llena el alto exacto
 
 
+# Clave de navegador (Static Maps): restringir por Sitios web
 GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY", "")
-# (ya que estás en producción, recuerda)
+
+

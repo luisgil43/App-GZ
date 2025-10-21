@@ -9,5 +9,6 @@ urlpatterns = [
     path("capture/", views.capture, name="capture"),
     path("upload/", views.upload, name="upload"),
     path("gallery/", views.gallery, name="gallery"),
+    path("geocode/", views.geocode_google, name="geocode"),
     
 ]

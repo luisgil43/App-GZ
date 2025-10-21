@@ -89,7 +89,7 @@ const CSRF = (document.querySelector('meta[name="csrf-token"]')?.content && "{{ 
   ? document.querySelector('meta[name="csrf-token"]').content
   : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
 
-/* endpoint + GOOGLE KEY (inyectada desde Django) */
+/* endpoint + GOOGLE KEY (navegador) */
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
 const GOOGLE_KEY = "{{ google_key|default:'' }}";
 
@@ -120,22 +120,21 @@ async function startStream(){
   }
 }
 
-/* ===== Geocoding con Google ===== */
+/* ===== Geocoding vía PROXY del backend ===== */
 async function geocode(lat,lng){
-  if(!GOOGLE_KEY){
-    addr = {title:'Ubicación', line2:''};
-    if (mapBox) mapBox.style.display='none';
-    paintHUD(); return;
-  }
   try{
-    const url = "https://maps.googleapis.com/maps/api/geocode/json?"
-               + `latlng=${lat},${lng}&language=es&key=${encodeURIComponent(GOOGLE_KEY)}`;
-    const r = await fetch(url,{cache:'no-store'});
+    const r = await fetch(`/geo-cam/geocode/?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
+      cache:'no-store', credentials:'same-origin'
+    });
     const j = await r.json();
+    if (j.status !== "OK") {
+      console.warn("Geocoding proxy status:", j.status, j.error_message || "");
+      addr = {title:'Ubicación', line2:''};
+      paintHUD();
+      return;
+    }
     const best = j.results?.[0];
     const line2 = (best?.formatted_address || "").slice(0,120);
-
-    // Ciudad / Región / País
     let city="", region="", country="";
     (best?.address_components||[]).forEach(c=>{
       if(c.types.includes("locality")) city=c.long_name;
@@ -143,35 +142,45 @@ async function geocode(lat,lng){
       if(c.types.includes("country")) country=c.long_name;
     });
     const title=[city,region,country].filter(Boolean).join(", ");
-
     addr={title: title || "Ubicación", line2};
-  }catch{
+  }catch(e){
+    console.error("Geocoding proxy fetch error:", e);
     addr={title:'Ubicación', line2:''};
   }
   paintHUD();
 }
 
-/* ===== Imagen estática con Google Static Maps ===== */
+/* ===== Imagen estática con Google Static Maps (navegador) ===== */
 function staticMap(lat,lng){
   if(!GOOGLE_KEY){ mapReady=false; if(mapBox) mapBox.style.display='none'; return; }
   try{
     const zoom = 18;
-    const size = "640x640";       // escala real
-    const maptype = "satellite";  // o "roadmap"
-    const url = "https://maps.googleapis.com/maps/api/staticmap?"
-              + `center=${lat},${lng}&zoom=${zoom}&size=${size}&scale=2&maptype=${maptype}`
-              + `&markers=color:red|${lat},${lng}&key=${encodeURIComponent(GOOGLE_KEY)}`;
+    const size = "640x640";
+    const maptypePrimary = "satellite";  // o "roadmap"
+    const maptypeFallback = "roadmap";
+
+    const markersValue = encodeURIComponent(`color:red|${lat},${lng}`);
+    const makeUrl = (type) =>
+      "https://maps.googleapis.com/maps/api/staticmap?"
+      + `center=${lat},${lng}&zoom=${zoom}&size=${size}&scale=2&maptype=${type}`
+      + `&markers=${markersValue}&key=${encodeURIComponent(GOOGLE_KEY)}`;
 
     m.crossOrigin = "anonymous";
     m.onload  = ()=>{ mapReady=true; };
-    m.onerror = ()=>{ mapReady=false; };
-    m.src = url;
-  }catch{ mapReady=false; }
+    m.onerror = ()=>{
+      mapReady=false;
+      const fallback = makeUrl(maptypeFallback);
+      m.onload = ()=>{ mapReady=true; };
+      m.onerror = ()=>{ mapReady=false; };
+      m.src = fallback;
+    };
+    m.src = makeUrl(maptypePrimary);
+  }catch(e){ console.error("Static map error:", e); mapReady=false; }
 }
 
 function paintHUD(){
   const a=addr||{}, g=gps;
-  l1.textContent = a.title || '—';
+  l1.textContent = a.title || 'Ubicación';
   l2.textContent = a.line2 || '—';
   l3.textContent = g ? `Lat ${deg(g.lat)} Long ${deg(g.lng)}` : 'Lat — Long —';
   const ts = g?.ts ? new Date(g.ts) : new Date();
@@ -225,7 +234,6 @@ function drawStampOnCanvas(ctx, W, H){
   const textX = panelX + pad + (mapReady ? (mapSize + pad) : 0);
   let y = panelY + pad;
 
-  // Mapa nítido sin suavizado
   if (mapReady) {
     try {
       ctx.imageSmoothingEnabled = false;
