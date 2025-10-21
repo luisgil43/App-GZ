@@ -375,4 +375,52 @@ function mostrarToast(mensaje) {
 })();
 </script>
  
+<script>
+/* === Mantener scroll horizontal en "Lista de Facturación" === */
+(function () {
+  const KEY = 'fact-list-scrollX:' + location.pathname;
+
+  function getBox() {
+    // contenedor que hace el overflow-x de la tabla
+    return document.querySelector('.tabla-responsive');
+  }
+
+  function saveX(x){
+    try { sessionStorage.setItem(KEY, String(x)); } catch(_) {}
+  }
+  function readX(){
+    try { return Number(sessionStorage.getItem(KEY) || 0); } catch(_) { return 0; }
+  }
+
+  function attachSaver(box){
+    if (!box || box.__hasScrollSaver) return;
+    box.__hasScrollSaver = true;
+    let t = null;
+    box.addEventListener('scroll', () => {
+      if (t) return;
+      t = setTimeout(() => { t = null; saveX(box.scrollLeft); }, 120);
+    }, { passive: true });
+  }
+
+  function restore(){
+    const box = getBox();
+    if (!box) return;
+    requestAnimationFrame(() => { box.scrollLeft = readX(); });
+    attachSaver(box);
+  }
+
+  // 1) Restaurar al cargar
+  document.addEventListener('DOMContentLoaded', restore);
+
+  // 2) Guardar al salir/navegar (paginación, filtros, etc.)
+  window.addEventListener('beforeunload', () => {
+    const box = getBox();
+    if (box) saveX(box.scrollLeft);
+  });
+
+  // 3) Si el contenedor se re-renderiza por cualquier motivo, reintentar
+  const mo = new MutationObserver(() => setTimeout(restore, 0));
+  mo.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
 {% endblock %}

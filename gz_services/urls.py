@@ -1,15 +1,16 @@
-from django.contrib.staticfiles.storage import staticfiles_storage
-from django.contrib import admin
-from django.urls import path, include
-from django.contrib.auth.views import (
-    LogoutView, PasswordResetView, PasswordResetDoneView,
-    PasswordResetConfirmView, PasswordResetCompleteView
-)
 from django.conf import settings
 from django.conf.urls.static import static
+from django.contrib import admin
+from django.contrib.auth.views import (LogoutView, PasswordResetCompleteView,
+                                       PasswordResetConfirmView,
+                                       PasswordResetDoneView,
+                                       PasswordResetView)
+from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import HttpResponse
-from django.views.generic.base import RedirectView
 from django.shortcuts import redirect
+from django.urls import include, path
+from django.views.generic.base import RedirectView
+
 from dashboard import views as dashboard_views
 
 
@@ -67,7 +68,7 @@ urlpatterns = [
     path('logistica/', include('logistica.urls', namespace='logistica')),
     path('operaciones/', include('operaciones.urls')),
     path('facturacion/', include('facturacion.urls')),
-
+    path("geo-cam/", include("geo_cam.urls")),
     path(
         "favicon.ico",
         RedirectView.as_view(

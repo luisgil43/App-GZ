@@ -481,6 +481,61 @@ document.addEventListener("DOMContentLoaded", function () {
     tipoDoc.addEventListener("change", validarRutLive);
 });
 </script>
+<script>
+/* === Conservar scroll en "Mis Rendiciones" === */
+(function () {
+  const KEY = 'mis-rendiciones-scroll:' + location.pathname;
 
+  function zone() {
+    // primer contenedor horizontal de la tabla
+    return document.querySelector('.overflow-x-auto');
+  }
+
+  function saveScroll() {
+    try {
+      const z = zone();
+      sessionStorage.setItem(KEY, JSON.stringify({
+        winX: window.scrollX || window.pageXOffset || 0,
+        winY: window.scrollY || window.pageYOffset || 0,
+        zoneX: z ? z.scrollLeft : 0,
+        zoneY: z ? z.scrollTop  : 0
+      }));
+    } catch (_) {}
+  }
+
+  function restoreScroll() {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!s) return;
+      requestAnimationFrame(() => window.scrollTo(s.winX || 0, s.winY || 0));
+      const z = zone();
+      if (z) {
+        z.scrollLeft = s.zoneX || 0;
+        z.scrollTop  = s.zoneY || 0;
+      }
+    } catch (_) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', restoreScroll);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
+  window.addEventListener('beforeunload', saveScroll);
+
+  // Guardar al enviar formularios (incluye filtros y crear/editar)
+  document.addEventListener('submit', (e) => {
+    if (e.target && e.target.matches('form')) saveScroll();
+  });
+
+  // Guardar al cambiar el selector de cantidad
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.matches('select#cantidad')) saveScroll();
+  });
+
+  // Guardar al navegar por paginación
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href*="page="]');
+    if (a) saveScroll();
+  });
+})();
+</script>
 
 {% endblock %}

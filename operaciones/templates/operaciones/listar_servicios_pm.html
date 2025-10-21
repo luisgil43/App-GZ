@@ -338,6 +338,57 @@
   window.addEventListener('pageshow', restoreCaret);
 })();
 </script>
+<script>
+/* === Conservar scroll en "Mis Cotizaciones" (página y tabla) === */
+(function () {
+  const KEY = 'mis-cotizaciones-scroll:' + location.pathname;
+
+  function getZone() {
+    return document.querySelector('.tabla-responsive');
+  }
+
+  function saveScroll() {
+    try {
+      const zone = getZone();
+      sessionStorage.setItem(KEY, JSON.stringify({
+        winX: window.scrollX || window.pageXOffset || 0,
+        winY: window.scrollY || window.pageYOffset || 0,
+        zoneX: zone ? zone.scrollLeft : 0,
+        zoneY: zone ? zone.scrollTop  : 0
+      }));
+    } catch (_) {}
+  }
+
+  function restoreScroll() {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!s) return;
+      // Restaura primero el scroll de la página
+      requestAnimationFrame(() => window.scrollTo(s.winX || 0, s.winY || 0));
+      // Luego el contenedor horizontal (si existe)
+      const zone = getZone();
+      if (zone) {
+        zone.scrollLeft = s.zoneX || 0;
+        zone.scrollTop  = s.zoneY || 0;
+      }
+    } catch (_) {}
+  }
+
+  document.addEventListener('DOMContentLoaded', restoreScroll);
+  window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
+  window.addEventListener('beforeunload', saveScroll);
+
+  // Guarda antes de enviar filtros o paginación
+  document.addEventListener('submit', (e) => {
+    if ((e.target && e.target.matches('form'))) saveScroll();
+  });
+  // Guarda al hacer click en enlaces de paginación
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href*="page="]');
+    if (a) saveScroll();
+  });
+})();
+</script>
 
 </div>
 {% endblock %}

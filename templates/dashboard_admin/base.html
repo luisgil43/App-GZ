@@ -256,7 +256,26 @@
                 </li>
 {% endif %}
 
-                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+{% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">📷 Cámara GPS</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'geo_cam:capture' %}?next={{ request.get_full_path|urlencode }}"
+         class="hover:text-emerald-400">Cámara</a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+
+
+
+                {% if request.user.es_admin_general %}
                 <li class="group">
                     <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
                         onclick="toggleMenu(this)">

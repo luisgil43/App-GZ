@@ -1,41 +1,36 @@
-from django.shortcuts import get_object_or_404, redirect
-from .models import Notificacion
-from gz_services.utils.email_utils import enviar_correo_manual
-from email.utils import formataddr
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.conf import settings
-from django.urls import reverse
-from django.utils.crypto import get_random_string
-from django.core.mail import send_mail
-from django.utils import timezone
-from usuarios.models import FirmaRepresentanteLegal  # 👈 importa el modelo
 import base64
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
+import logging
+from email.utils import formataddr
+
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.forms import AuthenticationForm
-from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView
-from django.urls import reverse_lazy
-from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.hashers import make_password
 from django.core.cache import cache
-import logging
-from django.views.decorators.csrf import csrf_protect
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.mail import EmailMultiAlternatives, send_mail
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse, reverse_lazy
+from django.utils import timezone
+from django.utils.crypto import get_random_string
+from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect, requires_csrf_token
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_http_methods
-from django.utils.timezone import now
-from django.views.decorators.csrf import requires_csrf_token
-from django.shortcuts import redirect
-from django.contrib import messages
+
+from gz_services.utils.email_utils import enviar_correo_manual
+from usuarios.models import FirmaRepresentanteLegal  # 👈 importa el modelo
+
+from .models import Notificacion
 
 
 @requires_csrf_token
@@ -199,6 +194,7 @@ Si no solicitaste este correo, simplemente ignóralo.
 @csrf_protect
 @sensitive_post_parameters('password')
 @require_http_methods(["GET", "POST"])
+@ratelimit("login", limit=10, window_sec=60)
 def login_unificado(request):
     form = AuthenticationForm(request, data=request.POST or None)
 

@@ -575,6 +575,68 @@
 
 </script>
 
+<script>
+/* ====== Mantener scroll horizontal en Cartola (GZ Services) ====== */
+(function () {
+  const KEY = 'gz-cartola-scrollX:' + location.pathname;
+
+  function getBox() {
+    // contenedor con overflow-x que envuelve la tabla
+    return document.querySelector('#cartolaZone .tabla-responsive');
+  }
+
+  function saveX(x){
+    try { sessionStorage.setItem(KEY, String(x)); } catch(_) {}
+  }
+  function readX(){
+    try { return Number(sessionStorage.getItem(KEY) || 0); } catch(_) { return 0; }
+  }
+
+  function attachSaver(box){
+    if (!box || box.__hasScrollSaver) return;
+    box.__hasScrollSaver = true;
+    let t = null;
+    box.addEventListener('scroll', () => {
+      if (t) return;
+      t = setTimeout(() => { t = null; saveX(box.scrollLeft); }, 120);
+    }, { passive: true });
+  }
+
+  function restoreNow(){
+    const box = getBox();
+    if (!box) return;
+    // restaurar después del layout para evitar que lo pise otro código
+    requestAnimationFrame(() => {
+      box.scrollLeft = readX();
+    });
+    attachSaver(box);
+  }
+
+  // 1) Al cargar
+  document.addEventListener('DOMContentLoaded', restoreNow);
+
+  // 2) Si #cartolaZone se reemplaza por AJAX, volver a aplicar
+  const zone = document.getElementById('cartolaZone');
+  if (zone) {
+    const mo = new MutationObserver((muts) => {
+      for (const m of muts) {
+        if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
+          // dar un tick para que se monte el nuevo DOM
+          setTimeout(restoreNow, 0);
+          break;
+        }
+      }
+    });
+    mo.observe(zone.parentNode || zone, { childList: true, subtree: true });
+  }
+
+  // 3) Antes de salir/recargar, guardar por si acaso
+  window.addEventListener('beforeunload', () => {
+    const box = getBox();
+    if (box) saveX(box.scrollLeft);
+  });
+})();
+</script>
 
 </div>
 {% endblock %}

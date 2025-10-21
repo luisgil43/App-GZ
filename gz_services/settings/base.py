@@ -1,9 +1,11 @@
-from boto3.s3.transfer import TransferConfig
-from dotenv import load_dotenv
-from django.urls import reverse_lazy
-from pathlib import Path
-import os
 import mimetypes
+import os
+from pathlib import Path
+
+from boto3.s3.transfer import TransferConfig
+from django.urls import reverse_lazy
+from dotenv import load_dotenv
+
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 # ====== Rutas base ======
@@ -93,6 +95,7 @@ INSTALLED_APPS = [
     "dal",
     "dal_select2",
     "widget_tweaks",
+    'geo_cam',
     "django.contrib.humanize",
 ]
 
