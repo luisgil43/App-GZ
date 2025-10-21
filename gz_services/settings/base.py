@@ -373,4 +373,5 @@ REPORT_IMG_TOP_PAD_PX = 0         # 0 = llena el alto exacto
 # Clave de navegador (Static Maps): restringir por Sitios web
 GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY", "")
 
-
+# Clave de servidor (Geocoding): restringir por IP del servidor o sin restricción si no tienes IP fija
+GOOGLE_MAPS_SERVER_KEY = os.getenv("GOOGLE_MAPS_SERVER_KEY", "")

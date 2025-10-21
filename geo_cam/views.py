@@ -92,14 +92,29 @@ def geocode_google(request):
     Proxy seguro para Google Geocoding.
     Usa clave de servidor (GOOGLE_MAPS_SERVER_KEY) y evita 'referer restrictions'.
     """
+    import logging
+
+    import requests
+    logger = logging.getLogger(__name__)
+
     lat = request.GET.get("lat")
     lng = request.GET.get("lng")
     if not lat or not lng:
-        return JsonResponse({"status": "INVALID_REQUEST", "error_message": "lat/lng requeridos"}, status=400)
+        return JsonResponse(
+            {"status": "INVALID_REQUEST", "error_message": "lat/lng requeridos"},
+            status=400,
+        )
 
     key = getattr(settings, "GOOGLE_MAPS_SERVER_KEY", "")
     if not key:
-        return JsonResponse({"status": "REQUEST_DENIED", "error_message": "Falta GOOGLE_MAPS_SERVER_KEY"}, status=500)
+        # No hagamos 500: devolvemos un JSON claro para que el front lo muestre.
+        return JsonResponse(
+            {
+                "status": "REQUEST_DENIED",
+                "error_message": "Falta GOOGLE_MAPS_SERVER_KEY en el entorno del servidor.",
+            },
+            status=200,
+        )
 
     try:
         r = requests.get(
@@ -107,6 +122,22 @@ def geocode_google(request):
             params={"latlng": f"{lat},{lng}", "language": "es", "key": key},
             timeout=10,
         )
-        return JsonResponse(r.json(), status=r.status_code)
+        try:
+            data = r.json()
+        except ValueError:
+            data = {"status": "ERROR", "error_message": f"Respuesta no JSON ({r.status_code})."}
+
+        # Log útil para depurar en Render
+        if r.status_code != 200 or data.get("status") != "OK":
+            logger.warning("Geocoding fallo: code=%s status=%s msg=%s",
+                           r.status_code, data.get("status"), data.get("error_message"))
+
+        # Siempre respondemos 200 al front con el JSON real de Google;
+        # el front decide qué mostrar.
+        return JsonResponse(data, status=200)
+
+    except requests.Timeout:
+        return JsonResponse({"status": "ERROR", "error_message": "Timeout hacia Google Geocoding."}, status=200)
     except Exception as e:
-        return JsonResponse({"status": "ERROR", "error_message": str(e)}, status=500)
+        logger.exception("Excepcion en geocode_google")
+        return JsonResponse({"status": "ERROR", "error_message": str(e)}, status=200)
