@@ -1,13 +1,17 @@
 import os
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.core.files.storage import FileSystemStorage
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.utils.timezone import now
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
 
+@csrf_protect
+@login_required
 @require_GET
 def capture(request):
     """
@@ -24,6 +28,8 @@ def capture(request):
     }
     return render(request, "geo_cam/capture.html", ctx)
 
+@csrf_protect
+@login_required
 @require_POST
 def upload(request):
     """
@@ -46,7 +52,6 @@ def upload(request):
         base_url=os.path.join(settings.MEDIA_URL, subdir + "/"),
     )
 
-    # nombre único
     fname = f"foto_{int(now().timestamp())}.jpg"
     saved_name = fs.save(fname, img)
     url = fs.url(saved_name)

@@ -5,6 +5,11 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Tomar foto con GPS</title>
+
+  {# Fuerza que Django genere el token y cookie CSRF #}
+  {% csrf_token %}
+  <meta name="csrf-token" content="{{ csrf_token }}"/>
+
   <style>
     :root { --glass: rgba(0,0,0,.82); }
     body{margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter}
@@ -14,28 +19,21 @@
 
     /* HUD */
     .hud{position:absolute;inset:0;pointer-events:none}
-    .panel{
-      position:absolute;left:16px;right:16px;bottom:16px;
-      background:var(--glass);border-radius:14px;display:flex;gap:12px;padding:12px
-    }
-    .map{width:120px;height:120px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
+    .panel{position:absolute;left:12px;right:12px;bottom:12px;background:var(--glass);
+      border-radius:14px;display:flex;gap:10px;padding:10px}
+    .map{width:132px;height:132px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
     .txt{font-size:13px;line-height:1.25}
     .ttl{font-weight:700;font-size:16px;margin-bottom:6px}
 
-    /* Botones */
-    .topbar{
-      position:absolute;left:0;right:0;top:0;
-      display:flex;justify-content:space-between;align-items:center;
-      padding:12px 14px;gap:8px;pointer-events:none
-    }
-    .btn-icon{
-      pointer-events:auto;width:40px;height:40px;border-radius:999px;
-      display:grid;place-items:center;background:rgba(0,0,0,.55);
-      color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)
-    }
+    /* Botones superiores */
+    .topbar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;
+      padding:10px 12px;gap:8px;pointer-events:none}
+    .btn-icon{pointer-events:auto;width:40px;height:40px;border-radius:999px;display:grid;place-items:center;
+      background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)}
     .btn-icon:active{transform:scale(.96)}
     .bar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;padding:10px 0}
-    .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
+    .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);
+      background:rgba(0,0,0,.15)}
 
     /* Título opcional */
     .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
@@ -55,10 +53,11 @@
       <div class="note">Ingresa un título para esta foto</div>
     {% endif %}
 
-    <!-- Top bar (volver / flip) -->
+    <!-- Top bar -->
     <div class="topbar">
       {% if next_url %}
         <a class="btn-icon" href="{{ next_url|urlencode }}" title="Volver" aria-label="Volver">
+          <!-- Flecha izq -->
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M15 18l-6-6 6-6"></path>
@@ -74,6 +73,7 @@
       {% endif %}
 
       <button id="flip" class="btn-icon" type="button" title="Cambiar cámara" aria-label="Cambiar cámara">
+        <!-- Flechas circulares -->
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12a9 9 0 0 1-9 9"></path>
@@ -107,12 +107,16 @@
 
 <script>
 {% if next_url %} const NEXT = "{{ next_url|escapejs }}"; {% else %} const NEXT = ""; {% endif %}
-
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
-const CSRF = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '';
 
-/* Pon tu token para mapa satelital; si lo dejas vacío, se oculta el recuadro */
-const MAPBOX_TOKEN = "pk.eyJ1IjoiMjY3MjQ2NzkzIiwiYSI6ImNtZ3psNmlraDE0cWMya3B4OTgxcGt4ZGEifQ.D1HvNPiOQxLHHKTG7Glqbg"; // ej: "pk.XXXXXXXXXXXXXXXXXXXXXXXX"
+/* CSRF: cookie o meta-tag de respaldo */
+function readCookie(name){return (document.cookie.split('; ').find(r=>r.startsWith(name+'='))||'').split('=')[1]||''}
+const CSRF_COOKIE = readCookie('csrftoken');
+const CSRF_META   = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const CSRF = CSRF_COOKIE || CSRF_META;
+
+const MAPBOX_TOKEN = "pk.eyJ1IjoiMjY3MjQ2NzkzIiwiYSI6ImNtZ3psNmlraDE0cWMya3B4OTgxcGt4ZGEifQ.D1HvNPiOQxLHHKTG7Glqbg"; // ← Coloca tu token. Si lo dejas vacío, se oculta el recuadro del mapa.
+const MAP_STYLE    = "mapbox/streets-v12"; // más nítido que satellite para referencia.
 
 const v = document.getElementById('v');
 const m = document.getElementById('m');
@@ -148,23 +152,22 @@ async function geocode(lat,lng){
     const country=(ctx.country?.text_es||ctx.country?.text||'').trim();
     const region =(ctx.region?.text_es ||ctx.region?.text ||'').trim();
     const place  =(ctx.place?.text_es  ||ctx.place?.text  ||f?.text_es||f?.text||'').trim();
-    const code=(ctx.country?.short_code||'').toUpperCase();
     const title=[place,region,country].filter(Boolean).join(', ');
     const line2=f?.place_name_es||f?.place_name||'';
-    addr={title,line2,countryCode:code};
+    addr={title,line2,countryCode:(ctx.country?.short_code||'').toUpperCase()};
   }catch{
     addr={title:'Ubicación',line2:'',countryCode:''};
   }
   paintHUD();
 }
 
-function staticMap(lat,lng,size=240,zoom=18){
+function staticMap(lat,lng,size=320,zoom=18){
   if(!MAPBOX_TOKEN){ mapReady=false; return; }
   try{
     m.crossOrigin = "anonymous";  // evita canvas “tainted”
     m.onload = ()=>{ mapReady=true; };
     m.onerror= ()=>{ mapReady=false; };
-    m.src=`https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+    m.src=`https://api.mapbox.com/styles/v1/${MAP_STYLE}/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
   }catch{ mapReady=false; }
 }
 
@@ -202,7 +205,7 @@ async function demandGPS(){
   }
 }
 
-/* Dibuja la “placa” con mapa y textos sobre el frame capturado */
+/* Dibuja la placa con mapa y textos sobre el frame capturado */
 function drawStampOnCanvas(ctx, W, H){
   const margin = Math.round(W*0.02);
   const panelH = Math.round(H*0.24);
@@ -225,7 +228,6 @@ function drawStampOnCanvas(ctx, W, H){
   const textX = panelX + pad + (mapReady ? (mapSize + pad) : 0);
   let y = panelY + pad;
 
-  // mapa (si cargó)
   if (mapReady) {
     try { ctx.drawImage(m, panelX+pad, panelY+pad, mapSize, mapSize); } catch {}
   }
@@ -253,7 +255,6 @@ async function captureAndUpload(){
   if(!stream || !gps){ alert('Necesitamos cámara y GPS activos'); return; }
 
   const W0 = v.videoWidth || 1080, H0 = v.videoHeight || 1920;
-  // (opcional) reducir para peso razonable
   const maxSide = 1600, s = Math.min(1, maxSide / Math.max(W0, H0));
   const W = Math.round(W0*s), H = Math.round(H0*s);
 
@@ -287,17 +288,25 @@ async function captureAndUpload(){
     body:fd,
     cache:'no-store',
     credentials: 'same-origin',
-    headers: CSRF ? { 'X-CSRFToken': CSRF } : {}
+    headers: Object.assign(
+      { 'X-Requested-With': 'XMLHttpRequest' },
+      CSRF ? { 'X-CSRFToken': CSRF } : {}
+    )
   });
+
+  // Si el backend devolvió HTML (e.g. login) no intentes parsear como JSON
+  const ct = (r.headers.get('content-type') || '').toLowerCase();
+  if (!ct.includes('application/json')) {
+    alert('Tu sesión puede haber expirado. Por favor vuelve a iniciar sesión.');
+    return;
+  }
 
   let j=null; try{ j = await r.json(); }catch{}
   if(r.ok && j && j.ok){
     if(NEXT){ window.location.href = NEXT; }
     else { alert('Foto enviada'); }
   }else{
-    const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
-    alert('No se pudo enviar la foto: ' + msg);
-    try { console.error('Upload error:', r.status, await r.text()); } catch {}
+    alert('No se pudo enviar la foto' + (j && j.error ? `: ${j.error}` : ` (HTTP ${r.status})`));
   }
 }
 
