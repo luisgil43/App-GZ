@@ -12,10 +12,10 @@ from django.views.decorators.http import require_GET, require_POST
 def capture(request):
     """
     Pantalla de cámara standalone.
-    Query params opcionales:
-      - next: URL a la que volver (botón Volver)
-      - titulo_required=1 -> obliga a ingresar título
-      - titulo_default=Texto (valor por defecto)
+    Query params:
+      - next: URL a la que volver (opcional)
+      - titulo_required=1 (obliga título)
+      - titulo_default=Texto (por defecto si no es obligatorio)
     """
     ctx = {
         "next_url": request.GET.get("next", ""),
@@ -27,26 +27,26 @@ def capture(request):
 @require_POST
 def upload(request):
     """
-    Endpoint propio de geo_cam para recibir la imagen + metadatos.
-    Guarda en MEDIA_ROOT/geo_cam/ y responde JSON.
+    Recibe imagen + metadatos y guarda en MEDIA_ROOT/geo_cam/.
+    Responde JSON { ok, url, meta... }.
     """
     img = request.FILES.get("imagen")
     if not img:
         return HttpResponseBadRequest("Falta 'imagen'")
 
-    # metadatos opcionales
     lat = request.POST.get("lat")
     lng = request.POST.get("lng")
     acc = request.POST.get("acc")
     client_taken_at = request.POST.get("client_taken_at") or now().isoformat()
     titulo_manual = request.POST.get("titulo_manual", "")
 
-    # folder de la app
     subdir = "geo_cam"
-    fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, subdir),
-                           base_url=os.path.join(settings.MEDIA_URL, subdir + "/"))
+    fs = FileSystemStorage(
+        location=os.path.join(settings.MEDIA_ROOT, subdir),
+        base_url=os.path.join(settings.MEDIA_URL, subdir + "/"),
+    )
 
-    # nombre de archivo
+    # nombre único
     fname = f"foto_{int(now().timestamp())}.jpg"
     saved_name = fs.save(fname, img)
     url = fs.url(saved_name)

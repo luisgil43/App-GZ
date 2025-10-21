@@ -6,21 +6,41 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Tomar foto con GPS</title>
   <style>
+    :root { --glass: rgba(0,0,0,.82); }
     body{margin:0;background:#000;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter}
     .wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
     .box{width:100%;max-width:960px;aspect-ratio:9/16;background:#000;position:relative;overflow:hidden}
     video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+    /* HUD */
     .hud{position:absolute;inset:0;pointer-events:none}
-    .panel{position:absolute;left:16px;right:16px;bottom:16px;background:rgba(0,0,0,.82);border-radius:14px;display:flex;gap:12px;padding:12px}
+    .panel{
+      position:absolute;left:16px;right:16px;bottom:16px;
+      background:var(--glass);border-radius:14px;display:flex;gap:12px;padding:12px
+    }
     .map{width:120px;height:120px;border-radius:10px;overflow:hidden;background:#111;flex:0 0 auto}
     .txt{font-size:13px;line-height:1.25}
     .ttl{font-weight:700;font-size:16px;margin-bottom:6px}
-    .bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:12px;justify-content:center;padding:14px}
-    .btn{pointer-events:auto;border:none;border-radius:999px;padding:12px 18px;background:#334155;color:#fff;font-weight:600}
-    .shot{pointer-events:auto;width:78px;height:78px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
-    .title-box{position:absolute;left:16px;right:16px;top:16px;display:flex;gap:8px;pointer-events:auto}
+
+    /* Botones */
+    .topbar{
+      position:absolute;left:0;right:0;top:0;
+      display:flex;justify-content:space-between;align-items:center;
+      padding:12px 14px;gap:8px;pointer-events:none
+    }
+    .btn-icon{
+      pointer-events:auto;width:40px;height:40px;border-radius:999px;
+      display:grid;place-items:center;background:rgba(0,0,0,.55);
+      color:#fff;border:1px solid rgba(255,255,255,.15);backdrop-filter:blur(2px)
+    }
+    .btn-icon:active{transform:scale(.96)}
+    .bar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;padding:10px 0}
+    .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
+
+    /* Título opcional */
+    .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
-    .note{position:absolute;left:16px;right:16px;top:60px;color:#cbd5e1;font-size:12px}
+    .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
   </style>
 </head>
 <body>
@@ -35,9 +55,39 @@
       <div class="note">Ingresa un título para esta foto</div>
     {% endif %}
 
+    <!-- Top bar (volver / flip) -->
+    <div class="topbar">
+      {% if next_url %}
+        <a class="btn-icon" href="{{ next_url|urlencode }}" title="Volver" aria-label="Volver">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6"></path>
+          </svg>
+        </a>
+      {% else %}
+        <button id="close" class="btn-icon" type="button" title="Volver" aria-label="Volver">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 18l-6-6 6-6"></path>
+          </svg>
+        </button>
+      {% endif %}
+
+      <button id="flip" class="btn-icon" type="button" title="Cambiar cámara" aria-label="Cambiar cámara">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 0 1-9 9"></path>
+          <path d="M3 12a9 9 0 0 1 9-9"></path>
+          <polyline points="3 3 3 9 9 9"></polyline>
+          <polyline points="21 21 21 15 15 15"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <!-- HUD visible sobre el video -->
     <div class="hud">
-      <div class="panel">
-        <div class="map"><img id="m" alt></div>
+      <div class="panel" id="hudPanel">
+        <div class="map" id="mapBox"><img id="m" alt></div>
         <div class="txt">
           <div class="ttl" id="l1">—</div>
           <div id="l2">—</div>
@@ -46,36 +96,31 @@
           <div id="l5">—</div>
         </div>
       </div>
+
+      <!-- disparador abajo -->
       <div class="bar">
-        {% if next_url %}
-          <a class="btn" href="{{ next_url|urlencode }}">Volver</a>
-        {% else %}
-          <button id="close" class="btn" type="button">Cerrar</button>
-        {% endif %}
         <button id="shot" class="shot" type="button" aria-label="Capturar"></button>
-        <button id="flip" class="btn" type="button">Cambiar cámara</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-{% if next_url %}
-  const NEXT = "{{ next_url|escapejs }}";
-{% else %}
-  const NEXT = "";
-{% endif %}
+{% if next_url %} const NEXT = "{{ next_url|escapejs }}"; {% else %} const NEXT = ""; {% endif %}
 
-const UPLOAD_URL = "{% url 'geo_cam:upload' %}";   // <— endpoint de esta misma app
+const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
 const CSRF = (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '';
 
-const MAPBOX_TOKEN = ""; // opcional; si lo dejas vacío, se omite el mapa estático
+/* Pon tu token para mapa satelital; si lo dejas vacío, se oculta el recuadro */
+const MAPBOX_TOKEN = "pk.eyJ1IjoiMjY3MjQ2NzkzIiwiYSI6ImNtZ3psNmlraDE0cWMya3B4OTgxcGt4ZGEifQ.D1HvNPiOQxLHHKTG7Glqbg"; // ej: "pk.XXXXXXXXXXXXXXXXXXXXXXXX"
+
 const v = document.getElementById('v');
 const m = document.getElementById('m');
+const mapBox = document.getElementById('mapBox');
 const l1=document.getElementById('l1'), l2=document.getElementById('l2'),
       l3=document.getElementById('l3'), l4=document.getElementById('l4'), l5=document.getElementById('l5');
 
-let stream=null, facing='environment', gps=null, addr=null;
+let stream=null, facing='environment', gps=null, addr=null, mapReady=false;
 
 function pad(n){return String(n).padStart(2,'0')}
 function tzStr(d=new Date()){const off=-d.getTimezoneOffset();const s=off>=0?'+':'-';const hh=pad(Math.floor(Math.abs(off)/60));const mm=pad(Math.abs(off)%60);return `GMT ${s}${hh}:${mm}`;}
@@ -91,7 +136,11 @@ async function startStream(){
 }
 
 async function geocode(lat,lng){
-  if(!MAPBOX_TOKEN){ addr = {title:'Ubicación', line2:'', countryCode:''}; paintHUD(); return; }
+  if(!MAPBOX_TOKEN){
+    addr = {title:'Ubicación', line2:'', countryCode:''};
+    if (mapBox) mapBox.style.display='none';
+    paintHUD(); return;
+  }
   try{
     const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?limit=1&language=es&access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
     const r = await fetch(url,{cache:'no-store'}); const j=await r.json(); const f=j.features?.[0];
@@ -103,13 +152,20 @@ async function geocode(lat,lng){
     const title=[place,region,country].filter(Boolean).join(', ');
     const line2=f?.place_name_es||f?.place_name||'';
     addr={title,line2,countryCode:code};
-  }catch{ addr={title:'Ubicación',line2:'',countryCode:''}; }
+  }catch{
+    addr={title:'Ubicación',line2:'',countryCode:''};
+  }
   paintHUD();
 }
 
 function staticMap(lat,lng,size=240,zoom=18){
-  if(!MAPBOX_TOKEN){ m.removeAttribute('src'); return; }
-  m.src=`https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+  if(!MAPBOX_TOKEN){ mapReady=false; return; }
+  try{
+    m.crossOrigin = "anonymous";  // evita canvas “tainted”
+    m.onload = ()=>{ mapReady=true; };
+    m.onerror= ()=>{ mapReady=false; };
+    m.src=`https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/pin-s+ff0000(${lng},${lat})/${lng},${lat},${zoom},0/${size}x${size}@2x?access_token=${encodeURIComponent(MAPBOX_TOKEN)}`;
+  }catch{ mapReady=false; }
 }
 
 function paintHUD(){
@@ -146,14 +202,67 @@ async function demandGPS(){
   }
 }
 
+/* Dibuja la “placa” con mapa y textos sobre el frame capturado */
+function drawStampOnCanvas(ctx, W, H){
+  const margin = Math.round(W*0.02);
+  const panelH = Math.round(H*0.24);
+  const panelW = Math.min(W - margin*2, Math.round(W*0.92));
+  const panelX = margin, panelY = H - panelH - margin, radius = Math.round(panelH*0.08);
+
+  function rrect(x,y,w,h,r){
+    const rr=Math.min(r,w/2,h/2);
+    ctx.beginPath(); ctx.moveTo(x+rr,y);
+    ctx.arcTo(x+w,y,x+w,y+h,rr); ctx.arcTo(x+w,y+h,x,y+h,rr);
+    ctx.arcTo(x,y+h,x,y,rr); ctx.arcTo(x,y,x+w,y,rr); ctx.closePath();
+  }
+
+  // panel
+  ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#000';
+  rrect(panelX,panelY,panelW,panelH,radius); ctx.fill(); ctx.restore();
+
+  const pad  = Math.round(panelH*.10);
+  const mapSize = Math.min(panelH - pad*2, Math.round(panelW*.30));
+  const textX = panelX + pad + (mapReady ? (mapSize + pad) : 0);
+  let y = panelY + pad;
+
+  // mapa (si cargó)
+  if (mapReady) {
+    try { ctx.drawImage(m, panelX+pad, panelY+pad, mapSize, mapSize); } catch {}
+  }
+
+  const g = gps, a = addr || {};
+  const ttlF = Math.max(16, Math.round(panelH*.17));
+  const txtF = Math.max(12, Math.round(panelH*.14));
+  const gap  = Math.max(6, Math.round(panelH*.07));
+
+  ctx.fillStyle='#fff'; ctx.textBaseline='top';
+  ctx.font = `700 ${ttlF}px system-ui,-apple-system,Segoe UI,Roboto`;
+  ctx.fillText(a.title || 'Ubicación', textX, y); y += ttlF + gap;
+
+  ctx.font = `${txtF}px system-ui,-apple-system,Segoe UI,Roboto`;
+  ctx.fillText(a.line2 || '—', textX, y); y += txtF + Math.round(gap*.6);
+
+  if (g) {
+    ctx.fillText(`Lat ${deg(g.lat)} Long ${deg(g.lng)}`, textX, y); y += txtF + Math.round(gap*.6);
+    const ts = g.ts ? new Date(g.ts) : new Date();
+    ctx.fillText(`${fmtDT(ts)} ${tzStr(ts)}`, textX, y);
+  }
+}
+
 async function captureAndUpload(){
   if(!stream || !gps){ alert('Necesitamos cámara y GPS activos'); return; }
 
-  const W = v.videoWidth || 1080, H = v.videoHeight || 1920;
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  c.getContext('2d').drawImage(v,0,0,W,H);
+  const W0 = v.videoWidth || 1080, H0 = v.videoHeight || 1920;
+  // (opcional) reducir para peso razonable
+  const maxSide = 1600, s = Math.min(1, maxSide / Math.max(W0, H0));
+  const W = Math.round(W0*s), H = Math.round(H0*s);
 
-  const blob = await new Promise(res=>c.toBlob(res,'image/jpeg',0.9));
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const ctx=c.getContext('2d');
+  ctx.drawImage(v,0,0,W,H);
+  drawStampOnCanvas(ctx, W, H);
+
+  const blob = await new Promise(res=>c.toBlob(res,'image/jpeg',0.88));
   const file = new File([blob], `foto_${Date.now()}.jpg`, {type:'image/jpeg'});
 
   const fd = new FormData();
@@ -173,17 +282,26 @@ async function captureAndUpload(){
   if(Number.isFinite(gps.acc)) fd.append('acc', Math.round(gps.acc));
   fd.append('client_taken_at', new Date().toISOString());
 
-  const r = await fetch(UPLOAD_URL, { method:'POST', body:fd, cache:'no-store' });
-  let j=null; try{ j = await r.json(); }catch{}
+  const r = await fetch(UPLOAD_URL, {
+    method:'POST',
+    body:fd,
+    cache:'no-store',
+    credentials: 'same-origin',
+    headers: CSRF ? { 'X-CSRFToken': CSRF } : {}
+  });
 
+  let j=null; try{ j = await r.json(); }catch{}
   if(r.ok && j && j.ok){
     if(NEXT){ window.location.href = NEXT; }
     else { alert('Foto enviada'); }
   }else{
-    alert((j && j.error) ? j.error : 'No se pudo enviar la foto');
+    const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
+    alert('No se pudo enviar la foto: ' + msg);
+    try { console.error('Upload error:', r.status, await r.text()); } catch {}
   }
 }
 
+/* Wire de controles */
 document.getElementById('flip').addEventListener('click', async ()=>{
   facing = (facing==='environment'?'user':'environment');
   await startStream();
@@ -192,6 +310,7 @@ document.getElementById('shot').addEventListener('click', captureAndUpload);
 const closeBtn = document.getElementById('close');
 if(closeBtn) closeBtn.addEventListener('click', ()=>history.back());
 
+/* Init */
 (async function init(){
   await startStream();
   await demandGPS();

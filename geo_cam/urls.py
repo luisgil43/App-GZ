@@ -6,7 +6,7 @@ app_name = "geo_cam"
 
 urlpatterns = [
     
-    path("capture/", views.capture, name="capture"),    
-    path("upload/", views.upload, name="upload"),  
+    path("capture/", views.capture, name="capture"),
+    path("upload/", views.upload, name="upload"),
     
 ]
