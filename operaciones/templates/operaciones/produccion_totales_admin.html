@@ -445,12 +445,17 @@ document.addEventListener('click', function(e){
 </script>
 
 <script>
-  // ---------- CSRF (MISMO ENFOQUE QUE TU OTRO TEMPLATE) ----------
+  // ---------- CSRF (DOBLE FUENTE: cookie o template) ----------
   function getCookie(name){
     const v = document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
     return v ? v.pop() : '';
   }
-  const CSRF = getCookie('csrftoken');
+  // 1) desde cookie
+  const CSRF_COOKIE = getCookie('csrftoken');
+  // 2) desde el template (esto sí lo pone Django aunque la cookie sea HttpOnly)
+  const CSRF_TPL = '{{ csrf_token }}';
+  // usamos el que exista
+  const CSRF = CSRF_COOKIE || CSRF_TPL;
 
   // ---------- Toaster simple ----------
   function toast(msg,kind="info"){
@@ -469,16 +474,16 @@ document.addEventListener('click', function(e){
     setTimeout(()=>box.remove(),4500);
   }
 
-  // ---------- fetchJSON (solo manda CSRF si hay) ----------
+  // ---------- fetchJSON (ahora SIEMPRE manda CSRF, porque ya tenemos uno válido) ----------
   async function fetchJSON(url, opts){
     const headers = {
       'X-Requested-With':'XMLHttpRequest',
       'Accept':'application/json',
       ...(opts && opts.headers ? opts.headers : {})
     };
-    if (CSRF) {
-      headers['X-CSRFToken'] = CSRF;
-    }
+    // aquí ya NO hay chance de que vaya vacío
+    headers['X-CSRFToken'] = CSRF;
+
     const resp = await fetch(url, {
       credentials: 'same-origin',
       headers,
@@ -536,7 +541,7 @@ document.addEventListener('click', function(e){
       toast('Subiendo comprobante…');
 
       try{
-        // PASO 1: presign
+        // PASO 1: presign (a Django)
         const presignData=new FormData(); presignData.append('filename', file.name);
         const presignUrl="{% url 'operaciones:presign_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
         dlog('STEP1 presign →', presignUrl);
@@ -544,7 +549,7 @@ document.addEventListener('click', function(e){
         dlog('STEP1 presign OK', presigned);
         const {post, key} = presigned;
 
-        // PASO 2: upload a S3/Wasabi
+        // PASO 2: subir al storage (Wasabi/S3) — NO requiere CSRF
         dlog('STEP2 upload →', post.url);
         await new Promise((resolve,reject)=>{
           const fd=new FormData();
@@ -552,20 +557,16 @@ document.addEventListener('click', function(e){
           fd.append('file', file);
           const xhr=new XMLHttpRequest();
           xhr.open('POST', post.url, true);
-          xhr.upload.onprogress = (e)=>{ if(e.lengthComputable){ dlog('STEP2 progress', `${((e.loaded/e.total)*100).toFixed(1)}%`); } };
-          xhr.onload=()=>{
-            dlog('STEP2 onload status', xhr.status, 'respLen', xhr.response?.length);
-            (xhr.status===201 || xhr.status===204) ? resolve() : reject(new Error('Upload '+xhr.status+' '+(xhr.responseText||'')));
-          };
+          xhr.onload=()=> (xhr.status===201 || xhr.status===204)? resolve() : reject(new Error('Upload '+xhr.status));
           xhr.onerror=()=>reject(new Error('Upload network error'));
           xhr.send(fd);
         });
         dlog('STEP2 upload OK');
 
-        // PASO 3: confirm
+        // PASO 3: confirmar en Django
         const confirmUrl="{% url 'operaciones:confirm_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
         const confirmFD=new FormData(); confirmFD.append('key', key);
-        dlog('STEP3 confirm →', confirmUrl, {key});
+        dlog('STEP3 confirm →', confirmUrl);
         const confirmResp = await fetchJSON(confirmUrl,{ method:'POST', body:confirmFD });
         dlog('STEP3 confirm OK', confirmResp);
 
