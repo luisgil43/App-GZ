@@ -48,55 +48,53 @@
           <td class="p-2">{{ r.display_name }}</td>
           <td class="p-2">{{ r.week }}</td>
           <td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
-         <td class="p-2">
-  {% if r.status == "pending_user" %}
-    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
+          <td class="p-2">
+            {% if r.status == "pending_user" %}
+              <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">Pendiente aprobación del técnico</span>
 
-  {% elif r.status == "approved_user" or r.status == "pending_payment" %}
-    <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Pendiente de pago</span>
+            {% elif r.status == "approved_user" or r.status == "pending_payment" %}
+              <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Pendiente de pago</span>
 
-  {% elif r.status == "rejected_user" %}
-    <div class="space-y-1">
-      <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full">Rechazado por el técnico</span>
-      <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-        <b>Motivo:</b> {{ r.reject_reason|default:"(sin motivo)" }}
-      </div>
-      <div class="text-[11px] text-gray-500">
-        Puedes restablecerlo para que el técnico vuelva a aprobar/rechazar.
-      </div>
-    </div>
+            {% elif r.status == "rejected_user" %}
+              <div class="space-y-1">
+                <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full">Rechazado por el técnico</span>
+                <div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
+                  <b>Motivo:</b> {{ r.reject_reason|default:"(sin motivo)" }}
+                </div>
+                <div class="text-[11px] text-gray-500">
+                  Puedes restablecerlo para que el técnico vuelva a aprobar/rechazar.
+                </div>
+              </div>
 
-  {% elif r.status == "paid" %}
-    <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Pagado</span>
+            {% elif r.status == "paid" %}
+              <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">Pagado</span>
 
-  {% else %}
-    <span class="text-gray-400">—</span>
-  {% endif %}
-</td>
+            {% else %}
+              <span class="text-gray-400">—</span>
+            {% endif %}
+          </td>
           <td class="p-2">
             {% if r.receipt %}
               <a class="text-blue-600 underline" href="{{ r.receipt.url }}" target="_blank" rel="noopener">Ver</a>
             {% else %}—{% endif %}
           </td>
-<td class="p-2">
-  {% if r.status == "pending_payment" or r.status == "approved_user" %}
-    <button type="button"
-            class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-            onclick="openPayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
-      Marcar como pagado
-    </button>
-  {% elif r.status == "rejected_user" %}
-    <button type="button"
-            class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
-            onclick="restoreRejected({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
-      Restablecer
-    </button>
-  {% else %}
-    <span class="text-gray-400">—</span>
-  {% endif %}
-</td>
-
-
+          <td class="p-2">
+            {% if r.status == "pending_payment" or r.status == "approved_user" %}
+              <button type="button"
+                      class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
+                      onclick="openPayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+                Marcar como pagado
+              </button>
+            {% elif r.status == "rejected_user" %}
+              <button type="button"
+                      class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
+                      onclick="restoreRejected({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+                Restablecer
+              </button>
+            {% else %}
+              <span class="text-gray-400">—</span>
+            {% endif %}
+          </td>
         </tr>
 
         <!-- detalle por DU -->
@@ -114,7 +112,7 @@
                 <tbody>
                   {% for d in r.details %}
                   <tr class="border-t">
-                   <td class="p-2">
+                    <td class="p-2">
                       {% with du=d.du proj=d.project_id %}
                         {% if proj and proj != '-' and proj != '—' and proj != du %}
                           {{ du }} — {{ proj }}
@@ -123,7 +121,6 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-
                     <td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
                   </tr>
                   {% empty %}
@@ -139,41 +136,42 @@
         {% endfor %}
       </tbody>
     </table>
-<!-- ===== Modal: Subir comprobante ===== -->
-<div id="pay-modal"
-     class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50"
-     role="dialog" aria-modal="true" aria-labelledby="pay-modal-title">
-  <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
-    <h3 id="pay-modal-title" class="text-xl font-semibold mb-1">Adjuntar comprobante de pago</h3>
-    <p id="pay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
 
-    <div class="space-y-3">
-      <div class="space-y-1">
-        <label class="block text-sm font-medium">Archivo del comprobante</label>
+    <!-- ===== Modal: Subir comprobante ===== -->
+    <div id="pay-modal"
+         class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50"
+         role="dialog" aria-modal="true" aria-labelledby="pay-modal-title">
+      <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
+        <h3 id="pay-modal-title" class="text-xl font-semibold mb-1">Adjuntar comprobante de pago</h3>
+        <p id="pay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
 
-        <input id="receipt-file" type="file" accept=".pdf,.jpg,.jpeg,.png" class="hidden" required>
+        <div class="space-y-3">
+          <div class="space-y-1">
+            <label class="block text-sm font-medium">Archivo del comprobante</label>
 
-        <div class="flex items-center gap-2">
-          <button type="button"
-                  class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  onclick="document.getElementById('receipt-file').click()">
-            Elegir archivo
-          </button>
-          <span id="receipt-name" class="text-sm text-gray-600" aria-live="polite">
-            Ningún archivo seleccionado
-          </span>
+            <input id="receipt-file" type="file" accept=".pdf,.jpg,.jpeg,.png" class="hidden" required>
+
+            <div class="flex items-center gap-2">
+              <button type="button"
+                      class="px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+                      onclick="document.getElementById('receipt-file').click()">
+                Elegir archivo
+              </button>
+              <span id="receipt-name" class="text-sm text-gray-600" aria-live="polite">
+                Ningún archivo seleccionado
+              </span>
+            </div>
+          </div>
+
+          <div class="flex gap-2 justify-end pt-2">
+            <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closePayModal()">Cancelar</button>
+            <button id="btn-upload" type="button" class="px-4 py-2 rounded bg-green-600 text-white">
+              Subir y marcar como pagado
+            </button>
+          </div>
         </div>
       </div>
-
-      <div class="flex gap-2 justify-end pt-2">
-        <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closePayModal()">Cancelar</button>
-        <button id="btn-upload" type="button" class="px-4 py-2 rounded bg-green-600 text-white">
-          Subir y marcar como pagado
-        </button>
-      </div>
     </div>
-  </div>
-</div>
 
   </div>
 
@@ -184,7 +182,7 @@
   <form id="filters" class="mb-3" onsubmit="return false;">
     <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
 
-    <div>
+      <div>
         <label class="text-xs text-gray-600">Técnico</label>
         <input name="f_tecnico" type="text" value="{{ f_tecnico }}"
                class="w-full border rounded px-2 py-1.5" placeholder="Nombre o usuario">
@@ -194,7 +192,7 @@
         <input name="f_month" type="text" value=""
                class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
       </div>
-  
+
       <div>
         <label class="text-xs text-gray-600">DU</label>
         <input name="f_du" type="text" value="{{ f_du }}"
@@ -242,8 +240,7 @@
 
             <td class="p-2">{{ r.display_name }}</td>
             <td class="p-2">{{ r.week }}</td>
-       
-<td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
+            <td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
             <td class="p-2">
               <span class="inline-flex items-center px-2 py-0.5 rounded bg-green-100 text-green-800">Pagado</span>
             </td>
@@ -254,13 +251,12 @@
               {% else %}—{% endif %}
             </td>
             <td class="p-2">
-  <button type="button"
-          class="inline-block bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
-          onclick="openUnpayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
-    Revertir pago
-  </button>
-</td>
-
+              <button type="button"
+                      class="inline-block bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded"
+                      onclick="openUnpayModal({{ r.id }}, '{{ r.week }}', '{{ r.display_name }}')">
+                Revertir pago
+              </button>
+            </td>
           </tr>
 
           <tr id="det-paid-{{ forloop.counter }}" class="hidden">
@@ -277,16 +273,16 @@
                   <tbody>
                     {% for d in r.details %}
                     <tr class="border-t">
-                          <td class="p-2">
-                      {% with du=d.du proj=d.project_id %}
-                        {% if proj and proj != '-' and proj != '—' and proj != du %}
-                          {{ du }} — {{ proj }}
-                        {% else %}
-                          {{ du }}
-                        {% endif %}
-                      {% endwith %}
-                    </td>
-<td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
+                      <td class="p-2">
+                        {% with du=d.du proj=d.project_id %}
+                          {% if proj and proj != '-' and proj != '—' and proj != du %}
+                            {{ du }} — {{ proj }}
+                          {% else %}
+                            {{ du }}
+                          {% endif %}
+                        {% endwith %}
+                      </td>
+                      <td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
@@ -301,41 +297,41 @@
           {% endfor %}
         </tbody>
       </table>
-<div id="unpay-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
-  <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
-    <h3 class="text-xl font-semibold mb-1">¿Revertir pago?</h3>
-    <p id="unpay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
-    <p class="text-sm text-gray-700 mb-4">
-      Esto <b>eliminará el comprobante</b> y volverá a <i>Pendiente de pago</i>.
-    </p>
-    <div class="flex gap-2 justify-end">
-      <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeUnpayModal()">Cancelar</button>
-      <button id="btn-unpay" type="button" class="px-4 py-2 rounded bg-amber-600 text-white">Sí, revertir</button>
-    </div>
-  </div>
-</div>
 
-<script>
-  let currentUnpayId=null;
-  function openUnpayModal(id, month, tech){
-    currentUnpayId=id;
-    const m=document.getElementById('unpay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
-    document.getElementById('unpay-modal-sub').textContent=`${tech} — ${month}`;
-  }
-  function closeUnpayModal(){const m=document.getElementById('unpay-modal'); m.classList.add('hidden'); m.classList.remove('flex');}
-  document.getElementById('btn-unpay').addEventListener('click', async ()=>{
-    const id=currentUnpayId; if(!id) return; closeUnpayModal();
-    try{
-      const url="{% url 'operaciones:admin_unpay_monthly' 0 %}".replace('/0/','/'+id+'/') + '?ajax=1';
-      await fetchJSON(url, {
-        method:'POST',
-        headers:{'X-CSRFToken':CSRF}
-      });
-      toast('Pago revertido. De vuelta a Pendiente de pago ✅','ok');
-      setTimeout(()=>window.location.reload(),500);
-    }catch(e){console.error(e); toast('No se pudo revertir: '+e.message,'error');}
-  });
-</script>
+      <div id="unpay-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow max-w-md w-full p-6">
+          <h3 class="text-xl font-semibold mb-1">¿Revertir pago?</h3>
+          <p id="unpay-modal-sub" class="text-sm text-gray-600 mb-4"></p>
+          <p class="text-sm text-gray-700 mb-4">
+            Esto <b>eliminará el comprobante</b> y volverá a <i>Pendiente de pago</i>.
+          </p>
+          <div class="flex gap-2 justify-end">
+            <button type="button" class="px-4 py-2 rounded bg-gray-200" onclick="closeUnpayModal()">Cancelar</button>
+            <button id="btn-unpay" type="button" class="px-4 py-2 rounded bg-amber-600 text-white">Sí, revertir</button>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        let currentUnpayId=null;
+        function openUnpayModal(id, month, tech){
+          currentUnpayId=id;
+          const m=document.getElementById('unpay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
+          document.getElementById('unpay-modal-sub').textContent=`${tech} — ${month}`;
+        }
+        function closeUnpayModal(){const m=document.getElementById('unpay-modal'); m.classList.add('hidden'); m.classList.remove('flex');}
+        document.getElementById('btn-unpay').addEventListener('click', async ()=>{
+          const id=currentUnpayId; if(!id) return; closeUnpayModal();
+          try{
+            const url="{% url 'operaciones:admin_unpay_monthly' 0 %}".replace('/0/','/'+id+'/') + '?ajax=1';
+            await fetchJSON(url, {
+              method:'POST'
+            });
+            toast('Pago revertido. De vuelta a Pendiente de pago ✅','ok');
+            setTimeout(()=>window.location.reload(),500);
+          }catch(e){console.error(e); toast('No se pudo revertir: '+e.message,'error');}
+        });
+      </script>
 
     </div>
 
@@ -406,45 +402,39 @@ document.addEventListener('click', function(e){
 <!-- Filtros automáticos + control de paginación abajo -->
 <script>
 (function(){
-  // Construye params desde los filtros actuales
   function paramsFromFilters(){
     const form = document.getElementById('filters');
     return new URLSearchParams(new FormData(form));
   }
 
-  // Debounce para que el usuario escriba cómodo
   let t=null;
   function schedule(){ clearTimeout(t); t=setTimeout(applyFilters, 400); }
 
-function applyFilters(){
-  const p = paramsFromFilters();
-  const url = new URL(window.location.href);
-  const cant = url.searchParams.get('cantidad');
-  if (cant) p.set('cantidad', cant);
-  p.set('filters', '1');   // 👈 marca que el usuario aplicó filtros
-  p.set('page', '1');
-  window.location.search = p.toString();
-}
+  function applyFilters(){
+    const p = paramsFromFilters();
+    const url = new URL(window.location.href);
+    const cant = url.searchParams.get('cantidad');
+    if (cant) p.set('cantidad', cant);
+    p.set('filters', '1');
+    p.set('page', '1');
+    window.location.search = p.toString();
+  }
 
-  // Auto-aplicar en cada cambio
   document.querySelectorAll('#filters input').forEach(el=>{
     el.addEventListener('input', schedule);
     el.addEventListener('change', schedule);
   });
 
-  // Selector "Mostrar" (abajo a la izquierda)
   const sel = document.getElementById('cantidad-bottom');
   if (sel){
     sel.addEventListener('change', ()=>{
       const p = paramsFromFilters();
       p.set('cantidad', sel.value);
-      // mantener filtros y mandar a página 1
       p.set('page', '1');
       window.location.search = p.toString();
     });
   }
 
-  // Navegación por enlaces de paginación
   document.addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-pagelink]');
     if (!a) return;
@@ -455,31 +445,75 @@ function applyFilters(){
 </script>
 
 <script>
-  // ---------- CSRF ----------
-  function getCookie(name){const v=document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');return v? v.pop() : '';}
+  // ---------- CSRF (MISMO ENFOQUE QUE TU OTRO TEMPLATE) ----------
+  function getCookie(name){
+    const v = document.cookie.match('(^|;)\\s*'+name+'\\s*=\\s*([^;]+)');
+    return v ? v.pop() : '';
+  }
   const CSRF = getCookie('csrftoken');
 
   // ---------- Toaster simple ----------
   function toast(msg,kind="info"){
-    let host=document.getElementById('toast'); if(!host){host=document.createElement('div');host.id='toast';host.className='fixed bottom-4 right-4 z-[100]';document.body.appendChild(host);}
-    const box=document.createElement('div');box.className='mb-2 rounded-lg shadow px-3 py-2 text-sm '+(kind==="error"?'bg-red-600 text-white':kind==="ok"?'bg-green-600 text-white':'bg-gray-900 text-white');box.textContent=msg;host.appendChild(box);setTimeout(()=>box.remove(),4500);
+    let host=document.getElementById('toast'); 
+    if(!host){
+      host=document.createElement('div');
+      host.id='toast';
+      host.className='fixed bottom-4 right-4 z-[100]';
+      document.body.appendChild(host);
+    }
+    const box=document.createElement('div');
+    box.className='mb-2 rounded-lg shadow px-3 py-2 text-sm '
+      +(kind==="error"?'bg-red-600 text-white':kind==="ok"?'bg-green-600 text-white':'bg-gray-900 text-white');
+    box.textContent=msg;
+    host.appendChild(box);
+    setTimeout(()=>box.remove(),4500);
+  }
+
+  // ---------- fetchJSON (solo manda CSRF si hay) ----------
+  async function fetchJSON(url, opts){
+    const headers = {
+      'X-Requested-With':'XMLHttpRequest',
+      'Accept':'application/json',
+      ...(opts && opts.headers ? opts.headers : {})
+    };
+    if (CSRF) {
+      headers['X-CSRFToken'] = CSRF;
+    }
+    const resp = await fetch(url, {
+      credentials: 'same-origin',
+      headers,
+      ...opts
+    });
+    const ctype = resp.headers.get('content-type') || '';
+    const raw = await resp.text();
+
+    if (!resp.ok) {
+      throw new Error(`${resp.status} ${resp.statusText}: ${raw.slice(0,200)}`);
+    }
+    if (!ctype.includes('application/json')) {
+      throw new Error(`Respuesta no JSON (posible redirect/login): ${raw.slice(0,200)}`);
+    }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error('JSON inválido del servidor');
+    }
   }
 
   // ---------- Modal Pago ----------
-let currentPayId=null;
-function openPayModal(id, month, tech){
-  dlog('openPayModal()', {id, month, tech});
-  currentPayId=id;
-  const m=document.getElementById('pay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
-  document.getElementById('pay-modal-sub').textContent=`${tech} — ${month}`;
-}
+  let currentPayId=null;
+  function openPayModal(id, month, tech){
+    dlog('openPayModal()', {id, month, tech});
+    currentPayId=id;
+    const m=document.getElementById('pay-modal'); m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('pay-modal-sub').textContent=`${tech} — ${month}`;
+  }
 
   function closePayModal(){
     const m=document.getElementById('pay-modal'); m.classList.add('hidden'); m.classList.remove('flex');
     document.getElementById('receipt-file').value=""; document.getElementById('receipt-name').textContent='Ningún archivo seleccionado';
   }
 
-  // UI del archivo
   (function(){
     const fileInput = document.getElementById('receipt-file');
     const fileName  = document.getElementById('receipt-name');
@@ -493,100 +527,66 @@ function openPayModal(id, month, tech){
     });
 
     uploadBtn.addEventListener('click', async ()=>{
-  const file=fileInput.files?.[0]; const payId=currentPayId;
-  dlog('UPLOAD click', {payId, file: file?.name, size: file?.size});
-  if(!file){ toast('Selecciona un archivo de comprobante.', 'error'); return; }
-  if(!payId){ toast('ID de pago no encontrado.', 'error'); return; }
+      const file=fileInput.files?.[0]; const payId=currentPayId;
+      dlog('UPLOAD click', {payId, file: file?.name, size: file?.size});
+      if(!file){ toast('Selecciona un archivo de comprobante.', 'error'); return; }
+      if(!payId){ toast('ID de pago no encontrado.', 'error'); return; }
 
-  closePayModal();
-  toast('Subiendo comprobante…');
+      closePayModal();
+      toast('Subiendo comprobante…');
 
-  try{
-    // PASO 1: presign
-    const presignData=new FormData(); presignData.append('filename', file.name);
-    const presignUrl="{% url 'operaciones:presign_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
-    dlog('STEP1 presign →', presignUrl);
-    const presigned = await fetchJSON(presignUrl,{ method:'POST', headers:{'X-CSRFToken':CSRF}, body:presignData });
-    dlog('STEP1 presign OK', presigned);
-    const {post, key} = presigned;
+      try{
+        // PASO 1: presign
+        const presignData=new FormData(); presignData.append('filename', file.name);
+        const presignUrl="{% url 'operaciones:presign_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
+        dlog('STEP1 presign →', presignUrl);
+        const presigned = await fetchJSON(presignUrl,{ method:'POST', body:presignData });
+        dlog('STEP1 presign OK', presigned);
+        const {post, key} = presigned;
 
-    // PASO 2: upload a S3/Wasabi
-    dlog('STEP2 upload →', post.url);
-    await new Promise((resolve,reject)=>{
-      const fd=new FormData();
-      Object.entries(post.fields).forEach(([k,v])=>fd.append(k,v));
-      fd.append('file', file);
-      const xhr=new XMLHttpRequest();
-      xhr.open('POST', post.url, true);
-      xhr.upload.onprogress = (e)=>{ if(e.lengthComputable){ dlog('STEP2 progress', `${((e.loaded/e.total)*100).toFixed(1)}%`); } };
-      xhr.onload=()=>{
-        dlog('STEP2 onload status', xhr.status, 'respLen', xhr.response?.length);
-        (xhr.status===201 || xhr.status===204) ? resolve() : reject(new Error('Upload '+xhr.status+' '+(xhr.responseText||'')));
-      };
-      xhr.onerror=()=>reject(new Error('Upload network error'));
-      xhr.send(fd);
+        // PASO 2: upload a S3/Wasabi
+        dlog('STEP2 upload →', post.url);
+        await new Promise((resolve,reject)=>{
+          const fd=new FormData();
+          Object.entries(post.fields).forEach(([k,v])=>fd.append(k,v));
+          fd.append('file', file);
+          const xhr=new XMLHttpRequest();
+          xhr.open('POST', post.url, true);
+          xhr.upload.onprogress = (e)=>{ if(e.lengthComputable){ dlog('STEP2 progress', `${((e.loaded/e.total)*100).toFixed(1)}%`); } };
+          xhr.onload=()=>{
+            dlog('STEP2 onload status', xhr.status, 'respLen', xhr.response?.length);
+            (xhr.status===201 || xhr.status===204) ? resolve() : reject(new Error('Upload '+xhr.status+' '+(xhr.responseText||'')));
+          };
+          xhr.onerror=()=>reject(new Error('Upload network error'));
+          xhr.send(fd);
+        });
+        dlog('STEP2 upload OK');
+
+        // PASO 3: confirm
+        const confirmUrl="{% url 'operaciones:confirm_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
+        const confirmFD=new FormData(); confirmFD.append('key', key);
+        dlog('STEP3 confirm →', confirmUrl, {key});
+        const confirmResp = await fetchJSON(confirmUrl,{ method:'POST', body:confirmFD });
+        dlog('STEP3 confirm OK', confirmResp);
+
+        toast('Pago marcado como PAGADO ✅','ok');
+        setTimeout(()=>window.location.reload(),600);
+      }catch(e){
+        console.error(DBG, 'ERROR', e);
+        toast('Fallo al subir: '+e.message,'error');
+      }
     });
-    dlog('STEP2 upload OK');
 
-    // PASO 3: confirm
-    const confirmUrl="{% url 'operaciones:confirm_receipt_monthly' 0 %}".replace('/0/','/'+payId+'/');
-    const confirmFD=new FormData(); confirmFD.append('key', key);
-    dlog('STEP3 confirm →', confirmUrl, {key});
-    const confirmResp = await fetchJSON(confirmUrl,{ method:'POST', headers:{'X-CSRFToken':CSRF}, body:confirmFD });
-    dlog('STEP3 confirm OK', confirmResp);
-
-    toast('Pago marcado como PAGADO ✅','ok');
-    setTimeout(()=>window.location.reload(),600);
-  }catch(e){
-    console.error(DBG, 'ERROR', e);
-    toast('Fallo al subir: '+e.message,'error');
-  }
-});
-
-
-    // UX: cerrar con click afuera o Escape
     const modal = document.getElementById('pay-modal');
     modal.addEventListener('click', (e)=>{ if(e.target===modal) closePayModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && modal.classList.contains('flex')) closePayModal(); });
   })();
-</script>
-<script>
-async function fetchJSON(url, opts){
-  dlog('fetchJSON ⇒', url, opts?.method||'GET');
-  const resp = await fetch(url, {
-    credentials: 'same-origin',
-    headers: {
-      'X-Requested-With':'XMLHttpRequest',
-      'Accept':'application/json',           // 👈 importante
-      ...(opts?.headers||{})
-    },
-    ...opts
-  });
-  const ctype = resp.headers.get('content-type') || '';
-  dlog('fetchJSON ⇐ status', resp.status, 'ctype', ctype, 'url', resp.url);
 
-  const raw = await resp.text();
-  if (!resp.ok) {
-    dlog('fetchJSON body (error)', raw.slice(0,500));
-    throw new Error(`${resp.status} ${resp.statusText}: ${raw.slice(0,200)}`);
-  }
-  if (!ctype.includes('application/json')) {
-    dlog('fetchJSON body (no-json)', raw.slice(0,500));
-    throw new Error(`Respuesta no JSON (posible redirect/login): ${raw.slice(0,200)}`);
-  }
-  try { return JSON.parse(raw); }
-  catch { throw new Error('JSON inválido del servidor'); }
-}
-
-</script>
-
-<script>
   async function restoreRejected(id, month, tech){
     try{
       const url = "{% url 'operaciones:admin_restore_user_pending_monthly' 0 %}".replace('/0/','/'+id+'/') + '?ajax=1';
       await fetchJSON(url, {
-        method: 'POST',
-        headers: {'X-CSRFToken': CSRF}
+        method: 'POST'
       });
       toast(`Restaurado: ${tech} — ${month} ✅`, 'ok');
       setTimeout(()=>window.location.reload(), 500);
