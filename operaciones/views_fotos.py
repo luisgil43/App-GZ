@@ -2169,10 +2169,18 @@ def _onecell_anchor_compat(col_idx0, row_idx0, off_x_px, off_y_px, w_px, h_px):
 def generar_acta_preview(request, servicio_id: int):
     """
     Genera el ACTA en PDF.
-    - Preview (por defecto): muestra inline sin guardar.
-    - Guardar (si ?save=1): guarda/reemplaza en el modelo `acta_aceptacion_pdf`.
+
+    Modos:
+      - Preview (por defecto): muestra inline sin guardar.
+      - Guardar/Reemplazar (si ?save=1 o si hay OC y el servicio está aprobado):
+        guarda el PDF nuevo en `acta_aceptacion_pdf`, borrando el archivo previo si existía.
+
+    También:
+      - Si hay OC asociada, se fuerza la regeneración para que el PDF incluya sus datos.
+      - Se agrega un query param `?v=timestamp` al redirigir al PDF guardado para evitar caché.
     """
     import io
+    from time import time
 
     from django.contrib import messages
     from django.core.files.base import ContentFile
@@ -2197,31 +2205,39 @@ def generar_acta_preview(request, servicio_id: int):
     save_flag = str(request.GET.get("save", "")).lower() in {"1", "true", "on", "yes", "si", "sí"}
     force = request.GET.get("force")
 
-    # Si vamos a guardar, forzamos regeneración; si no hay force y existe OC, forzamos preview actualizado.
+    # Detectar si existe OC (du puede ser FK o texto)
+    oc_exists = False
+    try:
+        from facturacion.models import OrdenCompraFacturacion
+        try:
+            # Caso 1: du es FK a ServicioCotizado
+            oc_exists = OrdenCompraFacturacion.objects.filter(du=servicio).exists()
+        except Exception:
+            # Caso 2: du es texto/código (ej. "DU1234")
+            du_val = getattr(servicio, 'du', None)
+            if du_val:
+                oc_exists = OrdenCompraFacturacion.objects.filter(du=du_val).exists()
+    except Exception:
+        pass
+
+    # Si vamos a guardar, forzamos regeneración
     if save_flag:
         force = "1"
-    if not force:
-        try:
-            from facturacion.models import OrdenCompraFacturacion
-            oc_exists = False
-            try:
-                # Caso 1: du es FK al ServicioCotizado
-                oc_exists = OrdenCompraFacturacion.objects.filter(du=servicio).exists()
-            except Exception:
-                # Caso 2: du es texto/código (ej. "DU1234")
-                du_val = getattr(servicio, 'du', None)
-                if du_val:
-                    oc_exists = OrdenCompraFacturacion.objects.filter(du=du_val).exists()
-            if oc_exists:
-                force = "1"
-        except Exception:
-            pass
+
+    # Si no se pidió force y existe OC, forzamos regeneración para incluirla
+    if not force and oc_exists:
+        force = "1"
+
+    # Auto-guardar cuando hay OC y el servicio ya está aprobado (aunque el template no mande save=1)
+    if oc_exists and servicio.estado in {"aprobado_supervisor", "aprobado_pm"}:
+        save_flag = True
+        force = "1"
 
     # Si hay PDF previo y NO se fuerza y NO vamos a guardar, servimos el ya existente
     if getattr(servicio.acta_aceptacion_pdf, "name", "") and not force and not save_flag:
         return redirect(servicio.acta_aceptacion_pdf.url)
 
-    # Generar bytes del acta (siempre regeneramos en force o save_flag)
+    # Generar bytes del acta (regeneramos en force/save_flag)
     try:
         pdf_bytes = _bytes_acta_aceptacion(servicio)
     except Exception as e:
@@ -2251,21 +2267,22 @@ def generar_acta_preview(request, servicio_id: int):
 
     # Guardar (reemplazar) o mostrar inline
     if save_flag:
+        # Si ya existía un archivo, lo borramos ANTES de guardar para garantizar reemplazo 1:1
         old_name = getattr(servicio.acta_aceptacion_pdf, "name", "") or None
+        if old_name:
+            try:
+                servicio.acta_aceptacion_pdf.storage.delete(old_name)
+            except Exception:
+                # Si falla la eliminación, continuamos con el guardado igualmente
+                pass
 
-        # Guardar bytes en el FileField (Django resolverá nombre final según storage)
+        # Guardar bytes en el FileField (Django/Storage resolverá el nombre final)
         servicio.acta_aceptacion_pdf.save(filename, ContentFile(pdf_bytes), save=True)
 
-        # Si el storage generó un nombre nuevo y había uno anterior distinto, borramos el viejo
-        try:
-            if old_name and old_name != servicio.acta_aceptacion_pdf.name:
-                servicio.acta_aceptacion_pdf.storage.delete(old_name)
-        except Exception:
-            # Si falla la eliminación, no interrumpimos el flujo
-            pass
-
+        # Mensaje y redirect con bust de caché
         messages.success(request, "Acta actualizada y guardada correctamente.")
-        return redirect(servicio.acta_aceptacion_pdf.url)
+        url = servicio.acta_aceptacion_pdf.url
+        return redirect(f"{url}?v={int(time())}")
 
     # Preview inline (sin guardar en el modelo)
     resp = FileResponse(io.BytesIO(pdf_bytes), content_type="application/pdf")

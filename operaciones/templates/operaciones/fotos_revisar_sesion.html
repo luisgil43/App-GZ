@@ -40,7 +40,7 @@
     </a>
 
     {# ✅ Acta (PDF): SIEMPRE visible, esté o no aprobado #}
-   <a href="{% url 'operaciones:generar_acta_preview' s.id %}?force=1"
+   <a href="{% url 'operaciones:generar_acta_preview' s.id %}?force=1&save=1"
    target="_blank" rel="noopener"
    class="inline-flex items-center px-4 py-2 rounded shadow bg-emerald-600 hover:bg-emerald-700 text-white">
   🧾 Acta (PDF)
