@@ -1,64 +1,54 @@
 # operaciones/views_fotos.py
-import unicodedata
-from django.db.models import Prefetch
-import boto3
-import mimetypes
-import uuid
-import re
-from django.core.files.storage import default_storage
-from .models import SesionFotoTecnico
-from django.shortcuts import get_object_or_404
-from datetime import datetime, timezone
-from django.db.models import Case, When, Value, IntegerField
-from django.http import JsonResponse
-from .models import SitioMovil, ServicioCotizado, _site_name_for
-from openpyxl.workbook import Workbook
-from django.db.models import Max
-from django.core.files import File
-from openpyxl.drawing.image import Image as XLImage
-from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
-from openpyxl.utils.units import pixels_to_EMU
-from openpyxl.utils import get_column_letter
-from PIL import Image, ImageOps
-import os
-from django.conf import settings
-from django.http import FileResponse, HttpResponse
-from tempfile import NamedTemporaryFile
-from pathlib import Path
-from .models import SitioMovil  # para traer ID SITES, dirección, comuna, región
-from .models import EvidenciaFoto
-from django.shortcuts import get_object_or_404, redirect
-import xlsxwriter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from PIL import ExifTags
 import io
-from django.utils.text import slugify
-from django.utils.dateparse import parse_datetime
-from django.db.models import Count
-from django.core.files.base import ContentFile
-from django.utils import timezone
-from django.views.decorators.http import require_POST
+import mimetypes
+import os
+import re
+import unicodedata
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
+import boto3
+import xlsxwriter
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.files import File
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.db.models import Count  # ya lo tienes importado arriba
+from django.db.models import Case, IntegerField, Max, Prefetch, Value, When
+from django.http import (FileResponse, HttpResponse, HttpResponseBadRequest,
+                         JsonResponse)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.utils.text import slugify
+from django.views.decorators.http import require_POST
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
+from openpyxl.utils.units import pixels_to_EMU
+from openpyxl.workbook import Workbook
+from PIL import ExifTags, Image, ImageOps
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from .models import (
-    ServicioCotizado, SesionFotos, SesionFotoTecnico,
-    RequisitoFoto
-)
 from usuarios.decoradores import rol_requerido
+
+from .models import \
+    SitioMovil  # para traer ID SITES, dirección, comuna, región
+from .models import (EvidenciaFoto, RequisitoFoto, ServicioCotizado,
+                     SesionFotos, SesionFotoTecnico, _site_name_for)
 
 # ========== Helpers ==========
 
 
-from django.db import transaction
-from django.db.models import Count  # ya lo tienes importado arriba
 
 
 def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
@@ -125,10 +115,12 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
 
 # ========== Helpers ==========
 
-import unicodedata
 import re
+import unicodedata
+
 from django.db import transaction
 from django.db.models import Count
+
 
 def _norm_title(s: str) -> str:
     """
@@ -378,8 +370,9 @@ def download_requirements_template(request, servicio_id, ext):
         return resp
 
     if ext in ("xlsx", "xls"):
-        from openpyxl import Workbook
         from io import BytesIO
+
+        from openpyxl import Workbook
         wb = Workbook()
         ws = wb.active
         ws.title = "Requisitos"
@@ -403,9 +396,10 @@ def download_requirements_template(request, servicio_id, ext):
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
 def importar_requisitos(request, servicio_id):
-    from openpyxl import load_workbook
     import csv
     import io
+
+    from openpyxl import load_workbook
 
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
@@ -765,7 +759,8 @@ def finalize_upload(request, asig_id: int):
         return max(0, EXTRA_MAX - _extra_count(sesion))
 
     # ---- normalización y cómputo de faltantes/can_finish (solo activos) ----
-    import unicodedata, re
+    import re
+    import unicodedata
 
     def _norm_title(s: str) -> str:
         s = (s or "").strip().lower()
@@ -1249,11 +1244,15 @@ def upload_evidencias_ajax(request, pk):
 
 # views.py
 
-from django.http import JsonResponse
-from django.db.models import Count
+import re
+import unicodedata
+
 from django.contrib.auth.decorators import login_required
-from .models import SesionFotoTecnico, RequisitoFoto, EvidenciaFoto
-import unicodedata, re
+from django.db.models import Count
+from django.http import JsonResponse
+
+from .models import EvidenciaFoto, RequisitoFoto, SesionFotoTecnico
+
 
 def _norm_title(s: str) -> str:
     s = (s or "").strip().lower()
@@ -1651,7 +1650,7 @@ def _tmp_jpeg_from_filefield(filefield, max_px=1600, quality=90):
 
 
 def _wb_from_template():
-    from openpyxl import load_workbook, Workbook
+    from openpyxl import Workbook, load_workbook
     tpl_path = getattr(settings, "REPORTE_FOTOS_TEMPLATE_XLSX", "")
     if tpl_path and os.path.exists(tpl_path):
         try:
@@ -1731,15 +1730,19 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
       - **Centrado con CANVAS** del tamaño exacto de la caja.
       - Nunca desborda.
     """
+    import os
     from tempfile import NamedTemporaryFile
+
+    from django.conf import settings
     from openpyxl.drawing.image import Image as XLImage
-    from openpyxl.styles import Alignment, Font, Border, Side
+    from openpyxl.styles import Alignment, Border, Font, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.utils.units import pixels_to_EMU
-    from PIL import Image as PILImage, ImageOps, Image
-    from django.conf import settings
+    from PIL import Image
+    from PIL import Image as PILImage
+    from PIL import ImageOps
+
     from .models import _site_name_for
-    import os
 
     wb = _wb_from_template()
     _prefill_hoja_datos_general(wb, servicio)
@@ -1929,7 +1932,8 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
 
             # Anclar al inicio de la caja y forzar tamaño exacto de la caja efectiva
             try:
-                from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor, Extent
+                from openpyxl.drawing.spreadsheet_drawing import (
+                    AnchorMarker, Extent, OneCellAnchor)
                 col0 = left_col_idx - 1
                 row0 = img_top - 1
                 anchor = AnchorMarker(col=col0, row=row0, colOff=0, rowOff=0)
@@ -2118,8 +2122,8 @@ def _px_to_anchor(ws, start_col_1b: int, start_row_1b: int, off_x_px: int, off_y
 def _absolute_anchor_compat(x_px, y_px, w_px, h_px):
     from openpyxl.utils.units import pixels_to_EMU
     try:
-        from openpyxl.drawing.spreadsheet_drawing import AbsoluteAnchor, Extent
         from openpyxl.drawing.geometry import Point2D
+        from openpyxl.drawing.spreadsheet_drawing import AbsoluteAnchor, Extent
         pos = Point2D(pixels_to_EMU(x_px), pixels_to_EMU(y_px))
         ext = Extent(cx=pixels_to_EMU(w_px), cy=pixels_to_EMU(h_px))
         return AbsoluteAnchor(pos=pos, ext=ext)
@@ -2137,7 +2141,8 @@ def _absolute_anchor_compat(x_px, y_px, w_px, h_px):
 def _onecell_anchor_compat(col_idx0, row_idx0, off_x_px, off_y_px, w_px, h_px):
     from openpyxl.utils.units import pixels_to_EMU
     try:
-        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor, Extent
+        from openpyxl.drawing.spreadsheet_drawing import (AnchorMarker, Extent,
+                                                          OneCellAnchor)
         anchor = AnchorMarker(
             col=col_idx0, row=row_idx0,
             colOff=pixels_to_EMU(off_x_px), rowOff=pixels_to_EMU(off_y_px)
@@ -2145,7 +2150,8 @@ def _onecell_anchor_compat(col_idx0, row_idx0, off_x_px, off_y_px, w_px, h_px):
         extent = Extent(cx=pixels_to_EMU(w_px), cy=pixels_to_EMU(h_px))
         return OneCellAnchor(_from=anchor, ext=extent, editAs="oneCell")
     except Exception:
-        from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+        from openpyxl.drawing.spreadsheet_drawing import (AnchorMarker,
+                                                          OneCellAnchor)
         try:
             from openpyxl.drawing.geometry import XDRPositiveSize2D
         except Exception:
@@ -2162,51 +2168,111 @@ def _onecell_anchor_compat(col_idx0, row_idx0, off_x_px, off_y_px, w_px, h_px):
 @rol_requerido('supervisor', 'admin', 'pm')
 def generar_acta_preview(request, servicio_id: int):
     """
-    Genera y descarga (o muestra) el ACTA en PDF para revisión.
-    No cambia estados. Si ya existe acta en el modelo y no se fuerza, la sirve.
+    Genera el ACTA en PDF.
+    - Preview (por defecto): muestra inline sin guardar.
+    - Guardar (si ?save=1): guarda/reemplaza en el modelo `acta_aceptacion_pdf`.
     """
     import io
+
+    from django.contrib import messages
+    from django.core.files.base import ContentFile
     from django.http import FileResponse
     from django.shortcuts import get_object_or_404, redirect
-    from django.contrib import messages
 
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
 
-    # ✅ Ahora incluye estados aprobados
+    # Estados permitidos para ver/generar el acta (preview/guardar)
     estados_permitidos = {
         'en_progreso',
         'en_revision_supervisor',
         'rechazado_supervisor',
-        'aprobado_supervisor',   # ← añadido
-        'aprobado_pm',           # ← añade/quita según tu flujo
+        'aprobado_supervisor',
+        'aprobado_pm',
     }
-
     if servicio.estado not in estados_permitidos:
         messages.error(request, "El acta no está disponible para este estado.")
         return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
-    # Si ya existe un acta guardada y no se pide regenerar, redirige al archivo
+    # Flags de query
+    save_flag = str(request.GET.get("save", "")).lower() in {"1", "true", "on", "yes", "si", "sí"}
     force = request.GET.get("force")
-    if getattr(servicio.acta_aceptacion_pdf, "name", "") and not force:
+
+    # Si vamos a guardar, forzamos regeneración; si no hay force y existe OC, forzamos preview actualizado.
+    if save_flag:
+        force = "1"
+    if not force:
+        try:
+            from facturacion.models import OrdenCompraFacturacion
+            oc_exists = False
+            try:
+                # Caso 1: du es FK al ServicioCotizado
+                oc_exists = OrdenCompraFacturacion.objects.filter(du=servicio).exists()
+            except Exception:
+                # Caso 2: du es texto/código (ej. "DU1234")
+                du_val = getattr(servicio, 'du', None)
+                if du_val:
+                    oc_exists = OrdenCompraFacturacion.objects.filter(du=du_val).exists()
+            if oc_exists:
+                force = "1"
+        except Exception:
+            pass
+
+    # Si hay PDF previo y NO se fuerza y NO vamos a guardar, servimos el ya existente
+    if getattr(servicio.acta_aceptacion_pdf, "name", "") and not force and not save_flag:
         return redirect(servicio.acta_aceptacion_pdf.url)
 
-    # Generar bytes del acta (sin guardar en el modelo)
+    # Generar bytes del acta (siempre regeneramos en force o save_flag)
     try:
         pdf_bytes = _bytes_acta_aceptacion(servicio)
     except Exception as e:
         messages.error(request, f"No se pudo generar el acta: {e}")
         return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
+    # Determinar nombre de archivo preferentemente con la OC
     from .models import _pdf_filename
-    filename = _pdf_filename(servicio, servicio.documento_compra or "DOC")
+    doc_compra_for_name = getattr(servicio, "documento_compra", None)
+    if not doc_compra_for_name:
+        try:
+            from facturacion.models import OrdenCompraFacturacion
+            oc = None
+            try:
+                oc = (OrdenCompraFacturacion.objects
+                      .filter(du=servicio).order_by("-creado").first())
+            except Exception:
+                du_val = getattr(servicio, 'du', None)
+                if du_val:
+                    oc = (OrdenCompraFacturacion.objects
+                          .filter(du=du_val).order_by("-creado").first())
+            if oc and getattr(oc, "orden_compra", None):
+                doc_compra_for_name = oc.orden_compra
+        except Exception:
+            pass
+    filename = _pdf_filename(servicio, doc_compra_for_name or "DOC")
 
+    # Guardar (reemplazar) o mostrar inline
+    if save_flag:
+        old_name = getattr(servicio.acta_aceptacion_pdf, "name", "") or None
+
+        # Guardar bytes en el FileField (Django resolverá nombre final según storage)
+        servicio.acta_aceptacion_pdf.save(filename, ContentFile(pdf_bytes), save=True)
+
+        # Si el storage generó un nombre nuevo y había uno anterior distinto, borramos el viejo
+        try:
+            if old_name and old_name != servicio.acta_aceptacion_pdf.name:
+                servicio.acta_aceptacion_pdf.storage.delete(old_name)
+        except Exception:
+            # Si falla la eliminación, no interrumpimos el flujo
+            pass
+
+        messages.success(request, "Acta actualizada y guardada correctamente.")
+        return redirect(servicio.acta_aceptacion_pdf.url)
+
+    # Preview inline (sin guardar en el modelo)
     resp = FileResponse(io.BytesIO(pdf_bytes), content_type="application/pdf")
     resp["Content-Disposition"] = f'inline; filename="{filename}"'
-
     resp["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp["Pragma"] = "no-cache"
     return resp
-
 
 def _bytes_acta_aceptacion(servicio) -> bytes:
     """
@@ -2218,14 +2284,18 @@ def _bytes_acta_aceptacion(servicio) -> bytes:
     """
     import io
     import os
-    from django.utils import timezone
+
     from django.conf import settings
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
-    from reportlab.lib.pagesizes import A4
+    from django.utils import timezone
     from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import cm, mm
     from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import cm, mm
+    from reportlab.platypus import Image as RLImage
+    from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer,
+                                    Table, TableStyle)
+
     from .models import _site_name_for
 
     # -------- Datos base --------
