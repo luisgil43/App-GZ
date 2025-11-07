@@ -2175,12 +2175,11 @@ def generar_acta_preview(request, servicio_id: int):
       - Guardar/Reemplazar (si ?save=1 o si hay OC y el servicio está aprobado):
         guarda el PDF nuevo en `acta_aceptacion_pdf`, borrando el archivo previo si existía.
 
-    También:
+    Notas:
       - Si hay OC asociada, se fuerza la regeneración para que el PDF incluya sus datos.
-      - Se agrega un query param `?v=timestamp` al redirigir al PDF guardado para evitar caché.
+      - IMPORTANTE: no agregar query params a URLs prefirmadas (S3/Wasabi), rompe la firma.
     """
     import io
-    from time import time
 
     from django.contrib import messages
     from django.core.files.base import ContentFile
@@ -2228,7 +2227,7 @@ def generar_acta_preview(request, servicio_id: int):
     if not force and oc_exists:
         force = "1"
 
-    # Auto-guardar cuando hay OC y el servicio ya está aprobado (aunque el template no mande save=1)
+    # Auto-guardar cuando hay OC y el servicio ya está aprobado
     if oc_exists and servicio.estado in {"aprobado_supervisor", "aprobado_pm"}:
         save_flag = True
         force = "1"
@@ -2267,22 +2266,21 @@ def generar_acta_preview(request, servicio_id: int):
 
     # Guardar (reemplazar) o mostrar inline
     if save_flag:
-        # Si ya existía un archivo, lo borramos ANTES de guardar para garantizar reemplazo 1:1
         old_name = getattr(servicio.acta_aceptacion_pdf, "name", "") or None
+
+        # Borramos el archivo anterior si existe (por si el storage no sobreescribe)
         if old_name:
             try:
                 servicio.acta_aceptacion_pdf.storage.delete(old_name)
             except Exception:
-                # Si falla la eliminación, continuamos con el guardado igualmente
                 pass
 
-        # Guardar bytes en el FileField (Django/Storage resolverá el nombre final)
+        # Guardar bytes en el FileField (el storage decide si sobreescribe o versiona)
         servicio.acta_aceptacion_pdf.save(filename, ContentFile(pdf_bytes), save=True)
 
-        # Mensaje y redirect con bust de caché
         messages.success(request, "Acta actualizada y guardada correctamente.")
-        url = servicio.acta_aceptacion_pdf.url
-        return redirect(f"{url}?v={int(time())}")
+        # ⚠️ No agregar parámetros a la URL prefirmada
+        return redirect(servicio.acta_aceptacion_pdf.url)
 
     # Preview inline (sin guardar en el modelo)
     resp = FileResponse(io.BytesIO(pdf_bytes), content_type="application/pdf")
