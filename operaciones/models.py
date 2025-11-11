@@ -1,14 +1,16 @@
 import os
-from uuid import uuid4
-from django.utils import timezone
-from operaciones.storage_backends import GZWasabiStorage
-from django.core.validators import FileExtensionValidator
-from django.utils.text import slugify
-from django.db import models
-from django.conf import settings
-from usuarios.models import CustomUser
 import re
 from decimal import Decimal
+from uuid import uuid4
+
+from django.conf import settings
+from django.core.validators import FileExtensionValidator
+from django.db import models
+from django.utils import timezone
+from django.utils.text import slugify
+
+from operaciones.storage_backends import GZWasabiStorage
+from usuarios.models import CustomUser
 
 # === Storage Wasabi (GZ Services) ===
 _gz_storage = GZWasabiStorage()
@@ -372,10 +374,21 @@ class SesionFotoTecnico(models.Model):
         return f"{self.sesion} -> {self.tecnico}"
 
 
+import re
+import unicodedata  # si aún no los tienes en models.py
+
+# imports (arriba del models.py)
+from django.db.models import Q
+
+
+def _norm_title_m(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    return re.sub(r"\s+", " ", s)
+
+
 class RequisitoFoto(models.Model):
-    """
-    La lista se replica para cada técnico de la sesión (como en Hyperlink).
-    """
     tecnico_sesion = models.ForeignKey(
         SesionFotoTecnico, on_delete=models.CASCADE, related_name='requisitos'
     )
@@ -385,12 +398,26 @@ class RequisitoFoto(models.Model):
     orden = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
 
+    # NUEVO: título normalizado (para comparar/constraint)
+    titulo_norm = models.CharField(max_length=220, db_index=True, editable=False, default="")
+
     class Meta:
         ordering = ['orden', 'id']
+        constraints = [
+            # ÚNICO por asignación y título normalizado SOLO cuando activo=True
+            models.UniqueConstraint(
+                fields=['tecnico_sesion', 'titulo_norm'],
+                name='uq_req_norm_asig_activo',
+                condition=Q(activo=True),
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.titulo_norm = _norm_title_m(self.titulo)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"[{self.orden}] {self.titulo}"
-
 
 class EvidenciaFoto(models.Model):
     tecnico_sesion = models.ForeignKey(

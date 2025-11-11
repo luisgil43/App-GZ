@@ -96,7 +96,9 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
                 ))
                 existing_norms.add(key)
             if to_create:
-                RequisitoFoto.objects.bulk_create(to_create)
+                for r in to_create:
+                    r.titulo_norm = _norm_title(r.titulo)
+                RequisitoFoto.objects.bulk_create(to_create, ignore_conflicts=True)
 
         # Limpieza por si ya existían duplicados
         _dedupe_requisitos(a_nueva)
@@ -1000,39 +1002,54 @@ def upload_evidencias_fotos(request, pk):
         messages.success(request, f"{n} foto(s) subidas." if n else "No seleccionaste archivos.")
         return redirect("operaciones:fotos_upload", pk=a.pk)
 
-    # ---------- GET: armar contexto ----------
+    # ---------- GET: SYNC de requisitos ACTIVOS a nivel de sesión ----------
+    # En vez de clonar solo cuando no hay ninguno, sincronizamos siempre lo faltante.
+    # Canon = títulos activos de TODA la sesión, únicos por título normalizado.
+    canon_map = {}  # norm -> (titulo, obligatorio, orden)
+    for r in (RequisitoFoto.objects
+              .filter(tecnico_sesion__sesion=s, activo=True)
+              .order_by("orden", "id")
+              .values("titulo", "obligatorio", "orden")):
+        k = _norm_title(r["titulo"])
+        if k not in canon_map:
+            canon_map[k] = (r["titulo"], r["obligatorio"], r["orden"])
 
-    # Si esta asignación NO tiene requisitos activos, clónalos (solo activos) desde otra asignación
-    if not a.requisitos.filter(activo=True).exists():  # 👈 SOLO activos
-        canon_asig = (
-            s.asignaciones
-             .exclude(pk=a.pk)
-             .filter(requisitos__isnull=False)
-             .annotate(n=Count("requisitos"))
-             .filter(n__gt=0)
-             .first()
-        )
-        if canon_asig:
-            base = list(
-                RequisitoFoto.objects
-                .filter(tecnico_sesion=canon_asig, activo=True)  # 👈 SOLO activos
-                .order_by("orden", "id")
-            )
-            RequisitoFoto.objects.bulk_create([
-                RequisitoFoto(
-                    tecnico_sesion=a,
-                    titulo=r.titulo,
-                    descripcion=r.descripcion,
-                    obligatorio=r.obligatorio,
-                    orden=r.orden,
-                    activo=True,
-                ) for r in base
-            ])
+    mine = { _norm_title(x.titulo): x
+             for x in RequisitoFoto.objects.filter(tecnico_sesion=a) }
+
+    to_create = []
+    for k, (titulo, oblig, orden) in canon_map.items():
+        if k not in mine:
+            to_create.append(RequisitoFoto(
+                tecnico_sesion=a,
+                titulo=titulo,
+                descripcion="",
+                obligatorio=oblig,
+                orden=orden,
+                activo=True,
+            ))
+        else:
+            obj = mine[k]
+            upds = []
+            if hasattr(obj, "activo") and not obj.activo:
+                obj.activo = True; upds.append("activo")
+            if obj.obligatorio != oblig:
+                obj.obligatorio = oblig; upds.append("obligatorio")
+            if obj.orden != orden:
+                obj.orden = orden; upds.append("orden")
+            if upds:
+                obj.save(update_fields=upds)
+
+    if to_create:
+        for r in to_create:
+            r.titulo_norm = _norm_title(r.titulo)
+        RequisitoFoto.objects.bulk_create(to_create, ignore_conflicts=True)
+    # ----------------------------------------------------------------------
 
     # Requisitos de ESTA asignación (solo activos) con conteo "mío"
     requisitos = (
         a.requisitos
-         .filter(activo=True)                # 👈 SOLO activos
+         .filter(activo=True)
          .annotate(uploaded=Count("evidencias"))
          .order_by("orden", "id")
     )
@@ -1055,7 +1072,7 @@ def upload_evidencias_fotos(request, pk):
     # Faltantes globales: contar solo requisitos activos y obligatorios
     req_titles = (
         RequisitoFoto.objects
-        .filter(tecnico_sesion__sesion=s, obligatorio=True, activo=True)  # 👈 SOLO activos
+        .filter(tecnico_sesion__sesion=s, obligatorio=True, activo=True)
         .values_list("titulo", flat=True)
     )
     taken_titles = (
