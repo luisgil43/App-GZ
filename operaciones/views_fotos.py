@@ -38,7 +38,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-
 from usuarios.decoradores import rol_requerido
 
 from .models import \
@@ -258,7 +257,6 @@ def configurar_requisitos(request, servicio_id):
                     for rid, orden, titulo, obligatorio, norm in desired:
                         if rid and rid in by_id:
                             r = by_id[rid]
-                            cambios = []
                             # Si el nuevo título colisiona con otro por norma, mergeamos
                             collision = by_norm.get(norm)
                             if collision and collision.id != r.id:
@@ -268,6 +266,9 @@ def configurar_requisitos(request, servicio_id):
                                     c.obligatorio = obligatorio; upds.append("obligatorio")
                                 if c.orden != orden:
                                     c.orden = orden; upds.append("orden")
+                                # ⬇️ aseguramos normalizado correcto
+                                if getattr(c, "titulo_norm", None) != norm:
+                                    c.titulo_norm = norm; upds.append("titulo_norm")
                                 if hasattr(c, "activo") and not c.activo:
                                     c.activo = True; upds.append("activo")
                                 if upds:
@@ -279,12 +280,16 @@ def configurar_requisitos(request, servicio_id):
                                 by_norm[norm] = c
                                 continue
 
+                            cambios = []
                             if r.titulo != titulo:
                                 r.titulo = titulo; cambios.append("titulo")
                             if r.orden != orden:
                                 r.orden = orden; cambios.append("orden")
                             if r.obligatorio != obligatorio:
                                 r.obligatorio = obligatorio; cambios.append("obligatorio")
+                            # ⬇️ actualizar siempre el normalizado cuando cambie (o por saneo)
+                            if getattr(r, "titulo_norm", None) != norm:
+                                r.titulo_norm = norm; cambios.append("titulo_norm")
                             if hasattr(r, "activo") and not r.activo:
                                 r.activo = True; cambios.append("activo")
                             if cambios:
@@ -299,6 +304,8 @@ def configurar_requisitos(request, servicio_id):
                                     exist.obligatorio = obligatorio; cambios.append("obligatorio")
                                 if exist.orden != orden:
                                     exist.orden = orden; cambios.append("orden")
+                                if getattr(exist, "titulo_norm", None) != norm:
+                                    exist.titulo_norm = norm; cambios.append("titulo_norm")
                                 if hasattr(exist, "activo") and not exist.activo:
                                     exist.activo = True; cambios.append("activo")
                                 if cambios:
@@ -308,6 +315,7 @@ def configurar_requisitos(request, servicio_id):
                                 nuevo = RequisitoFoto.objects.create(
                                     tecnico_sesion=a,
                                     titulo=titulo,
+                                    titulo_norm=norm,   # ⬅️ NUEVO
                                     descripcion="",
                                     obligatorio=obligatorio,
                                     orden=orden,
@@ -414,7 +422,7 @@ def importar_requisitos(request, servicio_id):
     ext = (f.name.rsplit(".", 1)[-1] or "").lower()
     normalized = []  # [(order, name, mandatory), ...]
 
-    # ---- Parseo del archivo (igual que antes)
+    # ---- Parseo del archivo
     try:
         if ext == "csv":
             raw = f.read().decode("utf-8", errors="ignore")
@@ -426,8 +434,7 @@ def importar_requisitos(request, servicio_id):
                     name = (row.get("name") or "").strip()
                     if not name:
                         continue
-                    order = int(row.get("order")) if (
-                        row.get("order") or "").strip().isdigit() else len(normalized)
+                    order = int(row.get("order")) if (row.get("order") or "").strip().isdigit() else len(normalized)
                     mval = str(row.get("mandatory") or "1").strip().lower()
                     mandatory = mval in ("1", "true", "si", "sí", "yes", "y")
                     normalized.append((order, name, mandatory))
@@ -449,20 +456,17 @@ def importar_requisitos(request, servicio_id):
                 messages.warning(request, "La planilla está vacía.")
                 return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
 
-            header = [str(x).strip().lower()
-                      if x is not None else "" for x in rows[0]]
+            header = [str(x).strip().lower() if x is not None else "" for x in rows[0]]
             headered = "name" in header
             start = 1 if headered else 0
 
             if headered:
                 i_name = header.index("name")
                 i_order = header.index("order") if "order" in header else None
-                i_mand = header.index(
-                    "mandatory") if "mandatory" in header else None
+                i_mand = header.index("mandatory") if "mandatory" in header else None
 
                 for r in rows[start:]:
-                    name = (str(r[i_name]) if i_name < len(r)
-                            and r[i_name] is not None else "").strip()
+                    name = (str(r[i_name]) if i_name < len(r) and r[i_name] is not None else "").strip()
                     if not name:
                         continue
                     if i_order is not None and i_order < len(r) and r[i_order] not in (None, ""):
@@ -475,8 +479,7 @@ def importar_requisitos(request, servicio_id):
 
                     if i_mand is not None and i_mand < len(r) and r[i_mand] not in (None, ""):
                         mval = str(r[i_mand]).strip().lower()
-                        mandatory = mval in (
-                            "1", "true", "si", "sí", "yes", "y")
+                        mandatory = mval in ("1", "true", "si", "sí", "yes", "y")
                     else:
                         mandatory = True
                     normalized.append((order, name, mandatory))
@@ -489,8 +492,7 @@ def importar_requisitos(request, servicio_id):
                         continue
                     normalized.append((len(normalized), name, True))
         else:
-            messages.error(
-                request, "Tipo de archivo no soportado. Usa .csv o .xlsx.")
+            messages.error(request, "Tipo de archivo no soportado. Usa .csv o .xlsx.")
             return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
 
     except Exception as e:
@@ -501,7 +503,7 @@ def importar_requisitos(request, servicio_id):
         messages.warning(request, "No se encontraron filas válidas.")
         return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
 
-    # ---- A N E X A R  (no borrar lo existente) + reactivar si corresponde
+    # ---- Anexar / Reactivar (respetando índice único por (tecnico_sesion, titulo_norm))
     try:
         with transaction.atomic():
             asignaciones = list(
@@ -515,7 +517,7 @@ def importar_requisitos(request, servicio_id):
             total_reactivados = 0
 
             for a in asignaciones:
-                # punto de partida = último orden + 1 (considera activos si existen)
+                # punto de partida = último orden + 1 (solo activos si existe el flag)
                 qs_max = RequisitoFoto.objects.filter(tecnico_sesion=a)
                 if hasattr(RequisitoFoto, "activo"):
                     qs_max = qs_max.filter(activo=True)
@@ -524,7 +526,7 @@ def importar_requisitos(request, servicio_id):
 
                 # mapa por nombre normalizado -> requisito existente (activo o no)
                 existentes_map = {}
-                for x in RequisitoFoto.objects.filter(tecnico_sesion=a).only("id", "titulo", "obligatorio", "orden"):
+                for x in RequisitoFoto.objects.filter(tecnico_sesion=a).only("id", "titulo", "titulo_norm", "obligatorio", "orden"):
                     existentes_map[_norm_title(x.titulo)] = x
 
                 nuevos = []
@@ -541,29 +543,31 @@ def importar_requisitos(request, servicio_id):
                         if hasattr(exist, "activo") and getattr(exist, "activo") is False:
                             cambios = []
                             if exist.obligatorio != mandatory:
-                                exist.obligatorio = mandatory
-                                cambios.append("obligatorio")
-                            # lo mandamos al final del bloque importado
+                                exist.obligatorio = mandatory; cambios.append("obligatorio")
                             if exist.orden != (base + i):
-                                exist.orden = (base + i)
-                                cambios.append("orden")
-                            exist.activo = True
-                            cambios.append("activo")
+                                exist.orden = (base + i); cambios.append("orden")
+                            # ⬇️ asegurar que el normalizado coincide con el import
+                            if getattr(exist, "titulo_norm", None) != key:
+                                exist.titulo_norm = key; cambios.append("titulo_norm")
+                            exist.activo = True; cambios.append("activo")
                             if cambios:
                                 exist.save(update_fields=cambios)
                             reactivados_local += 1
                         else:
                             # ya existe activo con ese nombre -> lo omitimos (no duplicamos)
+                            # (y, de paso, saneamos titulo_norm si está desalineado)
+                            if getattr(exist, "titulo_norm", None) != key:
+                                exist.titulo_norm = key
+                                exist.save(update_fields=["titulo_norm"])
                             omitidos_local += 1
                         continue
 
-                        # (no cae aquí porque 'exist' evalúa True y ya hicimos continue)
-
-                    # crear nuevo al final
+                    # crear nuevo al final (con titulo_norm)
                     nuevos.append(
                         RequisitoFoto(
                             tecnico_sesion=a,
                             titulo=name,
+                            titulo_norm=key,   # ⬅️ clave para el índice único
                             descripcion="",
                             obligatorio=mandatory,
                             orden=base + i,
