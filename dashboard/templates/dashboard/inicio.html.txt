@@ -1,0 +1,32 @@
+{% extends "dashboard/base.html" %}
+
+{% block content %}
+<div class="text-center mt-12">
+  <h1 class="text-3xl font-bold text-gray-800 mb-2">
+    ¡Hola {{ request.user.get_full_name }}!
+  </h1>
+  <p class="text-lg text-gray-600 mb-8">
+    ¿En qué podemos ayudarte hoy?
+  </p>
+
+  <div class="flex flex-wrap justify-center gap-4 px-4">
+
+    <a href="{% url 'rrhh:mis_contratos' %}" class="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+      📄 Ver Contrato
+    </a>
+
+    <a href="{% url 'liquidaciones:listar' %}" class="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+      🪙 Ver Liquidaciones
+    </a>
+
+    <a href="#" class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+      📊 Ver Producción
+    </a>
+
+    <a href="#" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+      🎓 Ver Cursos
+    </a>
+
+  </div>
+</div>
+{% endblock %}

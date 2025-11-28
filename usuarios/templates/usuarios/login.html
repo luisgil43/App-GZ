@@ -5,61 +5,209 @@
   <meta charset="UTF-8">
   <title>Iniciar Sesión - ADMINISTRACIÓN GZ</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
     * { box-sizing: border-box; }
+
+    :root {
+      /* Paleta más navideña para GZ */
+      --gz-red:        #d7263d;   /* rojo vino brillante */
+      --gz-green:      #166534;   /* verde pino */
+      --gz-gold:       #facc15;   /* dorado cálido */
+      --card-bg:       #ffffff;
+      --body-bg-top:   #052e26;   /* verde muy oscuro */
+      --body-bg-bottom:#4a0b16;   /* rojo vino oscuro */
+    }
 
     body {
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', sans-serif;
-      background-color: #f4f6f8;
+      background:
+        radial-gradient(circle at top,
+          rgba(255,255,255,0.16) 0,
+          transparent 55%),
+        linear-gradient(180deg,
+          var(--body-bg-top),
+          var(--body-bg-bottom));
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
+      color: #111827;
+      position: relative;
+      overflow: hidden;
     }
 
+    /* ===== Nieve ===== */
+    .snow-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 999; /* encima del fondo, debajo de Santa y la tarjeta */
+    }
+
+    .snowflake {
+      position: absolute;
+      top: -10px;
+      color: rgba(255,255,255,0.9);
+      font-size: 8px;
+      animation-name: snow-fall;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      will-change: transform;
+      text-shadow: 0 0 4px rgba(17,24,39,0.9);
+    }
+
+    @keyframes snow-fall {
+      0% {
+        transform: translate3d(0, -10px, 0);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(0, 110vh, 0);
+        opacity: 0;
+      }
+    }
+
+   /* ===== Santa lanzando regalos (DERECHA → IZQUIERDA) ===== */
+.santa-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999; /* por encima de la nieve, debajo de la tarjeta */
+  overflow: hidden;
+}
+
+.planex-santa {
+  position: absolute;
+  top: 18%;      /* altura del vuelo */
+  right: -30%;   /* sale desde la derecha, fuera de la pantalla */
+  left: auto;
+  width: 260px;
+  animation: santa-gifts 20s linear infinite;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.45));
+}
+
+@keyframes santa-gifts {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(3deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  30% {
+    transform: translate3d(-30vw, -3vh, 0) rotate(1deg);
+  }
+  55% {
+    transform: translate3d(-65vw, 2vh, 0) rotate(-1deg);
+  }
+  80% {
+    transform: translate3d(-105vw, -2vh, 0) rotate(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(-130vw, 0, 0) rotate(-5deg);
+    opacity: 0;
+  }
+}
+
     .login-container {
-      background-color: white;
+      background-color: var(--card-bg);
       padding: 2rem;
-      border-radius: 16px;
-      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
       max-width: 400px;
       width: 100%;
       text-align: center;
+      border-top: 4px solid var(--gz-green);
+      border-bottom: 4px solid var(--gz-red);
+      position: relative;
+      overflow: hidden;
+      z-index: 3; /* por encima de nieve y Santa */
+    }
+
+    /* Halos navideños en el fondo de la tarjeta */
+    .login-container::before,
+    .login-container::after {
+      content: "";
+      position: absolute;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.35;
+      z-index: -1;
+    }
+    .login-container::before {
+      background: var(--gz-gold);
+      top: -60px;
+      left: -60px;
+    }
+    .login-container::after {
+      background: rgba(190,24,93,0.9); /* rosa vino brillante */
+      bottom: -60px;
+      right: -60px;
     }
 
     /* Logo enmarcado */
     .logo-box {
       display: inline-block;
       padding: 10px;
-      background: #f0f4ff;
-      border: 2px solid #d0d8f0;
+      background: rgba(255,255,255,0.9);
+      border: 2px solid rgba(251,191,36,0.7); /* dorado */
       border-radius: 12px;
       margin-bottom: 1rem;
+      box-shadow: 0 6px 14px rgba(15,23,42,0.18);
     }
     .logo-box img {
-      max-width: 160px;
+      max-width: 170px;
       height: auto;
     }
 
-    /* Texto Plataforma */
+    /* Título Plataforma */
     .login-container h2 {
-      margin: 0 0 8px 0;
+      margin: 0 0 6px 0;
       font-size: 1.4rem;
-      font-weight: bold;
-      color: #1a73e8;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #f97316; /* naranjita cálido */
+      text-transform: uppercase;
     }
 
     .login-container p.subtexto {
       font-size: 0.9rem;
-      color: #666;
-      margin-bottom: 1.5rem;
+      color: #4b5563;
+      margin-bottom: 0.6rem;
+    }
+    .login-container p.subtexto strong {
+      color: #1f2937;
+      font-weight: 700;
+    }
+
+    /* Mensaje navideño */
+    .xmas-message {
+      margin: 0 0 1.4rem 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--gz-green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+    .xmas-message span {
+      color: var(--gz-red);
     }
 
     .errorlist {
-      color: red;
+      color: #b91c1c;
       list-style: none;
       padding: 0;
       margin-bottom: 10px;
@@ -76,23 +224,37 @@
       transition: opacity 0.5s ease-out;
     }
 
-    .message-box.error { background-color: #fdecea; color: #d93025; }
-    .message-box.success { background-color: #e6ffed; color: #188038; }
-    .message-box.info { background-color: #e8f0fe; color: #1a73e8; }
+    .message-box.error   { background-color: #fdecea; color: #b91c1c; }
+    .message-box.success { background-color: #e6ffed; color: #166534; }
+    .message-box.info    { background-color: #eff6ff; color: #1d4ed8; }
 
     form { text-align: left; }
     form p { margin-bottom: 15px; }
-    form label { font-weight: bold; display: block; margin-bottom: 5px; }
+    form label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+      color: #374151;
+    }
 
-    /* Inputs iguales */
-    form input[type="text"], 
+    form input[type="text"],
     form input[type="password"] {
       width: 100%;
       padding: 10px;
-      border: 2px solid #ccc;
-      border-radius: 8px;
+      border: 2px solid #d1d5db;
+      border-radius: 10px;
       font-size: 1rem;
       box-sizing: border-box;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background-color: #ffffff;
+    }
+
+    form input[type="text"]:focus,
+    form input[type="password"]:focus {
+      outline: none;
+      border-color: var(--gz-green);
+      box-shadow: 0 0 0 1px rgba(21,128,61,0.4);
     }
 
     /* Campo con ojito */
@@ -113,47 +275,87 @@
     button {
       width: 100%;
       padding: 12px;
-      background-color: #1e73be;
+      background: linear-gradient(90deg, var(--gz-red), var(--gz-green));
       color: white;
       border: none;
-      border-radius: 8px;
-      font-weight: bold;
+      border-radius: 999px;
+      font-weight: 700;
       font-size: 1rem;
       cursor: pointer;
-      transition: background-color 0.3s;
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
       margin-top: 5px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.25);
     }
-    button:hover { background-color: #155a96; }
+    button:hover {
+      filter: brightness(1.07);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.3);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
 
-    .forgot-password { margin-top: 15px; text-align: center; }
-    .forgot-password a { color: #1e73be; text-decoration: none; font-size: 0.9rem; }
-    .forgot-password a:hover { text-decoration: underline; }
+    .forgot-password {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .forgot-password a {
+      color: #f97316;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+    .forgot-password a:hover {
+      text-decoration: underline;
+      color: var(--gz-gold);
+    }
 
     .footer {
       text-align: center;
       font-size: 0.75rem;
-      color: #999;
-      margin-top: 2px;
+      color: #e5e7eb;
+      margin-top: 10px;
+      z-index: 3;
     }
-    .footer img { height: 60px; vertical-align: middle; }
+    .footer img {
+      height: 60px;
+      vertical-align: middle;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4));
+    }
 
     @media (max-width: 500px) {
-      .login-container { padding: 1.5rem; margin: 0 1rem; }
-      .logo-box img { width: 120px; }
+      .login-container { padding: 1.6rem; margin: 0 1rem; }
+      .logo-box img { width: 130px; }
     }
   </style>
 </head>
 <body>
 
+  <!-- Capa de nieve -->
+  <div class="snow-container" id="snow-container"></div>
+
+  <!-- Santa en trineo lanzando regalos (izquierda → derecha) -->
+  <div class="santa-layer">
+    <img src="{% static 'images/planexsanta.png' %}"
+         alt="Santa lanzando regalos"
+         class="planex-santa">
+  </div>
+
   <div class="login-container">
     <!-- Logo enmarcado -->
     <div class="logo-box">
-      <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+      <img src="{% static 'images/planixnavidad.png' %}" alt="Logo GZ Services">
     </div>
 
     <!-- Título -->
     <h2>PLATAFORMA DE MILTEL</h2>
     <p class="subtexto">Potenciada por <strong>Planix</strong></p>
+
+    <!-- Mensaje navideño -->
+    <div class="xmas-message">
+      🎄 <span>GZ Services</span> Les desea una Feliz Navidad y un próspero Año Nuevo 🎅
+    </div>
 
     <!-- Mensajes del sistema -->
     {% if messages %}
@@ -202,7 +404,7 @@
     <img src="{% static 'images/planixl.png' %}" alt="Planix">
   </div>
 
-  <!-- JS para ocultar mensajes y toggle -->
+  <!-- JS para el ojito -->
   <script>
     function togglePassword() {
       const passwordField = document.querySelector('input[name="{{ form.password.name }}"]');
@@ -215,13 +417,42 @@
         toggleIcon.textContent = "👁️";
       }
     }
+  </script>
 
+  <!-- JS para ocultar mensajes -->
+  <script>
     setTimeout(() => {
       document.querySelectorAll('.message-box').forEach(el => {
         el.style.opacity = '0';
         setTimeout(() => el.remove(), 500);
       });
     }, 4000);
+  </script>
+
+  <!-- JS para generar copos de nieve -->
+  <script>
+    (function () {
+      const container = document.getElementById('snow-container');
+      const flakes = 70;  // puedes subir o bajar este número
+
+      for (let i = 0; i < flakes; i++) {
+        const span = document.createElement('span');
+        span.className = 'snowflake';
+        span.textContent = '❆';
+
+        const size = 6 + Math.random() * 8;      // tamaño
+        const left = Math.random() * 100;        // posición horizontal
+        const duration = 9 + Math.random() * 10; // duración de la caída
+        const delay = Math.random() * -duration; // empezar en distintos puntos
+
+        span.style.left = left + 'vw';
+        span.style.fontSize = size + 'px';
+        span.style.animationDuration = duration + 's';
+        span.style.animationDelay = delay + 's';
+
+        container.appendChild(span);
+      }
+    })();
   </script>
 
 </body>

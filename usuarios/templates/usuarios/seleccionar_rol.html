@@ -1,23 +1,162 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Seleccionar Rol</title>
+  <title>Seleccionar Rol - GZ Services</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
 
-  <div class="bg-white p-6 rounded-xl shadow w-full max-w-sm">
-    <h2 class="text-xl font-bold text-center mb-4 text-gray-900">¿Cómo deseas ingresar?</h2>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      /* Paleta navideña GZ */
+      --gz-red:        #d7263d;   /* rojo vino brillante */
+      --gz-green:      #166534;   /* verde pino */
+      --gz-gold:       #facc15;   /* dorado cálido */
+      --card-bg:       #ffffff;
+      --body-bg-top:   #052e26;   /* verde muy oscuro */
+      --body-bg-bottom:#4a0b16;   /* rojo vino oscuro */
+    }
+
+    /* Fondo igual estilo login navideño */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(circle at top,
+          rgba(255,255,255,0.16) 0,
+          transparent 55%),
+        linear-gradient(180deg,
+          var(--body-bg-top),
+          var(--body-bg-bottom));
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      color: #111827;
+    }
+
+    /* ===== Nieve ===== */
+    .snow-container {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 1; /* encima del fondo, debajo de la tarjeta */
+    }
+
+    .snowflake {
+      position: absolute;
+      top: -10px;
+      color: rgba(255,255,255,0.9);
+      font-size: 8px;
+      animation-name: snow-fall;
+      animation-timing-function: linear;
+      animation-iteration-count: infinite;
+      will-change: transform;
+      text-shadow: 0 0 4px rgba(17,24,39,0.9);
+    }
+
+    @keyframes snow-fall {
+      0% {
+        transform: translate3d(0, -10px, 0);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(0, 110vh, 0);
+        opacity: 0;
+      }
+    }
+
+    /* Tarjeta navideña */
+    .role-card {
+      background-color: var(--card-bg);
+      padding: 1.9rem 1.8rem;
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.35);
+      max-width: 380px;
+      width: 100%;
+      text-align: center;
+      border-top: 4px solid var(--gz-green);
+      border-bottom: 4px solid var(--gz-red);
+      position: relative;
+      overflow: hidden;
+      z-index: 2; /* por encima de la nieve */
+    }
+
+    /* Halos de color en la tarjeta */
+    .role-card::before,
+    .role-card::after {
+      content: "";
+      position: absolute;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.35;
+      z-index: -1;
+    }
+    .role-card::before {
+      background: var(--gz-gold);
+      top: -60px;
+      left: -60px;
+    }
+    .role-card::after {
+      background: rgba(190,24,93,0.9);
+      bottom: -60px;
+      right: -60px;
+    }
+
+    .role-title {
+      color: #f97316; /* naranjita cálido como en el login */
+    }
+
+    /* Botón navideño */
+    .xmas-btn {
+      background: linear-gradient(90deg, var(--gz-red), var(--gz-green));
+      box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.15s ease;
+    }
+    .xmas-btn:hover {
+      filter: brightness(1.07);
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(0,0,0,0.3);
+    }
+    .xmas-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Capa de nieve -->
+  <div class="snow-container" id="snow-container"></div>
+
+  <!-- Tarjeta principal -->
+  <div class="role-card">
+    <h2 class="text-xl font-bold text-center mb-4 role-title">
+      ¿Cómo deseas ingresar?
+    </h2>
 
     <form method="post">
       {% csrf_token %}
       <div class="space-y-3">
+        <!-- Botón Usuario -->
         <button type="submit" name="opcion" value="usuario"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl">
+          class="w-full xmas-btn text-white font-semibold py-2 px-4 rounded-xl">
           Entrar como Usuario
         </button>
+
+        <!-- Botón Admin -->
         <button type="submit" name="opcion" value="admin"
           class="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-xl">
           Entrar como Administrador
@@ -25,6 +164,33 @@
       </div>
     </form>
   </div>
+
+  <!-- JS nieve -->
+  <script>
+    (function () {
+      const container = document.getElementById('snow-container');
+      if (!container) return;
+
+      const flakes = 80; // cantidad de copos
+      for (let i = 0; i < flakes; i++) {
+        const span = document.createElement('span');
+        span.className = 'snowflake';
+        span.textContent = '❆';
+
+        const size = 6 + Math.random() * 8;      // tamaño
+        const left = Math.random() * 100;         // posición horizontal
+        const duration = 8 + Math.random() * 10;  // duración de la caída
+        const delay = Math.random() * -duration;  // arranque desfasado
+
+        span.style.left = left + 'vw';
+        span.style.fontSize = size + 'px';
+        span.style.animationDuration = duration + 's';
+        span.style.animationDelay = delay + 's';
+
+        container.appendChild(span);
+      }
+    })();
+  </script>
 
 </body>
 </html>

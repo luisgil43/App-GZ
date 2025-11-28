@@ -27,61 +27,13 @@
 
 
     <script src="https://cdn.tailwindcss.com"></script>
-        <style>
+    <style>
         .rotate-90 {
             transform: rotate(90deg);
         }
 
-        :root {
-          /* Paleta navideña GZ */
-          --gz-red:         #d7263d;   /* rojo vino brillante */
-          --gz-green:       #166534;   /* verde pino */
-          --gz-gold:        #facc15;   /* dorado cálido */
-          --body-bg-top:    #052e26;   /* verde muy oscuro */
-          --body-bg-bottom: #4a0b16;   /* rojo vino oscuro */
-        }
-
-        /* Header con degradado navideño como el login */
-        header {
-          background:
-            radial-gradient(circle at top left,
-              rgba(255,255,255,0.08) 0,
-              transparent 60%),
-            linear-gradient(90deg,
-              var(--body-bg-top),
-              var(--body-bg-bottom));
-          color: #f9fafb;
-          box-shadow: 0 8px 18px rgba(0,0,0,0.4);
-          border-bottom: 3px solid rgba(215,38,61,0.7); /* rojito GZ */
-        }
-
-        /* Asegurar textos claros sobre el header oscuro */
-        header .text-gray-800,
-        header .text-gray-700 {
-          color: #f9fafb !important;
-        }
-        header .text-red-600 {
-          color: #fee2e2 !important;
-        }
-        header .text-red-600:hover {
-          color: #fff5f5 !important;
-        }
-
-        /* Menú lateral con el mismo degradado navideño */
-        #side-nav {
-          background:
-            radial-gradient(circle at top,
-              rgba(255,255,255,0.06) 0,
-              transparent 55%),
-            linear-gradient(180deg,
-              var(--body-bg-top),
-              var(--body-bg-bottom));
-        }
-
-        /* Si en algún sitio usas bg-sidebar, lo volvemos transparente
-           para no romper el degradado del nav */
         .bg-sidebar {
-          background-color: transparent;
+            background-color: #1e293b;
         }
     </style>
 </head>
@@ -130,7 +82,7 @@
       <!-- Izquierda: Logo -->
       <div class="flex items-center gap-3">
         <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
-        <img src="{% static 'images/planixnavidad.png' %}" alt="Logo" class="h-12">
+        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
         <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
       </div>
 
