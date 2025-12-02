@@ -1,70 +1,56 @@
 # operaciones/views.py
 
-from django.db.models import Q, Sum, Case, When, Value, IntegerField
-from django.db.models import Q
-from django.contrib.admin.views.decorators import staff_member_required
-from .models import ServicioCotizado, SesionFotoTecnico
-from django.views.decorators.http import require_POST
-from django.shortcuts import get_object_or_404, redirect
-from django.db import transaction
-from django.utils import timezone
-from django.db.models import Count
-from .models import RequisitoFoto, SesionFotoTecnico
-from .views_fotos import _get_or_create_sesion, _norm_title
-from .models import SesionFotoTecnico
-from .views_fotos import _get_or_create_sesion
-from .forms import SitioMovilForm
-from django.utils.timezone import is_aware
-from .forms import validar_rut_chileno, verificar_rut_sii
-from django.db.models import Sum
-from .forms import MovimientoUsuarioForm  # crearemos este form
-from django.shortcuts import redirect
-from facturacion.models import CartolaMovimiento
-from django.db.models import Sum, Q
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from django.utils.html import escape
-from django.utils.encoding import force_str
-from django.core.paginator import Paginator
 import calendar
-from decimal import Decimal
-import requests
-from django.conf import settings
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
+import csv
 import io
+import locale
+import logging
+from datetime import datetime
+from decimal import Decimal
+
+import pandas as pd
+import requests
+import xlwt
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db import models, transaction
+from django.db.models import (Case, Count, F, FloatField, IntegerField, Q, Sum,
+                              Value, When)
+from django.db.models.functions import Coalesce
+from django.http import HttpResponse, HttpResponseServerError, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.utils.encoding import force_str
+from django.utils.html import escape
+from django.utils.timezone import is_aware, now
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
-from django.db.models.functions import Coalesce
-from django.db.models import Sum, F, Count, Value, FloatField
-from django.db.models import Case, When, Value, IntegerField
-from django.utils.timezone import now
-from django.http import HttpResponseServerError
-import logging
-import xlwt
-from django.http import HttpResponse
-import csv
-from usuarios.models import CustomUser
-from django.urls import reverse
-from usuarios.utils import crear_notificacion  # asegúrate de tener esta función
-from datetime import datetime
-import locale
-from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
-from .models import ServicioCotizado
-from .forms import ServicioCotizadoForm
-import pandas as pd
-from django.db import models
-from django.contrib import messages
-from django.shortcuts import render, redirect
-from django.shortcuts import render
-from .models import SitioMovil
-from django.contrib.auth.decorators import login_required
-from usuarios.decoradores import rol_requerido
+from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
+                                Table, TableStyle)
+
+from facturacion.models import CartolaMovimiento
 from operaciones.forms import AsignarTrabajadoresForm
+from usuarios.decoradores import rol_requerido
+from usuarios.models import CustomUser
+from usuarios.utils import \
+    crear_notificacion  # asegúrate de tener esta función
+
+from .forms import MovimientoUsuarioForm  # crearemos este form
+from .forms import (ServicioCotizadoForm, SitioMovilForm, validar_rut_chileno,
+                    verificar_rut_sii)
+from .models import (RequisitoFoto, ServicioCotizado, SesionFotoTecnico,
+                     SitioMovil)
+from .views_fotos import _get_or_create_sesion, _norm_title
 
 # Configurar locale para nombres de meses en español
 try:
@@ -951,11 +937,13 @@ def finalizar_servicio(request, servicio_id):
         a = SesionFotoTecnico.objects.create(sesion=sesion, tecnico=request.user, estado='asignado')
 
     # 🔧 Import local para evitar NameError aun si no está en el tope del archivo
-    from .models import RequisitoFoto, EvidenciaFoto
-
+    import re
     # ==================== Helpers locales (activos + norma) ====================
-    import unicodedata, re
+    import unicodedata
+
     from django.db import transaction
+
+    from .models import EvidenciaFoto, RequisitoFoto
 
     def _norm_title(s: str) -> str:
         s = (s or "").strip().lower()
@@ -1098,12 +1086,51 @@ def mis_rendiciones(request):
     if request.method == 'POST':
         form = MovimientoUsuarioForm(request.POST, request.FILES)
         if form.is_valid():
+            cd = form.cleaned_data
+
+            # === Anti-doble envío: detectar si la última rendición del usuario
+            # === es exactamente igual a la que se está intentando guardar ahora.
+            last_mov = (
+                CartolaMovimiento.objects
+                .filter(usuario=user)
+                .order_by('-id')
+                .first()
+            )
+
+            def norm(value):
+                return (value or "").strip()
+
+            is_duplicate = False
+            if last_mov:
+                is_duplicate = (
+                    # mismo proyecto
+                    getattr(last_mov, "proyecto_id", None) == cd["proyecto"].id and
+                    # mismo tipo
+                    getattr(last_mov, "tipo_id", None) == cd["tipo"].id and
+                    # mismo número de documento
+                    getattr(last_mov, "numero_doc", None) == cd.get("numero_doc") and
+                    # mismo monto
+                    getattr(last_mov, "cargos", None) == cd.get("cargos") and
+                    # mismo RUT factura (normalizado)
+                    norm(getattr(last_mov, "rut_factura", "")) == norm(cd.get("rut_factura")) and
+                    # mismas observaciones (normalizadas)
+                    norm(getattr(last_mov, "observaciones", "")) == norm(cd.get("observaciones"))
+                )
+
+            if is_duplicate:
+                messages.warning(
+                    request,
+                    "Esta rendición ya fue registrada hace unos instantes. "
+                    "No se creó un duplicado."
+                )
+                return redirect('operaciones:mis_rendiciones')
+
+            # Si no es duplicada, ahora sí la guardamos
             mov = form.save(commit=False)
             mov.usuario = user
             mov.fecha = now()
             mov.status = 'pendiente_supervisor'
-            mov.comprobante = form.cleaned_data.get(
-                "comprobante")  # Usamos el comprobante validado
+            mov.comprobante = cd.get("comprobante")  # Usamos el comprobante validado
             mov.save()
             messages.success(request, "Rendición registrada correctamente.")
             return redirect('operaciones:mis_rendiciones')
@@ -1111,14 +1138,34 @@ def mis_rendiciones(request):
         form = MovimientoUsuarioForm()
 
     # --- Filtros y Paginación ---
-    cantidad = request.GET.get('cantidad', '10')
-    cantidad = 1000000 if cantidad == 'todos' else int(cantidad)
+    raw_cantidad = request.GET.get('cantidad', '10')
+
+    if raw_cantidad == 'todos':
+        # ya no permitimos "todos": lo interpretamos como 100
+        per_page = 100
+        cantidad = '100'
+    else:
+        try:
+            per_page = int(raw_cantidad)
+        except (TypeError, ValueError):
+            per_page = 10
+            cantidad = '10'
+        else:
+            # límite inferior y superior
+            if per_page < 1:
+                per_page = 10
+                cantidad = '10'
+            elif per_page > 100:
+                per_page = 100
+                cantidad = '100'
+            else:
+                cantidad = raw_cantidad
 
     movimientos = CartolaMovimiento.objects.filter(
         usuario=user
     ).order_by('-fecha')
 
-    paginator = Paginator(movimientos, cantidad)
+    paginator = Paginator(movimientos, per_page)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
@@ -1149,7 +1196,7 @@ def mis_rendiciones(request):
 
     return render(request, 'operaciones/mis_rendiciones.html', {
         'pagina': pagina,
-        'cantidad': request.GET.get('cantidad', '10'),
+        'cantidad': cantidad,  # <- antes usabas request.GET.get(...)
         'saldo_disponible': saldo_disponible,
         'saldo_pendiente': saldo_pendiente,
         'saldo_rendido': saldo_rendido,

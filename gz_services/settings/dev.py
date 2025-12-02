@@ -1,13 +1,14 @@
 # setiign-dev.py
 
-from .base import *
 import os
+
+from .base import *
 
 DEBUG = True
 
 ALLOWED_HOSTS = [
     'localhost', '127.0.0.1', '172.20.10.3', '172.20.10.2',
-    '192.168.1.84', '192.168.1.85', '192.168.1.82', '192.168.1.83', '192.168.1.86'
+    '192.168.1.84', '192.168.1.85', '192.168.1.82', '192.168.1.83','192.168.1.87', '192.168.1.86'
 ]
 
 # Opcional: mostrar errores detallados
