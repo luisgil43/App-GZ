@@ -1,74 +1,47 @@
 # operaciones/views_produccion.py
 # si no lo tienes, añade este import
-from django.shortcuts import get_object_or_404, redirect
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden, Http404
-from django.views.decorators.http import require_http_methods
-from dateutil.relativedelta import relativedelta
-from django.urls import reverse
-from datetime import date, datetime
-from django.db.models import Max, IntegerField, Value
-from django.db.models import Max, IntegerField
-from django.db.models.functions import Cast, Replace
-from django.contrib.auth import get_user_model
-from .utils.http import login_required_json
-from django.http import JsonResponse
 import datetime as dt
-import mimetypes
-import uuid
-from .models import MonthlyPayment  # <-- CAMBIA esto por tu modelo real
-from django.shortcuts import get_object_or_404
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponseForbidden
-from django.core.paginator import Paginator
-from reportlab.lib import colors
-import logging
-from django.conf import settings
 import io
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from datetime import datetime
-from usuarios.decoradores import rol_requerido
+import logging
+import mimetypes
 import os
-from botocore.client import Config
-import boto3
-from uuid import uuid4
-from django.views.decorators.http import require_POST
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.http import JsonResponse, HttpResponseBadRequest, HttpResponse
-from django.db import transaction
-from .models import ServicioCotizado, MonthlyPayment
-from django.db.models import Q, Sum, F
 import re
+import uuid
+from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import urlencode
+from uuid import uuid4
 
+import boto3
+from botocore.client import Config
+from dateutil.relativedelta import relativedelta
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import get_user_model  # 👈 agregado
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.http import HttpResponse
-from django.shortcuts import render
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import F, IntegerField, Max, Q, Sum, Value
+from django.db.models.functions import Cast, Replace
+from django.http import (Http404, HttpResponse, HttpResponseBadRequest,
+                         HttpResponseForbidden, JsonResponse)
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
-
+from django.views.decorators.http import require_http_methods, require_POST
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-
-from .models import ServicioCotizado
-
-from datetime import date
-
-
-from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
-from django.utils import timezone
-from django.contrib.auth import get_user_model  # 👈 agregado
-from django.db.models import Q
-from urllib.parse import urlencode
-from decimal import Decimal
-from datetime import date
-import re
-
-from .models import ServicioCotizado
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
+                                Table, TableStyle)
 
+from usuarios.decoradores import rol_requerido
+
+from .models import MonthlyPayment  # <-- CAMBIA esto por tu modelo real
+from .models import ServicioCotizado
+from .utils.http import login_required_json
 
 # === Estados producción + ajustes (usar en TODO el módulo) ===
 EST_PROD = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
@@ -1489,7 +1462,9 @@ def produccion_tecnico(request):
 
     q_text = (request.GET.get("id_claro") or "").strip()
     q_month = (request.GET.get("mes_produccion") or "").strip()
-    cantidad = (request.GET.get("cantidad") or "10").strip().lower()
+
+    # 🔹 ahora usamos raw_cantidad y luego la normalizamos / limitamos a 100
+    raw_cantidad = (request.GET.get("cantidad") or "10").strip().lower()
 
     # 👉 incluir ajustes para que se muestren al usuario
     AJUSTES = ["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"]
@@ -1531,9 +1506,11 @@ def produccion_tecnico(request):
         qs = qs.filter(cond)
 
     if q_text:
-        qs = qs.filter(Q(id_claro__icontains=q_text) |
-                       Q(id_new__icontains=q_text) |
-                       Q(detalle_tarea__icontains=q_text))
+        qs = qs.filter(
+            Q(id_claro__icontains=q_text) |
+            Q(id_new__icontains=q_text) |
+            Q(detalle_tarea__icontains=q_text)
+        )
 
     # === Construcción de filas (primero mes actual, luego septiembre, agosto, etc.) ===
     filas, total_estimado = [], Decimal("0.00")
@@ -1591,21 +1568,37 @@ def produccion_tecnico(request):
         _push(s)
 
     # 2) Resto de meses, ordenados de más reciente a más antiguo por mes_produccion
-    otros_ordenados = sorted(list(qs_otros), key=lambda s: _ym_from_mes(
-        s.mes_produccion), reverse=True)
+    otros_ordenados = sorted(
+        list(qs_otros),
+        key=lambda s: _ym_from_mes(s.mes_produccion),
+        reverse=True
+    )
     for s in otros_ordenados:
         _push(s)
     # ====================================================================
 
-    if cantidad == "todos":
-        pagina = filas
+    # 🔹 Lógica de paginación: máx 100, igual que Mis Rendiciones
+    if raw_cantidad == "todos":
+        per_page = 100
+        cantidad = "100"
     else:
         try:
-            per_page = max(5, min(100, int(cantidad)))
-        except ValueError:
-            per_page, cantidad = 10, "10"
-        paginator = Paginator(filas, per_page)
-        pagina = paginator.get_page(request.GET.get("page") or 1)
+            per_page = int(raw_cantidad)
+        except (TypeError, ValueError):
+            per_page = 10
+            cantidad = "10"
+        else:
+            if per_page < 1:
+                per_page = 10
+                cantidad = "10"
+            elif per_page > 100:
+                per_page = 100
+                cantidad = "100"
+            else:
+                cantidad = raw_cantidad
+
+    paginator = Paginator(filas, per_page)
+    pagina = paginator.get_page(request.GET.get("page") or 1)
 
     return render(request, "operaciones/produccion_tecnico.html", {
         "current_month": current_month,

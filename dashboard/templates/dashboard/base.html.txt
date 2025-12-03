@@ -34,10 +34,28 @@
   <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 
   <style>
-    .rotate-90 {
-      transform: rotate(90deg);
+  .rotate-90 {
+    transform: rotate(90deg);
+  }
+
+  /* === COLAPSAR MENÚ EN PC (>=768px) === */
+  @media (min-width: 768px) {
+    /* Cuando hay sidebar, empujamos el contenido 18rem (w-72) */
+    .content-wrapper.with-sidebar #main-content {
+      margin-left: 18rem;
     }
-  </style>
+
+    /* Cuando se oculta, el contenido ocupa todo el ancho */
+    .content-wrapper.no-sidebar #main-content {
+      margin-left: 0;
+    }
+
+    /* Nav colapsado: lo movemos fuera de pantalla */
+    #side-nav.collapsed {
+      transform: translateX(-100%) !important;
+    }
+  }
+</style>
 </head>
 
 <body class="bg-gray-100 text-gray-900">
@@ -83,7 +101,7 @@
 
       <!-- IZQUIERDA: Logo + texto -->
       <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="sm:hidden text-gray-800 text-2xl">☰</button>
+        <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
         <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
         <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
       </div>
@@ -107,7 +125,7 @@
 
 
   <!-- Contenedor principal -->
-  <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
+<div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
 
     <!-- Menú lateral con animación -->
     <nav id="side-nav"
@@ -217,7 +235,7 @@
     </nav>
 
     <!-- Contenido principal -->
-    <main class="md:ml-72 flex-1 p-6">
+    <main id="main-content" class="flex-1 p-6">
       {% block content %}{% endblock %}
     </main>
 
@@ -243,9 +261,22 @@
     }
 
     function toggleSidebar() {
-      const nav = document.getElementById('side-nav');
-      nav.classList.toggle('-translate-x-full');
-    }
+  const nav = document.getElementById('side-nav');
+  const wrapper = document.querySelector('.content-wrapper');
+  if (!nav || !wrapper) return;
+
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+
+  if (isDesktop) {
+    // En desktop: colapsar/expandir menú y ajustar ancho del contenido
+    const collapsed = nav.classList.toggle('collapsed');
+    wrapper.classList.toggle('no-sidebar', collapsed);
+    wrapper.classList.toggle('with-sidebar', !collapsed);
+  } else {
+    // En móvil: off-canvas clásico
+    nav.classList.toggle('-translate-x-full');
+  }
+}
   </script>
 
   {% if messages %}

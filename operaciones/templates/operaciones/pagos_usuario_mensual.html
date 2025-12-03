@@ -5,7 +5,7 @@
 {% block title %}Mis Pagos Mensuales{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
   <div class="flex items-center justify-between mb-4">
     <div class="flex items-center gap-2">
@@ -18,9 +18,9 @@
     <div class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></div>
   </div>
 
-  <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-[900px]" style="white-space: nowrap;">
-      <thead class="bg-gray-100">
+   <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
         <tr>
           <th class="w-10"></th>
           <th class="p-2 text-left">Mes</th>

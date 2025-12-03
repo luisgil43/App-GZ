@@ -5,7 +5,7 @@
 {% block title %}Mi Producción{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto bg-white p-4 sm:p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
   <!-- Header: Mes actual + Total del mes (CLP) + Botón Mis pagos -->
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
@@ -37,8 +37,66 @@
     </div>
   </form>
 
-  <div class="rounded-xl border border-gray-200 overflow-x-auto">
-    <table class="table-auto text-sm w-full min-w-[1100px]" style="white-space: nowrap;">
+
+  <div class="flex justify-start mb-2">
+  <details class="relative">
+    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+      ⚙️ Columns
+    </summary>
+
+    <!-- 👇 IMPORTANTE: mismo id que usa el script -->
+    <div id="columnToggles" class="absolute left-0 mt-1 w-56 bg-white border rounded-xl shadow-lg p-3 z-10">
+      <p class="text-xs text-gray-500 mb-2">Show / hide columns</p>
+
+      <!-- ✅ Master checkbox -->
+      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+        <input type="checkbox" id="col-toggle-all" checked>
+        <span class="font-semibold text-xs">Show all columns</span>
+      </label>
+
+      <!-- ✅ Una línea por columna (index 1–7) -->
+      <div class="space-y-1 text-sm">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="1" checked>
+          <span>DU</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="2" checked>
+          <span>ID CLARO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="3" checked>
+          <span>ID NEW</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <span>Región</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <span>Mes producción</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <span>Estado</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <span>Mi total</span>
+        </label>
+      </div>
+    </div>
+  </details>
+</div>
+
+   <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
       <thead class="bg-gray-100">
         <tr>
           <th class="w-10"></th>
@@ -99,16 +157,16 @@
           <td class="p-2 text-right">$ {{ r.monto_tecnico|formato_clp }} CLP</td>
         </tr>
 
-        <!-- Detalle simple -->
-        <tr id="det-{{ forloop.counter }}" class="hidden">
-          <td class="p-0"></td>
-          <td colspan="7" class="bg-gray-50 p-3">
-            <div class="text-xs text-gray-700">
-              <b>Detalle:</b>
-              <div class="mt-1 whitespace-pre-line">{{ r.detalle_tarea|default:"—" }}</div>
-            </div>
-          </td>
-        </tr>
+       <!-- Detalle simple -->
+<tr id="det-{{ forloop.counter }}" class="hidden detail-row">
+  <td class="p-0"></td>
+  <td colspan="7" class="bg-gray-50 p-3">
+    <div class="text-xs text-gray-700">
+      <b>Detalle:</b>
+      <div class="mt-1 whitespace-pre-line">{{ r.detalle_tarea|default:"—" }}</div>
+    </div>
+  </td>
+</tr>
         {% empty %}
         <tr><td colspan="8" class="p-4 text-center text-gray-500">No tienes producción aprobada.</td></tr>
         {% endfor %}
@@ -121,22 +179,19 @@
     <form method="get" class="flex items-center gap-2">
       <label for="cantidad" class="text-sm">Mostrar:</label>
       <select name="cantidad" id="cantidad" class="border rounded px-2 py-1">
-        <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
-        <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-        <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-        <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+        <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
       </select>
       <input type="hidden" name="id_claro" value="{{ id_claro }}">
       <input type="hidden" name="mes_produccion" value="{{ mes_produccion }}">
     </form>
 
-    <div class="flex-1 text-center">
-      {% if cantidad == 'todos' %}
-        <span>Página 1 de 1</span>
-      {% else %}
-        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-      {% endif %}
-    </div>
+   <div class="mt-2 flex justify-center text-sm">
+    <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+</div>
 
     <div></div>
   </div>
@@ -173,5 +228,134 @@
   document.getElementById('cantidad')?.addEventListener('change', function(){
     this.form.submit();
   });
+</script>
+
+<script>
+(function () {
+  // Panel de columnas
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  // Tabla asociada: usa la que tenga data-columns-table
+  const table =
+    document.querySelector('[data-columns-table]') ||
+    document.querySelector('table');
+  if (!table) return;
+
+  // Clave para recordar las columnas por vista/tabla
+  const tableId = table.dataset.columnsTable || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const state = loadState(); // {0: true, 1: false, ...}
+
+    // Encabezados
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false; // por defecto visible
+      th.style.display = visible ? '' : 'none';
+    });
+
+    // Celdas
+       // Celdas
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const isDetail = tr.classList.contains('detail-row');
+      const tds = tr.querySelectorAll('td');
+
+      tds.forEach((td, idx) => {
+        // No aplicamos el hide por columna en las filas de detalle
+        if (isDetail) {
+          td.style.display = '';
+          return;
+        }
+
+        const visible = state[idx] !== false; // por defecto visible
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+    // Sincronizar checkboxes + master
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) {
+      master.checked = allOn;
+    }
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    // Individuales
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    // Master "Show all columns"
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  // Cerrar el <details> al hacer clic fuera
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  // Inicializar
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
+})();
 </script>
 {% endblock %}
