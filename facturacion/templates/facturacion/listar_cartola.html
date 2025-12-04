@@ -5,7 +5,7 @@
 {% block title %}Cartola de Movimientos{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 <style>
   .campo-filtro {
     border: 2px solid #1f2937;
@@ -31,333 +31,440 @@
     min-width: 1200px;
   }
 </style>
+
 <!-- Título y botones -->
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">📑 Cartola de Movimientos</h2>
-     <div class="flex gap-2">
- <a href="{% url 'facturacion:crear_tipo' %}"
-   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
-  + Crear Tipo
-</a>
- <a href="{% url 'facturacion:crear_proyecto' %}"
-   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
-  + Crear Proyecto 
-</a>
- <a href="{% url 'facturacion:registrar_abono' %}"
-   class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
-  + Registrar Abono
-</a>
- <a href="{% url 'facturacion:exportar_cartola_finanzas' %}" 
-   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-    📥 Export to Excel
-</a>
-     </div>  
-    </div>
-
-<!-- Filtros estilo pill -->
-<form id="form-filtros" method="get" class="mb-6 flex flex-wrap gap-2 items-center">
-  <input type="text" name="usuario" value="{{ filtros.usuario }}" placeholder="Filtrar Usuario"
-       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
- <input type="text" name="fecha" value="{{ filtros.fecha }}" placeholder="DD-MM-YYYY"
-       class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="proyecto" value="{{ filtros.proyecto }}" placeholder="Filtrar por Proyecto"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="categoria" value="{{ filtros.categoria }}" placeholder="Filtrar por Categoria"
-         class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <input type="text" name="tipo" value="{{ filtros.tipo }}" placeholder="Filtrar por Tipo"
-               class="flex-1 min-w-[140px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-  <select name="estado"
-          class="flex-1 min-w-[160px] px-4 py-2 border border-gray-300 rounded-full text-sm focus:ring-blue-500 focus:border-blue-500">
-    <option value="">Todos los estados</option>
-    {% for codigo, nombre in estado_choices %}
-      <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-    {% endfor %}
-  </select>
-
+<div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
+  <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">📑 Cartola de Movimientos</h2>
   <div class="flex gap-2">
-    <a href="{% url 'facturacion:listar_cartola' %}"
-       class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow">
-      ❌ Limpiar
+    <a href="{% url 'facturacion:crear_tipo' %}"
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      + Crear Tipo
+    </a>
+    <a href="{% url 'facturacion:crear_proyecto' %}"
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      + Crear Proyecto
+    </a>
+    <a href="{% url 'facturacion:registrar_abono' %}"
+       class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      + Registrar Abono
+    </a>
+    <a href="{% url 'facturacion:exportar_cartola_finanzas' %}"
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      📥 Export to Excel
     </a>
   </div>
-  <input type="hidden" name="cantidad" value="{{ cantidad }}">
+</div>
+
+<!-- Filtros -->
+<form id="form-filtros"
+      method="get"
+      class="mb-3 text-base">
+
+  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">Usuario</label>
+      <input type="text"
+             name="usuario"
+             value="{{ filtros.usuario }}"
+             placeholder="Filtrar Usuario"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-44">
+      <label class="text-xs text-gray-600">Fecha</label>
+      <input type="text"
+             name="fecha"
+             value="{{ filtros.fecha }}"
+             placeholder="DD-MM-YYYY"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">Proyecto</label>
+      <input type="text"
+             name="proyecto"
+             value="{{ filtros.proyecto }}"
+             placeholder="Filtrar por Proyecto"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">Categoría</label>
+      <input type="text"
+             name="categoria"
+             value="{{ filtros.categoria }}"
+             placeholder="Filtrar por Categoria"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-48">
+      <label class="text-xs text-gray-600">Tipo</label>
+      <input type="text"
+             name="tipo"
+             value="{{ filtros.tipo }}"
+             placeholder="Filtrar por Tipo"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">Estado</label>
+      <select name="estado"
+              class="border rounded-lg px-3 py-2 w-full">
+        <option value="">Todos los estados</option>
+        {% for codigo, nombre in estado_choices %}
+          <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>
+            {{ nombre }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
+      <a href="{% url 'facturacion:listar_cartola' %}"
+         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-lg shadow whitespace-nowrap">
+        ❌ Limpiar
+      </a>
+    </div>
+
+    <!-- Mantener cantidad actual -->
+    <input type="hidden" name="cantidad" value="{{ cantidad }}">
+  </div>
 </form>
 
+<!-- Selector de columnas -->
+<div class="flex justify-start mb-2">
+  <details class="relative">
+    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+      ⚙️ Columns
+    </summary>
+
+    <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
+      <p class="text-xs text-gray-500 mb-2">Show / hide columns</p>
+
+      <!-- Master checkbox -->
+      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+        <input type="checkbox" id="col-toggle-all" checked>
+        <span class="font-semibold text-xs">Show all columns</span>
+      </label>
+
+      <div class="space-y-1 text-sm">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="0" checked>
+          <span>Usuario</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="1" checked>
+          <span>Fecha</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="2" checked>
+          <span>Proyecto</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="3" checked>
+          <span>Categoría</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <span>Tipo</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <span>RUT Factura</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <span>Tipo de Documento</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <span>N° Documento</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="8" checked>
+          <span>Observaciones</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="9" checked>
+          <span>N° Transferencia</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="10" checked>
+          <span>Comprobante</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="11" checked>
+          <span>Cargos</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="12" checked>
+          <span>Abonos</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="13" checked>
+          <span>Status</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="14" checked>
+          <span>Acciones</span>
+        </label>
+      </div>
+    </div>
+  </details>
+</div>
+
 <div id="cartolaZone">
-<!-- Tabla responsive -->
-<div class="rounded-xl border border-gray-200 tabla-responsive">
-      <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
-    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-                <tr>
-                    <th class="p-2 border">Usuario</th>
-                    <th class="p-2 border">Fecha</th>
-                    <th class="p-2 border">Proyecto</th>
-                    <th class="p-2 border">Categoría</th>
-                    <th class="p-2 border">Tipo</th>
-<th class="p-2 border">RUT Factura</th>
-<th class="p-2 border">Tipo de Documento</th>
-<th class="p-2 border">Número de Documento</th>
-                    <th class="p-2 border">Observaciones</th>
-			<th class="p-2 border">N° Transferencia</th>
-                    <th class="p-2 border">Comprobante</th>
-                    <th class="p-2 border">Cargos</th>
-                    <th class="p-2 border">Abonos</th>
-                    <th class="p-2 border">Status</th>
-                    <th class="p-2 border">Acciones</th>
-                </tr>
-            </thead>
+  <!-- Tabla responsive -->
+  <div class="tabla-responsive overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+           style="white-space: nowrap;"
+           data-columns-table="gz-cartola">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2 border">Usuario</th>
+          <th class="p-2 border">Fecha</th>
+          <th class="p-2 border">Proyecto</th>
+          <th class="p-2 border">Categoría</th>
+          <th class="p-2 border">Tipo</th>
+          <th class="p-2 border">RUT Factura</th>
+          <th class="p-2 border">Tipo de Documento</th>
+          <th class="p-2 border">Número de Documento</th>
+          <th class="p-2 border">Observaciones</th>
+          <th class="p-2 border">N° Transferencia</th>
+          <th class="p-2 border">Comprobante</th>
+          <th class="p-2 border">Cargos</th>
+          <th class="p-2 border">Abonos</th>
+          <th class="p-2 border">Status</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
 
-           <tbody class="text-center">
-                {% for mov in pagina %}
-                <tr class="border-t">
-<!-- Servicio -->
-                    <td class="p-2 border">{{ mov.usuario }}</td>
-                    <td class="p-2 border">{{ mov.fecha }}</td>
-                    <td class="p-2 border">{{ mov.proyecto }}</td>
-                    <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
-                    <td class="p-2 border">{{ mov.tipo }}</td>
-<td class="p-2 border">{{ mov.rut_factura|default:"—" }}</td>
-<td class="p-2 border">{{ mov.tipo_doc|default:"—" }}</td>
-<td class="p-2 border">{{ mov.numero_doc|default:"—" }}</td>
-                    <td class="p-2 border">{{ mov.observaciones }}</td>
-<td class="p-2 border">{{ mov.numero_transferencia|default:"—" }}</td>
-                    <td class="p-2 border">
-                        {% if mov.comprobante %}
-                            <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
-                        {% else %}
-                            —
-                        {% endif %}
-                    </td>
-                    <td class="p-2 border text-right">{{ mov.cargos|default:0|formato_clp }}</td>
-                    <td class="p-2 border text-right">{{ mov.abonos|default:0|formato_clp }}</td>
-                
-  <td class="p-2 text-sm">
-    <div class="flex flex-col gap-1 text-left leading-tight">
-        {% if mov.status == 'pendiente_supervisor' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Supervisor
-            </span>
-        {% elif mov.status == 'aprobado_supervisor' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ⏳ Pendiente aprobación del PM
-            </span>
-        {% elif mov.status == 'rechazado_supervisor' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Supervisor
-            </span>
-        {% elif mov.status == 'aprobado_pm' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ⏳ Pendiente aprobación de Finanzas
-            </span>
-        {% elif mov.status == 'rechazado_pm' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por PM
-            </span>
-        {% elif mov.status == 'aprobado_finanzas' %}
-            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
-            </span>
-        {% elif mov.status == 'rechazado_finanzas' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Finanzas
-            </span>
-        {% elif mov.status == 'pendiente_abono_usuario' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Usuario
-            </span>
-        {% elif mov.status == 'aprobado_abono_usuario' %}
-            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Abono aprobado por Usuario
-            </span>
-        {% elif mov.status == 'rechazado_abono_usuario' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Abono rechazado por Usuario
-            </span>
-        {% else %}
-            {{ mov.get_status_display }}
-        {% endif %}
+      <tbody class="text-center">
+        {% for mov in pagina %}
+        <tr class="border-t">
+          <td class="p-2 border">{{ mov.usuario }}</td>
+          <td class="p-2 border">{{ mov.fecha|date:"d-m-Y" }}</td>
+          <td class="p-2 border">{{ mov.proyecto }}</td>
+          <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
+          <td class="p-2 border">{{ mov.tipo }}</td>
+          <td class="p-2 border">{{ mov.rut_factura|default:"—" }}</td>
+          <td class="p-2 border">{{ mov.tipo_doc|default:"—" }}</td>
+          <td class="p-2 border">{{ mov.numero_doc|default:"—" }}</td>
+          <td class="p-2 border">{{ mov.observaciones }}</td>
+          <td class="p-2 border">{{ mov.numero_transferencia|default:"—" }}</td>
+          <td class="p-2 border">
+            {% if mov.comprobante %}
+              <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="p-2 border text-right">{{ mov.cargos|default:0|formato_clp }}</td>
+          <td class="p-2 border text-right">{{ mov.abonos|default:0|formato_clp }}</td>
 
-        {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
-                 style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
-                <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+          <!-- Status -->
+          <td class="p-2 text-sm">
+            <div class="flex flex-col gap-1 text-left leading-tight">
+              {% if mov.status == 'pendiente_supervisor' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                  ⏳ Pendiente aprobación del Supervisor
+                </span>
+              {% elif mov.status == 'aprobado_supervisor' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                  ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                  ⏳ Pendiente aprobación del PM
+                </span>
+              {% elif mov.status == 'rechazado_supervisor' %}
+                <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                  ❌ Rechazado por Supervisor
+                </span>
+              {% elif mov.status == 'aprobado_pm' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                  ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                  ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                  ⏳ Pendiente aprobación de Finanzas
+                </span>
+              {% elif mov.status == 'rechazado_pm' %}
+                <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                  ❌ Rechazado por PM
+                </span>
+              {% elif mov.status == 'aprobado_finanzas' %}
+                <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                  ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                  ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                  ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
+                </span>
+              {% elif mov.status == 'rechazado_finanzas' %}
+                <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                  ❌ Rechazado por Finanzas
+                </span>
+              {% elif mov.status == 'pendiente_abono_usuario' %}
+                <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                  ⏳ Pendiente aprobación del Usuario
+                </span>
+              {% elif mov.status == 'aprobado_abono_usuario' %}
+                <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                  ✅ Abono aprobado por Usuario
+                </span>
+              {% elif mov.status == 'rechazado_abono_usuario' %}
+                <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                  ❌ Abono rechazado por Usuario
+                </span>
+              {% else %}
+                {{ mov.get_status_display }}
+              {% endif %}
+
+              {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
+                <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
+                     style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+                  <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+                </div>
+              {% endif %}
             </div>
-        {% endif %}
-    </div>
-</td>
+          </td>
 
+          <!-- Acciones -->
+          <td class="p-2 border">
+            {# SUPERUSUARIO #}
+            {% if user.is_superuser %}
+              <a href="{% url 'facturacion:editar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+                 class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
+                ✏️ Editar
+              </a>
+              <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
+                 class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                🗑️ Eliminar
+              </a>
 
-<td class="p-2 border">
-  {# ===== SUPERUSUARIO ===== #}
-  {% if user.is_superuser %}
-    <a href="{% url 'facturacion:editar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-       class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200 transition">
-       ✏️ Editar
-    </a>
-    <a href="{% url 'facturacion:eliminar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-       class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-       🗑️ Eliminar
-    </a>
+              {% if mov.tipo.categoria != "abono" %}
+                {% if mov.status == 'pendiente_supervisor' or mov.status == 'aprobado_supervisor' or mov.status == 'aprobado_pm' %}
+                  <a href="#"
+                     class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition"
+                     data-url="{% url 'facturacion:aprobar_movimiento' mov.id %}">
+                    ✅ Aprobar gasto
+                  </a>
+                  <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+                     class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                    ❌ Rechazar gasto
+                  </a>
+                {% endif %}
+              {% endif %}
+            {% endif %}
 
-    {% if mov.tipo.categoria != "abono" %}
-      {% if mov.status == 'pendiente_supervisor' or mov.status == 'aprobado_supervisor' or mov.status == 'aprobado_pm' %}
-        <form method="post"
-              action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-              class="inline">
-          {% csrf_token %}
-          <button type="submit"
-                  class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-            ✅ Aprobar gasto
-          </button>
-        </form>
-        <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-           class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-           ❌ Rechazar gasto
-        </a>
-      {% endif %}
-    {% endif %}
-  {% endif %}
+            {# NO SUPERUSUARIO (gastos, no abonos) #}
+            {% if not user.is_superuser and mov.tipo.categoria != "abono" %}
 
-  {# ===== NO SUPERUSUARIO ===== #}
-  {% if not user.is_superuser and mov.tipo.categoria != "abono" %}
+              {# Supervisor #}
+              {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+                <a href="#"
+                   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition"
+                   data-url="{% url 'facturacion:aprobar_movimiento' mov.id %}">
+                  ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                  ❌ Rechazar gasto
+                </a>
+              {% endif %}
 
-    {# Supervisor #}
-    {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-      <form method="post"
-            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-            class="inline">
-        {% csrf_token %}
-        <button type="submit"
-                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-          ✅ Aprobar gasto
-        </button>
-      </form>
-      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-         ❌ Rechazar gasto
-      </a>
-    {% endif %}
+              {# PM #}
+              {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+                <a href="#"
+                   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition"
+                   data-url="{% url 'facturacion:aprobar_movimiento' mov.id %}">
+                  ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                  ❌ Rechazar gasto
+                </a>
+              {% endif %}
 
-    {# PM #}
-    {% if user.es_pm and mov.status == "aprobado_supervisor" %}
-      <form method="post"
-            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-            class="inline">
-        {% csrf_token %}
-        <button type="submit"
-                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-          ✅ Aprobar gasto
-        </button>
-      </form>
-      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-         ❌ Rechazar gasto
-      </a>
-    {% endif %}
+              {# Finanzas #}
+              {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+                <a href="#"
+                   class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition"
+                   data-url="{% url 'facturacion:aprobar_movimiento' mov.id %}">
+                  ✅ Aprobar gasto
+                </a>
+                <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
+                   class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
+                  ❌ Rechazar gasto
+                </a>
+              {% endif %}
 
-    {# Finanzas #}
-    {% if user.es_facturacion and mov.status == "aprobado_pm" %}
-      <form method="post"
-            action="{% url 'facturacion:aprobar_movimiento' mov.id %}?next={{ request.get_full_path|urlencode }}"
-            class="inline">
-        {% csrf_token %}
-        <button type="submit"
-                class="js-approve inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200 transition">
-          ✅ Aprobar gasto
-        </button>
-      </form>
-      <a href="#" onclick="return abrirModalRechazo({{ mov.id }});"
-         class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200 transition">
-         ❌ Rechazar gasto
-      </a>
-    {% endif %}
-
-  {% endif %}
-</td>
-
-
-
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="11" class="p-4 text-center">No hay movimientos registrados.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-<!-- Controles de paginación -->
-<div class="mt-4 flex flex-wrap justify-between items-center text-sm">
-
-  <!-- Selector de cantidad -->
-  <form method="get" class="flex items-center gap-2">
-    <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-      <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-      <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
-    </select>
-
-    <!-- 🔒 Preservar filtros actuales -->
-    <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
-    <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
-    <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
-    <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
-    <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
-    <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
-    <input type="hidden" name="estado"      value="{{ filtros.estado }}">
-  </form>
-
-  <!-- Texto centrado de página -->
-  <div class="mt-2 flex justify-center text-sm">
-    {% if cantidad == 'todos' %}
-      <span>Página 1 de 1</span>
-    {% else %}
-      <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-    {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="15" class="p-4 text-center">No hay movimientos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
- 
- <!-- Botones de navegación -->
-{% with base_qs=request.GET.urlencode %}
-<div class="mt-2 flex justify-center gap-2 text-sm">
+  
+
+    <!-- Selector de cantidad -->
+    <form method="get" class="flex items-center gap-2">
+      <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+      <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+        <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+        <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+        <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+        <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+        <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+      </select>
+
+      <!-- Preservar filtros actuales -->
+      <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
+      <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
+      <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
+      <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
+      <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
+      <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
+      <input type="hidden" name="estado"      value="{{ filtros.estado }}">
+    </form>
+
+   <!-- Paginación -->
+<div class="mt-4 flex justify-center gap-2 text-sm">
   {% if pagina.has_previous %}
-    <a href="?{{ base_qs }}&page=1" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?{{ base_qs }}&page={{ pagina.previous_page_number }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
   {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
   {% if pagina.has_next %}
-    <a href="?{{ base_qs }}&page={{ pagina.next_page_number }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?{{ base_qs }}&page={{ pagina.paginator.num_pages }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
   {% endif %}
 </div>
-{% endwith %}
 
-
-</div>
+  
 
 <!-- Modal de rechazo -->
 <div id="modalRechazo" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
   <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
     <h2 class="text-lg font-bold text-gray-800 mb-4">Motivo del Rechazo</h2>
-   <form id="formRechazo" method="POST" action="">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <textarea name="motivo_rechazo" rows="4" required
-    class="w-full border rounded-lg p-2 mb-4"
-    placeholder="Escribe el motivo del rechazo"></textarea>
-  <div class="flex justify-end gap-2">
-    <button type="button" onclick="cerrarModalRechazo()" 
-            class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
-    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rechazar</button>
-  </div>
-</form>
-
+    <form id="formRechazo" method="POST" action="">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <textarea name="motivo_rechazo" rows="4" required
+                class="w-full border rounded-lg p-2 mb-4"
+                placeholder="Escribe el motivo del rechazo"></textarea>
+      <div class="flex justify-end gap-2">
+        <button type="button" onclick="cerrarModalRechazo()"
+                class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rechazar</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -366,13 +473,10 @@
     const modal = document.getElementById('modalRechazo');
     const form  = document.getElementById('formRechazo');
 
-    // Opción A: usando path fijo
     form.action = `/facturacion/cartola/rechazar/${id}/`;
-
-    // Opción B (mejor): usando la URL nombrada y reemplazando el ID.
+    // Alternativa con URL nombrada:
     // form.action = `{% url 'facturacion:rechazar_movimiento' 0 %}`.replace('/0/', `/${id}/`);
 
-    // Refresca el 'next' por si cambió la query (paginación/filtros actuales)
     const nextInput = form.querySelector('input[name="next"]');
     if (nextInput) {
       nextInput.value = location.pathname + location.search;
@@ -380,7 +484,7 @@
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
-    return false; // <- evita que el <a href="#"> navegue
+    return false;
   }
 
   function cerrarModalRechazo() {
@@ -390,6 +494,7 @@
   }
 </script>
 
+<!-- Filtros + paginación por AJAX (tipo Hyperlink) -->
 <script>
 (function () {
   const form = document.getElementById('form-filtros');
@@ -400,7 +505,7 @@
     const fd = new FormData(form);
     const params = new URLSearchParams(fd);
 
-    // Borra parámetros vacíos para “resetear” filtros al limpiar el campo
+    // Eliminar parámetros vacíos
     form.querySelectorAll('input[type="text"], select').forEach(el => {
       const v = (el.value || '').trim();
       if (v === '') params.delete(el.name);
@@ -409,7 +514,7 @@
   }
 
   async function refreshList(extraParams = {}) {
-    // guarda foco y caret
+    // guardar foco y caret
     const active = document.activeElement;
     const activeName = active && active.name;
     const caretPos = (active && active.selectionStart) ?? null;
@@ -426,8 +531,17 @@
     if (!newZone) { location.href = url; return; }
 
     zone.replaceWith(newZone);
-    zone = document.getElementById('cartolaZone'); // actualizar referencia
+    zone = document.getElementById('cartolaZone');
     wirePagination(zone);
+
+    // re-aplicar columnas si está disponible
+    if (window.reApplyCartolaColumns) {
+      window.reApplyCartolaColumns();
+    }
+    // re-enganchar aprobar si está disponible
+    if (window.engancharAprobarCartola) {
+      window.engancharAprobarCartola();
+    }
 
     // restaurar foco/caret
     if (activeName) {
@@ -442,7 +556,7 @@
       }
     }
 
-    // actualizar URL (compartible/recargable)
+    // actualizar URL
     history.replaceState(null, '', url);
   }
 
@@ -458,14 +572,14 @@
   }
   wirePagination(zone);
 
-  // Debounce suave
+  // Debounce
   let t;
   const debouncedRefresh = (extra = {}) => {
     clearTimeout(t);
     t = setTimeout(() => refreshList({ page: 1, ...extra }), 300);
   };
 
-  // Autofiltrado (incluye limpiar al dejar vacío)
+  // Autofiltrado
   form.addEventListener('input', (e) => {
     if (e.target.matches('input[type="text"], select')) debouncedRefresh();
   });
@@ -478,110 +592,19 @@
       refreshList({ page: 1 });
     }
   });
+
+  // Exponer refreshList por si lo quieres desde otros scripts
+  window.refreshCartolaList = refreshList;
 })();
 </script>
 
-<script>
-  // --- CSRF helper ---
-  function getCookie(name){const v=`; ${document.cookie}`.split(`; ${name}=`);if(v.length===2)return v.pop().split(';').shift();}
-  const csrftoken = getCookie('csrftoken');
-
-  // ----- PARCHA TU refreshList -----
-  async function refreshList(extraParams = {}) {
-    const prevY = window.scrollY;           // 👈 guarda scroll
-    const form = document.getElementById('form-filtros');
-    let zone = document.getElementById('cartolaZone');
-
-    const fd = new FormData(form);
-    const params = new URLSearchParams(fd);
-
-    form.querySelectorAll('input[type="text"], select').forEach(el => {
-      const v = (el.value || '').trim();
-      if (v === '') params.delete(el.name);
-    });
-    Object.entries(extraParams).forEach(([k, v]) => params.set(k, v));
-
-    // Mantén página actual si existe
-    const current = new URLSearchParams(location.search);
-    const currentPage = current.get('page');
-    if (currentPage && !params.has('page')) params.set('page', currentPage);
-
-    const url = `${location.pathname}?${params.toString()}`;
-    const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' }});
-    const html = await res.text();
-
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const newZone = doc.querySelector('#cartolaZone');
-    if (!newZone) { location.href = url; return; }
-
-    zone.replaceWith(newZone);
-    history.replaceState(null, '', url);
-
-    // reengancha la paginación dentro de la zona nueva
-    wirePagination(document.getElementById('cartolaZone'));
-
-    window.scrollTo(0, prevY);             // 👈 restaura scroll
-  }
-
-  // Paginación por AJAX (igual a lo que ya tienes)
-  function wirePagination(scope) {
-    (scope || document).querySelectorAll('a[href*="page="]').forEach(a => {
-      a.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        const u = new URL(a.href, location.href);
-        const page = u.searchParams.get('page') || '1';
-        refreshList({ page });
-      });
-    });
-  }
-  wirePagination(document.getElementById('cartolaZone'));
-
-  // ----- INTERCEPTA APROBAR PARA HACER POST SIN NAVEGAR -----
-  document.addEventListener('click', async (e) => {
-    const a = e.target.closest('a.js-approve');
-    if (!a) return;
-    e.preventDefault();
-
-    const prevY = window.scrollY; // 👈 por si el refresh tarda
-    // envía POST a la misma URL (ignora el GET)
-    const url = new URL(a.href, location.href);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': csrftoken,
-        'X-Requested-With': 'fetch'
-      }
-    });
-    // refresca solo la tabla (mantiene filtros, página y scroll)
-    await refreshList();
-    window.scrollTo(0, prevY);   // 👈 doble seguridad
-  });
-
-  // ----- Modal de rechazo por fetch (mantiene scroll igual) -----
-  document.addEventListener('submit', async (e) => {
-    const form = e.target;
-    if (form.id !== 'formRechazo') return;
-    e.preventDefault();
-    const prevY = window.scrollY;
-    await fetch(form.action, {
-      method: 'POST',
-      body: new FormData(form),
-      headers: { 'X-Requested-With': 'fetch' }
-    });
-    cerrarModalRechazo();
-    await refreshList();
-    window.scrollTo(0, prevY);
-  });
-
-</script>
-
+<!-- Mantener scroll horizontal -->
 <script>
 /* ====== Mantener scroll horizontal en Cartola (GZ Services) ====== */
 (function () {
   const KEY = 'gz-cartola-scrollX:' + location.pathname;
 
   function getBox() {
-    // contenedor con overflow-x que envuelve la tabla
     return document.querySelector('#cartolaZone .tabla-responsive');
   }
 
@@ -605,7 +628,6 @@
   function restoreNow(){
     const box = getBox();
     if (!box) return;
-    // restaurar después del layout para evitar que lo pise otro código
     requestAnimationFrame(() => {
       box.scrollLeft = readX();
     });
@@ -621,7 +643,6 @@
     const mo = new MutationObserver((muts) => {
       for (const m of muts) {
         if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
-          // dar un tick para que se monte el nuevo DOM
           setTimeout(restoreNow, 0);
           break;
         }
@@ -630,11 +651,198 @@
     mo.observe(zone.parentNode || zone, { childList: true, subtree: true });
   }
 
-  // 3) Antes de salir/recargar, guardar por si acaso
+  // 3) Antes de salir/recargar
   window.addEventListener('beforeunload', () => {
     const box = getBox();
     if (box) saveX(box.scrollLeft);
   });
+})();
+</script>
+
+<!-- Gestión de columnas con localStorage -->
+<script>
+(function () {
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  function getTable() {
+    return document.querySelector('[data-columns-table]') ||
+           document.querySelector('#cartolaZone table') ||
+           document.querySelector('table');
+  }
+
+  const firstTable = getTable();
+  const tableId = (firstTable && firstTable.dataset.columnsTable) || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const table = getTable();
+    if (!table) return;
+
+    const state = loadState();
+
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false;
+      th.style.display = visible ? '' : 'none';
+    });
+
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) {
+      master.checked = allOn;
+    }
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
+
+  // Exponer para re-aplicar después de AJAX
+  window.reApplyCartolaColumns = applyVisibility;
+})();
+</script>
+
+<!-- Aprobar por AJAX (igual que Hyperlink) -->
+<script>
+(function () {
+  function engancharAprobarCartola() {
+    document.querySelectorAll('.js-approve').forEach(btn => {
+      if (btn.__hasApproveHandler) return;
+      btn.__hasApproveHandler = true;
+
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        const url = btn.dataset.url;
+        const row = btn.closest('tr');
+        if (!url || !row) return;
+
+        if (btn.dataset.loading === '1') return;
+        btn.dataset.loading = '1';
+
+        const originalText = btn.textContent;
+        btn.textContent    = 'Aprobando...';
+
+        try {
+          const fd = new FormData();
+          fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+          const resp = await fetch(url, {
+            method: 'POST',
+            body: fd,
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+          });
+
+          let data = {};
+          try {
+            data = await resp.json();
+          } catch (_) {}
+
+          if (!resp.ok || !data.ok) {
+            const msg = (data && data.error) || 'No se pudo aprobar el movimiento.';
+            alert(msg);
+            btn.textContent     = originalText;
+            btn.dataset.loading = '';
+            return;
+          }
+
+          row.style.transition = 'opacity 0.2s ease';
+          row.style.opacity    = '0.4';
+          setTimeout(() => {
+            row.remove();
+          }, 200);
+
+        } catch (err) {
+          console.error(err);
+          alert('Error de red al aprobar el movimiento.');
+          btn.textContent     = originalText;
+          btn.dataset.loading = '';
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', engancharAprobarCartola);
+  window.engancharAprobarCartola = engancharAprobarCartola;
 })();
 </script>
 

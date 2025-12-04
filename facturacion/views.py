@@ -1,66 +1,44 @@
-from django.db.models import Q, Case, When, Value, IntegerField
-from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse
-from django.shortcuts import redirect, get_object_or_404
-from django.db.models import Q, Prefetch, Count
-from django.shortcuts import render, redirect, get_object_or_404
-from django.db.models import Count, Q
-from django.db import transaction
-from operaciones.models import ServicioCotizado, MonthlyPayment
-from django.db.models import Prefetch
-from uuid import uuid4
-import unicodedata
-import xlwt
-from django.utils.timezone import is_aware
-from django.db.models import Q
-from operaciones.forms import MovimientoUsuarioForm
-from django.db.models import Sum, Q
-from django.contrib.auth import get_user_model
-from facturacion.models import CartolaMovimiento
-from django.shortcuts import render
-from django.db.models import Sum, F, Value
-from .forms import CartolaMovimientoCompletoForm
-from .forms import ProyectoForm
-from .models import Proyecto
-from django.template.loader import render_to_string
-from .forms import TipoGastoForm
-from .models import TipoGasto
-from .forms import CartolaAbonoForm
-from .forms import CartolaGastoForm
-from django.shortcuts import get_object_or_404
-from django.views.decorators.csrf import csrf_exempt
-from dateutil import parser
-from decimal import Decimal, InvalidOperation
-from .forms import ImportarFacturasForm
-from .forms import FacturaOCForm
-from .models import OrdenCompraFacturacion, FacturaOC
-from django.http import JsonResponse
-from openpyxl.styles import Font, Alignment, PatternFill
-from django.http import HttpResponse
-from openpyxl.utils import get_column_letter
-import openpyxl
+import re
 import traceback
-from usuarios.decoradores import rol_requerido
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import get_object_or_404, redirect, render
+import unicodedata
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from uuid import uuid4
+
+import openpyxl
+import pdfplumber
+import xlwt
+from dateutil import parser
+from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.contrib import messages
-import re
-import pdfplumber
-from operaciones.models import ServicioCotizado
-from facturacion.models import OrdenCompraFacturacion
-from facturacion.forms import OrdenCompraFacturacionForm
-from facturacion.models import FacturaOC
-
 from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import (Case, CharField, Count, F, IntegerField,
+                              Prefetch, Q, Subquery, Sum, Value, When)
+from django.db.models.functions import Cast
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils.timezone import is_aware
+from django.views.decorators.csrf import csrf_exempt
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
+from facturacion.forms import OrdenCompraFacturacionForm
+from facturacion.models import (CartolaMovimiento, FacturaOC,
+                                OrdenCompraFacturacion)
+from operaciones.forms import MovimientoUsuarioForm
+from operaciones.models import MonthlyPayment, ServicioCotizado
+from usuarios.decoradores import rol_requerido
 
-from django.db.models import Subquery
-from facturacion.models import FacturaOC
-
+from .forms import (CartolaAbonoForm, CartolaGastoForm,
+                    CartolaMovimientoCompletoForm, FacturaOCForm,
+                    ImportarFacturasForm, ProyectoForm, TipoGastoForm)
+from .models import FacturaOC, OrdenCompraFacturacion, Proyecto, TipoGasto
 
 User = get_user_model()
 
@@ -137,12 +115,20 @@ def listar_ordenes_compra(request):
     # - servicios que nunca tuvieron OC (oc_total == 0)
     servicios = servicios.filter(Q(oc_sin_fact__gt=0) | Q(oc_total=0))
 
-    # --- Paginación ---
-    cantidad = (q.get("cantidad") or "10")
-    try:
-        per_page = 999_999 if cantidad == "todos" else int(cantidad)
-    except ValueError:
-        per_page = 10
+    # --- Paginación (máx. 100) ---
+    cantidad = (q.get("cantidad") or "10").strip().lower()
+
+    if cantidad == "todos":
+        # "todos" = mostrar hasta 100
+        per_page = 100
+    else:
+        try:
+            # mínimo 5, máximo 100
+            per_page = max(5, min(int(cantidad), 100))
+        except ValueError:
+            per_page = 10
+            cantidad = "10"
+
     pagina = Paginator(servicios, per_page).get_page(q.get("page"))
 
     # === MonthlyPayment (como ya lo tenías)
@@ -663,12 +649,19 @@ def listar_facturas(request):
     if estado:
         facturas = facturas.filter(orden_compra__du__estado=estado)
 
-    # Paginación (usa 'cantidad' del GET)
-    cantidad = request.GET.get("cantidad", "10")
-    try:
-        per_page = 999_999 if cantidad == "todos" else int(cantidad)
-    except ValueError:
-        per_page = 10
+    # Paginación (usa 'cantidad' del GET) → máx. 100
+    cantidad = (request.GET.get("cantidad") or "10").strip().lower()
+
+    if cantidad == "todos":
+        # "todos" se interpreta como máximo 100
+        per_page = 100
+    else:
+        try:
+            # mínimo 5, máximo 100
+            per_page = max(5, min(int(cantidad), 100))
+        except ValueError:
+            per_page = 10
+            cantidad = "10"
 
     paginator = Paginator(facturas, per_page)
     page_number = request.GET.get('page')
@@ -997,8 +990,8 @@ def actualizar_factura_ajax(request, pk):
 @rol_requerido('facturacion', 'admin')
 def exportar_facturacion_excel(request):
     import openpyxl
-    from openpyxl.styles import Alignment, Font
     from django.http import HttpResponse
+    from openpyxl.styles import Alignment, Font
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1106,7 +1099,16 @@ def exportar_facturacion_excel(request):
 def listar_cartola(request):
     # --- Cantidad/paginación (mantén string para la UI)
     cantidad_param = request.GET.get('cantidad', '10')
-    page_size = 1000000 if cantidad_param == 'todos' else int(cantidad_param)
+
+    # Limitamos a máx. 100 (y "todos" también se interpreta como 100)
+    if cantidad_param == 'todos':
+        page_size = 100
+    else:
+        try:
+            page_size = max(5, min(int(cantidad_param), 100))
+        except ValueError:
+            page_size = 10
+            cantidad_param = '10'
 
     # --- Filtros (string trimming)
     usuario = (request.GET.get('usuario') or '').strip()
@@ -1120,6 +1122,11 @@ def listar_cartola(request):
     # --- Base queryset
     movimientos = CartolaMovimiento.objects.all()
 
+    # Anotar fecha como texto ISO (YYYY-MM-DD...) para poder usar icontains
+    movimientos = movimientos.annotate(
+        fecha_iso=Cast('fecha', CharField())
+    )
+
     # --- Filtro usuario: username / nombres / apellidos
     if usuario:
         movimientos = movimientos.filter(
@@ -1128,14 +1135,50 @@ def listar_cartola(request):
             Q(usuario__last_name__icontains=usuario)
         )
 
-    # --- Filtro fecha (DD-MM-YYYY)
+    # --- Filtro fecha incremental (input tipo DD-MM-YYYY, parcial)
+        # --- Filtro fecha (permite parcial: DD, DD-MM, DD-MM-YYYY)
     if fecha_txt:
-        try:
-            fecha_valida = datetime.strptime(fecha_txt, "%d-%m-%Y").date()
-            movimientos = movimientos.filter(fecha__date=fecha_valida)
-        except ValueError:
+        # Permitimos 08-12-2025, 08/12/2025, 8-12, 29, etc.
+        fecha_normalizada = fecha_txt.replace('/', '-').strip()
+
+        # Patrones permitidos: "D", "DD", "DD-MM", "DD-M", "DD-MM-YYYY"
+        m = re.match(r'^(\d{1,2})(?:-(\d{1,2}))?(?:-(\d{1,4}))?$', fecha_normalizada)
+        if m:
+            dia_str = m.group(1)
+            mes_str = m.group(2)
+            anio_str = m.group(3)
+
+            try:
+                q_fecha = Q()
+
+                # Siempre filtramos por día
+                dia = int(dia_str)
+                q_fecha &= Q(fecha__day=dia)
+
+                # Si hay mes, también filtramos por mes
+                if mes_str:
+                    mes = int(mes_str)
+                    q_fecha &= Q(fecha__month=mes)
+
+                # Si hay año completo (4 dígitos), filtramos por año
+                if anio_str and len(anio_str) == 4:
+                    anio = int(anio_str)
+                    q_fecha &= Q(fecha__year=anio)
+
+                movimientos = movimientos.filter(q_fecha)
+
+            except ValueError:
+                # Si algo raro pasa al convertir, avisamos
+                messages.warning(
+                    request,
+                    "Formato de fecha inválido. Use DD, DD-MM o DD-MM-YYYY."
+                )
+        else:
+            # Cualquier cosa que no encaje en el patrón permitido
             messages.warning(
-                request, "Formato de fecha inválido. Use DD-MM-YYYY.")
+                request,
+                "Formato de fecha inválido. Use DD, DD-MM o DD-MM-YYYY."
+            )
 
     # --- Otros filtros
     if proyecto:
@@ -1192,6 +1235,7 @@ def listar_cartola(request):
             'filtros': filtros,
         }
     )
+
 
 
 @login_required
@@ -1323,9 +1367,10 @@ def eliminar_proyecto(request, pk):
     return redirect('facturacion:crear_proyecto')
 
 
-from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_protect
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_POST
+
 
 def _is_ajax(request):
     hdr = (request.headers.get('x-requested-with') or '').lower()
@@ -1537,37 +1582,47 @@ def eliminar_movimiento(request, pk):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_saldos_usuarios(request):
-    cantidad = request.GET.get('cantidad', '5')
+    # Cantidad por página (máx. 100)
+    cantidad_param = (request.GET.get('cantidad') or '5').strip().lower()
 
     # Agrupar por usuario y calcular rendido y disponible
-    saldos = (CartolaMovimiento.objects
-              .values('usuario__id', 'usuario__first_name', 'usuario__last_name', 'usuario__email')
-              .annotate(
-                  monto_rendido=Sum('cargos'),
-                  monto_asignado=Sum('abonos'),
-              )
-              .order_by('usuario__first_name'))
+    saldos = (
+        CartolaMovimiento.objects
+        .values('usuario__id', 'usuario__first_name', 'usuario__last_name', 'usuario__email')
+        .annotate(
+            # 👉 cargos SOLO de movimientos que NO están rechazados
+            monto_rendido=Sum(
+                'cargos',
+                filter=~Q(status__startswith='rechazado')
+            ),
+            monto_asignado=Sum('abonos'),
+        )
+        .order_by('usuario__first_name')
+    )
 
     # Calcular monto disponible
     for s in saldos:
-        s['monto_disponible'] = (
-            s['monto_asignado'] or 0) - (s['monto_rendido'] or 0)
+        s['monto_disponible'] = (s['monto_asignado'] or 0) - (s['monto_rendido'] or 0)
 
-    # Paginación como facturación
-    if cantidad == 'todos':
-        paginator = Paginator(saldos, saldos.count() or 1)  # Todo en 1 página
+    # Paginación (máx. 100)
+    if cantidad_param == 'todos':
+        per_page = 100
     else:
-        paginator = Paginator(saldos, int(cantidad))
+        try:
+            per_page = max(5, min(int(cantidad_param), 100))
+        except ValueError:
+            per_page = 5
+            cantidad_param = '5'
 
+    paginator = Paginator(saldos, per_page)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
     return render(request, 'facturacion/listar_saldos_usuarios.html', {
         'saldos': pagina,
         'pagina': pagina,
-        'cantidad': cantidad,
+        'cantidad': cantidad_param,
     })
-
 
 @login_required
 @rol_requerido('facturacion', 'admin')
@@ -1625,7 +1680,8 @@ def exportar_cartola_finanzas(request):
 @rol_requerido('admin', 'facturacion')  # Solo Admin y Finanzas
 def exportar_saldos_disponibles(request):
     # Obtener los mismos datos que usa la vista principal
-    from django.db.models import Sum, F, Value
+    from django.db.models import F, Sum, Value
+
     from facturacion.models import CartolaMovimiento
 
     saldos = (CartolaMovimiento.objects

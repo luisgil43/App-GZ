@@ -4,7 +4,7 @@
 {% block title %}Saldos Disponibles{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
     <!-- Encabezado con icono y botones -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
@@ -56,10 +56,11 @@
     <form method="get" class="flex items-center gap-2">
         <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
         <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-            <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
-            <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-            <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-            <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+          <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
         </select>
     </form>
 </div>
@@ -69,7 +70,7 @@
     {% if cantidad == 'todos' %}
         <span>Página 1 de 1</span>
     {% else %}
-        <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+        <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
     {% endif %}
 </div>
 
