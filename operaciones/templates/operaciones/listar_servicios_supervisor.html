@@ -131,6 +131,84 @@
   </div>
 </form>
 
+
+<div class="flex justify-start mb-2">
+  <details class="relative">
+    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+      ⚙️ Columns
+    </summary>
+
+    <!-- 👇 IMPORTANTE: mismo id que usa el script -->
+    <div id="columnToggles" class="absolute left-0 mt-1 w-56 bg-white border rounded-xl shadow-lg p-3 z-10">
+      <p class="text-xs text-gray-500 mb-2">Show / hide columns</p>
+
+      <!-- ✅ Master checkbox -->
+      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+        <input type="checkbox" id="col-toggle-all" checked>
+        <span class="font-semibold text-xs">Show all columns</span>
+      </label>
+
+      <!-- ✅ Una línea por columna (0-based) -->
+      <div class="space-y-1 text-sm">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="0" checked>
+          <span>DU</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="1" checked>
+          <span>ID CLARO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="2" checked>
+          <span>REGIÓN</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="3" checked>
+          <span>MES PRODUCCIÓN</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <span>ID NEW</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <span>DETALLE TAREA</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <span>MONTO MMOO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <span>ASIGNADOS</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="8" checked>
+          <span>FECHA FIN</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="9" checked>
+          <span>STATUS</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="10" checked>
+          <span>ACCIONES</span>
+        </label>
+      </div>
+    </div>
+  </details>
+</div>
+
 <!-- Tabla -->
  <div class="overflow-x-auto">
     <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
