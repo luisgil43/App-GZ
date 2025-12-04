@@ -332,20 +332,25 @@
         </main>
     </div>
     <!-- Scripts -->
-    <script>
+   <script>
+  // Clave distinta solo para el admin
+  const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
+
   function applySidebarState() {
     const nav     = document.getElementById('side-nav');
     const wrapper = document.querySelector('.content-wrapper');
     if (!nav || !wrapper) return;
 
     const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    const saved     = localStorage.getItem('sidebar-collapsed') === '1';
+    const raw = localStorage.getItem(ADMIN_SIDEBAR_KEY);
+    // Si no hay nada guardado -> false (abierto)
+    const savedCollapsed = raw === '1';
 
     if (isDesktop) {
-      // Estado según lo último que hizo el usuario
-      nav.classList.toggle('collapsed', saved);
-      wrapper.classList.toggle('no-sidebar', saved);
-      wrapper.classList.toggle('with-sidebar', !saved);
+      // En escritorio: respetamos lo último que hizo el usuario
+      nav.classList.toggle('collapsed', savedCollapsed);
+      wrapper.classList.toggle('no-sidebar', savedCollapsed);
+      wrapper.classList.toggle('with-sidebar', !savedCollapsed);
       // En desktop no usamos -translate-x-full
       nav.classList.remove('-translate-x-full');
     } else {
@@ -370,8 +375,9 @@
       nav.classList.toggle('collapsed', willCollapse);
       wrapper.classList.toggle('no-sidebar', willCollapse);
       wrapper.classList.toggle('with-sidebar', !willCollapse);
-      // Guardar preferencia
-      localStorage.setItem('sidebar-collapsed', willCollapse ? '1' : '0');
+
+      // Guardar preferencia solo del ADMIN
+      localStorage.setItem(ADMIN_SIDEBAR_KEY, willCollapse ? '1' : '0');
     } else {
       // En móvil es off-canvas
       nav.classList.toggle('-translate-x-full');
