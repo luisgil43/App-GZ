@@ -5,7 +5,7 @@
 {% block title %}Mis Cotizaciones{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
 <style>
   .campo-filtro {
@@ -41,41 +41,170 @@
   .btn-delete:hover { background-color:#fee2e2; }
 </style>
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
-  <h2 class="text-2xl font-bold text-gray-800">📋 Lista de Cotizaciones</h2>
-  <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-    <a href="{% url 'operaciones:importar_cotizaciones' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl text-center">📥 Importar Cotizaciones</a>
-    <a href="{% url 'operaciones:crear_servicio_cotizado' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-center">➕ Crear Cotización</a>
+<div class="flex flex-col sm:flex-row sm:items-center mb-4 gap-3">
+  <h2 class="text-2xl font-bold text-gray-800">
+    📋 Lista de Cotizaciones
+  </h2>
+
+  <div class="flex flex-wrap gap-3">
+    <a href="{% url 'operaciones:importar_cotizaciones' %}"
+       class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-xl text-center">
+      📥 Importar Cotizaciones
+    </a>
+    <a href="{% url 'operaciones:crear_servicio_cotizado' %}"
+       class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-center">
+      ➕ Crear Cotización
+    </a>
   </div>
 </div>
 
-<form id="form-filtros" method="get" class="filtros-compactos mb-6">
-  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
-    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
-    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
-    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
-    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
 
-    <select name="estado" class="campo-filtro">
-      <option value="">Todos los estados</option>
-      {% for codigo, nombre in estado_choices %}
-        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-      {% endfor %}
-    </select>
+<form id="form-filtros"
+      method="get"
+      class="mb-3 text-sm">
 
-    <div class="flex gap-2">
+  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+
+    <div class="w-full sm:w-40">
+      <label class="text-xs text-gray-600">DU</label>
+      <input type="text"
+             name="du"
+             value="{{ filtros.du }}"
+             placeholder="Filtrar por DU"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-48">
+      <label class="text-xs text-gray-600">ID CLARO</label>
+      <input type="text"
+             name="id_claro"
+             value="{{ filtros.id_claro }}"
+             placeholder="Filtrar por ID CLARO"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-48">
+      <label class="text-xs text-gray-600">ID NEW</label>
+      <input type="text"
+             name="id_new"
+             value="{{ filtros.id_new }}"
+             placeholder="Filtrar por ID NEW"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-44">
+      <label class="text-xs text-gray-600">Mes producción</label>
+      <input type="text"
+             name="mes_produccion"
+             value="{{ filtros.mes_produccion }}"
+             placeholder="Mes producción"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-60">
+      <label class="text-xs text-gray-600">Estado</label>
+      <select name="estado"
+              class="border rounded-lg px-3 py-2 w-full">
+        <option value="">Todos los estados</option>
+        {% for codigo, nombre in estado_choices %}
+          <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>
+            {{ nombre }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="w-full sm:w-auto flex items-center gap-2">
       <a href="{% url 'operaciones:listar_servicios_pm' %}"
-         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+         class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium whitespace-nowrap shadow">
         ❌ Limpiar
       </a>
     </div>
 
+    <!-- Mantener cantidad actual -->
     <input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
 
-<div class="rounded-xl border border-gray-200 tabla-responsive">
-  <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
+<div class="flex justify-start mb-2">
+  <details class="relative">
+    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+      ⚙️ Columnas
+    </summary>
+
+    <!-- 👇 IMPORTANTE: mismo id que usa el script -->
+    <div id="columnToggles" class="absolute left-0 mt-1 w-56 bg-white border rounded-xl shadow-lg p-3 z-10">
+      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+      <!-- ✅ Master checkbox -->
+      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+        <input type="checkbox" id="col-toggle-all" checked>
+        <span class="font-semibold text-xs">Mostrar todas</span>
+      </label>
+
+      <!-- ✅ Una línea por columna (0-based, mismo orden que el THEAD) -->
+      <div class="space-y-1 text-sm">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="0" checked>
+          <span>DU</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="1" checked>
+          <span>ID CLARO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="2" checked>
+          <span>REGIÓN</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="3" checked>
+          <span>MES PRODUCCIÓN</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <span>ID NEW</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <span>DETALLE TAREA</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <span>MONTO COTIZADO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <span>MONTO MMOO</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="8" checked>
+          <span>STATUS</span>
+        </label>
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="9" checked>
+          <span>ACCIONES</span>
+        </label>
+      </div>
+    </div>
+  </details>
+</div>
+
+
+ <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
       <tr>
         <th class="p-2">DU</th>
@@ -230,10 +359,11 @@
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+    <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
   </select>
   <input type="hidden" name="du" value="{{ filtros.du }}">
   <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
@@ -241,6 +371,21 @@
   <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
   <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
+
+
+<!-- Paginación -->
+<div class="mt-4 flex justify-center gap-2 text-sm">
+  {% if pagina.has_previous %}
+    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+
 
 {# === MODALES DE APROBACIÓN === #}
 {% for servicio in pagina %}
@@ -387,6 +532,126 @@
     const a = e.target.closest('a[href*="page="]');
     if (a) saveScroll();
   });
+})();
+</script>
+<script>
+(function () {
+  // Panel de columnas
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  // Tabla asociada: usa la que tenga data-columns-table
+  const table =
+    document.querySelector('[data-columns-table]') ||
+    document.querySelector('table');
+  if (!table) return;
+
+  // Clave para recordar las columnas por vista/tabla
+  const tableId = table.dataset.columnsTable || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const state = loadState(); // {0: true, 1: false, ...}
+
+    // Encabezados
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false; // por defecto visible
+      th.style.display = visible ? '' : 'none';
+    });
+
+    // Celdas
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    // Sincronizar checkboxes + master
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) {
+      master.checked = allOn;
+    }
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    // Individuales
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    // Master "Show all columns"
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  // Cerrar el <details> al hacer clic fuera
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  // Inicializar
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
 })();
 </script>
 

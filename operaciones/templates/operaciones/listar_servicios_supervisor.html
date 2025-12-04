@@ -5,7 +5,7 @@
 {% block title %}Servicios Cotizados - Supervisor{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-6xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
 <style>
   .campo-filtro {
@@ -47,7 +47,7 @@
   }
 </style>
 
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4 sm:gap-0">
+<div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-4 sm:gap-4">
   <h2 class="text-2xl font-bold text-gray-800">📋 Servicios Cotizados - Supervisor</h2>
   <a href="{% url 'operaciones:exportar_servicios_supervisor' %}" class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-amber-600 transition">
     📤 Exportar a Excel
@@ -55,34 +55,85 @@
 </div>
 
 <!-- Filtros -->
-<form id="form-filtros" method="get" class="filtros-compactos mb-6">
-  <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
-    <input type="text" name="du" value="{{ filtros.du }}" placeholder="Filtrar por DU" class="campo-filtro">
-    <input type="text" name="id_claro" value="{{ filtros.id_claro }}" placeholder="Filtrar por ID CLARO" class="campo-filtro">
-    <input type="text" name="id_new" value="{{ filtros.id_new }}" placeholder="Filtrar por ID NEW" class="campo-filtro">
-    <input type="text" name="mes_produccion" value="{{ filtros.mes_produccion }}" placeholder="Mes producción" class="campo-filtro">
+<form id="form-filtros"
+      method="get"
+      class="mb-3 text-base">
 
-    <select name="estado" class="campo-filtro">
-      <option value="">Todos los estados</option>
-      {% for codigo, nombre in estado_choices %}
-        <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
-      {% endfor %}
-    </select>
+  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
 
-    <div class="flex gap-2">
+    <div class="w-full sm:w-44">
+      <label class="text-xs text-gray-600">DU</label>
+      <input type="text"
+             name="du"
+             value="{{ filtros.du }}"
+             placeholder="Filtrar por DU"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">ID CLARO</label>
+      <input type="text"
+             name="id_claro"
+             value="{{ filtros.id_claro }}"
+             placeholder="Filtrar por ID CLARO"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">ID NEW</label>
+      <input type="text"
+             name="id_new"
+             value="{{ filtros.id_new }}"
+             placeholder="Filtrar por ID NEW"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-52">
+      <label class="text-xs text-gray-600">Mes producción</label>
+      <input type="text"
+             name="mes_produccion"
+             value="{{ filtros.mes_produccion }}"
+             placeholder="Mes producción"
+             class="border rounded-lg px-3 py-2 w-full"
+             autocomplete="off">
+    </div>
+
+    <div class="w-full sm:w-56">
+      <label class="text-xs text-gray-600">Estado</label>
+      <select name="estado"
+              class="border rounded-lg px-3 py-2 w-full">
+        <option value="">Todos los estados</option>
+        {% for codigo, nombre in estado_choices %}
+          <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>
+            {{ nombre }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
+      <button type="submit"
+              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium whitespace-nowrap shadow">
+        🔍 Filtrar
+      </button>
+
       <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">
+         class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 font-medium whitespace-nowrap shadow">
         ❌ Limpiar
       </a>
     </div>
 
+    <!-- Mantener cantidad actual -->
     <input type="hidden" name="cantidad" value="{{ cantidad }}">
   </div>
 </form>
 
 <!-- Tabla -->
-<div class="rounded-xl border border-gray-200 tabla-responsive">
-  <table class="table-auto border border-gray-300 rounded-xl text-sm w-full">
+ <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
       <tr>
         <th class="p-2">DU</th>
@@ -194,7 +245,10 @@
 <td class="p-2 space-y-1">
   {# 1) Aprobado por PM -> Asignar #}
   {% if servicio.estado == 'aprobado_pendiente' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-blue-600 hover:underline">👥 Asignar</a>
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+       class="text-blue-600 hover:underline">
+      👥 Asignar
+    </a>
 
   {# 2) SOLO estos tres NO tienen acciones #}
   {% elif servicio.estado == 'ajuste_bono' or servicio.estado == 'ajuste_adelanto' or servicio.estado == 'ajuste_descuento' %}
@@ -202,9 +256,18 @@
 
   {# 3) Flujo normal con acciones (como antes) #}
   {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' or servicio.estado == 'rechazado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}" class="text-sky-700 hover:underline block">📋 Requerimientos fotos</a>
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}" class="text-emerald-700 hover:underline block">🔎 Revisión</a>
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}" class="text-indigo-600 hover:underline block">🔁 Reasignar</a>
+    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+       class="text-sky-700 hover:underline block">
+      📋 Requerimientos fotos
+    </a>
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+       class="text-emerald-700 hover:underline block">
+      🔎 Revisión
+    </a>
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+       class="text-indigo-600 hover:underline block">
+      🔁 Reasignar
+    </a>
     {% if servicio.motivo_rechazo %}
       <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
         <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
@@ -213,23 +276,51 @@
 
   {# 4) Aprobado por supervisor -> revisar + reabrir (igual que antes) #}
   {% elif servicio.estado == 'aprobado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}" class="text-emerald-700 hover:underline block">🔎 Revisar</a>
-    <button type="button" class="text-red-600 hover:underline block" onclick="abrirModalReabrir('{{ servicio.id }}')">🔓 Reabrir servicio</button>
+    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+       class="text-emerald-700 hover:underline block">
+      🔎 Revisar
+    </a>
+    <button type="button"
+            class="text-red-600 hover:underline block"
+            onclick="abrirModalReabrir('{{ servicio.id }}')">
+      🔓 Reabrir servicio
+    </button>
 
-    <div id="modal-reabrir-{{ servicio.id }}" class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
+    <div id="modal-reabrir-{{ servicio.id }}"
+         class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
       <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
         <div class="px-5 py-4 border-b flex items-center justify-between">
           <h3 class="text-lg font-semibold text-gray-800">Reabrir servicio</h3>
-          <button type="button" class="text-gray-500 hover:text-gray-700" onclick="cerrarModalReabrir('{{ servicio.id }}')">✕</button>
+          <button type="button"
+                  class="text-gray-500 hover:text-gray-700"
+                  onclick="cerrarModalReabrir('{{ servicio.id }}')">
+            ✕
+          </button>
         </div>
-        <form method="post" action="{% url 'operaciones:reabrir_servicio' servicio.pk %}" class="px-5 pt-4 pb-5 space-y-3">
+        <form method="post"
+              action="{% url 'operaciones:reabrir_servicio' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+              class="px-5 pt-4 pb-5 space-y-3">
           {% csrf_token %}
-          <p class="text-sm text-gray-600 leading-relaxed modal-copy">Indica el motivo por el cual se reabre la asignación.</p>
+          <p class="text-sm text-gray-600 leading-relaxed modal-copy">
+            Indica el motivo por el cual se reabre la asignación.
+          </p>
           <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
-          <textarea name="motivo" rows="4" required pattern=".*\S.*" oninput="this.value = this.value.replace(/^\s+/, '')" class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <textarea name="motivo"
+                    rows="4"
+                    required
+                    pattern=".*\S.*"
+                    oninput="this.value = this.value.replace(/^\s+/, '')"
+                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
           <div class="flex items-center justify-end gap-2 pt-2">
-            <button type="button" class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700" onclick="cerrarModalReabrir('{{ servicio.id }}')">Cancelar</button>
-            <button type="submit" class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">Reabrir servicio</button>
+            <button type="button"
+                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    onclick="cerrarModalReabrir('{{ servicio.id }}')">
+              Cancelar
+            </button>
+            <button type="submit"
+                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+              Reabrir servicio
+            </button>
           </div>
         </form>
       </div>
@@ -242,7 +333,6 @@
 </td>
 
 
-
       </tr>
       {% endfor %}
     </tbody>
@@ -253,10 +343,11 @@
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
   <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5"  {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+    <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
   </select>
 
   <input type="hidden" name="du" value="{{ filtros.du }}">
@@ -265,6 +356,20 @@
   <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
   <input type="hidden" name="estado" value="{{ filtros.estado }}">
 </form>
+
+<!-- Paginación -->
+<div class="mt-4 flex justify-center gap-2 text-sm">
+  {% if pagina.has_previous %}
+    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
+
 
 <script>
   function abrirModalReabrir(id) {
@@ -417,6 +522,129 @@
   });
 })();
 </script>
+
+<script>
+(function () {
+  // Panel de columnas
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  // Tabla asociada: usa la que tenga data-columns-table
+  const table =
+    document.querySelector('[data-columns-table]') ||
+    document.querySelector('table');
+  if (!table) return;
+
+  // Clave para recordar las columnas por vista/tabla
+  const tableId = table.dataset.columnsTable || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const state = loadState(); // {0: true, 1: false, ...}
+
+    // Encabezados
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false; // por defecto visible
+      th.style.display = visible ? '' : 'none';
+    });
+
+    // Celdas
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    // Sincronizar checkboxes + master
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) {
+      master.checked = allOn;
+    }
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    // Individuales
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    // Master "Show all columns"
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  // Cerrar el <details> al hacer clic fuera
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  // Inicializar
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
+})();
+</script>
+
+
 
 
 </div>

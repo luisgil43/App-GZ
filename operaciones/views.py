@@ -97,7 +97,29 @@ def buscar_mi_sitio(request):
 def listar_sitios(request):
     id_claro = request.GET.get("id_claro", "")
     id_new = request.GET.get("id_new", "")
-    cantidad = request.GET.get("cantidad", "10")
+
+    # --- Manejo de cantidad con tope 100 ---
+    raw_cantidad = request.GET.get("cantidad", "10")
+
+    if raw_cantidad == "todos":
+        per_page = 100
+        cantidad = "100"
+    else:
+        try:
+            per_page = int(raw_cantidad)
+        except (TypeError, ValueError):
+            per_page = 10
+            cantidad = "10"
+        else:
+            if per_page < 1:
+                per_page = 10
+                cantidad = "10"
+            elif per_page > 100:
+                per_page = 100
+                cantidad = "100"
+            else:
+                cantidad = raw_cantidad
+
     page_number = request.GET.get("page", 1)
 
     sitios = SitioMovil.objects.all()
@@ -107,21 +129,16 @@ def listar_sitios(request):
     if id_new:
         sitios = sitios.filter(id_sites_new__icontains=id_new)
 
-    if cantidad == "todos":
-        paginator = Paginator(sitios, sitios.count() or 1)
-    else:
-        paginator = Paginator(sitios, int(cantidad))
-
+    paginator = Paginator(sitios, per_page)
     pagina = paginator.get_page(page_number)
 
     return render(request, 'operaciones/listar_sitios.html', {
         'sitios': pagina,
         'id_claro': id_claro,
         'id_new': id_new,
-        'cantidad': cantidad,
-        'pagina': pagina
+        'cantidad': cantidad,  # <- ya normalizado (máx 100)
+        'pagina': pagina,
     })
-
 
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion', 'supervisor')
@@ -265,11 +282,22 @@ def listar_servicios_pm(request):
         # si piden un estado de ajuste, no aparecerá por el exclude del queryset base
         servicios = servicios.filter(estado=estado)
 
-    # Paginación
-    cantidad = request.GET.get("cantidad", "10")
-    cantidad = 999999 if cantidad == "todos" else int(cantidad)
-    paginator = Paginator(servicios, cantidad)
-    page_number = request.GET.get("page")
+   # ========= Paginación (máx. 100) =========
+    cantidad_param = request.GET.get("cantidad", "10")
+
+    if cantidad_param == "todos":
+        # "todos" se interpreta como máximo 100
+        per_page = 100
+    else:
+        try:
+            # mínimo 5, máximo 100
+            per_page = max(5, min(int(cantidad_param), 100))
+        except ValueError:
+            per_page = 10
+            cantidad_param = "10"
+
+    paginator = Paginator(servicios, per_page)
+    page_number = request.GET.get("page") or 1
     pagina = paginator.get_page(page_number)
 
     return render(request, 'operaciones/listar_servicios_pm.html', {
@@ -599,12 +627,24 @@ def listar_servicios_supervisor(request):
         # aunque elijan ajuste_*, igual no aparecerán porque ya están excluidos arriba
         servicios = servicios.filter(estado=estado)
 
-    # Paginación
-    cantidad = request.GET.get("cantidad", "10")
-    cantidad = 999999 if cantidad == "todos" else int(cantidad)
-    paginator = Paginator(servicios, cantidad)
-    page_number = request.GET.get("page")
+       # ========= Paginación (máx. 100) =========
+    cantidad_param = request.GET.get("cantidad", "10")
+
+    if cantidad_param == "todos":
+        # "todos" se interpreta como máximo 100
+        per_page = 100
+    else:
+        try:
+            # mínimo 5, máximo 100
+            per_page = max(5, min(int(cantidad_param), 100))
+        except ValueError:
+            per_page = 10
+            cantidad_param = "10"
+
+    paginator = Paginator(servicios, per_page)
+    page_number = request.GET.get("page") or 1
     pagina = paginator.get_page(page_number)
+    
 
     return render(request, 'operaciones/listar_servicios_supervisor.html', {
         'pagina': pagina,
@@ -1343,12 +1383,18 @@ def vista_rendiciones(request):
         total=Sum('cargos'))['total'] or 0
 
     # --- Paginación
-    cantidad_param = request.GET.get(
-        'cantidad', '10')  # para el select del template
-    page_size = 1000000 if cantidad_param == 'todos' else int(cantidad_param)
+    cantidad_param = request.GET.get('cantidad', '10')  # para el select del template
+    try:
+        if cantidad_param == 'todos':
+            page_size = 100
+        else:
+            page_size = max(5, min(int(cantidad_param), 100))
+    except ValueError:
+        cantidad_param = '10'
+        page_size = 10
 
     paginator = Paginator(movimientos, page_size)
-    page_number = request.GET.get('page')
+    page_number = request.GET.get('page') or 1
     pagina = paginator.get_page(page_number)
 
     return render(request, 'operaciones/vista_rendiciones.html', {

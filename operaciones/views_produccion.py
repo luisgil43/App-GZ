@@ -229,17 +229,24 @@ def produccion_admin(request):
     # Orden final: mes (YYYYMM) desc y, a igualdad, fecha_fin desc
     filas.sort(key=lambda x: (x["_ym_key"], x["_date_key"]), reverse=True)
 
-    # ---------- Paginación ----------
-    if cantidad != "todos":
-        try:
-            per_page = max(5, min(int(cantidad), 100))
-        except ValueError:
-            per_page = 10
-        paginator = Paginator(filas, per_page)
-        page_number = request.GET.get("page") or 1
-        pagina = paginator.get_page(page_number)
-    else:
-        pagina = filas
+     # ---------- Paginación ----------
+    page_number = request.GET.get("page") or 1
+
+    # Tratar "todos" como 100 y nunca pasar de 100
+    try:
+        if cantidad == "todos":
+            per_page = 100
+        else:
+            per_page = int(cantidad)
+        per_page = max(5, min(per_page, 100))  # mínimo 5, máximo 100
+    except ValueError:
+        per_page = 10
+
+    paginator = Paginator(filas, per_page)
+    pagina = paginator.get_page(page_number)
+
+    # Normalizar cantidad para que el select quede coherente
+    cantidad = str(per_page)
 
     estado_choices = [
         ('aprobado_supervisor', 'Aprobado por Supervisor'),
@@ -597,18 +604,25 @@ def produccion_totales_a_pagar(request):
     # Abajo (historial/paginación): CON mes si se solicitó
     rows_hist = _agrega_por_tecnico(qs_hist)
 
-    # Paginación del bloque inferior
-    if cantidad == "todos":
-        pagina = rows_hist
-    else:
-        try:
-            per_page = max(5, min(100, int(cantidad)))
-        except ValueError:
-            per_page = 10
-            cantidad = "10"
-        paginator = Paginator(rows_hist, per_page)
-        page_number = request.GET.get("page") or 1
-        pagina = paginator.get_page(page_number)
+        # Paginación del bloque inferior (historial)
+    try:
+        # Si viene "todos", lo tratamos como 100 (máximo permitido)
+        if cantidad == "todos":
+            per_page_raw = 100
+        else:
+            per_page_raw = int(cantidad)
+    except ValueError:
+        per_page_raw = 10  # fallback seguro
+
+    # Forzamos entre 5 y 100
+    per_page = max(5, min(100, per_page_raw))
+
+    paginator = Paginator(rows_hist, per_page)
+    page_number = request.GET.get("page") or 1
+    pagina = paginator.get_page(page_number)
+
+    # Normalizamos cantidad para que en la plantilla coincida con el select
+    cantidad = str(per_page)
 
     filters_qs = urlencode({
         k: v for k, v in {

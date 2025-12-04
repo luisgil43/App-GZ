@@ -83,6 +83,39 @@
         .bg-sidebar {
           background-color: transparent;
         }
+
+        /* === COLAPSE MENÚ EN PC (como en Hyperlink) === */
+    @media (min-width: 768px) {
+      /* Cuando hay sidebar, empujamos el contenido 72 (18rem) hacia la derecha */
+      .content-wrapper.with-sidebar #main-content {
+        margin-left: 18rem; /* igual que w-72 */
+      }
+
+      /* Cuando está colapsado, el contenido ocupa todo el ancho */
+      .content-wrapper.no-sidebar #main-content {
+        margin-left: 0;
+      }
+
+      /* Nav colapsado: lo escondemos hacia la izquierda */
+      #side-nav.collapsed {
+        transform: translateX(-100%) !important;
+      }
+    }
+
+    /* Cuando el sidebar está presente */
+.content-wrapper.with-sidebar main {
+  margin-left: 18rem; /* ancho del menú en desktop */
+}
+
+/* Cuando lo colapsas en desktop */
+.content-wrapper.no-sidebar main {
+  margin-left: 0;
+}
+
+/* Sidebar colapsado en desktop */
+#side-nav.collapsed {
+  transform: translateX(-100%);
+}
     </style>
 </head>
 
@@ -129,7 +162,7 @@
 
       <!-- Izquierda: Logo -->
       <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="md:hidden text-gray-800 text-2xl">☰</button>
+        <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
         <img src="{% static 'images/planixnavidad.png' %}" alt="Logo" class="h-12">
         <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
       </div>
@@ -154,7 +187,7 @@
 
 
     <!-- Contenedor principal -->
-    <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper">
+    <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
 
   <!-- Menú lateral con animación -->
     <nav id="side-nav"
@@ -346,26 +379,60 @@
         </nav>
 
         <!-- Contenido -->
-       <main class="md:ml-72 flex-1 p-6 z-10 bg-gray-100">
+       <main id="main-content" class="flex-1 p-6">
 {% block dashboard_content %}{% endblock %}
         </main>
     </div>
     <!-- Scripts -->
-    <script>
-        function toggleMenu(el) {
-            const submenu = el.nextElementSibling;
-            const flecha = el.querySelector('.flecha');
-            if (submenu && flecha) {
-                submenu.classList.toggle('hidden');
-                flecha.classList.toggle('rotate-90');
-            }
-        }
+<script>
+  function applySidebarState() {
+    const nav     = document.getElementById('side-nav');
+    const wrapper = document.querySelector('.content-wrapper');
+    if (!nav || !wrapper) return;
 
-        function toggleSidebar() {
-            const nav = document.getElementById('side-nav');
-            nav.classList.toggle('-translate-x-full');
-        }
-    </script>
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+    const saved     = localStorage.getItem('sidebar-collapsed') === '1';
+
+    if (isDesktop) {
+      // Estado según lo último que hizo el usuario
+      nav.classList.toggle('collapsed', saved);
+      wrapper.classList.toggle('no-sidebar', saved);
+      wrapper.classList.toggle('with-sidebar', !saved);
+      // En desktop no usamos -translate-x-full
+      nav.classList.remove('-translate-x-full');
+    } else {
+      // En móvil el menú empieza oculto
+      nav.classList.add('-translate-x-full');
+      nav.classList.remove('collapsed');
+      wrapper.classList.remove('no-sidebar');
+      wrapper.classList.add('with-sidebar');
+    }
+  }
+
+  function toggleSidebar() {
+    const nav     = document.getElementById('side-nav');
+    const wrapper = document.querySelector('.content-wrapper');
+    if (!nav || !wrapper) return;
+
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+
+    if (isDesktop) {
+      // Colapsar / expandir en escritorio
+      const willCollapse = !nav.classList.contains('collapsed');
+      nav.classList.toggle('collapsed', willCollapse);
+      wrapper.classList.toggle('no-sidebar', willCollapse);
+      wrapper.classList.toggle('with-sidebar', !willCollapse);
+      // Guardar preferencia
+      localStorage.setItem('sidebar-collapsed', willCollapse ? '1' : '0');
+    } else {
+      // En móvil es off-canvas
+      nav.classList.toggle('-translate-x-full');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', applySidebarState);
+  window.addEventListener('resize', applySidebarState);
+</script>
 
  <!-- Mensajes emergentes -->
     {% if messages %}
@@ -430,6 +497,27 @@ function toggleNotifications() {
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
   lucide.createIcons();
+</script>
+<script>
+  // Abrir/cerrar submenús del sidebar
+  function toggleMenu(el) {
+    const submenu = el.nextElementSibling;        // <ul class="submenu">
+    const flecha  = el.querySelector('.flecha');  // <span class="flecha">▶</span>
+
+    if (!submenu) return;
+
+    const isHidden = submenu.classList.contains('hidden') || submenu.style.display === 'none';
+
+    if (isHidden) {
+      submenu.classList.remove('hidden');
+      submenu.style.display = 'block';
+      if (flecha) flecha.classList.add('rotate-90');
+    } else {
+      submenu.classList.add('hidden');
+      submenu.style.display = 'none';
+      if (flecha) flecha.classList.remove('rotate-90');
+    }
+  }
 </script>
 
 

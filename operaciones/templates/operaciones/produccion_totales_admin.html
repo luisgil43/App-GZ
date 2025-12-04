@@ -4,7 +4,7 @@
 {% block title %}Totales a pagar{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6"> 
 
   <!-- CSRF REAL, OCULTO (fuente principal para JS) -->
   <form id="__csrf" method="post" style="display:none;">
@@ -24,8 +24,8 @@
 
   <!-- ================= PARTE SUPERIOR: este mes ================= -->
   <h2 class="text-lg font-semibold mb-2">Pendiente de Pago</h2>
-  <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-[950px]" style="white-space: nowrap;">
+   <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
       <thead class="bg-gray-100">
         <tr>
           <th class="w-10"></th>
@@ -183,41 +183,61 @@
   <!-- ================= HISTORIAL (Pagados) ================= -->
   <h2 class="text-lg font-semibold mt-8 mb-2">Historial (Pagados)</h2>
 
-  <!-- Filtros automáticos (sin botón Aplicar) -->
-  <form id="filters" class="mb-3" onsubmit="return false;">
-    <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+<form id="filters"
+      class="mb-3 text-base"
+      onsubmit="return false;">
 
-      <div>
-        <label class="text-xs text-gray-600">Técnico</label>
-        <input name="f_tecnico" type="text" value="{{ f_tecnico }}"
-               class="w-full border rounded px-2 py-1.5" placeholder="Nombre o usuario">
-      </div>
-      <div>
-        <label class="text-xs text-gray-600">Mes de Pago</label>
-        <input name="f_month" type="text" value=""
-               class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
-      </div>
+  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
 
-      <div>
-        <label class="text-xs text-gray-600">DU</label>
-        <input name="f_du" type="text" value="{{ f_du }}"
-               class="w-full border rounded px-2 py-1.5" placeholder="DU">
-      </div>
-      <div>
-        <label class="text-xs text-gray-600">Mes Pagado</label>
-        <input name="f_paid_month" type="text" value="{{ f_paid_month }}"
-               class="w-full border rounded px-2 py-1.5" placeholder="YYYY-MM o Mes Año">
-      </div>
-      <div class="flex items-end gap-2">
-        <a href="{% url 'operaciones:produccion_totales_a_pagar' %}"
-           class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow flex-none">❌ Limpiar</a>
-      </div>
+    <div class="w-full sm:w-60">
+      <label class="text-xs text-gray-600">Técnico</label>
+      <input name="f_tecnico"
+             type="text"
+             value="{{ f_tecnico }}"
+             class="border rounded-lg px-3 py-2 w-full"
+             placeholder="Nombre o usuario">
     </div>
-  </form>
+
+    <div class="w-full sm:w-52">
+      <label class="text-xs text-gray-600">Mes de Pago</label>
+      <input name="f_month"
+             type="text"
+             value="{{ f_month }}"
+             class="border rounded-lg px-3 py-2 w-full"
+             placeholder="YYYY-MM o Mes Año">
+    </div>
+
+    <div class="w-full sm:w-40">
+      <label class="text-xs text-gray-600">DU</label>
+      <input name="f_du"
+             type="text"
+             value="{{ f_du }}"
+             class="border rounded-lg px-3 py-2 w-full"
+             placeholder="DU">
+    </div>
+
+    <div class="w-full sm:w-52">
+      <label class="text-xs text-gray-600">Mes Pagado</label>
+      <input name="f_paid_month"
+             type="text"
+             value="{{ f_paid_month }}"
+             class="border rounded-lg px-3 py-2 w-full"
+             placeholder="YYYY-MM o Mes Año">
+    </div>
+
+    <div class="w-full sm:w-auto flex items-center gap-2">
+      <a href="{% url 'operaciones:produccion_totales_a_pagar' %}"
+         class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 font-medium whitespace-nowrap shadow">
+        ❌ Limpiar
+      </a>
+    </div>
+
+  </div>
+</form>
 
   <div id="paid-wrap">
-    <div class="overflow-x-auto">
-      <table class="table-auto w-full text-sm min-w-[950px]" style="white-space: nowrap;">
+     <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
         <thead class="bg-gray-100">
           <tr>
             <th class="w-10"></th>
@@ -345,16 +365,17 @@
       <div class="flex items-center gap-2">
         <label for="cantidad-bottom" class="text-sm font-medium text-gray-700">Mostrar:</label>
         <select id="cantidad-bottom" class="border rounded-lg px-3 py-1">
-          <option value="5"    {% if cantidad == '5' %}selected{% endif %}>5</option>
-          <option value="10"   {% if cantidad == '10' %}selected{% endif %}>10</option>
-          <option value="20"   {% if cantidad == '20' %}selected{% endif %}>20</option>
-          <option value="todos" {% if cantidad == 'todos' %}selected{% endif %}>Todos</option>
+          <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
         </select>
 
         {% if cantidad == 'todos' %}
           <span> Página 1 de 1 </span>
         {% else %}
-          <span> Página {{ pagina.number }} de {{ pagina.paginator.num_pages }} </span>
+          <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
         {% endif %}
 
         {% if cantidad != 'todos' and pagina.has_previous %}
