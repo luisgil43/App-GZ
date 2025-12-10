@@ -10,5 +10,7 @@ urlpatterns = [
     path("upload/", views.upload, name="upload"),
     path("gallery/", views.gallery, name="gallery"),
     path("geocode/", views.geocode_google, name="geocode"),
+    path("static-map/", views.static_map, name="static_map"),  # 👈 NUEVO
     
 ]
+

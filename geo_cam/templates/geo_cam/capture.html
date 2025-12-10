@@ -27,7 +27,7 @@
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
     .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
 
-        /* === Overlay de previsualización === */
+    /* === Overlay de previsualización === */
     .preview {
       position:absolute;
       inset:0;
@@ -115,7 +115,7 @@
       </div>
     </div>
 
-        <!-- Overlay de previsualización después de capturar -->
+    <!-- Overlay de previsualización después de capturar -->
     <div id="previewOverlay" class="preview hidden">
       <img id="previewImg" alt="Previsualización" />
 
@@ -153,9 +153,10 @@ const CSRF = (document.querySelector('meta[name="csrf-token"]')?.content && "{{ 
   ? document.querySelector('meta[name="csrf-token"]').content
   : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
 
-/* endpoint + GOOGLE KEY (navegador) */
+/* endpoints */
 const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
-const GOOGLE_KEY = "{{ google_key|default:'' }}";
+const GEOCODE_URL = "{% url 'geo_cam:geocode' %}";
+const STATIC_MAP_URL = "{% url 'geo_cam:static_map' %}";
 
 const v = document.getElementById('v');
 const m = document.getElementById('m');
@@ -193,7 +194,7 @@ async function startStream(){
 /* ===== Geocoding vía PROXY del backend ===== */
 async function geocode(lat,lng){
   try{
-    const r = await fetch(`/geo-cam/geocode/?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
+    const r = await fetch(`${GEOCODE_URL}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`, {
       cache:'no-store', credentials:'same-origin'
     });
     const j = await r.json();
@@ -220,41 +221,23 @@ async function geocode(lat,lng){
   paintHUD();
 }
 
-/* ===== Static Maps con marcador (URLSearchParams correcto) ===== */
+/* ===== Static Maps desde nuestro backend (misma origen) ===== */
 function staticMap(lat, lng){
-  if(!GOOGLE_KEY){
-    mapReady=false; if(mapBox) mapBox.style.display='none'; return;
+  if (!STATIC_MAP_URL) {
+    mapReady = false;
+    mapBox.style.display = 'none';
+    return;
   }
+  const url = `${STATIC_MAP_URL}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&cb=${Date.now()}`;
 
-  const url = new URL("https://maps.googleapis.com/maps/api/staticmap");
-  url.searchParams.set("center", `${lat},${lng}`);
-  url.searchParams.set("zoom", "18");
-  url.searchParams.set("size", "240x240"); // 120x120@2x
-  url.searchParams.set("scale", "2");
-  url.searchParams.set("maptype", "satellite");
-  url.searchParams.set("key", GOOGLE_KEY);
-  // el pin rojo por defecto
-  url.searchParams.append("markers", `${lat},${lng}`);
-  // cache-buster para Safari/iOS
-  url.searchParams.set("cb", String(Date.now()));
-
-  try{
-    // NUNCA poner crossorigin con Static Maps (no hay CORS)
-    m.removeAttribute('crossorigin');
-    m.onload  = ()=>{ mapReady=true; };
-    m.onerror = ()=>{
-      mapReady=false;
-      url.searchParams.set("maptype", "roadmap"); // fallback
-      m.src = url.toString();
-    };
-    console.log("STATIC MAP URL =>", url.toString());
-    m.src = url.toString();
-  }catch(e){
-    console.error("Static map error:", e);
-    mapReady=false;
-  }
+  mapReady = false;
+  m.onload  = ()=>{ mapReady = true; mapBox.style.display = ''; };
+  m.onerror = ()=>{ mapReady = false; mapBox.style.display = 'none'; };
+  m.removeAttribute('crossorigin');
+  m.src = url;
 }
 
+/* ===== HUD ===== */
 function paintHUD(){
   const a=addr||{}, g=gps;
   l1.textContent = a.title || 'Ubicación';
@@ -289,7 +272,40 @@ async function demandGPS(){
   }
 }
 
-/* ===== Sello en canvas (SIN dibujar el <img> del mapa para no taint) ===== */
+/* ===== Helper para texto con salto / truncado ===== */
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines){
+  if (!text) text = '—';
+  const words = String(text).split(/\s+/);
+  let line = '';
+  let lineCount = 0;
+
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line ? line + ' ' + words[n] : words[n];
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && n > 0) {
+      ctx.fillText(line, x, y);
+      y += lineHeight;
+      lineCount++;
+      if (lineCount >= maxLines - 1) {
+        // última línea con "..."
+        const remaining = words.slice(n).join(' ');
+        let truncated = remaining;
+        while (ctx.measureText(truncated + '…').width > maxWidth && truncated.length > 0) {
+          truncated = truncated.slice(0, -1);
+        }
+        ctx.fillText(truncated + '…', x, y);
+        return y + lineHeight;
+      }
+      line = words[n];
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line, x, y);
+  return y + lineHeight;
+}
+
+/* ===== Sello en canvas ===== */
 function drawStampOnCanvas(ctx, W, H){
   const margin = Math.round(W*0.02);
   const panelH = Math.round(H*0.24);
@@ -304,48 +320,77 @@ function drawStampOnCanvas(ctx, W, H){
   }
 
   // Panel
-  ctx.save(); ctx.globalAlpha=.85; ctx.fillStyle='#000';
-  rrect(panelX,panelY,panelW,panelH,radius); ctx.fill(); ctx.restore();
+  ctx.save();
+  ctx.globalAlpha=.85;
+  ctx.fillStyle='#000';
+  rrect(panelX,panelY,panelW,panelH,radius);
+  ctx.fill();
+  ctx.restore();
 
   const pad  = Math.round(panelH*.10);
   const mapSize = Math.min(panelH - pad*2, Math.round(panelW*.30));
-  const textX = panelX + pad + (/* NO usamos mapa en canvas */ 0);
-  let y = panelY + pad;
+  const mapX = panelX + pad;
+  const mapY = panelY + pad;
 
-  // (IMPORTANTE) No dibujar m (Google Static Maps) para no contaminar el canvas.
-  // Si quieres estampar un "placeholder" visual, dibujamos un cuadrito con un punto:
+  const textX = mapX + mapSize + pad;
+  const maxTextWidth = panelX + panelW - pad - textX;
+
+  const g = gps, a = addr || {};
+
+  // Mapa: recortado con esquinas redondeadas
   ctx.save();
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 2;
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.roundRect(panelX+pad, panelY+pad, mapSize, mapSize, 8);
-  ctx.fill(); ctx.stroke();
-  // punto rojo centrado para indicar la posición
-  if (gps){
-    ctx.beginPath();
-    ctx.arc(panelX+pad+mapSize/2, panelY+pad+mapSize/2, Math.max(4, Math.round(mapSize*0.06)), 0, Math.PI*2);
-    ctx.fillStyle = '#ef4444';
-    ctx.fill();
+  rrect(mapX, mapY, mapSize, mapSize, 8);
+  ctx.clip();
+
+  if (m && m.complete && m.naturalWidth > 0 && mapReady) {
+    ctx.drawImage(m, mapX, mapY, mapSize, mapSize);
+  } else {
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(mapX, mapY, mapSize, mapSize);
+    if (g) {
+      ctx.beginPath();
+      ctx.arc(mapX + mapSize/2, mapY + mapSize/2, Math.max(4, Math.round(mapSize*0.06)), 0, Math.PI*2);
+      ctx.fillStyle = '#ef4444';
+      ctx.fill();
+    }
   }
   ctx.restore();
 
-  const g = gps, a = addr || {};
+  // Borde del mapa
+  ctx.save();
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 2;
+  rrect(mapX, mapY, mapSize, mapSize, 8);
+  ctx.stroke();
+  ctx.restore();
+
+  // Texto
+  let y = panelY + pad;
   const ttlF = Math.max(16, Math.round(panelH*.17));
   const txtF = Math.max(12, Math.round(panelH*.14));
   const gap  = Math.max(6, Math.round(panelH*.07));
 
-  ctx.fillStyle='#fff'; ctx.textBaseline='top';
-  ctx.font = `700 ${ttlF}px system-ui,-apple-system,Segoe UI,Roboto`;
-  ctx.fillText(a.title || 'Ubicación', textX + (mapSize + pad), y); y += ttlF + gap;
+  ctx.fillStyle='#fff';
+  ctx.textBaseline='top';
 
+  // Título
+  ctx.font = `700 ${ttlF}px system-ui,-apple-system,Segoe UI,Roboto`;
+  ctx.fillText(a.title || 'Ubicación', textX, y);
+  y += ttlF + gap;
+
+  // Dirección (máx 2 líneas)
   ctx.font = `${txtF}px system-ui,-apple-system,Segoe UI,Roboto`;
-  ctx.fillText(a.line2 || '—', textX + (mapSize + pad), y); y += txtF + Math.round(gap*.6);
+  y = drawWrappedText(ctx, a.line2 || '—', textX, y, maxTextWidth, txtF + Math.round(gap*0.3), 2);
 
   if (g) {
-    ctx.fillText(`Lat ${deg(g.lat)} Long ${deg(g.lng)}`, textX + (mapSize + pad), y); y += txtF + Math.round(gap*.6);
+    // Lat / Long (1 línea)
+    const latLngText = `Lat ${deg(g.lat)} Long ${deg(g.lng)}`;
+    y = drawWrappedText(ctx, latLngText, textX, y, maxTextWidth, txtF + Math.round(gap*0.3), 1);
+
+    // Fecha + TZ (máx 2 líneas)
     const ts = g.ts ? new Date(g.ts) : new Date();
-    ctx.fillText(`${fmtDT(ts)} ${tzStr(ts)}`, textX + (mapSize + pad), y);
+    const dtText = `${fmtDT(ts)} ${tzStr(ts)}`;
+    y = drawWrappedText(ctx, dtText, textX, y, maxTextWidth, txtF + Math.round(gap*0.3), 2);
   }
 }
 
@@ -473,15 +518,16 @@ async function uploadCurrent() {
   } catch (e) {}
 
   if (r.ok && j && j.ok) {
-    alert('Foto guardada en tu galería');
+    alert('Foto guardada en la galería de la app');
     setPreviewMode(false);
+    // Aquí podrías redirigir a la galería si quieres:
+    // window.location.href = "{% url 'geo_cam:gallery' %}";
   } else {
     const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
     alert('No se pudo enviar la foto: ' + msg);
   }
 }
 
-/* ===== Listeners ===== */
 /* ===== Listeners ===== */
 document.getElementById('flip').addEventListener('click', async () => {
   facing = (facing === 'environment' ? 'user' : 'environment');

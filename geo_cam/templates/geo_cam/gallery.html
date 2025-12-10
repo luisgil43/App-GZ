@@ -6,13 +6,158 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Galería — Geo Cam</title>
   <style>
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter;background:#0b1220;color:#e2e8f0}
-    header{position:sticky;top:0;background:#0b1220;border-bottom:1px solid #1f2a44;padding:12px 16px;display:flex;gap:12px;align-items:center}
-    a.back{display:inline-flex;gap:8px;align-items:center;color:#93c5fd;text-decoration:none}
-    .grid{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
-    figure{background:#0f172a;border:1px solid #1f2a44;border-radius:12px;padding:8px}
-    img{width:100%;height:140px;object-fit:cover;border-radius:8px;background:#0b1220}
-    figcaption{font-size:12px;margin-top:6px;color:#94a3b8}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter;
+      background:#0b1220;
+      color:#e2e8f0;
+    }
+    header{
+      position:sticky;
+      top:0;
+      background:#0b1220;
+      border-bottom:1px solid #1f2a44;
+      padding:12px 16px;
+      display:flex;
+      gap:12px;
+      align-items:center;
+      z-index:10;
+    }
+    a.back{
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+      color:#93c5fd;
+      text-decoration:none;
+    }
+    .grid{
+      padding:16px;
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+      gap:12px;
+    }
+    figure{
+      background:#0f172a;
+      border:1px solid #1f2a44;
+      border-radius:12px;
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    img.thumb{
+      width:100%;
+      height:140px;
+      object-fit:cover;
+      border-radius:8px;
+      background:#0b1220;
+      cursor:pointer;
+    }
+    figcaption{
+      font-size:12px;
+      color:#94a3b8;
+    }
+    .btn-save{
+      margin-top:4px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid #1d4ed8;
+      background:#1d4ed8;
+      color:#e5e7eb;
+      font-size:11px;
+      font-weight:600;
+      text-decoration:none;
+      cursor:pointer;
+    }
+    .btn-save span.icon{
+      font-size:13px;
+    }
+    .btn-save:active{
+      transform:scale(.97);
+    }
+
+    /* === Overlay de previsualización === */
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:30;
+    }
+    .overlay.visible{
+      display:flex;
+    }
+    .overlay-backdrop{
+      position:absolute;
+      inset:0;
+      background:rgba(0,0,0,.85);
+    }
+    .overlay-inner{
+      position:relative;
+      max-width:960px;
+      width:100%;
+      padding:16px;
+      box-sizing:border-box;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      z-index:1;
+    }
+    .overlay-img{
+      max-height:70vh;
+      width:100%;
+      object-fit:contain;
+      border-radius:14px;
+      box-shadow:0 18px 40px rgba(0,0,0,.7);
+      background:#020617;
+    }
+    .overlay-footer{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      background:rgba(15,23,42,.9);
+      border-radius:12px;
+      padding:10px 12px;
+      border:1px solid #1f2937;
+    }
+    .overlay-meta{
+      font-size:12px;
+      color:#cbd5e1;
+      line-height:1.35;
+    }
+    .overlay-top{
+      position:absolute;
+      top:10px;
+      right:14px;
+      display:flex;
+      gap:8px;
+    }
+    .overlay-close{
+      width:32px;
+      height:32px;
+      border-radius:999px;
+      border:1px solid rgba(148,163,184,.5);
+      background:rgba(15,23,42,.8);
+      color:#e5e7eb;
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+    }
+    .overlay-close:active{
+      transform:scale(.95);
+    }
+    @media (min-width:640px){
+      .overlay-footer{
+        flex-direction:row;
+        align-items:center;
+        justify-content:space-between;
+      }
+    }
   </style>
 </head>
 <body>
@@ -30,17 +175,108 @@
 <main class="grid">
   {% for p in photos %}
     <figure>
-      <img src="{{ p.image.url }}" alt="foto {{ forloop.counter }}" loading="lazy"
-           onerror="this.src='{% static 'images/placeholder.png' %}'">
+      <img
+        class="thumb"
+        src="{{ p.image.url }}"
+        alt="foto {{ forloop.counter }}"
+        loading="lazy"
+        onerror="this.src='{% static 'images/placeholder.png' %}'"
+        data-full="{{ p.image.url }}"
+        data-title="{{ p.titulo_manual|default:'—' }}"
+        data-date="{{ p.created_at|date:'Y-m-d H:i' }}"
+        data-lat="{% if p.lat %}{{ p.lat }}{% endif %}"
+        data-lng="{% if p.lng %}{{ p.lng }}{% endif %}"
+      >
       <figcaption>
         {{ p.titulo_manual|default:"—" }}<br>
         {{ p.created_at|date:"Y-m-d H:i" }}<br>
         {% if p.lat and p.lng %}Lat {{ p.lat }} · Long {{ p.lng }}{% endif %}
       </figcaption>
+      <!-- Botón para “Guardar en el teléfono” -->
+      <a
+        class="btn-save"
+        href="{{ p.image.url }}"
+        download
+        target="_blank"
+        rel="noopener"
+      >
+        <span class="icon">📥</span>
+        <span>Guardar en tu teléfono</span>
+      </a>
     </figure>
   {% empty %}
     <div style="grid-column:1/-1;color:#94a3b8;">Aún no hay fotos.</div>
   {% endfor %}
 </main>
+
+<!-- Overlay de previsualización -->
+<div id="overlay" class="overlay">
+  <div class="overlay-backdrop"></div>
+  <div class="overlay-inner">
+    <div class="overlay-top">
+      <button id="overlayClose" class="overlay-close" type="button" aria-label="Cerrar">✕</button>
+    </div>
+    <img id="overlayImg" class="overlay-img" alt="Previsualización">
+    <div class="overlay-footer">
+      <div id="overlayMeta" class="overlay-meta">—</div>
+      <a id="overlaySave" class="btn-save" href="#" download target="_blank" rel="noopener">
+        <span class="icon">📥</span>
+        <span>Guardar en tu teléfono</span>
+      </a>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const overlay = document.getElementById('overlay');
+  const overlayImg = document.getElementById('overlayImg');
+  const overlayMeta = document.getElementById('overlayMeta');
+  const overlaySave = document.getElementById('overlaySave');
+  const overlayClose = document.getElementById('overlayClose');
+
+  function openOverlay(fromImg) {
+    const url = fromImg.dataset.full || fromImg.src;
+    const title = fromImg.dataset.title || '—';
+    const date = fromImg.dataset.date || '';
+    const lat = fromImg.dataset.lat || '';
+    const lng = fromImg.dataset.lng || '';
+
+    overlayImg.src = url;
+    overlaySave.href = url;
+
+    let meta = '';
+    meta += `<strong>${title}</strong>`;
+    if (date) meta += `<br>${date}`;
+    if (lat && lng) meta += `<br>Lat ${lat} · Long ${lng}`;
+
+    overlayMeta.innerHTML = meta;
+    overlay.classList.add('visible');
+  }
+
+  function closeOverlay() {
+    overlay.classList.remove('visible');
+    overlayImg.src = '';
+  }
+
+  document.querySelectorAll('img.thumb').forEach(img => {
+    img.addEventListener('click', () => openOverlay(img));
+  });
+
+  overlayClose.addEventListener('click', closeOverlay);
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.classList.contains('overlay-backdrop')) {
+      closeOverlay();
+    }
+  });
+
+  // Esc para cerrar
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && overlay.classList.contains('visible')) {
+      closeOverlay();
+    }
+  });
+});
+</script>
 </body>
 </html>
