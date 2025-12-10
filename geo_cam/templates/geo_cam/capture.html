@@ -23,6 +23,11 @@
     .btn-icon:active{transform:scale(.96)}
     .bar{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;padding:10px 0}
     .shot{pointer-events:auto;width:74px;height:74px;border-radius:999px;border:6px solid rgba(255,255,255,.75);background:rgba(0,0,0,.15)}
+    .shot[disabled]{
+      opacity:.4;
+      border-color:rgba(255,255,255,.35);
+      background:rgba(15,23,42,.7);
+    }
     .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
     .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
@@ -118,7 +123,6 @@
     <!-- Overlay de previsualización después de capturar -->
     <div id="previewOverlay" class="preview hidden">
       <img id="previewImg" alt="Previsualización" />
-
       <div class="preview-actions">
         <button type="button" id="btnRetake" class="preview-btn secondary">
           🔄 Tomar otra
@@ -154,8 +158,8 @@ const CSRF = (document.querySelector('meta[name="csrf-token"]')?.content && "{{ 
   : ((document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || "");
 
 /* endpoints */
-const UPLOAD_URL = "{% url 'geo_cam:upload' %}";
-const GEOCODE_URL = "{% url 'geo_cam:geocode' %}";
+const UPLOAD_URL   = "{% url 'geo_cam:upload' %}";
+const GEOCODE_URL  = "{% url 'geo_cam:geocode' %}";
 const STATIC_MAP_URL = "{% url 'geo_cam:static_map' %}";
 
 const v = document.getElementById('v');
@@ -168,8 +172,18 @@ const previewOverlay = document.getElementById('previewOverlay');
 const previewImg = document.getElementById('previewImg');
 const btnRetake = document.getElementById('btnRetake');
 const btnUse = document.getElementById('btnUse');
+const shotBtn = document.getElementById('shot');
 
-let stream = null, facing = 'environment', gps = null, addr = null, mapReady = false, lastBlob = null;
+let stream = null,
+    facing = 'environment',
+    gps = null,
+    addr = null,
+    mapReady = false,
+    lastBlob = null;
+
+if (shotBtn) {
+  shotBtn.disabled = true;   // hasta que tengamos GPS + mapa
+}
 
 function pad(n){return String(n).padStart(2,'0')}
 function tzStr(d=new Date()){const off=-d.getTimezoneOffset();const s=off>=0?'+':'-';const hh=pad(Math.floor(Math.abs(off)/60));const mm=pad(Math.abs(off)%60);return `GMT ${s}${hh}:${mm}`;}
@@ -226,13 +240,24 @@ function staticMap(lat, lng){
   if (!STATIC_MAP_URL) {
     mapReady = false;
     mapBox.style.display = 'none';
+    if (shotBtn) shotBtn.disabled = false;
     return;
   }
   const url = `${STATIC_MAP_URL}?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}&cb=${Date.now()}`;
 
   mapReady = false;
-  m.onload  = ()=>{ mapReady = true; mapBox.style.display = ''; };
-  m.onerror = ()=>{ mapReady = false; mapBox.style.display = 'none'; };
+  if (shotBtn) shotBtn.disabled = true;
+
+  m.onload  = ()=>{ 
+    mapReady = true; 
+    mapBox.style.display = ''; 
+    if (shotBtn) shotBtn.disabled = false;
+  };
+  m.onerror = ()=>{ 
+    mapReady = false; 
+    mapBox.style.display = 'none'; 
+    if (shotBtn) shotBtn.disabled = false;  // permitimos disparar aunque no haya mapa
+  };
   m.removeAttribute('crossorigin');
   m.src = url;
 }
@@ -268,6 +293,7 @@ async function demandGPS(){
     return true;
   }catch(e){
     alert(explainGeoErr(e));
+    if (shotBtn) shotBtn.disabled = false; // dejamos disparar aunque no haya GPS
     return false;
   }
 }
@@ -287,7 +313,6 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines){
       y += lineHeight;
       lineCount++;
       if (lineCount >= maxLines - 1) {
-        // última línea con "..."
         const remaining = words.slice(n).join(' ');
         let truncated = remaining;
         while (ctx.measureText(truncated + '…').width > maxWidth && truncated.length > 0) {
@@ -305,7 +330,7 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines){
   return y + lineHeight;
 }
 
-/* ===== Sello en canvas ===== */
+/* ===== Sello en canvas (incluye mapa) ===== */
 function drawStampOnCanvas(ctx, W, H){
   const margin = Math.round(W*0.02);
   const panelH = Math.round(H*0.24);
@@ -429,6 +454,12 @@ async function captureOnly() {
     return;
   }
 
+  // Si el mapa está visible pero aún cargando, esperamos
+  if (mapBox && mapBox.style.display !== 'none' && !mapReady) {
+    alert('Esperando el mapa de la ubicación, intenta de nuevo en un segundo…');
+    return;
+  }
+
   if (!stream) {
     alert('No hay cámara activa. Intentando iniciarla de nuevo...');
     await startStream();
@@ -486,7 +517,6 @@ async function uploadCurrent() {
   const ss = String(ts.getSeconds()).padStart(2, '0');
   const filename = `geo_${yyyy}${mm}${dd}_${hh}${mi}${ss}.jpg`;
 
-  // OJO: el backend espera el campo "imagen"
   fd.append('imagen', lastBlob, filename);
 
   const tituloInput = document.getElementById('titulo');
@@ -494,7 +524,6 @@ async function uploadCurrent() {
     fd.append('titulo_manual', tituloInput.value || '');
   }
 
-  // Metadatos GPS que tu vista ya soporta
   if (gps) {
     fd.append('lat', gps.lat);
     fd.append('lng', gps.lng);
@@ -520,7 +549,7 @@ async function uploadCurrent() {
   if (r.ok && j && j.ok) {
     alert('Foto guardada en la galería de la app');
     setPreviewMode(false);
-    // Aquí podrías redirigir a la galería si quieres:
+    // Si quieres redirigir a la galería:
     // window.location.href = "{% url 'geo_cam:gallery' %}";
   } else {
     const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
@@ -537,16 +566,21 @@ document.getElementById('flip').addEventListener('click', async () => {
 const closeBtn = document.getElementById('close');
 if (closeBtn) closeBtn.addEventListener('click', () => history.back());
 
-// El botón grande ahora solo CAPTURA y muestra la preview
-document.getElementById('shot').addEventListener('click', captureOnly);
+// Botón grande: captura + preview
+if (shotBtn) {
+  shotBtn.addEventListener('click', () => {
+    if (shotBtn.disabled) return;
+    captureOnly();
+  });
+}
 
 // Botones del overlay de previsualización
 btnRetake.addEventListener('click', () => {
-  setPreviewMode(false);  // oculta overlay y reactiva la cámara
+  setPreviewMode(false);
 });
 
 btnUse.addEventListener('click', () => {
-  uploadCurrent();        // envía la foto al backend
+  uploadCurrent();
 });
 
 /* ===== Init ===== */

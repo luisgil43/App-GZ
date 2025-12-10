@@ -34,11 +34,12 @@ def capture(request):
 @require_POST
 def upload(request):
     """
-    Recibe imagen + metadatos, guarda archivo con `upload_to` y crea GeoPhoto.
+    Recibe imagen + metadatos, guarda archivo en el storage por defecto (Wasabi)
+    y crea el GeoPhoto.
     """
     img = request.FILES.get("imagen")
-    if not img:
-        return HttpResponseBadRequest("Falta 'imagen'")
+    if not img or not getattr(img, "size", 0):
+        return HttpResponseBadRequest("Falta 'imagen' o viene vacía")
 
     titulo_manual = (request.POST.get("titulo_manual") or "").strip() or "Extra"
 
@@ -48,31 +49,34 @@ def upload(request):
     acc = request.POST.get("acc")
     client_taken_at = request.POST.get("client_taken_at")  # ISO-8601 (opcional)
 
-    # Parseo seguro
+    # Parseo seguro de lat/lng
     lat_dec = GeoPhoto._to_decimal_or_none(lat)
     lng_dec = GeoPhoto._to_decimal_or_none(lng)
+
+    # Precisión
     try:
         acc_float = float(acc) if acc not in (None, "") else None
     except Exception:
         acc_float = None
 
+    # Fecha/hora del dispositivo
     dt_client = None
     if client_taken_at:
         dt_client = parse_datetime(client_taken_at)
         if dt_client and dt_client.tzinfo is None:
             dt_client = make_aware(dt_client, get_current_timezone())
 
-    # Crear y guardar
+    # Guardamos directo en el ImageField (usa upload_to=geo_upload_to)
     photo = GeoPhoto(
         user=request.user,
+        image=img,
         titulo_manual=titulo_manual,
         lat=lat_dec,
         lng=lng_dec,
         acc=acc_float,
         client_taken_at=dt_client,
     )
-    filename = f"foto_{int(now().timestamp())}.jpg"
-    photo.image.save(filename, img, save=True)
+    photo.save()
 
     return JsonResponse(
         {
@@ -193,6 +197,5 @@ def static_map(request):
 
     content_type = r.headers.get("Content-Type", "image/png")
     resp = HttpResponse(r.content, content_type=content_type)
-    # Puedes cachear un poco si quieres, yo lo dejo casi sin cache
     resp["Cache-Control"] = "private, max-age=60"
     return resp
