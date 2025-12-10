@@ -26,6 +26,56 @@
     .title-box{position:absolute;left:16px;right:16px;top:56px;display:flex;gap:8px;pointer-events:auto}
     .input{flex:1;border-radius:10px;border:1px solid #475569;background:#0b1220;color:#fff;padding:10px 12px}
     .note{position:absolute;left:16px;right:16px;top:100px;color:#cbd5e1;font-size:12px}
+
+        /* === Overlay de previsualización === */
+    .preview {
+      position:absolute;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      box-sizing:border-box;
+      background:rgba(0,0,0,0.92);
+      z-index:20;
+    }
+    .preview.hidden {
+      display:none;
+    }
+    .preview img {
+      max-width:100%;
+      max-height:calc(100% - 90px);
+      object-fit:contain;
+      border-radius:14px;
+      box-shadow:0 18px 40px rgba(0,0,0,.6);
+      border:1px solid rgba(148,163,184,.3);
+    }
+    .preview-actions {
+      margin-top:16px;
+      display:flex;
+      gap:10px;
+    }
+    .preview-btn {
+      border:none;
+      border-radius:999px;
+      padding:10px 18px;
+      font-size:14px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    .preview-btn.primary {
+      background:#22c55e;
+      color:#022c22;
+    }
+    .preview-btn.secondary {
+      background:#0f172a;
+      color:#e5e7eb;
+      border:1px solid #1f2937;
+    }
+    .preview-btn:active {
+      transform:scale(.97);
+    }
   </style>
 </head>
 <body>
@@ -65,6 +115,20 @@
       </div>
     </div>
 
+        <!-- Overlay de previsualización después de capturar -->
+    <div id="previewOverlay" class="preview hidden">
+      <img id="previewImg" alt="Previsualización" />
+
+      <div class="preview-actions">
+        <button type="button" id="btnRetake" class="preview-btn secondary">
+          🔄 Tomar otra
+        </button>
+        <button type="button" id="btnUse" class="preview-btn primary">
+          ✅ Usar
+        </button>
+      </div>
+    </div>
+
     <div class="hud">
       <div class="panel" id="hudPanel">
         <div class="map" id="mapBox"><img id="m" alt></div>
@@ -96,10 +160,15 @@ const GOOGLE_KEY = "{{ google_key|default:'' }}";
 const v = document.getElementById('v');
 const m = document.getElementById('m');
 const mapBox = document.getElementById('mapBox');
-const l1=document.getElementById('l1'), l2=document.getElementById('l2'),
-      l3=document.getElementById('l3'), l4=document.getElementById('l4'), l5=document.getElementById('l5');
+const l1 = document.getElementById('l1'), l2 = document.getElementById('l2'),
+      l3 = document.getElementById('l3'), l4 = document.getElementById('l4'), l5 = document.getElementById('l5');
 
-let stream=null, facing='environment', gps=null, addr=null, mapReady=false;
+const previewOverlay = document.getElementById('previewOverlay');
+const previewImg = document.getElementById('previewImg');
+const btnRetake = document.getElementById('btnRetake');
+const btnUse = document.getElementById('btnUse');
+
+let stream = null, facing = 'environment', gps = null, addr = null, mapReady = false, lastBlob = null;
 
 function pad(n){return String(n).padStart(2,'0')}
 function tzStr(d=new Date()){const off=-d.getTimezoneOffset();const s=off>=0?'+':'-';const hh=pad(Math.floor(Math.abs(off)/60));const mm=pad(Math.abs(off)%60);return `GMT ${s}${hh}:${mm}`;}
@@ -281,65 +350,158 @@ function drawStampOnCanvas(ctx, W, H){
 }
 
 /* ===== Capturar y subir ===== */
-async function captureAndUpload(){
-  if(!stream || !gps){ alert('Necesitamos cámara y GPS activos'); return; }
+function setPreviewMode(on) {
+  const hud = document.querySelector('.hud');
+  const bar = document.querySelector('.bar');
 
-  const W0 = v.videoWidth || 1080, H0 = v.videoHeight || 1920;
-  const maxSide = 1600, s = Math.min(1, maxSide / Math.max(W0, H0));
-  const W = Math.round(W0*s), H = Math.round(H0*s);
+  if (on) {
+    previewOverlay.classList.remove('hidden');
+    if (hud) hud.style.opacity = '0';
+    if (bar) bar.style.opacity = '0';
 
-  const c=document.createElement('canvas'); c.width=W; c.height=H;
-  const ctx=c.getContext('2d');
-  ctx.drawImage(v,0,0,W,H);
+    // Apagar cámara mientras se muestra la preview
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+  } else {
+    previewOverlay.classList.add('hidden');
+    if (hud) hud.style.opacity = '';
+    if (bar) bar.style.opacity = '';
+
+    lastBlob = null;
+
+    // Volver a encender la cámara
+    if (!stream) {
+      startStream();
+    }
+  }
+}
+
+async function captureOnly() {
+  if (!gps) {
+    alert('Necesitamos la ubicación (GPS) activa antes de capturar.');
+    return;
+  }
+
+  if (!stream) {
+    alert('No hay cámara activa. Intentando iniciarla de nuevo...');
+    await startStream();
+    if (!stream) return;
+  }
+
+  const W0 = v.videoWidth || 1080;
+  const H0 = v.videoHeight || 1920;
+  const maxSide = 1600;
+  const s = Math.min(1, maxSide / Math.max(W0, H0));
+  const W = Math.round(W0 * s);
+  const H = Math.round(H0 * s);
+
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext('2d');
+
+  // Foto base + sello
+  ctx.drawImage(v, 0, 0, W, H);
   drawStampOnCanvas(ctx, W, H);
 
-  // Aquí toBlob ya NO falla porque no dibujamos el <img> de Google (sin CORS)
-  const blob = await new Promise(res=>c.toBlob(res,'image/jpeg',0.9));
-  if(!blob){ alert('No se pudo generar la imagen.'); return; }
+  const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+  if (!blob) {
+    alert('No se pudo generar la imagen.');
+    return;
+  }
 
-  const file = new File([blob], `foto_${Date.now()}.jpg`, {type:'image/jpeg'});
+  lastBlob = blob;
+
+  // Mostrar la previsualización
+  const reader = new FileReader();
+  reader.onload = () => {
+    previewImg.src = reader.result;
+    setPreviewMode(true);
+  };
+  reader.readAsDataURL(blob);
+}
+
+async function uploadCurrent() {
+  if (!lastBlob) {
+    alert('No hay foto capturada todavía.');
+    return;
+  }
 
   const fd = new FormData();
-  fd.append('imagen', file);
 
-  {% if titulo_required %}
-    const t = (document.getElementById('titulo')?.value || '').trim();
-    if(!t){ alert('Ingresa un título'); return; }
-    fd.append('titulo_manual', t);
-  {% else %}
-    {% if titulo_default %} fd.append('titulo_manual', "{{ titulo_default|escapejs }}"); {% endif %}
-  {% endif %}
+  // Nombre de archivo amigable
+  const ts = gps && gps.ts ? new Date(gps.ts) : new Date();
+  const yyyy = ts.getFullYear();
+  const mm = String(ts.getMonth() + 1).padStart(2, '0');
+  const dd = String(ts.getDate()).padStart(2, '0');
+  const hh = String(ts.getHours()).padStart(2, '0');
+  const mi = String(ts.getMinutes()).padStart(2, '0');
+  const ss = String(ts.getSeconds()).padStart(2, '0');
+  const filename = `geo_${yyyy}${mm}${dd}_${hh}${mi}${ss}.jpg`;
 
-  fd.append('lat', gps.lat);
-  fd.append('lng', gps.lng);
-  if(Number.isFinite(gps.acc)) fd.append('acc', Math.round(gps.acc));
-  fd.append('client_taken_at', new Date().toISOString());
+  // OJO: el backend espera el campo "imagen"
+  fd.append('imagen', lastBlob, filename);
+
+  const tituloInput = document.getElementById('titulo');
+  if (tituloInput) {
+    fd.append('titulo_manual', tituloInput.value || '');
+  }
+
+  // Metadatos GPS que tu vista ya soporta
+  if (gps) {
+    fd.append('lat', gps.lat);
+    fd.append('lng', gps.lng);
+    if (Number.isFinite(gps.acc)) {
+      fd.append('acc', Math.round(gps.acc));
+    }
+    fd.append('client_taken_at', new Date().toISOString());
+  }
 
   const r = await fetch(UPLOAD_URL, {
-    method:'POST',
-    body:fd,
-    cache:'no-store',
+    method: 'POST',
+    body: fd,
+    cache: 'no-store',
     credentials: 'same-origin',
     headers: { 'X-CSRFToken': CSRF }
   });
 
-  let j=null; try{ j = await r.json(); }catch{}
-  if(r.ok && j && j.ok){
+  let j = null;
+  try {
+    j = await r.json();
+  } catch (e) {}
+
+  if (r.ok && j && j.ok) {
     alert('Foto guardada en tu galería');
-  }else{
+    setPreviewMode(false);
+  } else {
     const msg = (j && j.error) ? j.error : `HTTP ${r.status}`;
     alert('No se pudo enviar la foto: ' + msg);
   }
 }
 
 /* ===== Listeners ===== */
-document.getElementById('flip').addEventListener('click', async ()=>{
-  facing = (facing==='environment'?'user':'environment');
+/* ===== Listeners ===== */
+document.getElementById('flip').addEventListener('click', async () => {
+  facing = (facing === 'environment' ? 'user' : 'environment');
   await startStream();
 });
+
 const closeBtn = document.getElementById('close');
-if(closeBtn) closeBtn.addEventListener('click', ()=>history.back());
-document.getElementById('shot').addEventListener('click', captureAndUpload);
+if (closeBtn) closeBtn.addEventListener('click', () => history.back());
+
+// El botón grande ahora solo CAPTURA y muestra la preview
+document.getElementById('shot').addEventListener('click', captureOnly);
+
+// Botones del overlay de previsualización
+btnRetake.addEventListener('click', () => {
+  setPreviewMode(false);  // oculta overlay y reactiva la cámara
+});
+
+btnUse.addEventListener('click', () => {
+  uploadCurrent();        // envía la foto al backend
+});
 
 /* ===== Init ===== */
 (async function init(){

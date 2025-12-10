@@ -1,54 +1,50 @@
-from liquidaciones.models import Liquidacion
-from liquidaciones.forms import CargaMasivaLiquidacionesForm
-# 👈 Asegúrate de que esté bien importado
-from usuarios.utils import crear_notificacion
-from django.shortcuts import render
+import base64
 import calendar
-from usuarios.models import FirmaRepresentanteLegal
-from django.urls import NoReverseMatch
 import logging
-from urllib.parse import urljoin
 import os
 import uuid
-import base64
-import requests
-import fitz  # PyMuPDF
 from io import BytesIO
-from PIL import Image
-from django.http import Http404
-from django.db.models import Q
-from django.utils.decorators import method_decorator
-from django.utils.timezone import now
 from pathlib import Path
+from urllib.parse import urljoin
+
+import fitz  # PyMuPDF
+import requests
+from dal import autocomplete
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth.decorators import login_required
-from django.core.files.base import ContentFile
-from django.http import HttpResponse, FileResponse, HttpResponseBadRequest
-from django.shortcuts import render, get_object_or_404, redirect
-from django.template.loader import render_to_string
-from django.utils import timezone
-from django.views.decorators.csrf import csrf_protect
-from django.core.exceptions import ValidationError
-from . import views
-from django.core.files.storage import default_storage
-from .models import Liquidacion, ruta_archivo_firmado, ruta_archivo_sin_firmar
-from .forms import LiquidacionForm
-from django_select2.views import AutoResponseView
-from dal import autocomplete
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
 from django.contrib.auth import get_user_model
-from usuarios.decoradores import rol_requerido
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.files import File
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db.models import Q
+from django.http import (FileResponse, Http404, HttpResponse,
+                         HttpResponseBadRequest, JsonResponse)
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.utils.http import urlencode
-from django.urls import reverse
-from .forms import CargaMasivaLiquidacionesForm
-from usuarios.models import CustomUser
+from django.utils.timezone import now
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django_select2.views import AutoResponseView
+from PIL import Image
+
+from liquidaciones.forms import CargaMasivaLiquidacionesForm
+from liquidaciones.models import Liquidacion
+from usuarios.decoradores import rol_requerido
+from usuarios.models import CustomUser, FirmaRepresentanteLegal
+# 👈 Asegúrate de que esté bien importado
 from usuarios.utils import crear_notificacion
-from django.urls import reverse
-import os
-import calendar
+
+from . import views
+from .forms import CargaMasivaLiquidacionesForm, LiquidacionForm
+from .models import Liquidacion, ruta_archivo_firmado, ruta_archivo_sin_firmar
+from .utils_pdf import extraer_paginas_liquidaciones, rut_clave
+
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
@@ -448,70 +444,283 @@ MESES_ESPANOL = {
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
 def carga_masiva_liquidaciones(request):
-    resumen = None
+    """
+    Flujo en dos pasos:
 
+    1) POST con archivos -> genera PREVIEW (no guarda nada) y guarda datos en sesión.
+    2) POST con confirmar=1 -> crea/actualiza las Liquidaciones usando lo de la sesión.
+
+    El match de usuarios se hace por RUT usando rut_clave(), por lo que funciona con:
+    - 26.724.679-3
+    - 26724679-3
+    - 267246793
+    - 25973603k
+    etc.
+    """
+    User = get_user_model()
+
+    form = CargaMasivaLiquidacionesForm()
+    resumen = None
+    asociadas = []
+    no_asociadas = []
+
+    # --------- Paso 2: Confirmar carga real ---------
+    if request.method == 'POST' and request.POST.get("confirmar") == "1":
+        preview = request.session.get("carga_liq_preview")
+
+        if not preview:
+            messages.error(request, "No hay una carga previa para confirmar.")
+            return redirect('liquidaciones:carga_masiva')
+
+        mes = preview["mes"]
+        año = preview["año"]
+        total_archivos = preview["total_archivos"]
+        total_paginas = preview["total_paginas"]
+
+        asociadas_preview = preview["asociadas"]
+        no_asociadas_preview = preview["no_asociadas"]
+
+        # partimos de las no asociadas de la preview
+        no_asociadas = list(no_asociadas_preview)
+
+        for item in asociadas_preview:
+            usuario_id = item["usuario_id"]
+            try:
+                usuario = User.objects.get(pk=usuario_id)
+            except User.DoesNotExist:
+                item_error = {
+                    "archivo": item["archivo"],
+                    "pagina": item["pagina"],
+                    "rut": item["rut"],
+                    "nombre": item["nombre"],
+                    "motivo": "El usuario ya no existe.",
+                }
+                no_asociadas.append(item_error)
+                continue
+
+            pdf_bytes = base64.b64decode(item["pdf_base64"])
+            filename = item["filename"]
+            content_file = ContentFile(pdf_bytes, name=filename)
+
+            liquidacion, creada = Liquidacion.objects.update_or_create(
+                tecnico=usuario,
+                mes=mes,
+                año=año,
+                defaults={
+                    "archivo_pdf_liquidacion": content_file,
+                },
+            )
+
+            MESES_ESPANOL = {
+                1: "Enero",
+                2: "Febrero",
+                3: "Marzo",
+                4: "Abril",
+                5: "Mayo",
+                6: "Junio",
+                7: "Julio",
+                8: "Agosto",
+                9: "Septiembre",
+                10: "Octubre",
+                11: "Noviembre",
+                12: "Diciembre",
+            }
+            nombre_mes = MESES_ESPANOL.get(int(mes), "Mes inválido")
+
+            crear_notificacion(
+                usuario=usuario,
+                mensaje=(
+                    f"Se ha cargado una nueva liquidación "
+                    f"correspondiente a {nombre_mes} de {año}."
+                ),
+                tipo="info",
+                url=reverse('liquidaciones:listar'),
+            )
+
+            asociadas.append({
+                "archivo": item["archivo"],
+                "pagina": item["pagina"],
+                "rut": item["rut"],
+                "nombre": item["nombre"],
+                "usuario": usuario,
+                "liquidacion": liquidacion,
+                "creada": creada,
+            })
+
+        # limpiar sesión
+        try:
+            del request.session["carga_liq_preview"]
+        except KeyError:
+            pass
+
+        resumen = {
+            "total_archivos": total_archivos,
+            "total_paginas": total_paginas,
+            "total_asociadas": len(asociadas),
+            "total_no_asociadas": len(no_asociadas),
+            "confirmado": True,
+        }
+
+        messages.success(request, "Las liquidaciones se cargaron correctamente.")
+
+        form = CargaMasivaLiquidacionesForm(initial={"mes": mes, "año": año})
+
+        return render(
+            request,
+            "liquidaciones/carga_masiva_liquidaciones.html",
+            {
+                "form": form,
+                "resumen": resumen,
+                "asociadas": asociadas,
+                "no_asociadas": no_asociadas,
+            },
+        )
+
+    # --------- Paso 1: Preview ---------
     if request.method == 'POST':
         form = CargaMasivaLiquidacionesForm(request.POST, request.FILES)
 
         if form.is_valid():
-            mes = form.cleaned_data['mes']
+            mes = int(form.cleaned_data['mes'])
             año = form.cleaned_data['año']
             archivos = request.FILES.getlist('archivos')
 
-            errores = []
-            cargadas = 0
+            # mapa de usuarios por clave de RUT
+            usuarios = User.objects.exclude(identidad__isnull=True).exclude(identidad__exact="")
+            usuarios_por_rut = {}
+            for u in usuarios:
+                clave = rut_clave(u.identidad)
+                if clave:
+                    usuarios_por_rut.setdefault(clave, u)
+
+            total_archivos = len(archivos)
+            total_paginas = 0
+
+            asociadas = []
+            no_asociadas = []
+
+            asociadas_session = []
+            no_asociadas_session = []
 
             for archivo in archivos:
-                nombre = os.path.splitext(archivo.name)[0]
+                resultados = extraer_paginas_liquidaciones(archivo)
 
-                if not archivo.name.lower().endswith('.pdf'):
-                    errores.append(f"{archivo.name} (no es un PDF)")
-                    continue
+                for item in resultados:
+                    total_paginas += 1
 
-                rut = nombre.strip()
-                usuario = CustomUser.objects.filter(identidad=rut).first()
+                    if not item["ok"] or not item["rut"]:
+                        fila = {
+                            "archivo": archivo.name,
+                            "pagina": item["pagina"],
+                            "rut": item["rut"],
+                            "nombre": item["nombre"],
+                            "motivo": item["motivo"] or "Error al leer la página.",
+                        }
+                        no_asociadas.append(fila)
+                        no_asociadas_session.append(fila)
+                        continue
 
-                if not usuario:
-                    errores.append(f"{rut} (usuario no existe)")
-                    continue
+                    rut = item["rut"]
+                    nombre = item["nombre"]
+                    clave_pdf = rut_clave(rut)
 
-                liquidacion, creada = Liquidacion.objects.update_or_create(
-                    tecnico=usuario,
-                    mes=mes,
-                    año=año,
-                    defaults={'archivo_pdf_liquidacion': archivo}
-                )
+                    usuario = usuarios_por_rut.get(clave_pdf)
 
-                # 🔔 Notificación por usuario
-                nombre_mes = MESES_ESPANOL.get(int(mes), "Mes inválido")
-                crear_notificacion(
-                    usuario=usuario,
-                    mensaje=f"Se ha cargado una nueva liquidación correspondiente a {nombre_mes} de {año}.",
-                    url=reverse('liquidaciones:listar'),
-                    tipo='info'
-                )
+                    if not usuario:
+                        fila = {
+                            "archivo": archivo.name,
+                            "pagina": item["pagina"],
+                            "rut": rut,
+                            "nombre": nombre,
+                            "motivo": "No existe un usuario con este RUT (identidad).",
+                        }
+                        no_asociadas.append(fila)
+                        no_asociadas_session.append(fila)
+                        continue
 
-                cargadas += 1
+                    # índice dentro del listado de asociadas de la sesión
+                    preview_index = len(asociadas_session)
+
+                    # Para mostrar en el preview (todavía sin liquidación)
+                    asociadas.append({
+                        "archivo": archivo.name,
+                        "pagina": item["pagina"],
+                        "rut": rut,
+                        "nombre": nombre,
+                        "usuario": usuario,
+                        "liquidacion": None,      # se llenará en el paso 2
+                        "preview_index": preview_index,  # para ver el PDF
+                    })
+
+                    # Para guardar en sesión (datos necesarios para guardar luego)
+                    filename = f"{rut.replace('-', '')}-liquidacion-{año}-{mes}.pdf"
+                    pdf_b64 = base64.b64encode(item["pdf_bytes"]).decode("ascii")
+
+                    asociadas_session.append({
+                        "archivo": archivo.name,
+                        "pagina": item["pagina"],
+                        "rut": rut,
+                        "nombre": nombre,
+                        "usuario_id": usuario.id,
+                        "filename": filename,
+                        "pdf_base64": pdf_b64,
+                    })
 
             resumen = {
-                'exitosas': cargadas,
-                'fallidas': errores,
+                "total_archivos": total_archivos,
+                "total_paginas": total_paginas,
+                "total_asociadas": len(asociadas),
+                "total_no_asociadas": len(no_asociadas),
+                "confirmado": False,
             }
 
-            messages.success(request, "Carga finalizada")
-            form = CargaMasivaLiquidacionesForm()  # Resetear formulario
+            request.session["carga_liq_preview"] = {
+                "mes": mes,
+                "año": año,
+                "total_archivos": total_archivos,
+                "total_paginas": total_paginas,
+                "asociadas": asociadas_session,
+                "no_asociadas": no_asociadas_session,
+            }
 
+            messages.info(
+                request,
+                "Revisa el resumen. Si estás conforme, presiona 'Cargar' para guardar las liquidaciones."
+            )
         else:
-            for campo, errores in form.errors.items():
-                for error in errores:
-                    messages.error(request, f"{campo.capitalize()}: {error}")
-    else:
-        form = CargaMasivaLiquidacionesForm()
+            messages.error(request, "Revisa el formulario, hay errores en los datos enviados.")
 
-    return render(request, 'liquidaciones/carga_masiva_liquidaciones.html', {
-        'form': form,
-        'resumen': resumen,
-    })
+    contexto = {
+        "form": form,
+        "resumen": resumen,
+        "asociadas": asociadas,
+        "no_asociadas": no_asociadas,
+    }
+    return render(request, "liquidaciones/carga_masiva_liquidaciones.html", contexto)
+
+@staff_member_required
+@rol_requerido('admin', 'pm', 'rrhh')
+def preview_pdf_carga_masiva(request, index: int):
+    """
+    Devuelve el PDF de una página de liquidación que está en el preview
+    (almacenado en request.session["carga_liq_preview"]).
+    """
+    preview = request.session.get("carga_liq_preview")
+    if not preview:
+        raise Http404("No hay una carga masiva en sesión.")
+
+    try:
+        index = int(index)
+        item = preview["asociadas"][index]
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise Http404("PDF de preview no encontrado.")
+
+    pdf_bytes = base64.b64decode(item["pdf_base64"])
+    filename = item.get("filename", "liquidacion.pdf")
+
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{filename}"'
+    return response
 
 
 @staff_member_required
