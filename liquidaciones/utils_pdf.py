@@ -1,26 +1,34 @@
+import logging
 import re
+from io import BytesIO
 
 import fitz  # PyMuPDF
 
-# Ejemplo de texto en la liquidación Nubox:
-# LIQUIDACION DE SUELDO
-# REMUNERACIONES MES DE: OCTUBRE del 2025
-# ...
-# R.U.T.
-# TRABAJADOR
-# C.C.
-# 25.973.603-K
-# ZAPATA HERNANDEZ EDGARDO JOSE
+logger = logging.getLogger(__name__)
 
-RUT_NOMBRE_RE = re.compile(
-    r"R\.U\.T\.\s*\nTRABAJADOR\s*\nC\.C\.\s*\n([0-9\.\-Kk]+)\s*\n([A-ZÁÉÍÓÚÑ ]+)"
-)
+# ==========================
+# Normalización de RUT
+# ==========================
+def rut_clave(rut: str) -> str:
+    """
+    Normaliza cualquier formato de RUT para usarlo como clave:
+    - 26.724.679-3
+    - 26724679-3
+    - 267246793
+    - 25973603k
+    => "267246793", siempre en minúscula para la k.
+    """
+    if not rut:
+        return ""
+    # deja solo dígitos y k/K
+    limpio = re.sub(r"[^0-9kK]", "", str(rut))
+    return limpio.lower()
 
-MES_ANIO_RE = re.compile(
-    r"REMUNERACIONES MES DE:\s+([A-ZÁÉÍÓÚÑ]+)\s+del\s+(\d{4})"
-)
 
-MESES_MAP = {
+# ==========================
+# Mes / Año desde el texto
+# ==========================
+MESES_NOMBRE = {
     "ENERO": 1,
     "FEBRERO": 2,
     "MARZO": 3,
@@ -30,114 +38,202 @@ MESES_MAP = {
     "JULIO": 7,
     "AGOSTO": 8,
     "SEPTIEMBRE": 9,
+    "SETIEMBRE": 9,  # por si acaso
     "OCTUBRE": 10,
     "NOVIEMBRE": 11,
     "DICIEMBRE": 12,
 }
 
 
-def normalizar_rut(rut: str) -> str:
+def detectar_mes_anio(texto: str):
     """
-    Quita puntos, deja guion y mayúsculas.
-
-    '26.724.679-3' -> '26724679-3'
-    '25973603k'    -> '25973603K'
+    Busca algo como:
+      REMUNERACIONES MES DE: OCTUBRE del 2025
+    y devuelve (10, 2025).
     """
-    rut = (rut or "").strip().upper()
-    rut = rut.replace(".", "")
-    return rut
+    if not texto:
+        return None, None
+
+    patron = re.compile(
+        r"REMUNERACIONES\s+MES\s+DE:\s+([A-ZÁÉÍÓÚÑ]+)\s+del\s+(\d{4})",
+        re.IGNORECASE,
+    )
+    m = patron.search(texto)
+    if not m:
+        return None, None
+
+    nombre_mes_raw = m.group(1)
+    anio_txt = m.group(2)
+
+    # normalizamos el nombre del mes (mayúsculas, sin acentos)
+    nombre_mes = (
+        nombre_mes_raw.upper()
+        .replace("Á", "A")
+        .replace("É", "E")
+        .replace("Í", "I")
+        .replace("Ó", "O")
+        .replace("Ú", "U")
+    )
+
+    mes_num = MESES_NOMBRE.get(nombre_mes)
+    if not mes_num:
+        return None, None
+
+    try:
+        anio_num = int(anio_txt)
+    except ValueError:
+        return None, None
+
+    return mes_num, anio_num
 
 
-def rut_clave(rut: str) -> str:
+# ==========================
+# Extracción por página
+# ==========================
+def extraer_paginas_liquidaciones(archivo_subido):
     """
-    Clave de comparación de RUT:
-    - minúscula
-    - sin puntos ni guiones
-    - solo dígitos y 'k'
-
-    '26.724.679-3' -> '267246793'
-    '26724679-3'   -> '267246793'
-    '267246793'    -> '267246793'
-    '25973603K'    -> '25973603k'
-    """
-    rut = (rut or "").strip().lower()
-    return "".join(ch for ch in rut if ch.isdigit() or ch == "k")
-
-
-def extraer_paginas_liquidaciones(archivo_pdf):
-    """
-    Recibe un InMemoryUploadedFile (PDF con una o muchas liquidaciones).
-
-    Devuelve una lista de dicts, uno por página:
+    Recibe un InMemoryUploadedFile (el PDF que subes en el form) y devuelve
+    una lista de diccionarios, uno por página, con:
 
     {
-      'ok': True/False,
-      'pagina': 1-based,
-      'rut': '26724679-3' o None,   # normalizado (sin puntos, con guion)
-      'nombre': 'ZAPATA HERNANDEZ EDGARDO JOSE' o None,
-      'mes': 10 o None,
-      'anio': 2025 o None,
-      'pdf_bytes': b'...' o None,   # PDF solo de esa página
-      'motivo': 'texto de error si ok=False'
+      "ok": True/False,
+      "pagina": 1-based,
+      "rut": "26.724.679-3",
+      "nombre": "GIL MOYA LUIS ENRIQUE",
+      "mes": 10,
+      "anio": 2025,
+      "motivo": None o texto de error,
+      "pdf_bytes": b"...pdf con SOLO esa página..."
     }
     """
-    data = archivo_pdf.read()
-    doc = fitz.open(stream=data, filetype="pdf")
-
     resultados = []
 
-    for i in range(doc.page_count):
-        pagina_num = i + 1
-        page = doc.load_page(i)
-        text = page.get_text("text") or ""
+    try:
+        # por si el archivo ya fue leído en otro sitio
+        try:
+            archivo_subido.seek(0)
+        except Exception:
+            pass
 
-        # 1) Buscar RUT + nombre
-        m = RUT_NOMBRE_RE.search(text)
-        if not m:
-            resultados.append({
+        contenido = archivo_subido.read()
+        doc = fitz.open(stream=contenido, filetype="pdf")
+    except Exception as e:
+        logger.error(f"[extraer_paginas_liquidaciones] No se pudo abrir el PDF: {e}")
+        return [
+            {
                 "ok": False,
-                "pagina": pagina_num,
+                "pagina": None,
                 "rut": None,
                 "nombre": None,
                 "mes": None,
                 "anio": None,
-                "pdf_bytes": None,
-                "motivo": "No se encontró el patrón R.U.T. TRABAJADOR en la página.",
-            })
-            continue
+                "motivo": f"No se pudo abrir el PDF: {e}",
+                "pdf_bytes": b"",
+            }
+        ]
 
-        rut_raw, nombre_raw = m.groups()
-        rut = normalizar_rut(rut_raw)          # Ej: 25.973.603-K -> 25973603-K
-        nombre = " ".join(nombre_raw.split())  # Limpia espacios dobles
+    num_paginas = doc.page_count
 
-        # 2) Mes/año (solo informativo)
-        mes = None
-        anio = None
-        m2 = MES_ANIO_RE.search(text)
-        if m2:
-            mes_str, anio_str = m2.groups()
-            mes = MESES_MAP.get(mes_str.strip().upper())
-            try:
-                anio = int(anio_str)
-            except (TypeError, ValueError):
-                anio = None
+    for idx in range(num_paginas):
+        pagina_num = idx + 1
+        try:
+            page = doc.load_page(idx)
+            texto = page.get_text("text")
 
-        # 3) Crear PDF solo con esta página (en memoria)
-        single = fitz.open()
-        single.insert_pdf(doc, from_page=i, to_page=i)
-        pdf_bytes = single.tobytes()
-        single.close()
+            # --- mes / año ---
+            mes, anio = detectar_mes_anio(texto)
 
-        resultados.append({
-            "ok": True,
-            "pagina": pagina_num,
-            "rut": rut,
-            "nombre": nombre,
-            "mes": mes,
-            "anio": anio,
-            "pdf_bytes": pdf_bytes,
-            "motivo": None,
-        })
+            # --- RUT y nombre ---
+            lineas = [l.strip() for l in texto.splitlines() if l.strip()]
+            rut = None
+            nombre = None
+            motivo = None
+            ok = False
+
+            # 1️⃣ FORMATO NUEVO:
+            #   R.U.T.
+            #   TRABAJADOR
+            #   C.C.
+            #   25.973.603-K
+            #   ZAPATA HERNANDEZ EDGARDO JOSE
+            #   ADM
+            for i, linea in enumerate(lineas):
+                up = linea.upper()
+                if up.startswith("R.U.T"):
+                    # comprobamos que las siguientes líneas sean TRABAJADOR / C.C.
+                    if i + 3 < len(lineas):
+                        l1 = lineas[i + 1].strip().upper()
+                        l2 = lineas[i + 2].strip().upper()
+                        if "TRABAJADOR" in l1 and ("C.C." in l2 or "C.C" in l2):
+                            rut_cand = lineas[i + 3].strip()
+                            nombre_cand = lineas[i + 4].strip() if i + 4 < len(lineas) else ""
+
+                            if rut_cand:
+                                rut = rut_cand
+                                nombre = nombre_cand or None
+                                break
+
+            # 2️⃣ FORMATO ANTIGUO (backup):
+            #    "R.U.T. TRABAJADOR ..." todo en la misma línea y en la siguiente RUT+NOMBRE+CC
+            if not rut:
+                for i, linea in enumerate(lineas):
+                    if linea.upper().startswith("R.U.T. TRABAJADOR"):
+                        if i + 1 < len(lineas):
+                            datos = lineas[i + 1]
+                            partes = datos.split()
+                            if partes:
+                                rut = partes[0]
+                                if len(partes) > 1:
+                                    # normalmente el último token es el centro de costo: ADM, EXT, etc.
+                                    if len(partes) >= 3:
+                                        nombre = " ".join(partes[1:-1])
+                                    else:
+                                        nombre = partes[1]
+                        break
+
+            if not rut:
+                motivo = "No se pudo leer el RUT del trabajador en la página."
+                ok = False
+            else:
+                ok = True
+
+            # --- sacar PDF de solo esa página ---
+            single_doc = fitz.open()
+            single_doc.insert_pdf(doc, from_page=idx, to_page=idx)
+            buffer = BytesIO()
+            single_doc.save(buffer)
+            single_doc.close()
+            pdf_bytes = buffer.getvalue()
+
+            resultados.append(
+                {
+                    "ok": ok,
+                    "pagina": pagina_num,
+                    "rut": rut,
+                    "nombre": nombre,
+                    "mes": mes,
+                    "anio": anio,
+                    "motivo": motivo,
+                    "pdf_bytes": pdf_bytes,
+                }
+            )
+
+        except Exception as e:
+            logger.error(
+                f"[extraer_paginas_liquidaciones] Error en página {pagina_num}: {e}"
+            )
+            resultados.append(
+                {
+                    "ok": False,
+                    "pagina": pagina_num,
+                    "rut": None,
+                    "nombre": None,
+                    "mes": None,
+                    "anio": None,
+                    "motivo": f"Error al procesar la página: {e}",
+                    "pdf_bytes": b"",
+                }
+            )
 
     doc.close()
     return resultados

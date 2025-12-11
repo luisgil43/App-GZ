@@ -1,7 +1,8 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django_select2.forms import ModelSelect2Widget
 from django.urls import reverse_lazy
+from django_select2.forms import ModelSelect2Widget
+
 from .models import Liquidacion
 
 User = get_user_model()
@@ -104,34 +105,10 @@ class LiquidacionForm(forms.ModelForm):
 
 
 class CargaMasivaLiquidacionesForm(forms.Form):
-    mes = forms.CharField(label="Mes", max_length=20)
-    año = forms.IntegerField(label="Año")
-    archivos = forms.FileField(
-        label="Seleccionar archivos PDF",
-        required=True
-    )
-
-    def clean(self):
-        cleaned_data = super().clean()
-        archivos = self.files.getlist('archivos')
-        mes = cleaned_data.get('mes')
-
-        # Validar archivos
-        if not archivos:
-            raise forms.ValidationError("Debes subir al menos un archivo.")
-
-        for archivo in archivos:
-            if not archivo.name.lower().endswith('.pdf'):
-                raise forms.ValidationError(
-                    f"El archivo '{archivo.name}' no es PDF.")
-
-        # Validar que el mes esté entre 1 y 12
-        try:
-            mes_int = int(mes)
-            if mes_int < 1 or mes_int > 12:
-                raise forms.ValidationError("El mes debe estar entre 1 y 12.")
-        except ValueError:
-            raise forms.ValidationError(
-                "El mes debe ser un número válido entre 1 y 12.")
-
-        return cleaned_data
+    """
+    Formulario sin campos de archivo.
+    Los PDFs se toman directamente desde request.FILES en la vista.
+    Lo usamos solo para poder mostrar errores (non_field_errors).
+    """
+    # Si más adelante quieres opciones (ej: modo por defecto), se agregan aquí.
+    pass

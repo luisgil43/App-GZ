@@ -448,14 +448,12 @@ def carga_masiva_liquidaciones(request):
     Flujo en dos pasos:
 
     1) POST con archivos -> genera PREVIEW (no guarda nada) y guarda datos en sesión.
-    2) POST con confirmar=1 -> crea/actualiza las Liquidaciones usando lo de la sesión.
+       - Detecta mes/año desde el PDF por cada página.
+       - Marca duplicados (ya existe liquidación para técnico+mes+año).
 
-    El match de usuarios se hace por RUT usando rut_clave(), por lo que funciona con:
-    - 26.724.679-3
-    - 26724679-3
-    - 267246793
-    - 25973603k
-    etc.
+    2) POST con confirmar=1 -> crea/actualiza las Liquidaciones usando lo de la sesión.
+       - modo = "solo_nuevas" => no reemplaza duplicados.
+       - modo = "reemplazar"  => reemplaza también duplicados.
     """
     User = get_user_model()
 
@@ -472,10 +470,10 @@ def carga_masiva_liquidaciones(request):
             messages.error(request, "No hay una carga previa para confirmar.")
             return redirect('liquidaciones:carga_masiva')
 
-        mes = preview["mes"]
-        año = preview["año"]
         total_archivos = preview["total_archivos"]
         total_paginas = preview["total_paginas"]
+        duplicados = preview.get("duplicados", 0)
+        modo = request.POST.get("modo", "reemplazar")  # "solo_nuevas" o "reemplazar"
 
         asociadas_preview = preview["asociadas"]
         no_asociadas_preview = preview["no_asociadas"]
@@ -485,6 +483,10 @@ def carga_masiva_liquidaciones(request):
 
         for item in asociadas_preview:
             usuario_id = item["usuario_id"]
+            mes = item["mes"]
+            año = item["año"]
+            ya_existe = item.get("ya_existe", False)
+
             try:
                 usuario = User.objects.get(pk=usuario_id)
             except User.DoesNotExist:
@@ -493,9 +495,24 @@ def carga_masiva_liquidaciones(request):
                     "pagina": item["pagina"],
                     "rut": item["rut"],
                     "nombre": item["nombre"],
+                    "mes": mes,
+                    "año": año,
                     "motivo": "El usuario ya no existe.",
                 }
                 no_asociadas.append(item_error)
+                continue
+
+            # Si ya existía y el modo es "solo_nuevas", no reemplazamos
+            if ya_existe and modo == "solo_nuevas":
+                no_asociadas.append({
+                    "archivo": item["archivo"],
+                    "pagina": item["pagina"],
+                    "rut": item["rut"],
+                    "nombre": item["nombre"],
+                    "mes": mes,
+                    "año": año,
+                    "motivo": "Ya existía liquidación para este trabajador y mes/año. Se mantuvo la anterior.",
+                })
                 continue
 
             pdf_bytes = base64.b64decode(item["pdf_base64"])
@@ -511,20 +528,6 @@ def carga_masiva_liquidaciones(request):
                 },
             )
 
-            MESES_ESPANOL = {
-                1: "Enero",
-                2: "Febrero",
-                3: "Marzo",
-                4: "Abril",
-                5: "Mayo",
-                6: "Junio",
-                7: "Julio",
-                8: "Agosto",
-                9: "Septiembre",
-                10: "Octubre",
-                11: "Noviembre",
-                12: "Diciembre",
-            }
             nombre_mes = MESES_ESPANOL.get(int(mes), "Mes inválido")
 
             crear_notificacion(
@@ -543,6 +546,9 @@ def carga_masiva_liquidaciones(request):
                 "rut": item["rut"],
                 "nombre": item["nombre"],
                 "usuario": usuario,
+                "mes": mes,
+                "año": año,
+                "ya_existe": ya_existe,
                 "liquidacion": liquidacion,
                 "creada": creada,
             })
@@ -558,12 +564,13 @@ def carga_masiva_liquidaciones(request):
             "total_paginas": total_paginas,
             "total_asociadas": len(asociadas),
             "total_no_asociadas": len(no_asociadas),
+            "duplicados": duplicados,
             "confirmado": True,
         }
 
         messages.success(request, "Las liquidaciones se cargaron correctamente.")
 
-        form = CargaMasivaLiquidacionesForm(initial={"mes": mes, "año": año})
+        form = CargaMasivaLiquidacionesForm()
 
         return render(
             request,
@@ -577,14 +584,27 @@ def carga_masiva_liquidaciones(request):
         )
 
     # --------- Paso 1: Preview ---------
-    if request.method == 'POST':
-        form = CargaMasivaLiquidacionesForm(request.POST, request.FILES)
+    if request.method == 'POST' and request.POST.get("confirmar") != "1":
+        form = CargaMasivaLiquidacionesForm(request.POST)
+
+        # 🔹 Archivos directamente desde request.FILES
+        archivos = request.FILES.getlist('archivos')
+
+        # Validación manual de archivos
+        if not archivos:
+            form.add_error(None, "Debes subir al menos un archivo PDF.")
+        else:
+            for archivo in archivos:
+                nombre = archivo.name
+                content_type = (archivo.content_type or "").lower()
+                if not nombre.lower().endswith('.pdf') or content_type not in ("application/pdf", "application/x-pdf"):
+                    form.add_error(
+                        None,
+                        f"El archivo '{nombre}' no es un PDF válido."
+                    )
+                    break
 
         if form.is_valid():
-            mes = int(form.cleaned_data['mes'])
-            año = form.cleaned_data['año']
-            archivos = request.FILES.getlist('archivos')
-
             # mapa de usuarios por clave de RUT
             usuarios = User.objects.exclude(identidad__isnull=True).exclude(identidad__exact="")
             usuarios_por_rut = {}
@@ -595,6 +615,7 @@ def carga_masiva_liquidaciones(request):
 
             total_archivos = len(archivos)
             total_paginas = 0
+            duplicados = 0
 
             asociadas = []
             no_asociadas = []
@@ -602,19 +623,43 @@ def carga_masiva_liquidaciones(request):
             asociadas_session = []
             no_asociadas_session = []
 
+            # cache de liquidaciones existentes para no consultar mil veces
+            existentes_cache = {}
+
             for archivo in archivos:
                 resultados = extraer_paginas_liquidaciones(archivo)
 
                 for item in resultados:
                     total_paginas += 1
 
+                    mes = item.get("mes")
+                    anio = item.get("anio")
+
+                    # Error al leer o sin RUT
                     if not item["ok"] or not item["rut"]:
                         fila = {
                             "archivo": archivo.name,
                             "pagina": item["pagina"],
                             "rut": item["rut"],
                             "nombre": item["nombre"],
+                            "mes": mes,
+                            "año": anio,
                             "motivo": item["motivo"] or "Error al leer la página.",
+                        }
+                        no_asociadas.append(fila)
+                        no_asociadas_session.append(fila)
+                        continue
+
+                    # Sin mes/año detectado
+                    if not mes or not anio:
+                        fila = {
+                            "archivo": archivo.name,
+                            "pagina": item["pagina"],
+                            "rut": item["rut"],
+                            "nombre": item["nombre"],
+                            "mes": mes,
+                            "año": anio,
+                            "motivo": "No se pudo detectar mes y año en la página.",
                         }
                         no_asociadas.append(fila)
                         no_asociadas_session.append(fila)
@@ -632,11 +677,26 @@ def carga_masiva_liquidaciones(request):
                             "pagina": item["pagina"],
                             "rut": rut,
                             "nombre": nombre,
+                            "mes": mes,
+                            "año": anio,
                             "motivo": "No existe un usuario con este RUT (identidad).",
                         }
                         no_asociadas.append(fila)
                         no_asociadas_session.append(fila)
                         continue
+
+                    # Ver si ya existe liquidación para este técnico+mes+año
+                    clave_existente = (usuario.id, anio, mes)
+                    existente = existentes_cache.get(clave_existente)
+                    if existente is None:
+                        existente = Liquidacion.objects.filter(
+                            tecnico=usuario, año=anio, mes=mes
+                        ).first()
+                        existentes_cache[clave_existente] = existente
+
+                    ya_existe = existente is not None
+                    if ya_existe:
+                        duplicados += 1
 
                     # índice dentro del listado de asociadas de la sesión
                     preview_index = len(asociadas_session)
@@ -648,12 +708,15 @@ def carga_masiva_liquidaciones(request):
                         "rut": rut,
                         "nombre": nombre,
                         "usuario": usuario,
+                        "mes": mes,
+                        "año": anio,
+                        "ya_existe": ya_existe,
                         "liquidacion": None,      # se llenará en el paso 2
                         "preview_index": preview_index,  # para ver el PDF
                     })
 
                     # Para guardar en sesión (datos necesarios para guardar luego)
-                    filename = f"{rut.replace('-', '')}-liquidacion-{año}-{mes}.pdf"
+                    filename = f"{rut.replace('-', '')}-liquidacion-{anio}-{mes}.pdf"
                     pdf_b64 = base64.b64encode(item["pdf_bytes"]).decode("ascii")
 
                     asociadas_session.append({
@@ -662,6 +725,9 @@ def carga_masiva_liquidaciones(request):
                         "rut": rut,
                         "nombre": nombre,
                         "usuario_id": usuario.id,
+                        "mes": mes,
+                        "año": anio,
+                        "ya_existe": ya_existe,
                         "filename": filename,
                         "pdf_base64": pdf_b64,
                     })
@@ -671,14 +737,14 @@ def carga_masiva_liquidaciones(request):
                 "total_paginas": total_paginas,
                 "total_asociadas": len(asociadas),
                 "total_no_asociadas": len(no_asociadas),
+                "duplicados": duplicados,
                 "confirmado": False,
             }
 
             request.session["carga_liq_preview"] = {
-                "mes": mes,
-                "año": año,
                 "total_archivos": total_archivos,
                 "total_paginas": total_paginas,
+                "duplicados": duplicados,
                 "asociadas": asociadas_session,
                 "no_asociadas": no_asociadas_session,
             }
@@ -697,6 +763,7 @@ def carga_masiva_liquidaciones(request):
         "no_asociadas": no_asociadas,
     }
     return render(request, "liquidaciones/carga_masiva_liquidaciones.html", contexto)
+
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
@@ -721,6 +788,8 @@ def preview_pdf_carga_masiva(request, index: int):
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = f'inline; filename="{filename}"'
     return response
+
+
 
 
 @staff_member_required

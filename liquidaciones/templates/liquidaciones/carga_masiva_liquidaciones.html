@@ -7,30 +7,43 @@
     Carga Masiva de Liquidaciones
   </h2>
 
-  <!-- FORMULARIO PRINCIPAL (solo para subir/preview) -->
+  {# 🔴 BLOQUE PARA MOSTRAR ERRORES DEL FORMULARIO #}
+  {% if form.errors %}
+    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      <p class="font-semibold mb-1">Hay errores en el formulario:</p>
+      {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+          <div>• {{ error }}</div>
+        {% endfor %}
+      {% endif %}
+      {% for field in form %}
+        {% for error in field.errors %}
+          <div>• {{ field.label }}: {{ error }}</div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <!-- FORMULARIO PRINCIPAL (solo archivos, el sistema detecta mes/año) -->
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {% csrf_token %}
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      <div>
-        <label class="block text-sm font-semibold text-gray-700">Mes</label>
-        {{ form.mes|add_class:"w-full rounded-xl border-gray-300 px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500" }}
-      </div>
-
-      <div>
-        <label class="block text-sm font-semibold text-gray-700">Año</label>
-        {{ form.año|add_class:"w-full rounded-xl border-gray-300 px-4 py-2 shadow-sm focus:ring-2 focus:ring-green-500" }}
-      </div>
-    </div>
 
     <div>
       <label class="block text-sm font-semibold text-gray-700">
         Archivos PDF (puede ser uno con todas las liquidaciones)
       </label>
-      {{ form.archivos|add_class:"w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" }}
+      <input
+  type="file"
+  name="archivos"
+  id="id_archivos"
+  multiple
+  accept="application/pdf"
+  class="block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+/>
       <p class="mt-1 text-xs text-gray-500">
         Puedes subir un único PDF con todas las liquidaciones o varios PDFs.
-        El sistema leerá el RUT y nombre desde cada página, sin importar el formato del RUT.
+        El sistema detectará automáticamente el mes y el año desde cada página,
+        y asociará a cada trabajador según su RUT (en cualquier formato).
       </p>
     </div>
 
@@ -52,7 +65,7 @@
     <div class="mt-8 bg-white border rounded-xl p-4 shadow space-y-4">
       <h3 class="text-lg font-semibold text-gray-800">📊 Resumen de carga</h3>
 
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm mb-4">
+      <div class="grid grid-cols-1 sm:grid-cols-5 gap-4 text-sm mb-4">
         <div class="p-3 rounded-xl bg-slate-100">
           <div class="text-xs text-slate-500">Archivos PDF</div>
           <div class="text-2xl font-semibold">{{ resumen.total_archivos }}</div>
@@ -69,23 +82,52 @@
           <div class="text-xs text-red-700">No asociadas</div>
           <div class="text-2xl font-semibold">{{ resumen.total_no_asociadas }}</div>
         </div>
+        <div class="p-3 rounded-xl {% if resumen.duplicados %}bg-amber-100{% else %}bg-slate-100{% endif %}">
+          <div class="text-xs {% if resumen.duplicados %}text-amber-700{% else %}text-slate-500{% endif %}">
+            Duplicadas (ya existía liquidación mismo mes/año)
+          </div>
+          <div class="text-2xl font-semibold">{{ resumen.duplicados }}</div>
+        </div>
       </div>
 
       {% if not resumen.confirmado %}
         <!-- Botones de Cancelar / Cargar (solo en preview) -->
-        <div class="flex justify-end gap-3 mb-4">
-          <a href="{% url 'liquidaciones:carga_masiva' %}"
-             class="px-4 py-2 rounded-full border text-sm text-gray-700 hover:bg-slate-100">
-            Cancelar
-          </a>
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="confirmar" value="1">
-            <button type="submit"
-                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
-              ✅ Cargar liquidaciones
-            </button>
-          </form>
+        <div class="flex flex-col gap-2 mb-4">
+          {% if resumen.duplicados %}
+            <p class="text-xs text-amber-700">
+              ⚠ Se encontraron {{ resumen.duplicados }} liquidaciones que ya existen para el mismo trabajador y mes/año.
+              Elige si quieres cargar solo las nuevas o reemplazar también las existentes.
+            </p>
+          {% endif %}
+
+          <div class="flex justify-end gap-3">
+            <a href="{% url 'liquidaciones:carga_masiva' %}"
+               class="px-4 py-2 rounded-full border text-sm text-gray-700 hover:bg-slate-100">
+              Cancelar
+            </a>
+
+            {% if resumen.duplicados %}
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="confirmar" value="1">
+                <input type="hidden" name="modo" value="solo_nuevas">
+                <button type="submit"
+                        class="bg-slate-600 hover:bg-slate-700 text-white px-4 py-2 rounded-full text-sm shadow">
+                  ✅ Cargar solo nuevas
+                </button>
+              </form>
+            {% endif %}
+
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="confirmar" value="1">
+              <input type="hidden" name="modo" value="reemplazar">
+              <button type="submit"
+                      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
+                ✅ Cargar liquidaciones{% if resumen.duplicados %} (incluye reemplazo){% endif %}
+              </button>
+            </form>
+          </div>
         </div>
       {% endif %}
 
@@ -102,7 +144,10 @@
                   <th class="px-2 py-1 border">Pág.</th>
                   <th class="px-2 py-1 border">RUT</th>
                   <th class="px-2 py-1 border">Nombre</th>
+                  <th class="px-2 py-1 border">Mes</th>
+                  <th class="px-2 py-1 border">Año</th>
                   <th class="px-2 py-1 border">Usuario</th>
+                  <th class="px-2 py-1 border">Estado</th>
                   <th class="px-2 py-1 border">PDF</th>
                 </tr>
               </thead>
@@ -113,8 +158,17 @@
                     <td class="px-2 py-1 border text-center">{{ item.pagina }}</td>
                     <td class="px-2 py-1 border whitespace-nowrap">{{ item.rut }}</td>
                     <td class="px-2 py-1 border">{{ item.nombre }}</td>
+                    <td class="px-2 py-1 border text-center">{{ item.mes }}</td>
+                    <td class="px-2 py-1 border text-center">{{ item.año }}</td>
                     <td class="px-2 py-1 border">
                       {{ item.usuario.get_full_name|default:item.usuario.username }}
+                    </td>
+                    <td class="px-2 py-1 border text-xs">
+                      {% if item.ya_existe %}
+                        <span class="text-amber-700">Ya existía (duplicada)</span>
+                      {% else %}
+                        <span class="text-green-700">Nueva</span>
+                      {% endif %}
                     </td>
                     <td class="px-2 py-1 border text-center">
                       {% if not resumen.confirmado %}
@@ -158,6 +212,8 @@
                   <th class="px-2 py-1 border">Pág.</th>
                   <th class="px-2 py-1 border">RUT</th>
                   <th class="px-2 py-1 border">Nombre</th>
+                  <th class="px-2 py-1 border">Mes</th>
+                  <th class="px-2 py-1 border">Año</th>
                   <th class="px-2 py-1 border">Motivo</th>
                 </tr>
               </thead>
@@ -168,6 +224,12 @@
                     <td class="px-2 py-1 border text-center">{{ item.pagina }}</td>
                     <td class="px-2 py-1 border">{{ item.rut|default:"—" }}</td>
                     <td class="px-2 py-1 border">{{ item.nombre|default:"—" }}</td>
+                    <td class="px-2 py-1 border text-center">
+                      {{ item.mes|default:"—" }}
+                    </td>
+                    <td class="px-2 py-1 border text-center">
+                      {{ item.año|default:"—" }}
+                    </td>
                     <td class="px-2 py-1 border text-red-600">
                       {{ item.motivo }}
                     </td>
