@@ -627,7 +627,7 @@ def listar_servicios_supervisor(request):
         # aunque elijan ajuste_*, igual no aparecerán porque ya están excluidos arriba
         servicios = servicios.filter(estado=estado)
 
-       # ========= Paginación (máx. 100) =========
+    # ========= Paginación (máx. 100) =========
     cantidad_param = request.GET.get("cantidad", "10")
 
     if cantidad_param == "todos":
@@ -644,7 +644,6 @@ def listar_servicios_supervisor(request):
     paginator = Paginator(servicios, per_page)
     page_number = request.GET.get("page") or 1
     pagina = paginator.get_page(page_number)
-    
 
     return render(request, 'operaciones/listar_servicios_supervisor.html', {
         'pagina': pagina,
@@ -658,7 +657,6 @@ def listar_servicios_supervisor(request):
         },
         'estado_choices': ServicioCotizado.ESTADOS
     })
-
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
@@ -728,25 +726,42 @@ def asignar_trabajadores(request, pk):
         form = AsignarTrabajadoresForm(request.POST)
         if form.is_valid():
             trabajadores = form.cleaned_data['trabajadores']
-            print("Trabajadores asignados:", trabajadores)
+
+            # Detectamos si ya tenía trabajadores antes del POST
+            tenia_asignados = cotizacion.trabajadores_asignados.exists()
+
+            # Actualizamos las relaciones M2M
             cotizacion.trabajadores_asignados.set(trabajadores)
-            cotizacion.estado = 'asignado'
+
+            # Primera asignación:
+            #  - venimos de "aprobado_pendiente"
+            #  - y antes no tenía trabajadores
+            #
+            # Reasignación:
+            #  - ya tenía trabajadores; NO tocamos el estado
+            if not tenia_asignados and cotizacion.estado == 'aprobado_pendiente':
+                cotizacion.estado = 'asignado'
+
             cotizacion.supervisor_asigna = request.user
             cotizacion.save()
 
-            # Notificar a los trabajadores
+            # Notificar a los trabajadores seleccionados
             for trabajador in trabajadores:
                 crear_notificacion(
                     usuario=trabajador,
                     mensaje=f"Se te ha asignado una nueva tarea: DU{str(cotizacion.du).zfill(8)}.",
-                    # Ajusta si usas otra vista
-                    url=reverse('operaciones:mis_servicios_tecnico')
+                    url=reverse('operaciones:mis_servicios_tecnico'),
                 )
 
             messages.success(request, "Trabajadores asignados correctamente.")
             return redirect('operaciones:listar_servicios_supervisor')
     else:
-        form = AsignarTrabajadoresForm()
+        # Precargamos los técnicos que ya estaban asignados → se ve como REASIGNACIÓN
+        form = AsignarTrabajadoresForm(
+            initial={
+                "trabajadores": cotizacion.trabajadores_asignados.all()
+            }
+        )
 
     return render(request, 'operaciones/asignar_trabajadores.html', {
         'cotizacion': cotizacion,
@@ -843,9 +858,31 @@ def mis_servicios_tecnico(request):
         # puedo aceptar ⇢ mi asignación aún está en "asignado"
         puedo_aceptar = (a.estado == 'asignado')
 
-        # aceptados reales (quienes tienen aceptado_en registrado)
-        aceptados = sesion.asignaciones.filter(aceptado_en__isnull=False).count()
-        total = sesion.asignaciones.count()
+        # 🔧 ARREGLO DE CONSISTENCIA:
+        # Si YO ya acepté pero el servicio sigue en 'asignado',
+        # lo promovemos a 'en_progreso' y marcamos tecnico_aceptado si falta.
+        if yo_acepte and servicio.estado == 'asignado':
+            servicio.estado = 'en_progreso'
+            if not servicio.tecnico_aceptado_id:
+                servicio.tecnico_aceptado = usuario
+            servicio.save(update_fields=['estado', 'tecnico_aceptado'])
+
+        # Solo contamos aceptados / total entre los técnicos actualmente asignados
+        assigned_ids = list(
+            servicio.trabajadores_asignados.values_list("id", flat=True)
+        )
+
+        if assigned_ids:
+            aceptados = sesion.asignaciones.filter(
+                aceptado_en__isnull=False,
+                tecnico_id__in=assigned_ids,
+            ).count()
+            total = sesion.asignaciones.filter(
+                tecnico_id__in=assigned_ids,
+            ).count()
+        else:
+            aceptados = 0
+            total = 0
 
         servicios_info.append({
             'servicio': servicio,
@@ -859,7 +896,6 @@ def mis_servicios_tecnico(request):
     return render(request, 'operaciones/mis_servicios_tecnico.html', {
         'servicios_info': servicios_info
     })
-
 
 @login_required
 @rol_requerido('usuario')
@@ -887,6 +923,9 @@ def ir_a_upload_fotos(request, servicio_id):
     return redirect('operaciones:fotos_upload', pk=a.pk)
 
 
+from django.utils import timezone
+
+
 @login_required
 @rol_requerido('usuario')
 def aceptar_servicio(request, servicio_id):
@@ -894,8 +933,7 @@ def aceptar_servicio(request, servicio_id):
 
     # Debe ser un técnico asignado a este servicio
     if request.user not in servicio.trabajadores_asignados.all():
-        messages.error(
-            request, "No tienes permiso para aceptar este servicio.")
+        messages.error(request, "No tienes permiso para aceptar este servicio.")
         return redirect('operaciones:mis_servicios_tecnico')
 
     # Estados donde ya no corresponde aceptar
@@ -907,15 +945,13 @@ def aceptar_servicio(request, servicio_id):
         'finalizado',
     }
     if servicio.estado in estados_bloqueados:
-        messages.warning(
-            request, "Este servicio ya no está disponible para aceptar.")
+        messages.warning(request, "Este servicio ya no está disponible para aceptar.")
         return redirect('operaciones:mis_servicios_tecnico')
 
     # Estados desde los que SÍ se puede aceptar
     estados_permitidos = {'asignado', 'en_progreso', 'rechazado_supervisor'}
     if servicio.estado not in estados_permitidos:
-        messages.warning(
-            request, "Este servicio no se puede aceptar en su estado actual.")
+        messages.warning(request, "Este servicio no se puede aceptar en su estado actual.")
         return redirect('operaciones:mis_servicios_tecnico')
 
     # Crear/obtener sesión de fotos del servicio
@@ -928,22 +964,25 @@ def aceptar_servicio(request, servicio_id):
         defaults={'estado': 'asignado'}
     )
 
-    # IMPORTANTE: permitir "reiniciar" también cuando ESTÁ EN rechazado_supervisor
+    # Si ya estaba en otro estado distinto de 'asignado'
+    # solo la "reiniciamos" a 'asignado' cuando venimos de un rechazo.
     if asignacion.estado != 'asignado':
         if servicio.motivo_rechazo and servicio.estado in ['asignado', 'en_progreso', 'rechazado_supervisor']:
             asignacion.estado = 'asignado'
             if hasattr(asignacion, 'aceptado_en'):
                 asignacion.aceptado_en = None
-            asignacion.save(update_fields=[
-                            'estado'] + (['aceptado_en'] if hasattr(asignacion, 'aceptado_en') else []))
+            asignacion.save(update_fields=['estado'] + (['aceptado_en'] if hasattr(asignacion, 'aceptado_en') else []))
         else:
             messages.info(request, "Ya habías aceptado esta asignación.")
             return redirect('operaciones:mis_servicios_tecnico')
 
     # Marcar mi aceptación
     asignacion.estado = 'en_proceso'
-    asignacion.aceptado_en = timezone.now()
-    asignacion.save(update_fields=['estado', 'aceptado_en'])
+    if hasattr(asignacion, 'aceptado_en'):
+        asignacion.aceptado_en = timezone.now()
+        asignacion.save(update_fields=['estado', 'aceptado_en'])
+    else:
+        asignacion.save(update_fields=['estado'])
 
     # Pasar el servicio a EN PROGRESO si aún no lo está (incluye caso rechazado_supervisor)
     if servicio.estado != 'en_progreso':
@@ -951,10 +990,8 @@ def aceptar_servicio(request, servicio_id):
         servicio.tecnico_aceptado = request.user
         servicio.save(update_fields=['estado', 'tecnico_aceptado'])
 
-    messages.success(
-        request, "Has aceptado el servicio. Ya puedes subir fotos.")
+    messages.success(request, "Has aceptado el servicio. Ya puedes subir fotos.")
     return redirect('operaciones:mis_servicios_tecnico')
-
 
 @login_required
 @rol_requerido('usuario')
@@ -974,17 +1011,21 @@ def finalizar_servicio(request, servicio_id):
     sesion = _get_or_create_sesion(servicio)
     a = sesion.asignaciones.filter(tecnico=request.user).first()
     if not a:
-        a = SesionFotoTecnico.objects.create(sesion=sesion, tecnico=request.user, estado='asignado')
+        a = SesionFotoTecnico.objects.create(
+            sesion=sesion,
+            tecnico=request.user,
+            estado='asignado'
+        )
 
-    # 🔧 Import local para evitar NameError aun si no está en el tope del archivo
+    # 🔧 Imports locales
     import re
-    # ==================== Helpers locales (activos + norma) ====================
     import unicodedata
 
     from django.db import transaction
 
     from .models import EvidenciaFoto, RequisitoFoto
 
+    # ==================== Helpers locales (activos + norma) ====================
     def _norm_title(s: str) -> str:
         s = (s or "").strip().lower()
         s = unicodedata.normalize("NFKD", s)
@@ -1012,8 +1053,10 @@ def finalizar_servicio(request, servicio_id):
             else:
                 b["ids"].add(r["id"])
                 if (r["orden"], r["id"]) < (b["orden"], b["id"]):
-                    b["id"] = r["id"]; b["titulo"] = r["titulo"]
-                    b["obligatorio"] = r["obligatorio"]; b["orden"] = r["orden"]
+                    b["id"] = r["id"]
+                    b["titulo"] = r["titulo"]
+                    b["obligatorio"] = r["obligatorio"]
+                    b["orden"] = r["orden"]
         return canon_by_norm
 
     def _global_done_por_norma(canon_by_norm: dict):
@@ -1052,9 +1095,11 @@ def finalizar_servicio(request, servicio_id):
         )
         return redirect('operaciones:fotos_upload', pk=a.pk)
 
-    # 2) Validar que TODOS los técnicos hayan aceptado su asignación
-    for asg in sesion.asignaciones.all():
-        if not (asg.aceptado_en or asg.estado != "asignado"):
+    # 2) Validar que TODOS los técnicos asignados (actualmente asignados) hayan aceptado
+    assigned_ids = list(servicio.trabajadores_asignados.values_list('id', flat=True))
+    for asg in sesion.asignaciones.filter(tecnico_id__in=assigned_ids):
+        # si está todavía en "asignado" y sin aceptado_en ⇒ NO ha aceptado
+        if asg.estado == "asignado" and not getattr(asg, "aceptado_en", None):
             messages.error(request, "Aún hay técnicos sin aceptar la asignación. No se puede finalizar.")
             return redirect('operaciones:fotos_upload', pk=a.pk)
 
@@ -1071,7 +1116,6 @@ def finalizar_servicio(request, servicio_id):
 
     messages.success(request, "Enviado a revisión del supervisor (proyecto completo).")
     return redirect('operaciones:mis_servicios_tecnico')
-
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
