@@ -22,6 +22,13 @@ REPORTE_FOTOS_TEMPLATE_XLSX = BASE_DIR / \
 ACTA_SITES_LOGO_PATH = BASE_DIR / "static" / "images" / "sites_logo.png"
 ACTA_FIRMA_EDGARDO_PATH = BASE_DIR / "static" / "images" / "edgardo_zapata.png"
 
+# Logo Planix para correos HTML
+PLANIX_LOGO_URL = os.getenv(
+    "PLANIX_LOGO_URL",
+    "https://res.cloudinary.com/dm6gqg4fb/image/upload/v1751574704/planixb_a4lorr.jpg",
+)
+
+
 
 def is_env_var_set(key: str) -> bool:
     v = os.environ.get(key)
