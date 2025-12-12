@@ -4,12 +4,12 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import ContratoAlertaEnviada, ContratoTrabajo, CronDiarioEjecutado
 
 
-@require_GET
+@require_http_methods(["GET", "HEAD"])
 def cron_contratos_por_vencer(request):
     """
     Endpoint para ser llamado por UptimeRobot (o similar) varias veces al día.

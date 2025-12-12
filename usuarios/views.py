@@ -25,7 +25,7 @@ from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect, requires_csrf_token
 from django.views.decorators.debug import sensitive_post_parameters
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods
 
 from gz_services.utils.email_utils import enviar_correo_manual
 from usuarios.models import FirmaRepresentanteLegal  # 👈 importa el modelo
@@ -193,7 +193,7 @@ Si no solicitaste este correo, simplemente ignóralo.
 @never_cache
 @csrf_protect
 @sensitive_post_parameters('password')
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["GET", "POST", "HEAD"])
 @ratelimit("login", limit=10, window_sec=60)
 def login_unificado(request):
     form = AuthenticationForm(request, data=request.POST or None)
