@@ -230,6 +230,18 @@ AWS_S3_TRANSFER_CONFIG = TransferConfig(
 )
 
 
+# =========================
+# ALERTAS CONTRATOS RRHH
+# =========================
+CONTRATOS_CRON_TOKEN = os.environ.get("CONTRATOS_CRON_TOKEN", "")
+
+# Coma-separados, por ahora solo para contratos
+# Ej: "rrhh@tuempresa.cl,pm@tuempresa.cl,contador@tuempresa.cl"
+CONTRATOS_ALERT_EMAILS = os.environ.get("CONTRATOS_ALERT_EMAILS", "")
+
+
+
+
 # ===============================
 # Email (desde variables de entorno)
 # ===============================

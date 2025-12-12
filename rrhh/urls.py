@@ -1,6 +1,6 @@
-from django.urls import path
-from django.urls import include
-from . import views
+from django.urls import include, path
+
+from . import views, views_alerta
 
 app_name = 'rrhh'
 
@@ -131,6 +131,9 @@ urlpatterns = [
          views.rechazar_adelanto_rrhh, name='rechazar_adelanto_rrhh'),
     path('adelanto/activar-edicion/<int:id>/',
          views.activar_edicion_rrhh, name='activar_edicion_rrhh'),
+
+     
+    path("cron/contratos-por-vencer/",views_alerta.cron_contratos_por_vencer,name="rrhh_cron_contratos_por_vencer"),
 
 
 ]

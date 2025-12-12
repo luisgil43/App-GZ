@@ -1,11 +1,11 @@
-from django.db import models
 from django.conf import settings
-from django_select2.views import AutoResponseView
 from django.contrib.auth import get_user_model
-from django_select2.forms import ModelSelect2Widget
+from django.core.exceptions import ImproperlyConfigured
+from django.db import models
 from django.utils.functional import LazyObject
 from django.utils.module_loading import import_string
-from django.core.exceptions import ImproperlyConfigured
+from django_select2.forms import ModelSelect2Widget
+from django_select2.views import AutoResponseView
 
 
 class LazyCloudinaryStorage(LazyObject):

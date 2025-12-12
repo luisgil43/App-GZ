@@ -517,3 +517,42 @@ class SolicitudAdelanto(models.Model):
 
     def ruta_cloudinary(self):
         return self.carpeta_consecutiva()
+    
+
+class ContratoAlertaEnviada(models.Model):
+    """
+    Log de alertas enviadas por contrato para no repetir correos
+    el mismo día / mismo 'días antes'.
+    """
+    contrato = models.ForeignKey(
+        'ContratoTrabajo',
+        on_delete=models.CASCADE,
+        related_name='alertas_enviadas'
+    )
+    fecha_termino = models.DateField()
+    dias_antes = models.PositiveIntegerField()
+    enviado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('contrato', 'fecha_termino', 'dias_antes')
+
+    def __str__(self):
+        return f"Alerta contrato {self.contrato_id} - {self.dias_antes} días antes"
+
+
+class CronDiarioEjecutado(models.Model):
+    """
+    Controla que un cron lógico (por nombre) se ejecute solo
+    una vez por día. Lo usamos para que UptimeRobot pueda
+    pegarle varias veces, pero solo la primera después de las 08:00
+    dispare los correos.
+    """
+    nombre = models.CharField(max_length=100)
+    fecha = models.DateField()
+    ejecutado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('nombre', 'fecha')
+
+    def __str__(self):
+        return f"{self.nombre} @ {self.fecha}"
