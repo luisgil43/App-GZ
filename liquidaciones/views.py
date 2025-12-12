@@ -673,6 +673,9 @@ def carga_masiva_liquidaciones(request):
                 año=año,
                 defaults={
                     "archivo_pdf_liquidacion": content_file,
+                    "pdf_firmado": None,
+                    "firmada": False,
+                    "fecha_firma": None,
                 },
             )
 

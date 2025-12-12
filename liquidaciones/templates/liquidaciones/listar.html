@@ -96,10 +96,11 @@
             {% endif %}
           </td>
 
-          <td class="px-4 py-2">
-            {% if liquidacion.firmada and liquidacion.fecha_firma %}
+           <td class="px-4 py-2">
+            {# Estado basado en si existe pdf_firmado #}
+            {% if liquidacion.pdf_firmado and liquidacion.pdf_firmado.url %}
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">
-                Firmada el {{ liquidacion.fecha_firma|date:"d/m/Y H:i" }}
+                Firmada{% if liquidacion.fecha_firma %} el {{ liquidacion.fecha_firma|date:"d/m/Y H:i" }}{% endif %}
               </span>
             {% else %}
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-rose-100 text-rose-700 text-xs font-semibold">
@@ -108,14 +109,15 @@
             {% endif %}
           </td>
 
+
           <td class="px-4 py-2">
-            {% if liquidacion.firmada and liquidacion.pdf_firmado and liquidacion.pdf_firmado.url %}
+            {% if liquidacion.pdf_firmado and liquidacion.pdf_firmado.url %}
               <a href="{% url 'liquidaciones:descargar_pdf' liquidacion.id %}"
                  target="_blank"
                  class="text-blue-600 hover:underline">
                 ⬇️ Descargar
               </a>
-            {% elif not liquidacion.firmada %}
+            {% elif liquidacion.archivo_pdf_liquidacion %}
               <a href="{% url 'liquidaciones:firmar_liquidacion' liquidacion.pk %}"
                  class="text-blue-600 hover:underline">
                 ✍️ Firmar
