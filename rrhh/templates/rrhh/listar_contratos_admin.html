@@ -114,6 +114,7 @@
           <th class="p-2">Fecha inicio</th>
           <th class="p-2">Fecha término</th>
           <th class="p-2">Status</th>
+          <th class="p-2">Alertas</th>
           <th class="p-2">Contrato</th>
           <th class="p-2">Acciones</th>
         </tr>
@@ -156,6 +157,28 @@
             {% endif %}
           </td>
 
+          <!-- ALERTAS ON/OFF -->
+          <td class="p-2">
+            <form method="post"
+                  action="{% url 'rrhh:toggle_notificacion_contrato' contrato.id %}"
+                  class="inline-flex items-center gap-1 text-xs">
+              {% csrf_token %}
+              <label class="inline-flex items-center gap-1 cursor-pointer">
+                <input type="checkbox"
+                       name="notificar"
+                       value="1"
+                       class="rounded border-gray-300"
+                       onchange="this.form.submit()"
+                       {% if contrato.notificar_vencimiento %}checked{% endif %}>
+                {% if contrato.notificar_vencimiento %}
+                  <span class="text-emerald-700">Alertar</span>
+                {% else %}
+                  <span class="text-gray-500">Detenido</span>
+                {% endif %}
+              </label>
+            </form>
+          </td>
+
           <!-- CONTRATO -->
           <td class="p-2">
             {% if contrato.archivo %}
@@ -183,7 +206,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="p-4 text-center text-gray-500">
+          <td colspan="8" class="p-4 text-center text-gray-500">
             No se encontraron contratos.
           </td>
         </tr>

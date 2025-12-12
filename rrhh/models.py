@@ -29,6 +29,14 @@ class ContratoTrabajo(models.Model):
         storage=cloudinary_storage,
         verbose_name="Archivo del contrato"
     )
+    # 🔔 Nuevo: permitir apagar/encender alertas por contrato
+    notificar_vencimiento = models.BooleanField(
+        default=True,
+        help_text=(
+            "Si está desmarcado, no se enviarán correos de alerta "
+            "para este contrato."
+        ),
+    )
 
     def __str__(self):
         return f"Contrato de {self.tecnico.get_full_name()}"
@@ -521,8 +529,12 @@ class SolicitudAdelanto(models.Model):
 
 class ContratoAlertaEnviada(models.Model):
     """
-    Log de alertas enviadas por contrato para no repetir correos
-    el mismo día / mismo 'días antes'.
+    Log de alertas enviadas por contrato para no repetir correos.
+
+    'dias_antes' es un offset relativo a la fecha de término:
+      - positivo  => días que faltan (pre-vencimiento)
+      - cero      => vence hoy
+      - negativo  => días desde que venció (post-vencimiento)
     """
     contrato = models.ForeignKey(
         'ContratoTrabajo',
@@ -530,14 +542,18 @@ class ContratoAlertaEnviada(models.Model):
         related_name='alertas_enviadas'
     )
     fecha_termino = models.DateField()
-    dias_antes = models.PositiveIntegerField()
+    # 🔁 Ahora puede ser negativo para las alertas post-vencimiento
+    dias_antes = models.IntegerField()
     enviado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('contrato', 'fecha_termino', 'dias_antes')
 
     def __str__(self):
-        return f"Alerta contrato {self.contrato_id} - {self.dias_antes} días antes"
+        return (
+            f"Alerta contrato {self.contrato_id} - offset {self.dias_antes} días "
+            f"(fecha término {self.fecha_termino})"
+        )
 
 
 class CronDiarioEjecutado(models.Model):

@@ -228,6 +228,37 @@ def crear_contrato(request):
     return render(request, 'rrhh/crear_contrato.html', {'form': form})
 
 
+@staff_member_required
+@rol_requerido('admin', 'pm', 'rrhh')
+def toggle_notificacion_contrato(request, contrato_id):
+    """
+    Activa o desactiva las alertas de vencimiento para un contrato.
+
+    Se usa desde el listado con un checkbox que auto-envía el formulario.
+    """
+    contrato = get_object_or_404(ContratoTrabajo, id=contrato_id)
+
+    if request.method != 'POST':
+        return redirect('rrhh:contratos_trabajo')
+
+    # Si el checkbox viene marcado => True, si no viene en POST => False
+    notificar = 'notificar' in request.POST
+    contrato.notificar_vencimiento = notificar
+    contrato.save(update_fields=['notificar_vencimiento'])
+
+    if notificar:
+        messages.success(
+            request,
+            f"🔔 Alertas de vencimiento activadas para {contrato.tecnico.get_full_name()}."
+        )
+    else:
+        messages.success(
+            request,
+            f"🔕 Alertas de vencimiento desactivadas para {contrato.tecnico.get_full_name()}."
+        )
+
+    return redirect(request.META.get('HTTP_REFERER', 'rrhh:contratos_trabajo'))
+
 
 
 

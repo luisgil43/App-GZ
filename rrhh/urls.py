@@ -135,5 +135,7 @@ urlpatterns = [
      
     path("cron/contratos-por-vencer/",views_alerta.cron_contratos_por_vencer,name="rrhh_cron_contratos_por_vencer"),
 
+    path("contratos/<int:contrato_id>/toggle-alerta/",views.toggle_notificacion_contrato,name="toggle_notificacion_contrato"),
+
 
 ]

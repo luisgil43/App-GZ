@@ -9,6 +9,41 @@ from django.views.decorators.http import require_GET, require_http_methods
 from .models import ContratoAlertaEnviada, ContratoTrabajo, CronDiarioEjecutado
 
 
+def contrato_sigue_siend_ultimo(contrato: ContratoTrabajo) -> bool:
+    """
+    Devuelve True si este contrato sigue siendo el 'último' contrato relevante
+    del técnico para efectos de alertas.
+
+    Si existe otro contrato del mismo técnico con:
+      - fecha_termino mayor, o
+      - fecha_termino en blanco (indefinido),
+    asumimos que ese contrato nuevo reemplaza al actual y por lo tanto
+    este contrato ya no debería generar correos (ni pre ni post-vencimiento).
+    """
+    # ¿Hay algún contrato indefinido más nuevo?
+    existe_indefinido_nuevo = ContratoTrabajo.objects.filter(
+        tecnico=contrato.tecnico,
+        notificar_vencimiento=True,
+        fecha_termino__isnull=True,
+    ).exclude(pk=contrato.pk).exists()
+
+    if existe_indefinido_nuevo:
+        return False
+
+    # ¿Hay algún contrato con fecha_termino mayor que éste?
+    if contrato.fecha_termino:
+        existe_mas_nuevo = ContratoTrabajo.objects.filter(
+            tecnico=contrato.tecnico,
+            notificar_vencimiento=True,
+            fecha_termino__gt=contrato.fecha_termino,
+        ).exclude(pk=contrato.pk).exists()
+
+        if existe_mas_nuevo:
+            return False
+
+    return True
+
+
 @require_http_methods(["GET", "HEAD"])
 def cron_contratos_por_vencer(request):
     """
@@ -16,7 +51,11 @@ def cron_contratos_por_vencer(request):
     - Protegido por token (?token=...).
     - Solo ejecuta el envío una vez por día.
     - Nunca se ejecuta antes de las 08:00 (hora local).
-    - Envía correos cuando faltan 20, 15, 10, 5, 3, 2, 1 días.
+    - PRE-vencimiento: envía correos cuando faltan 20, 15, 10, 5, 3, 2, 1 días.
+    - POST-vencimiento: envía correos TODOS los días (hasta MAX_DIAS_POST)
+      mientras:
+        * el contrato tenga notificar_vencimiento=True, y
+        * siga siendo el 'último' contrato del técnico.
     """
 
     # 1) Seguridad: validar token
@@ -47,8 +86,11 @@ def cron_contratos_por_vencer(request):
     # Marcar como ejecutado
     CronDiarioEjecutado.objects.create(nombre=job_name, fecha=hoy)
 
-    # 4) Días en los que queremos avisar
-    DIAS_ALERTA = {20, 15, 10, 5, 3, 2, 1}
+    # 4) Configuración de días
+    DIAS_ALERTA_PRE = {20, 15, 10, 5, 3, 2, 1}
+    # Máximo de días después del vencimiento que queremos hinchar
+    # Si quieres ilimitado, pon MAX_DIAS_POST = None
+    MAX_DIAS_POST = 60
 
     # Pool de correos SOLO para contratos
     recip_raw = getattr(settings, "CONTRATOS_ALERT_EMAILS", "")
@@ -70,28 +112,71 @@ def cron_contratos_por_vencer(request):
         "https://res.cloudinary.com/dm6gqg4fb/image/upload/v1751574704/planixb_a4lorr.jpg",
     )
 
-    # 5) Buscar contratos con fecha_termino definida
+    # 5) Buscar contratos con fecha_termino definida y alertas activas
     contratos = (
         ContratoTrabajo.objects
         .select_related("tecnico")
         .exclude(fecha_termino__isnull=True)
+        .filter(notificar_vencimiento=True)
     )
 
     enviados = 0
     saltados = 0
 
     for c in contratos:
-        dias_restantes = (c.fecha_termino - hoy).days
-
-        if dias_restantes not in DIAS_ALERTA:
+        # Si ya existe un contrato nuevo para este técnico, no seguir molestando
+        if not contrato_sigue_siend_ultimo(c):
             saltados += 1
             continue
 
-        # Evitar duplicados
+        dias_relativos = (c.fecha_termino - hoy).days
+        es_pre = dias_relativos > 0
+
+        # ---------------- PRE-VENCIMIENTO ----------------
+        if es_pre:
+            if dias_relativos not in DIAS_ALERTA_PRE:
+                saltados += 1
+                continue
+
+            dias_pasados = 0
+            estado_tabla = "Por vencer"
+            estado_subject = f"por vencer en {dias_relativos} días"
+            texto_linea_plain = (
+                f"Quedan {dias_relativos} día(s) para su vencimiento."
+            )
+            alerta_html = (
+                f"<strong>Quedan {dias_relativos} día(s)</strong> para su vencimiento."
+            )
+
+        # ---------------- POST-VENCIMIENTO ----------------
+        else:
+            dias_pasados = -dias_relativos  # 0 => vence hoy, 1 => vencido hace 1 día...
+
+            if MAX_DIAS_POST is not None and dias_pasados > MAX_DIAS_POST:
+                saltados += 1
+                continue
+
+            estado_tabla = "Vencido"
+
+            if dias_pasados == 0:
+                estado_subject = "vence hoy"
+                texto_linea_plain = "El contrato vence hoy."
+                alerta_html = "<strong>El contrato vence hoy.</strong>"
+            else:
+                estado_subject = f"vencido hace {dias_pasados} día(s)"
+                texto_linea_plain = (
+                    f"El contrato se encuentra vencido hace {dias_pasados} día(s)."
+                )
+                alerta_html = (
+                    f"<strong>El contrato se encuentra vencido</strong> "
+                    f"hace {dias_pasados} día(s)."
+                )
+
+        # Evitar duplicados: usamos el mismo valor relativo (positivo o negativo)
         ya_enviada = ContratoAlertaEnviada.objects.filter(
             contrato=c,
             fecha_termino=c.fecha_termino,
-            dias_antes=dias_restantes,
+            dias_antes=dias_relativos,
         ).exists()
 
         if ya_enviada:
@@ -107,17 +192,17 @@ def cron_contratos_por_vencer(request):
         rut_tecnico = getattr(tecnico, "identidad", "")
 
         subject = (
-            f"[GZ Services] Contrato por vencer en {dias_restantes} días - {nombre_tecnico}"
+            f"[GZ Services] Contrato {estado_subject} - {nombre_tecnico}"
         )
 
-        # Texto plano ( fallback )
+        # Texto plano (fallback)
         text_body = (
             "Hola,\n\n"
             f"El contrato de trabajo del técnico {nombre_tecnico}"
             f"{f' (RUT {rut_tecnico})' if rut_tecnico else ''} "
-            f"vence el día {c.fecha_termino:%Y-%m-%d}.\n\n"
-            f"Quedan {dias_restantes} días para su vencimiento.\n\n"
-            "Por favor, revisar renovaciones o acciones necesarias en el módulo de "
+            f"tiene fecha de término el día {c.fecha_termino:%Y-%m-%d}.\n\n"
+            f"{texto_linea_plain}\n\n"
+            "Por favor, revisar renovaciones, anexos o término en el módulo de "
             "RRHH de GZ Services.\n\n"
             "Este mensaje fue generado automáticamente por el sistema Planix.\n"
         )
@@ -146,7 +231,7 @@ def cron_contratos_por_vencer(request):
     </div>
 
     <h2 style="font-size:22px; margin:0 0 12px; color:#111827;">
-      Aviso de contrato por vencer
+      Aviso de contrato {estado_tabla.lower()}
     </h2>
 
     <p style="font-size:14px; color:#374151; margin:0 0 12px;">
@@ -157,11 +242,11 @@ def cron_contratos_por_vencer(request):
       El contrato de trabajo del técnico
       <strong>{nombre_tecnico}</strong>
       {f"(RUT <strong>{rut_tecnico}</strong>)" if rut_tecnico else ""} 
-      vence el día <strong>{c.fecha_termino:%Y-%m-%d}</strong>.
+      tiene fecha de término el día <strong>{c.fecha_termino:%Y-%m-%d}</strong>.
     </p>
 
     <p style="font-size:14px; color:#111827; margin:0 0 16px;">
-      <strong>Quedan {dias_restantes} día(s)</strong> para su vencimiento.
+      {alerta_html}
     </p>
 
     <div style="
@@ -177,14 +262,14 @@ def cron_contratos_por_vencer(request):
         <li><strong>Técnico:</strong> {nombre_tecnico}</li>
         {f"<li><strong>RUT:</strong> {rut_tecnico}</li>" if rut_tecnico else ""}
         <li><strong>Fecha de término:</strong> {c.fecha_termino:%Y-%m-%d}</li>
-        <li><strong>Estado:</strong> Por vencer</li>
+        <li><strong>Estado:</strong> {estado_tabla}</li>
       </ul>
     </div>
 
     <p style="font-size:14px; color:#374151; margin:0 0 24px;">
       Por favor revisa la situación en el módulo de <strong>RRHH</strong> de
-      la plataforma para gestionar una eventual renovación, término de contrato
-      o actualización de condiciones.
+      la plataforma para gestionar una eventual renovación, anexo, término de
+      contrato o actualización de condiciones.
     </p>
 
     <div style="font-size:12px; color:#9ca3af; margin-top:24px; text-align:center;">
@@ -206,11 +291,11 @@ def cron_contratos_por_vencer(request):
         email.attach_alternative(html_body, "text/html")
         email.send(fail_silently=False)
 
-        # Registrar alerta enviada
+        # Registrar alerta enviada (puede ser positiva o negativa)
         ContratoAlertaEnviada.objects.create(
             contrato=c,
             fecha_termino=c.fecha_termino,
-            dias_antes=dias_restantes,
+            dias_antes=dias_relativos,
         )
         enviados += 1
 
