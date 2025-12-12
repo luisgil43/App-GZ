@@ -10,45 +10,87 @@
     {% csrf_token %}
     {{ form.non_field_errors }}
 
+    <!-- Técnico -->
     <div>
-      <label for="tecnico" class="block font-medium text-gray-700 mb-1">Técnico</label>
+      <label for="id_tecnico" class="block font-medium text-gray-700 mb-1">Técnico</label>
       {{ form.tecnico }}
+      {% if form.tecnico.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.tecnico.errors.0 }}</p>
+      {% endif %}
     </div>
 
+    <!-- Fecha de inicio -->
     <div>
-      <label for="fecha_inicio" class="block font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+      <label for="id_fecha_inicio" class="block font-medium text-gray-700 mb-1">Fecha de Inicio</label>
       {{ form.fecha_inicio }}
+      {% if form.fecha_inicio.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.fecha_inicio.errors.0 }}</p>
+      {% endif %}
     </div>
 
+    <!-- Fecha de término + indefinido -->
     <div>
-      <label for="fecha_termino" class="block font-medium text-gray-700 mb-1">Fecha de Término</label>
+      <label for="id_fecha_termino" class="block font-medium text-gray-700 mb-1">Fecha de Término</label>
       <div class="flex items-center gap-4">
         {{ form.fecha_termino }}
+        {% if form.fecha_termino.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.fecha_termino.errors.0 }}</p>
+        {% endif %}
+
         <label class="inline-flex items-center gap-2">
-          <input type="checkbox" id="indefinido" class="form-checkbox rounded text-emerald-600"
-       {% if not form.instance.fecha_termino %}checked{% endif %}>
+          <input
+            type="checkbox"
+            id="indefinido"
+            name="indefinido-check"
+            class="form-checkbox rounded text-emerald-600"
+            {% if not form.instance.fecha_termino %}checked{% endif %}
+          >
           <span class="text-sm text-gray-600">Indefinido</span>
         </label>
       </div>
     </div>
 
+    <!-- Archivo PDF -->
     <div>
-  <label for="archivo" class="block font-medium text-gray-700 mb-1">Archivo PDF del Contrato</label>
-  {{ form.archivo }}
-</div>
+      <label for="id_archivo" class="block font-medium text-gray-700 mb-1">
+        Archivo PDF del Contrato
+      </label>
 
-<div>
-  <label class="inline-flex items-center gap-2 mt-2">
-    {{ form.reemplazar_archivo }}
-    <span class="text-sm text-gray-600">Reemplazar archivo existente</span>
-  </label>
-</div>
+      {{ form.archivo }}
+      {% if form.archivo.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.archivo.errors.0 }}</p>
+      {% endif %}
 
+      {% if contrato.archivo %}
+  <p class="mt-2 text-sm text-gray-600">
+    Archivo actual:
+    <a href="{% url 'rrhh:ver_contrato' contrato.id %}"
+       target="_blank"
+       class="text-blue-600 underline">
+      Ver contrato actual (PDF)
+    </a>
+  </p>
+{% endif %}
+    </div>
+
+    <!-- Checkbox reemplazar archivo -->
+    <div>
+      <label class="inline-flex items-center gap-2 mt-2">
+        {{ form.reemplazar_archivo }}
+        <span class="text-sm text-gray-600">Reemplazar archivo existente</span>
+      </label>
+    </div>
+
+    <!-- Botones -->
     <div class="flex flex-col sm:flex-row gap-4">
-      <button type="submit" class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 w-full sm:w-auto">
+      <button
+        type="submit"
+        class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 w-full sm:w-auto">
         💾 Guardar Cambios
       </button>
-      <a href="{% url 'rrhh:contratos_trabajo' %}" class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-center w-full sm:w-auto">
+      <a
+        href="{% url 'rrhh:contratos_trabajo' %}"
+        class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-center w-full sm:w-auto">
         🔙 Volver
       </a>
     </div>
@@ -58,9 +100,11 @@
 <!-- JS para manejar el checkbox de "Indefinido" -->
 <script>
   const indefinidoCheckbox = document.getElementById('indefinido');
-  const fechaTerminoInput = document.getElementById('id_fecha_termino');
+  const fechaTerminoInput  = document.getElementById('id_fecha_termino');
 
   function toggleFechaTermino() {
+    if (!fechaTerminoInput) return;
+
     if (indefinidoCheckbox.checked) {
       fechaTerminoInput.disabled = true;
       fechaTerminoInput.value = '';
@@ -69,7 +113,9 @@
     }
   }
 
-  indefinidoCheckbox.addEventListener('change', toggleFechaTermino);
+  if (indefinidoCheckbox) {
+    indefinidoCheckbox.addEventListener('change', toggleFechaTermino);
+  }
   window.addEventListener('DOMContentLoaded', toggleFechaTermino);
 </script>
 {% endblock %}

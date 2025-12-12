@@ -1,13 +1,14 @@
+from datetime import date, timedelta
+
 from django import forms
-from django.db import models
-from django.contrib.auth import get_user_model
-from liquidaciones.models import cloudinary_storage
 from django.conf import settings
-from datetime import date
-from django.utils import timezone
-from datetime import timedelta
-from usuarios.models import CustomUser
+from django.contrib.auth import get_user_model
 from django.core.files.storage import default_storage
+from django.db import models
+from django.utils import timezone
+
+from liquidaciones.models import cloudinary_storage
+from usuarios.models import CustomUser
 
 
 def ruta_contrato_trabajo(instance, filename):
@@ -18,7 +19,8 @@ def ruta_contrato_trabajo(instance, filename):
 
 class ContratoTrabajo(models.Model):
     tecnico = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
     )
     fecha_inicio = models.DateField()
     fecha_termino = models.DateField(null=True, blank=True)
@@ -32,6 +34,7 @@ class ContratoTrabajo(models.Model):
         return f"Contrato de {self.tecnico.get_full_name()}"
 
     def save(self, *args, **kwargs):
+        # Eliminar archivo anterior si se reemplaza
         try:
             old = ContratoTrabajo.objects.get(pk=self.pk)
         except ContratoTrabajo.DoesNotExist:
@@ -46,6 +49,56 @@ class ContratoTrabajo(models.Model):
                 old.archivo.delete(save=False)
 
         super().save(*args, **kwargs)
+
+    # ====== LÓGICA DE VIGENCIA / STATUS ======
+
+    @property
+    def dias_restantes(self):
+        """
+        Días que faltan para que termine el contrato.
+        - > 0  => faltan días
+        - = 0  => termina hoy
+        - < 0  => ya vencido
+        """
+        if not self.fecha_termino:
+            return None
+        hoy = timezone.localdate()
+        return (self.fecha_termino - hoy).days
+
+    @property
+    def status_code(self):
+        """
+        Código interno para templates / filtros:
+        - 'indefinido'
+        - 'vencido'
+        - 'por_vencer'  (20 días o menos)
+        - 'vigente'
+        """
+        if not self.fecha_termino:
+            return "indefinido"
+
+        dias = self.dias_restantes
+
+        if dias is None:
+            return "indefinido"
+        if dias < 0:
+            return "vencido"
+        if dias <= 20:
+            return "por_vencer"
+        return "vigente"
+
+    @property
+    def status_label(self):
+        """
+        Texto bonito para mostrar en tablas (admin).
+        """
+        mapping = {
+            "indefinido": "Indefinido",
+            "vigente": "Vigente",
+            "por_vencer": "Por vencer",
+            "vencido": "Vencido",
+        }
+        return mapping.get(self.status_code, self.status_code)
 
 
 def ruta_ficha_ingreso(instance, filename):

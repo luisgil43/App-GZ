@@ -1,85 +1,69 @@
-from usuarios.models import CustomUser  # Asegúrate de importar esto
-from usuarios.utils import crear_notificacion
-from reportlab.lib.pagesizes import A4
-from rrhh.forms import AprobacionAdelantoForm
-from collections import Counter
-from openpyxl.styles import Font
-from django.urls import NoReverseMatch
-from rrhh.forms import CronogramaPagoForm
-from rrhh.models import CronogramaPago
-from django.utils import timezone
-from .models import CronogramaPago
-from .forms import CronogramaPagoForm
-from django.core.exceptions import ValidationError
-from rrhh.utils import generar_pdf_solicitud_vacaciones
-from rrhh.models import SolicitudVacaciones
-from django.shortcuts import get_object_or_404, redirect
-from rrhh.utils import generar_pdf_solicitud_vacaciones  # ⬅️ al inicio del archivo
-from io import BytesIO
-from rrhh.models import FichaIngreso
-from reportlab.lib.pagesizes import LETTER
-from reportlab.pdfgen import canvas
-from django.contrib.admin.views.decorators import staff_member_required
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
-import uuid
-import os
-from .models import ContratoTrabajo
-from .forms import ContratoTrabajoForm
-from django.shortcuts import get_object_or_404
-import logging
-from django.core.files.uploadedfile import InMemoryUploadedFile
-from django.http import FileResponse, Http404
-from .forms import FichaIngresoForm
-from .forms import SolicitudVacacionesForm
-from datetime import date
-from django.http import HttpResponseForbidden
-from usuarios.decoradores import rol_requerido
-from .forms import RevisionVacacionesForm
-from rrhh.models import Feriado
-import json
-from rrhh.models import DiasVacacionesTomadosManualmente
-from django.urls import reverse
-from django.db.models import Q
-from .utils import contar_dias_habiles
-from .forms import DocumentoTrabajadorForm, TipoDocumentoForm
-from .models import DocumentoTrabajador, TipoDocumento, CustomUser
-from django.db.models import OuterRef, Subquery
-from .forms import ReemplazoDocumentoForm
-import cloudinary.uploader
-from django.core.files.base import ContentFile
-from django.utils.text import slugify
-import openpyxl
-from datetime import datetime
-from openpyxl.utils import get_column_letter
-from django.http import HttpResponse
-from django.utils.encoding import smart_str
-from .utils import calcular_estado_documento
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
+import base64
+import calendar
 import io
-from rrhh.utils import generar_ficha_ingreso_pdf
+import json
+import logging
+import os
+import uuid
+from collections import Counter
+from datetime import date, datetime, timedelta
+from decimal import Decimal
+from io import BytesIO
+
+import cloudinary.uploader
+import openpyxl
 # from rrhh.utils import agregar_firma_trabajador_a_ficha
 import requests
-from django.core.files.base import ContentFile
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import get_user_model
-# from .utils import agregar_firma_pm_a_ficha
-from usuarios.models import CustomUser
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from django.core.paginator import Paginator
+from django.db.models import OuterRef, Q, Subquery, Sum
+from django.http import (FileResponse, Http404, HttpResponse,
+                         HttpResponseForbidden)
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import NoReverseMatch, reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_date
+from django.utils.encoding import smart_str
+from django.utils.text import slugify
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from PIL import Image
-from .forms import FirmaForm
-import base64
-from rrhh.forms import SolicitudAdelantoAdminForm
-from rrhh.models import SolicitudAdelanto
-from rrhh.models import FichaIngreso
-from decimal import Decimal
-import calendar
-from django.db.models import Sum
-from .forms import SolicitudAdelantoForm
-from rrhh.utils import generar_pdf_solicitud_adelanto
-from .utils import generar_pdf_solicitud_adelanto
+from reportlab.lib.pagesizes import A4, LETTER
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfgen import canvas
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+from rrhh.forms import (AprobacionAdelantoForm, CronogramaPagoForm,
+                        SolicitudAdelantoAdminForm)
+from rrhh.models import (CronogramaPago, DiasVacacionesTomadosManualmente,
+                         Feriado, FichaIngreso, SolicitudAdelanto,
+                         SolicitudVacaciones)
+from rrhh.utils import \
+    generar_pdf_solicitud_vacaciones  # ⬅️ al inicio del archivo
+from rrhh.utils import (generar_ficha_ingreso_pdf,
+                        generar_pdf_solicitud_adelanto)
+from usuarios.decoradores import rol_requerido
+# from .utils import agregar_firma_pm_a_ficha
+from usuarios.models import CustomUser  # Asegúrate de importar esto
+from usuarios.utils import crear_notificacion
+
+from .forms import (ContratoTrabajoForm, CronogramaPagoForm,
+                    DocumentoTrabajadorForm, FichaIngresoForm, FirmaForm,
+                    ReemplazoDocumentoForm, RevisionVacacionesForm,
+                    SolicitudAdelantoForm, SolicitudVacacionesForm,
+                    TipoDocumentoForm)
+from .models import (ContratoTrabajo, CronogramaPago, CustomUser,
+                     DocumentoTrabajador, TipoDocumento)
+from .utils import (calcular_estado_documento, contar_dias_habiles,
+                    generar_pdf_solicitud_adelanto)
+
 User = get_user_model()
 
 
@@ -89,84 +73,144 @@ logger = logging.getLogger(__name__)
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_contratos_admin(request):
-    contratos = ContratoTrabajo.objects.select_related('tecnico')
+    """
+    Lista de contratos para admin/PM/RRHH con filtros, status y paginación.
+    """
+    qs = ContratoTrabajo.objects.select_related('tecnico').order_by('-fecha_inicio')
 
-    identidades = contratos.values_list(
-        'tecnico__identidad', flat=True).distinct()
-    nombres = contratos.values_list(
-        'tecnico__first_name', 'tecnico__last_name').distinct()
-    fechas_inicio = contratos.values_list('fecha_inicio', flat=True).distinct()
+    identidad = request.GET.get('identidad', '').strip()
+    nombre = request.GET.get('nombre', '').strip()
+    status = request.GET.get('status', '').strip()
 
-    fechas_termino_raw = contratos.values_list('fecha_termino', flat=True)
-    fechas_termino = []
-    for fecha in fechas_termino_raw:
-        if fecha:
-            fechas_termino.append(str(fecha))
-        else:
-            fechas_termino.append("Indefinido")
-    fechas_termino = sorted(set(fechas_termino))
+    # 🔹 nuevos filtros de fechas (rangos)
+    fi_desde = request.GET.get('fi_desde', '').strip()   # fecha_inicio desde
+    fi_hasta = request.GET.get('fi_hasta', '').strip()   # fecha_inicio hasta
+    ft_desde = request.GET.get('ft_desde', '').strip()   # fecha_termino desde
+    ft_hasta = request.GET.get('ft_hasta', '').strip()   # fecha_termino hasta
 
-    nombres_completos = sorted(set(
-        f"{n[0]} {n[1]}" for n in nombres if n[0] and n[1]
-    ))
+    if identidad:
+        qs = qs.filter(tecnico__identidad__icontains=identidad)
+
+    if nombre:
+        qs = qs.filter(
+            Q(tecnico__first_name__icontains=nombre) |
+            Q(tecnico__last_name__icontains=nombre) |
+            Q(tecnico__username__icontains=nombre)
+        )
+
+    # 🔹 aplicar rangos de fecha_inicio
+    fi_desde_date = parse_date(fi_desde) if fi_desde else None
+    fi_hasta_date = parse_date(fi_hasta) if fi_hasta else None
+
+    if fi_desde_date:
+        qs = qs.filter(fecha_inicio__gte=fi_desde_date)
+    if fi_hasta_date:
+        qs = qs.filter(fecha_inicio__lte=fi_hasta_date)
+
+    # 🔹 aplicar rangos de fecha_termino
+    ft_desde_date = parse_date(ft_desde) if ft_desde else None
+    ft_hasta_date = parse_date(ft_hasta) if ft_hasta else None
+
+    if ft_desde_date:
+        qs = qs.filter(fecha_termino__isnull=False, fecha_termino__gte=ft_desde_date)
+    if ft_hasta_date:
+        qs = qs.filter(fecha_termino__isnull=False, fecha_termino__lte=ft_hasta_date)
+
+    # Filtros por status (usando fecha_termino)
+    hoy = timezone.localdate()
+    if status == 'vigente':
+        qs = qs.filter(
+            Q(fecha_termino__isnull=True) |
+            Q(fecha_termino__gt=hoy + timedelta(days=30))
+        )
+    elif status == 'por_vencer':
+        qs = qs.filter(
+            fecha_termino__isnull=False,
+            fecha_termino__gte=hoy,
+            fecha_termino__lte=hoy + timedelta(days=30),
+        )
+    elif status == 'vencido':
+        qs = qs.filter(
+            fecha_termino__isnull=False,
+            fecha_termino__lt=hoy,
+        )
+    elif status == 'indefinido':
+        qs = qs.filter(fecha_termino__isnull=True)
+
+    cantidad = request.GET.get('cantidad', '20')
+    try:
+        cantidad_int = int(cantidad)
+    except ValueError:
+        cantidad_int = 20
+
+    paginator = Paginator(qs, cantidad_int)
+    page_number = request.GET.get('page') or 1
+    pagina = paginator.get_page(page_number)
+
+    filtros = {
+        "identidad": identidad,
+        "nombre": nombre,
+        "status": status,
+        # 🔹 para repintar los inputs
+        "fi_desde": fi_desde,
+        "fi_hasta": fi_hasta,
+        "ft_desde": ft_desde,
+        "ft_hasta": ft_hasta,
+    }
+
+    STATUS_CHOICES = [
+        ("vigente", "Vigente"),
+        ("por_vencer", "Por vencer"),
+        ("vencido", "Vencido"),
+        ("indefinido", "Indefinido"),
+    ]
 
     return render(request, 'rrhh/listar_contratos_admin.html', {
-        'contratos': contratos,
-        'identidades': identidades,
-        'nombres': nombres_completos,
-        'fechas_inicio': fechas_inicio,
-        'fechas_termino': fechas_termino,
+        "pagina": pagina,
+        "cantidad": str(cantidad_int),
+        "filtros": filtros,
+        "STATUS_CHOICES": STATUS_CHOICES,
     })
 
 
 @login_required
 def listar_contratos_usuario(request):
-    try:
-        usuario = request.user
-        logger.info(f"🧪 Usuario: {usuario} - ID: {usuario.id}")
+    """
+    Vista de contratos para el propio usuario (técnico).
+    """
+    usuario = request.user
+    contratos = ContratoTrabajo.objects.filter(
+        tecnico=usuario
+    ).order_by('-fecha_inicio')
 
-        contratos = ContratoTrabajo.objects.filter(tecnico=usuario)
-        logger.info(f"🧪 Total contratos: {contratos.count()}")
-
-        return render(request, 'rrhh/contratos_trabajo.html', {
-            'contratos': contratos
-        })
-    except Exception as e:
-        logger.error(f"❌ Error al cargar contratos usuario: {e}")
-        raise e  # Deja que falle para ver en los logs de Render
+    return render(request, 'rrhh/contratos_trabajo.html', {
+        "contratos": contratos,
+    })
 
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
 def crear_contrato(request):
     if request.method == 'POST':
-        archivo = request.FILES.get('archivo')
+        indefinido = bool(request.POST.get('indefinido-check'))
 
-        # Validar archivo antes de crear el formulario
-        if not archivo:
-            messages.error(request, '❌ Debes subir un archivo PDF.')
-            return render(request, 'rrhh/crear_contrato.html', {'form': ContratoTrabajoForm(request.POST)})
-
-        if archivo.content_type != 'application/pdf':
-            messages.error(
-                request, '❌ Estás intentando subir un documento no válido. El archivo debe estar en formato PDF.')
-            return render(request, 'rrhh/crear_contrato.html', {'form': ContratoTrabajoForm(request.POST)})
-
-        form = ContratoTrabajoForm(request.POST, request.FILES)
+        form = ContratoTrabajoForm(
+            request.POST,
+            request.FILES,
+            indefinido=indefinido,
+        )
 
         if form.is_valid():
             contrato = form.save(commit=False)
 
-            if request.POST.get('indefinido-check'):
+            if indefinido:
                 contrato.fecha_termino = None
 
-            contrato.archivo = archivo
             contrato.save()
 
             crear_notificacion(
                 usuario=contrato.tecnico,
                 mensaje='Se ha generado un nuevo contrato de trabajo. Puedes revisarlo y firmarlo en la plataforma.',
-                # Ajusta la URL si es distinta
                 url=reverse('rrhh:mis_contratos'),
                 tipo='info'
             )
@@ -175,11 +219,16 @@ def crear_contrato(request):
             return redirect('rrhh:contratos_trabajo')
         else:
             messages.error(
-                request, '❌ Error al crear el contrato. Revisa los campos.')
+                request,
+                '❌ Error al crear el contrato. Revisa los campos marcados en rojo.'
+            )
     else:
         form = ContratoTrabajoForm()
 
     return render(request, 'rrhh/crear_contrato.html', {'form': form})
+
+
+
 
 
 @staff_member_required
@@ -187,45 +236,82 @@ def crear_contrato(request):
 def editar_contrato(request, contrato_id):
     contrato = get_object_or_404(ContratoTrabajo, id=contrato_id)
 
-    form = ContratoTrabajoForm(
-        request.POST or None, request.FILES or None, instance=contrato)
+    if request.method == 'POST':
+        indefinido = bool(request.POST.get('indefinido-check'))
 
-    if request.method == 'POST' and form.is_valid():
-        contrato = form.save(commit=False)
+        form = ContratoTrabajoForm(
+            request.POST,
+            request.FILES,
+            instance=contrato,
+            indefinido=indefinido,
+        )
 
-        if request.POST.get('indefinido-check'):
-            contrato.fecha_termino = None
+        if form.is_valid():
+            contrato = form.save(commit=False)
 
-        reemplazar = form.cleaned_data.get('reemplazar_archivo')
-        archivo_nuevo = request.FILES.get('archivo')
+            if indefinido:
+                contrato.fecha_termino = None
 
-        if reemplazar and archivo_nuevo:
-            if archivo_nuevo.content_type != 'application/pdf':
-                messages.error(request, '❌ El archivo debe ser un PDF válido.')
-                return render(request, 'rrhh/editar_contrato.html', {'form': form, 'contrato': contrato})
+            # Reemplazo de archivo sólo si marcaron el checkbox
+            reemplazar = form.cleaned_data.get('reemplazar_archivo')
+            archivo_nuevo = request.FILES.get('archivo')
 
-            try:
-                if contrato.archivo and contrato.archivo.name:
-                    nombre_original = contrato.archivo.name.split(
-                        '/')[-1]  # 🔁 Guardamos antes
-                    # 🗑️ Eliminar archivo existente
-                    contrato.archivo.delete(save=False)
+            if reemplazar and archivo_nuevo:
+                if archivo_nuevo.content_type != 'application/pdf':
+                    messages.error(request, '❌ El archivo debe ser un PDF válido.')
+                    return render(
+                        request,
+                        'rrhh/editar_contrato.html',
+                        {'form': form, 'contrato': contrato},
+                    )
+
+                try:
+                    nombre_original = None
+                    if contrato.archivo and contrato.archivo.name:
+                        nombre_original = contrato.archivo.name.split('/')[-1]
+                        contrato.archivo.delete(save=False)
+
+                    if not nombre_original:
+                        nombre_original = archivo_nuevo.name
 
                     archivo_nuevo.seek(0)
                     contenido = archivo_nuevo.read()
                     contrato.archivo.save(
-                        nombre_original, ContentFile(contenido), save=False)
-            except Exception as e:
-                messages.error(
-                    request, f"❌ Error al subir el nuevo archivo: {e}")
-                return render(request, 'rrhh/editar_contrato.html', {'form': form, 'contrato': contrato})
+                        nombre_original,
+                        ContentFile(contenido),
+                        save=False
+                    )
+                except Exception as e:
+                    messages.error(
+                        request,
+                        f"❌ Error al subir el nuevo archivo: {e}"
+                    )
+                    return render(
+                        request,
+                        'rrhh/editar_contrato.html',
+                        {'form': form, 'contrato': contrato},
+                    )
 
-        contrato.save()
-        messages.success(request, '✅ Contrato actualizado correctamente.')
-        return redirect('rrhh:contratos_trabajo')
+            contrato.save()
+            messages.success(request, '✅ Contrato actualizado correctamente.')
+            return redirect('rrhh:contratos_trabajo')
 
-    return render(request, 'rrhh/editar_contrato.html', {'form': form, 'contrato': contrato})
+        else:
+            messages.error(
+                request,
+                '❌ Error al actualizar el contrato. Revisa los campos marcados en rojo.'
+            )
+    else:
+        form = ContratoTrabajoForm(
+            instance=contrato,
+            indefinido=(contrato.fecha_termino is None),
+        )
 
+    return render(
+        request,
+        'rrhh/editar_contrato.html',
+        {'form': form, 'contrato': contrato},
+    )
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
@@ -248,6 +334,10 @@ def eliminar_contrato(request, contrato_id):
 
 @staff_member_required
 def ver_contrato(request, contrato_id):
+    from pathlib import Path
+
+    from django.http import FileResponse
+
     try:
         contrato = get_object_or_404(ContratoTrabajo, id=contrato_id)
 
@@ -257,8 +347,18 @@ def ver_contrato(request, contrato_id):
             messages.error(request, f"❌ No se pudo acceder al archivo: {e}")
             return redirect('rrhh:contratos_trabajo')
 
-        # ✅ Mostramos el PDF directamente en navegador
-        return FileResponse(contrato.archivo.open(), content_type='application/pdf')
+        # 👉 Nombre de descarga "bonito"
+        base_name = Path(contrato.archivo.name).name  # p.ej. PTS_NIVEL_PISO_uaf3tx
+        # Si no tiene .pdf, se lo agregamos
+        if not base_name.lower().endswith('.pdf'):
+            base_name = f"{base_name}.pdf"
+
+        # ✅ Mostramos el PDF (inline) pero con nombre .pdf al descargar
+        response = FileResponse(archivo, content_type='application/pdf')
+        # inline = se abre en el navegador, pero si el usuario guarda, usa ese nombre .pdf
+        # si quieres que SIEMPRE se descargue, cambia "inline" por "attachment"
+        response["Content-Disposition"] = f'inline; filename="{base_name}"'
+        return response
 
     except Exception as e:
         messages.error(request, f"❌ Error al mostrar el contrato: {e}")

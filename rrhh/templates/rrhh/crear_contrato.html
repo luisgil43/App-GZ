@@ -1,82 +1,101 @@
 {% extends "dashboard_admin/base.html" %}
-{% load static %}
-{% block dashboard_content %}
 
-<div class="p-6 bg-white rounded-xl shadow max-w-3xl mx-auto">
-  <h2 class="text-2xl font-bold mb-6 flex items-center gap-2 text-gray-800">
-    <i class="lucide lucide-file-text"></i>
-    Crear Contrato de Trabajo
+{% block dashboard_content %}
+<div class="p-6 max-w-2xl mx-auto">
+  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+    ➕ Crear Contrato de Trabajo
   </h2>
 
-  <form method="post" enctype="multipart/form-data" class="space-y-6">
+  <form method="POST" enctype="multipart/form-data" class="space-y-6 bg-white p-6 rounded-xl shadow">
     {% csrf_token %}
     {{ form.non_field_errors }}
 
     <!-- Técnico -->
     <div>
-      <label for="id_tecnico" class="block mb-1 font-semibold text-gray-700">Seleccionar Usuario</label>
+      <label for="id_tecnico" class="block font-medium text-gray-700 mb-1">Técnico</label>
       {{ form.tecnico }}
-      {{ form.tecnico.errors }}
+      {% if form.tecnico.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.tecnico.errors.0 }}</p>
+      {% endif %}
     </div>
 
-    <!-- Fecha Inicio -->
+    <!-- Fecha inicio -->
     <div>
-      <label for="id_fecha_inicio" class="block mb-1 font-semibold text-gray-700">Fecha de Inicio</label>
+      <label for="id_fecha_inicio" class="block font-medium text-gray-700 mb-1">Fecha de Inicio</label>
       {{ form.fecha_inicio }}
-      {{ form.fecha_inicio.errors }}
+      {% if form.fecha_inicio.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.fecha_inicio.errors.0 }}</p>
+      {% endif %}
     </div>
 
-    <!-- Fecha Término e Indefinido -->
+    <!-- Fecha término + indefinido -->
     <div>
-      <label for="id_fecha_termino" class="block mb-1 font-semibold text-gray-700">Fecha de Término</label>
+      <label for="id_fecha_termino" class="block font-medium text-gray-700 mb-1">Fecha de Término</label>
       <div class="flex items-center gap-4">
         {{ form.fecha_termino }}
-        <label class="flex items-center gap-2">
-          <input type="checkbox" id="indefinido" name="indefinido" class="form-checkbox h-5 w-5 text-green-600">
-          <span class="text-sm text-gray-700">Indefinido</span>
+        {% if form.fecha_termino.errors %}
+          <p class="mt-1 text-sm text-red-600">{{ form.fecha_termino.errors.0 }}</p>
+        {% endif %}
+
+        <label class="inline-flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="indefinido"
+            name="indefinido-check"
+            class="form-checkbox rounded text-emerald-600"
+          >
+          <span class="text-sm text-gray-600">Indefinido</span>
         </label>
       </div>
-      {{ form.fecha_termino.errors }}
     </div>
 
     <!-- Archivo PDF -->
     <div>
-      <label for="id_archivo" class="block mb-1 font-semibold text-gray-700">Archivo del Contrato (PDF)</label>
+      <label for="id_archivo" class="block font-medium text-gray-700 mb-1">
+        Archivo PDF del Contrato
+      </label>
       {{ form.archivo }}
-      {{ form.archivo.errors }}
+      {% if form.archivo.errors %}
+        <p class="mt-1 text-sm text-red-600">{{ form.archivo.errors.0 }}</p>
+      {% endif %}
     </div>
 
- <!-- Botones alineados -->
-<div class="flex justify-between items-center pt-4">
-  <!-- Botón Volver -->
-  <a href="{% url 'rrhh:contratos_trabajo' %}"
-     class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">
-    ← Volver
-  </a>
+    <!-- Checkbox reemplazar_archivo no es necesario en crear, pero si lo quieres: -->
+    {# {{ form.reemplazar_archivo }} se puede ocultar o no usar en crear #}
 
-  <!-- Botón Guardar -->
-  <button type="submit"
-    class="bg-emerald-600 text-white px-6 py-2 rounded hover:bg-emerald-700 transition">
-    Guardar Contrato
-  </button>
-</div>
+    <!-- Botones -->
+    <div class="flex flex-col sm:flex-row gap-4">
+      <button
+        type="submit"
+        class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 w-full sm:w-auto">
+        💾 Guardar Contrato
+      </button>
+      <a
+        href="{% url 'rrhh:contratos_trabajo' %}"
+        class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-center w-full sm:w-auto">
+        🔙 Volver
+      </a>
+    </div>
   </form>
 </div>
 
 <script>
-  // ✅ Desactiva el campo fecha_termino si se marca "Indefinido"
-  const checkbox = document.getElementById('indefinido');
-  const fechaTermino = document.getElementById('id_fecha_termino');
+  const indefinidoCheckbox = document.getElementById('indefinido');
+  const fechaTerminoInput  = document.getElementById('id_fecha_termino');
 
-  checkbox.addEventListener('change', function () {
-    if (this.checked) {
-      fechaTermino.disabled = true;
-      fechaTermino.value = '';
+  function toggleFechaTermino() {
+    if (!fechaTerminoInput) return;
+    if (indefinidoCheckbox.checked) {
+      fechaTerminoInput.disabled = true;
+      fechaTerminoInput.value = '';
     } else {
-      fechaTermino.disabled = false;
+      fechaTerminoInput.disabled = false;
     }
-  });
+  }
+
+  if (indefinidoCheckbox) {
+    indefinidoCheckbox.addEventListener('change', toggleFechaTermino);
+  }
+  window.addEventListener('DOMContentLoaded', toggleFechaTermino);
 </script>
-
 {% endblock %}
-

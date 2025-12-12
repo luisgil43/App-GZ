@@ -1,21 +1,18 @@
-from rrhh.models import SolicitudAdelanto
 import re
-from rrhh.models import CronogramaPago
-from .models import CronogramaPago
-from .models import DocumentoTrabajador
-from django import forms
-from .models import ContratoTrabajo
-from .models import FichaIngreso
-from .models import SolicitudVacaciones
-from datetime import timedelta
-import holidays
-from .models import Feriado
-from .models import TipoDocumento
-from datetime import date
-from django.core.exceptions import ValidationError
+from datetime import date, timedelta
 from decimal import Decimal
+
+import holidays
+from django import forms
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import UploadedFile
 from django.db.models import Sum
+
+from rrhh.models import CronogramaPago, SolicitudAdelanto
 from rrhh.utils import calcular_dias_habiles
+
+from .models import (ContratoTrabajo, CronogramaPago, DocumentoTrabajador,
+                     Feriado, FichaIngreso, SolicitudVacaciones, TipoDocumento)
 
 
 class ContratoTrabajoForm(forms.ModelForm):
@@ -27,6 +24,35 @@ class ContratoTrabajoForm(forms.ModelForm):
         })
     )
 
+    def __init__(self, *args, **kwargs):
+        # 👇 viene desde la vista según el checkbox "indefinido-check"
+        self.indefinido = kwargs.pop('indefinido', False)
+        super().__init__(*args, **kwargs)
+
+        # ---- requisitos básicos ----
+        self.fields['fecha_termino'].required = False  # la controlamos nosotros
+
+        # En edición el archivo NO es obligatorio, en creación sí
+        if self.instance and self.instance.pk:
+            self.fields['archivo'].required = False
+        else:
+            self.fields['archivo'].required = True
+
+        # Formatos para <input type="date">
+        self.fields['fecha_inicio'].input_formats = ['%Y-%m-%d']
+        self.fields['fecha_termino'].input_formats = ['%Y-%m-%d']
+
+        # Mensajes de "campo obligatorio" más claros
+        self.fields['fecha_inicio'].error_messages['required'] = (
+            'Debes ingresar una fecha de inicio.'
+        )
+        self.fields['fecha_termino'].error_messages['required'] = (
+            'Debes ingresar una fecha de término.'
+        )
+        self.fields['archivo'].error_messages['required'] = (
+            'Debes subir el archivo del contrato (PDF).'
+        )
+
     class Meta:
         model = ContratoTrabajo
         fields = ['tecnico', 'fecha_inicio', 'fecha_termino', 'archivo']
@@ -34,34 +60,77 @@ class ContratoTrabajoForm(forms.ModelForm):
             'tecnico': forms.Select(attrs={
                 'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
             }),
-            'fecha_inicio': forms.DateInput(attrs={
-                'type': 'date',
-                'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
-            }),
-            'fecha_termino': forms.DateInput(attrs={
-                'type': 'date',
-                'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
-            }),
+            'fecha_inicio': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={
+                    'type': 'date',
+                    'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
+                }
+            ),
+            'fecha_termino': forms.DateInput(
+                format='%Y-%m-%d',
+                attrs={
+                    'type': 'date',
+                    'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
+                }
+            ),
             'archivo': forms.ClearableFileInput(attrs={
                 'class': 'w-full border-gray-300 rounded-xl px-4 py-2 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500'
             }),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['fecha_termino'].required = False
+    # ===== Validaciones campo a campo =====
+
+    def clean_fecha_termino(self):
+        """
+        Si el contrato NO es indefinido, la fecha_termino es obligatoria.
+        """
+        fecha_termino = self.cleaned_data.get('fecha_termino')
+
+        if not self.indefinido and not fecha_termino:
+            raise forms.ValidationError(
+                "Debes ingresar una fecha de término o marcar el contrato como indefinido."
+            )
+
+        return fecha_termino
 
     def clean_archivo(self):
+        """
+        - En creación: archivo obligatorio y debe ser PDF.
+        - En edición:
+            * si no se sube nada nuevo, se deja el archivo existente.
+            * si se sube uno nuevo, se valida extensión/MIME.
+        """
         archivo = self.cleaned_data.get('archivo')
-        if archivo:
-            if not archivo.name.lower().endswith('.pdf'):
-                raise forms.ValidationError(
-                    "Solo se permiten archivos en formato PDF.")
-            if archivo.content_type != 'application/pdf':
-                raise forms.ValidationError(
-                    "El archivo debe ser un PDF válido.")
-        return archivo
+        es_creacion = not self.instance or not self.instance.pk
 
+        # En creación SIEMPRE debe haber archivo
+        if es_creacion and not archivo:
+            raise forms.ValidationError(
+                "Debes subir el archivo del contrato (PDF)."
+            )
+
+        # En edición y sin archivo nuevo → dejamos el existente
+        if not archivo:
+            return archivo
+
+        # Si es un archivo subido en ESTE request, lo validamos.
+        # (Para el FieldFile ya guardado no revisamos content_type.)
+        if isinstance(archivo, UploadedFile):
+            nombre = (archivo.name or '').lower()
+            if not nombre.endswith('.pdf'):
+                raise forms.ValidationError(
+                    "Solo se permiten archivos en formato PDF."
+                )
+
+            content_type = getattr(archivo, 'content_type', '') or ''
+            if content_type != 'application/pdf':
+                raise forms.ValidationError(
+                    "El archivo debe ser un PDF válido."
+                )
+
+        return archivo
+    
 
 class FichaIngresoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):

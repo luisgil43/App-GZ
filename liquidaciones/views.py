@@ -19,6 +19,7 @@ from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import (FileResponse, Http404, HttpResponse,
                          HttpResponseBadRequest, JsonResponse)
@@ -53,17 +54,65 @@ logger = logging.getLogger(__name__)
 @rol_requerido('admin', 'pm', 'rrhh')
 def admin_lista_liquidaciones(request):
     try:
-        liquidaciones = Liquidacion.objects.select_related('tecnico').all()
+        # Base queryset
+        qs = Liquidacion.objects.select_related('tecnico').order_by('-año', '-mes')
 
-        nombres = sorted(set(l.tecnico.get_full_name() for l in liquidaciones))
-        meses = sorted(set(l.mes for l in liquidaciones))
-        años = sorted(set(l.año for l in liquidaciones))
+        # === Filtros por GET ===
+        nombre  = request.GET.get('nombre', '').strip()
+        mes     = request.GET.get('mes', '').strip()
+        anio    = request.GET.get('anio', '').strip()       # parámetro sin ñ
+        firmado = request.GET.get('firmado', '').strip()    # 'si', 'no' o ''
+
+        if nombre:
+            qs = qs.filter(
+                Q(tecnico__first_name__icontains=nombre) |
+                Q(tecnico__last_name__icontains=nombre) |
+                Q(tecnico__username__icontains=nombre) |
+                Q(tecnico__identidad__icontains=nombre)
+            )
+
+        if mes:
+            qs = qs.filter(mes=mes)
+
+        if anio:
+            qs = qs.filter(año=anio)
+
+        if firmado == 'si':
+            qs = qs.filter(firmada=True)
+        elif firmado == 'no':
+            qs = qs.filter(firmada=False)
+
+        # === Paginación ===
+        cantidad = request.GET.get('cantidad', '20')
+        try:
+            cantidad_int = int(cantidad)
+        except ValueError:
+            cantidad_int = 20
+
+        paginator = Paginator(qs, cantidad_int)
+        page_number = request.GET.get('page') or 1
+        pagina = paginator.get_page(page_number)
+
+        # Opciones para selects (todas las liquidaciones)
+        base_qs = Liquidacion.objects.select_related('tecnico')
+        nombres = sorted(set(l.tecnico.get_full_name() for l in base_qs))
+        meses   = sorted(set(l.mes for l in base_qs))
+        años    = sorted(set(l.año for l in base_qs))
+
+        filtros = {
+            "nombre":  nombre,
+            "mes":     mes,
+            "anio":    anio,
+            "firmado": firmado,
+        }
 
         return render(request, 'liquidaciones/admin_lista.html', {
-            'liquidaciones': liquidaciones,
-            'nombres': nombres,
-            'meses': meses,
-            'años': años,
+            "pagina":   pagina,
+            "cantidad": str(cantidad_int),
+            "filtros":  filtros,
+            "nombres":  nombres,
+            "meses":    meses,
+            "años":     años,
         })
 
     except Exception as e:
@@ -74,9 +123,54 @@ def admin_lista_liquidaciones(request):
 @login_required
 def listar_liquidaciones(request):
     usuario = request.user
-    liquidaciones = Liquidacion.objects.filter(tecnico=usuario)
+
+    # Base queryset: solo las del técnico
+    qs = Liquidacion.objects.filter(tecnico=usuario).order_by('-año', '-mes')
+
+    # === Filtros por GET ===
+    mes    = request.GET.get('mes', '').strip()
+    anio   = request.GET.get('anio', '').strip()      # sin ñ en el parámetro
+    estado = request.GET.get('estado', '').strip()    # 'firmadas', 'pendientes' o ''
+
+    if mes:
+        qs = qs.filter(mes=mes)
+
+    if anio:
+        qs = qs.filter(año=anio)
+
+    if estado == 'firmadas':
+        qs = qs.filter(firmada=True)
+    elif estado == 'pendientes':
+        qs = qs.filter(firmada=False)
+
+    # === Paginación ===
+    cantidad = request.GET.get('cantidad', '20')
+    try:
+        cantidad_int = int(cantidad)
+    except ValueError:
+        cantidad_int = 20
+
+    paginator   = Paginator(qs, cantidad_int)
+    page_number = request.GET.get('page') or 1
+    pagina      = paginator.get_page(page_number)
+
+    # Opciones para selects (todas las liquidaciones del usuario)
+    base_qs = Liquidacion.objects.filter(tecnico=usuario)
+    meses   = sorted(set(l.mes for l in base_qs))
+    años    = sorted(set(l.año for l in base_qs))
+
+    filtros = {
+        "mes":    mes,
+        "anio":   anio,
+        "estado": estado,
+    }
+
     return render(request, 'liquidaciones/listar.html', {
-        'liquidaciones': liquidaciones
+        "pagina":   pagina,
+        "cantidad": str(cantidad_int),
+        "filtros":  filtros,
+        "meses":    meses,
+        "años":     años,
     })
 
 
