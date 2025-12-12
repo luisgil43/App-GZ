@@ -59,20 +59,56 @@
       </div>
     </div>
 
+    <!-- 🔔 Notificaciones (nuevo bloque) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-200 pt-4 mt-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Chat ID de Telegram</label>
+        <input type="text" name="telegram_chat_id"
+               placeholder="Se completa automáticamente cuando el bot hable con el usuario"
+               class="w-full rounded-lg border-gray-300 bg-gray-100 px-4 py-2"
+               value="{{ request.POST.telegram_chat_id }}">
+        <p class="mt-1 text-xs text-gray-500">
+          Normalmente no se llena a mano, el bot de Telegram lo registrará.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <span class="block text-sm font-medium text-gray-700 mb-1">Canales de notificación</span>
+
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="email_notificaciones_activo"
+                 class="rounded border-gray-300 text-blue-600"
+                 {% if request.POST.email_notificaciones_activo %}
+                   checked
+                 {% else %}
+                   checked  {# por defecto correo activo #}
+                 {% endif %}>
+          <span>Correo de notificaciones activo</span>
+        </label>
+
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="telegram_activo"
+                 class="rounded border-gray-300 text-blue-600"
+                 {% if request.POST.telegram_activo %}checked{% endif %}>
+          <span>Telegram activo</span>
+        </label>
+      </div>
+    </div>
+
     <!-- Roles Múltiples -->
-   <div>
-  <label class="block text-sm font-medium text-gray-700 mb-2">Roles de usuario:</label>
-  <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-    {% for rol in roles %}
-      <label class="inline-flex items-center space-x-2">
-        <input type="checkbox" name="roles" value="{{ rol.id }}"
-          {% if rol.id|stringformat:"s" in roles_seleccionados %}checked{% endif %}
-          class="rounded border-gray-300 text-blue-600">
-        <span>{{ rol.nombre }}</span>
-      </label>
-    {% endfor %}
-  </div>
-</div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Roles de usuario:</label>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {% for rol in roles %}
+          <label class="inline-flex items-center space-x-2">
+            <input type="checkbox" name="roles" value="{{ rol.id }}"
+              {% if rol.id|stringformat:"s" in roles_seleccionados %}checked{% endif %}
+              class="rounded border-gray-300 text-blue-600">
+            <span>{{ rol.nombre }}</span>
+          </label>
+        {% endfor %}
+      </div>
+    </div>
 
     <!-- Estado y permisos -->
     <div class="flex flex-wrap gap-4 pt-4">
@@ -92,20 +128,20 @@
 
     <!-- Grupos -->
     <div>
-  <label class="block text-sm font-medium text-gray-700 mb-2">Grupos disponibles:</label>
-  <div class="flex flex-wrap gap-3">
-    {% for grupo in grupos %}
-      <label class="inline-flex items-center bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700 shadow-sm">
-        <input type="checkbox" name="groups" value="{{ grupo.id }}"
-               {% if grupo.id|stringformat:"s" in grupo_ids_post %}checked{% endif %}
-               class="mr-2">
-        {{ grupo.name }}
-      </label>
-    {% empty %}
-      <p class="text-gray-400 text-sm">No hay grupos disponibles.</p>
-    {% endfor %}
-  </div>
-</div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Grupos disponibles:</label>
+      <div class="flex flex-wrap gap-3">
+        {% for grupo in grupos %}
+          <label class="inline-flex items-center bg-gray-100 px-3 py-1 rounded-full text-sm text-gray-700 shadow-sm">
+            <input type="checkbox" name="groups" value="{{ grupo.id }}"
+                   {% if grupo.id|stringformat:"s" in grupo_ids_post %}checked{% endif %}
+                   class="mr-2">
+            {{ grupo.name }}
+          </label>
+        {% empty %}
+          <p class="text-gray-400 text-sm">No hay grupos disponibles.</p>
+        {% endfor %}
+      </div>
+    </div>
 
     <!-- Botones -->
     <div class="pt-6 flex items-center gap-4">
@@ -121,6 +157,7 @@
   </form>
 </div>
 {% endblock %}
+
 {% if messages %}
   <div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
     {% for message in messages %}

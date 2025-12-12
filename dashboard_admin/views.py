@@ -1,28 +1,27 @@
-from django.urls import reverse, NoReverseMatch
-from django.shortcuts import render
-from django.shortcuts import get_object_or_404, render, redirect
-from usuarios.models import CustomUser, Rol
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.contrib.auth.views import LoginView
-from django.urls import reverse_lazy
-from rrhh.models import Feriado
-from rrhh.forms import FeriadoForm
-from dashboard.models import ProduccionTecnico
-from django.contrib.auth.forms import AuthenticationForm
-from django.utils.http import url_has_allowed_host_and_scheme
-from django.conf import settings
-from django.contrib.admin.views.decorators import staff_member_required
-from django.core.exceptions import PermissionDenied
-from usuarios.models import CustomUser as User
-from usuarios.decoradores import rol_requerido
 import re
-from usuarios.models import Notificacion
 
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth import authenticate, get_user_model, login, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.models import Group
+from django.contrib.auth.views import LoginView
+from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import NoReverseMatch, reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
+
+from dashboard.models import ProduccionTecnico
+from rrhh.forms import FeriadoForm
+from rrhh.models import Feriado
+from usuarios.decoradores import rol_requerido
+from usuarios.models import CustomUser
+from usuarios.models import CustomUser as User
+from usuarios.models import Notificacion, Rol
 
 User = get_user_model()
 
@@ -114,6 +113,11 @@ def editar_usuario_view(request, user_id):
         usuario.is_superuser = 'is_superuser' in request.POST
         usuario.identidad = request.POST.get('identidad', usuario.identidad)
 
+        # 🔔 Campos de notificaciones
+        usuario.telegram_chat_id = request.POST.get('telegram_chat_id') or None
+        usuario.telegram_activo = 'telegram_activo' in request.POST
+        usuario.email_notificaciones_activo = 'email_notificaciones_activo' in request.POST
+
         # --- Grupos ---
         grupo_ids = request.POST.getlist('groups')
         usuario.groups.set(grupo_ids)
@@ -177,6 +181,11 @@ def crear_usuario_view(request, identidad=None):
         identidad_post = request.POST.get('identidad')
         roles_ids = request.POST.getlist('roles')
 
+        # 🔔 Campos notificaciones
+        telegram_chat_id = request.POST.get('telegram_chat_id') or None
+        telegram_activo = 'telegram_activo' in request.POST
+        email_notificaciones_activo = 'email_notificaciones_activo' in request.POST
+
         # Campos jerárquicos
         def get_user_or_none(uid):
             return CustomUser.objects.filter(id=uid).first() if uid else None
@@ -205,7 +214,7 @@ def crear_usuario_view(request, identidad=None):
             return redirect(request.path)
 
         if usuario:
-            # Edición
+            # Edición desde esta vista
             usuario.username = username
             usuario.email = email
             usuario.first_name = first_name
@@ -217,7 +226,7 @@ def crear_usuario_view(request, identidad=None):
             usuario.groups.set(grupo_ids)
             usuario.roles.set(roles_ids)
 
-            # Actualizar jerarquías
+            # Jerarquías
             usuario.supervisor = supervisor
             usuario.pm = pm
             usuario.rrhh_encargado = rrhh_encargado
@@ -226,6 +235,11 @@ def crear_usuario_view(request, identidad=None):
             usuario.encargado_flota = encargado_flota
             usuario.encargado_subcontrato = encargado_subcontrato
             usuario.encargado_facturacion = encargado_facturacion
+
+            # 🔔 Notificaciones
+            usuario.telegram_chat_id = telegram_chat_id
+            usuario.telegram_activo = telegram_activo
+            usuario.email_notificaciones_activo = email_notificaciones_activo
 
             if password1:
                 usuario.set_password(password1)
@@ -259,7 +273,10 @@ def crear_usuario_view(request, identidad=None):
                 logistica_encargado=logistica_encargado,
                 encargado_flota=encargado_flota,
                 encargado_subcontrato=encargado_subcontrato,
-                encargado_facturacion=encargado_facturacion
+                encargado_facturacion=encargado_facturacion,
+                telegram_chat_id=telegram_chat_id,
+                telegram_activo=telegram_activo,
+                email_notificaciones_activo=email_notificaciones_activo,
             )
             usuario.groups.set(grupo_ids)
             usuario.roles.set(roles_ids)
@@ -287,39 +304,89 @@ def crear_usuario_view(request, identidad=None):
         'usuario': usuario,
         'roles': roles_disponibles,
         'roles_seleccionados': roles_seleccionados,
-        'usuarios': usuarios_activos,  # para los selects
+        'usuarios': usuarios_activos,  # para los selects jerárquicos
     }
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
+
+
+User = get_user_model()
 
 
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_usuarios(request):
+    # 🔴 Eliminar usuario (POST)
     if request.method == "POST" and "delete_user" in request.POST:
         user_id = request.POST.get("user_id")
         try:
             usuario = User.objects.get(id=user_id)
+            username = usuario.username
             usuario.delete()
             messages.success(
-                request, f'Usuario "{usuario.username}" eliminado correctamente.'
+                request, f'Usuario "{username}" eliminado correctamente.'
             )
         except User.DoesNotExist:
             messages.error(request, "Usuario no encontrado.")
-            return redirect('dashboard_admin:listar_usuarios')
+        return redirect('dashboard_admin:listar_usuarios')
 
-    # 🔎 Filtro por rol (GET)
-    rol_filtrado = request.GET.get('rol')
+    # 🔍 Filtros GET
+    identidad = request.GET.get('identidad', '').strip()
+    nombre = request.GET.get('nombre', '').strip()
+    email = request.GET.get('email', '').strip()
+    rol_filtrado = request.GET.get('rol', '').strip()
+    activo = request.GET.get('activo', '').strip()  # '', '1', '0'
+
+    qs = User.objects.all().order_by('first_name', 'last_name', 'username')
+
+    if identidad:
+        qs = qs.filter(identidad__icontains=identidad)
+
+    if nombre:
+        qs = qs.filter(
+            Q(first_name__icontains=nombre) |
+            Q(last_name__icontains=nombre) |
+            Q(username__icontains=nombre)
+        )
+
+    if email:
+        qs = qs.filter(email__icontains=email)
+
     if rol_filtrado:
-        usuarios = User.objects.filter(roles__nombre=rol_filtrado).distinct()
-    else:
-        usuarios = User.objects.all()
+        qs = qs.filter(roles__nombre=rol_filtrado)
+
+    if activo == '1':
+        qs = qs.filter(is_active=True)
+    elif activo == '0':
+        qs = qs.filter(is_active=False)
+
+    qs = qs.distinct()
+
+    # 🔢 Paginación
+    cantidad = request.GET.get('cantidad', '20')
+    try:
+        cantidad_int = int(cantidad)
+    except ValueError:
+        cantidad_int = 20
+
+    paginator = Paginator(qs, cantidad_int)
+    page_number = request.GET.get('page') or 1
+    pagina = paginator.get_page(page_number)
+
+    filtros = {
+        "identidad": identidad,
+        "nombre": nombre,
+        "email": email,
+        "rol": rol_filtrado,
+        "activo": activo,
+    }
 
     roles_disponibles = Rol.objects.all()
 
     return render(request, 'dashboard_admin/listar_usuarios.html', {
-        'usuarios': usuarios,
+        'pagina': pagina,
         'roles': roles_disponibles,
-        'rol_filtrado': rol_filtrado,
+        'filtros': filtros,
+        'cantidad': str(cantidad_int),
     })
 
 

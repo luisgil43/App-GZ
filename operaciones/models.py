@@ -31,9 +31,21 @@ def _safe_filename(texto: str) -> str:
 
 
 def _site_name_for(servicio) -> str:
-    """Busca el nombre del sitio por id_claro en SitioMovil."""
+    """Busca el nombre del sitio por id_claro o id_new en SitioMovil."""
     try:
-        sm = SitioMovil.objects.filter(id_claro=servicio.id_claro).first()
+        sm = None
+
+        # Primero por ID CLARO
+        id_claro = getattr(servicio, "id_claro", None)
+        if id_claro:
+            sm = SitioMovil.objects.filter(id_claro=id_claro).first()
+
+        # Si no lo encuentra y tenemos id_new, probamos por ID Sites NEW
+        if not sm:
+            id_new = getattr(servicio, "id_new", None)
+            if id_new:
+                sm = SitioMovil.objects.filter(id_sites_new=id_new).first()
+
         if sm and sm.nombre:
             return sm.nombre.strip()
     except Exception:

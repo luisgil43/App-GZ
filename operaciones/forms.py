@@ -1,23 +1,18 @@
 # servicios/forms.py
 
 
-from .models import SitioMovil
-from django.core.exceptions import ValidationError
-import requests
 import re
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from facturacion.models import CartolaMovimiento
-from decimal import Decimal
-from django.forms import ModelMultipleChoiceField
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+import requests
+from django import forms
 from django.contrib.auth import get_user_model
-from django import forms
-from .models import ServicioCotizado
-from decimal import Decimal, InvalidOperation
+from django.core.exceptions import ValidationError
+from django.forms import ModelMultipleChoiceField
 
+from facturacion.models import CartolaMovimiento
 
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
-from django import forms
-from .models import ServicioCotizado
+from .models import ServicioCotizado, SitioMovil
 
 
 class ServicioCotizadoForm(forms.ModelForm):
@@ -102,14 +97,17 @@ class AsignarTrabajadoresForm(forms.Form):
         queryset=User.objects.filter(roles__nombre='usuario', is_active=True),
         widget=forms.CheckboxSelectMultiple,
         required=True,
-        label="Selecciona uno o dos trabajadores"
+        label="Selecciona uno o más trabajadores",          # 🔹 antes: "uno o dos"
+        help_text="Debes seleccionar al menos un trabajador.",  # 🔹 opcional
     )
 
     def clean_trabajadores(self):
-        trabajadores = self.cleaned_data['trabajadores']
-        if not (1 <= trabajadores.count() <= 2):
+        trabajadores = self.cleaned_data.get('trabajadores')
+        # 🔹 Solo exigimos mínimo 1, sin límite máximo
+        if not trabajadores or trabajadores.count() == 0:
             raise forms.ValidationError(
-                "Debes seleccionar uno o dos trabajadores.")
+                "Debes seleccionar al menos un trabajador."
+            )
         return trabajadores
 
 

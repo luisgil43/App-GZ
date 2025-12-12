@@ -3,109 +3,266 @@
 {% block title %}Usuarios - Admin{% endblock %}
 
 {% block dashboard_content %}
-<div class="p-6 max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-4">👤 Lista de Usuarios</h1>
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-  <div class="flex flex-wrap gap-4 items-center mb-6">
-    <a href="{% url 'dashboard_admin:crear_usuario' %}"
-       class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded">
-      ➕ Agregar Usuario
-    </a>
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center mb-4 gap-3">
+    <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+      👤 Lista de Usuarios
+    </h1>
 
-    <!-- Filtro por rol -->
-    <form method="get" class="flex items-center gap-2">
-      <label for="rol" class="text-sm font-medium text-gray-700">Filtrar por rol:</label>
-      <select name="rol" id="rol" class="rounded border-gray-300 text-sm px-2 py-1">
-        <option value="">Todos</option>
-        {% for rol in roles %}
-  <option value="{{ rol.nombre }}" {% if rol_filtrado == rol.nombre %}selected{% endif %}>{{ rol.nombre|capfirst }}</option>
-{% endfor %}
-      </select>
-      <button type="submit"
-              class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
-        Aplicar
-      </button>
-      {% if rol_filtrado %}
-        <a href="{% url 'dashboard_admin:listar_usuarios' %}"
-           class="text-sm text-red-600 hover:underline ml-2">Quitar filtro</a>
-      {% endif %}
-    </form>
+    <div class="flex flex-wrap gap-3">
+      <a href="{% url 'dashboard_admin:crear_usuario' %}"
+         class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2 px-4 rounded-xl text-sm shadow">
+        ➕ Agregar Usuario
+      </a>
+    </div>
   </div>
 
+  <!-- Filtros tipo "Excel" (autosubmit) -->
+  <form id="form-filtros"
+        method="get"
+        class="mb-3 text-sm">
+
+    <div class="flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+
+      <!-- RUT / Identidad -->
+      <div class="w-full sm:flex-1 sm:min-w-[140px]">
+        <label class="text-xs text-gray-600">RUT</label>
+        <input type="text"
+               name="identidad"
+               value="{{ filtros.identidad }}"
+               placeholder="Filtrar por RUT"
+               class="border rounded-lg px-3 py-2 w-full"
+               autocomplete="off">
+      </div>
+
+      <!-- Nombre / usuario -->
+      <div class="w-full sm:flex-1 sm:min-w-[180px]">
+        <label class="text-xs text-gray-600">Nombre / Usuario</label>
+        <input type="text"
+               name="nombre"
+               value="{{ filtros.nombre }}"
+               placeholder="Nombre, apellido o usuario"
+               class="border rounded-lg px-3 py-2 w-full"
+               autocomplete="off">
+      </div>
+
+      <!-- Correo -->
+      <div class="w-full sm:flex-1 sm:min-w-[200px]">
+        <label class="text-xs text-gray-600">Correo</label>
+        <input type="text"
+               name="email"
+               value="{{ filtros.email }}"
+               placeholder="Correo electrónico"
+               class="border rounded-lg px-3 py-2 w-full"
+               autocomplete="off">
+      </div>
+
+      <!-- Rol -->
+      <div class="w-full sm:w-48 sm:flex-none">
+        <label class="text-xs text-gray-600">Rol</label>
+        <select name="rol"
+                class="border rounded-lg px-3 py-2 w-full">
+          <option value="">Todos</option>
+          {% for rol in roles %}
+            <option value="{{ rol.nombre }}" {% if filtros.rol == rol.nombre %}selected{% endif %}>
+              {{ rol.nombre|capfirst }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Activo -->
+      <div class="w-full sm:w-40 sm:flex-none">
+        <label class="text-xs text-gray-600">Activo</label>
+        <select name="activo"
+                class="border rounded-lg px-3 py-2 w-full">
+          <option value="">Todos</option>
+          <option value="1" {% if filtros.activo == '1' %}selected{% endif %}>Sí</option>
+          <option value="0" {% if filtros.activo == '0' %}selected{% endif %}>No</option>
+        </select>
+      </div>
+
+      <!-- Botón limpiar -->
+      <div class="w-full sm:w-auto sm:flex-none flex items-center gap-2">
+        <a href="{% url 'dashboard_admin:listar_usuarios' %}"
+           class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium whitespace-nowrap shadow">
+          ❌ Limpiar
+        </a>
+      </div>
+
+      <!-- Mantener cantidad actual -->
+      <input type="hidden" name="cantidad" value="{{ cantidad }}">
+    </div>
+  </form>
+
+  <!-- Mensajes -->
   {% if messages %}
     <ul class="mb-4">
       {% for message in messages %}
-        <li class="p-2 rounded {{ message.tags }} bg-blue-100 text-blue-800">
+        <li class="p-2 rounded bg-blue-50 text-blue-800 text-sm">
           {{ message }}
         </li>
       {% endfor %}
     </ul>
   {% endif %}
 
-  <div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200 text-sm text-left bg-white shadow rounded-lg">
-      <thead class="bg-gray-100">
+  <!-- Tabla -->
+   <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-left">
         <tr>
-          <th class="px-4 py-2 font-semibold">Usuario</th>
+          <th class="px-4 py-2">Usuario</th>
           <th class="px-4 py-2">Nombre</th>
           <th class="px-4 py-2">Apellidos</th>
-          <th class="px-4 py-2">ID</th>
+          <th class="px-4 py-2">RUT</th>
           <th class="px-4 py-2">Correo</th>
+          <th class="px-4 py-2">Notif. correo</th>
+          <th class="px-4 py-2">Telegram</th>
           <th class="px-4 py-2">Roles</th>
           <th class="px-4 py-2">Activo</th>
           <th class="px-4 py-2">Acciones</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-100">
-        {% for usuario in usuarios %}
-        <tr>
+      <tbody class="text-left divide-y divide-gray-100">
+        {% for usuario in pagina %}
+        <tr class="hover:bg-gray-50">
           <td class="px-4 py-2">{{ usuario.username }}</td>
           <td class="px-4 py-2">{{ usuario.first_name }}</td>
           <td class="px-4 py-2">{{ usuario.last_name }}</td>
           <td class="px-4 py-2">{{ usuario.identidad }}</td>
           <td class="px-4 py-2">{{ usuario.email }}</td>
+
+          <!-- Nueva columna: Notificaciones por correo -->
           <td class="px-4 py-2">
-            {% for rol in usuario.roles.all %}
-              <span class="inline-block bg-indigo-100 text-indigo-700 text-xs font-semibold px-2 py-1 rounded-full mr-1">{{ rol.nombre }}</span>
-            {% empty %}
-              <span class="text-gray-400 text-sm">Sin roles</span>
-            {% endfor %}
-          </td>
-          <td class="px-4 py-2">
-            {% if usuario.is_active %}
-              <span class="inline-block bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">✔ Sí</span>
+            {% if usuario.email_notificaciones_activo %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                Activo
+              </span>
             {% else %}
-              <span class="inline-block bg-red-100 text-red-700 text-xs font-semibold px-2 py-1 rounded-full">✖ No</span>
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold">
+                Inactivo
+              </span>
             {% endif %}
           </td>
+
+          <!-- Nueva columna: Telegram -->
+          <td class="px-4 py-2">
+            {% if usuario.telegram_activo %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-semibold">
+                Activo
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-semibold">
+                Inactivo
+              </span>
+            {% endif %}
+          </td>
+
+          <td class="px-4 py-2">
+            {% for rol in usuario.roles.all %}
+              <span class="inline-flex items-center px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold mr-1">
+                {{ rol.nombre }}
+              </span>
+            {% empty %}
+              <span class="text-gray-400 text-xs">Sin roles</span>
+            {% endfor %}
+          </td>
+
+          <td class="px-4 py-2">
+            {% if usuario.is_active %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
+                ✔ Sí
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-semibold">
+                ✖ No
+              </span>
+            {% endif %}
+          </td>
+
           <td class="px-4 py-2 space-x-2">
             <a href="{% url 'dashboard_admin:editar_usuario' usuario.id %}"
-               class="text-blue-600 hover:underline font-medium">Editar</a>
-            <button onclick="openModal('{{ usuario.id }}', '{{ usuario.username }}')"
-                    class="text-red-600 hover:underline font-medium">Eliminar</button>
+               class="text-blue-600 hover:underline text-sm font-medium">
+              ✏️ Editar
+            </a>
+            <button type="button"
+                    onclick="openModal('{{ usuario.id }}', '{{ usuario.username }}')"
+                    class="text-red-600 hover:underline text-sm font-medium">
+              🗑️ Eliminar
+            </button>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="py-4 text-center text-gray-500">No hay usuarios registrados.</td>
+          <td colspan="10" class="p-4 text-center text-gray-500">
+            No hay usuarios registrados.
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  <!-- Selector de cantidad -->
+  <form method="get" class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+    <label for="cantidad" class="font-medium text-gray-700">Mostrar:</label>
+    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+    </select>
+
+    <!-- Mantener filtros al cambiar cantidad -->
+    <input type="hidden" name="identidad" value="{{ filtros.identidad }}">
+    <input type="hidden" name="nombre" value="{{ filtros.nombre }}">
+    <input type="hidden" name="email" value="{{ filtros.email }}">
+    <input type="hidden" name="rol" value="{{ filtros.rol }}">
+    <input type="hidden" name="activo" value="{{ filtros.activo }}">
+  </form>
+
+  <!-- Paginación -->
+  <div class="mt-3 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+      <a href="?page=1&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&email={{ filtros.email }}&rol={{ filtros.rol }}&activo={{ filtros.activo }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&email={{ filtros.email }}&rol={{ filtros.rol }}&activo={{ filtros.activo }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+
+    <span class="px-3 py-1">
+      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+    </span>
+
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&email={{ filtros.email }}&rol={{ filtros.rol }}&activo={{ filtros.activo }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&email={{ filtros.email }}&rol={{ filtros.rol }}&activo={{ filtros.activo }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+  </div>
 </div>
 
-<!-- Modal -->
+<!-- Modal eliminar -->
 <div id="confirmModal" class="fixed inset-0 hidden bg-black bg-opacity-50 flex items-center justify-center z-50">
   <div class="bg-white rounded-lg shadow-lg max-w-sm w-full p-6">
     <h2 class="text-xl font-semibold mb-4">Confirmar eliminación</h2>
     <p id="modalMessage" class="mb-6 text-gray-700"></p>
     <div class="flex justify-end space-x-4">
-      <button onclick="closeModal()" class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 font-semibold">Cancelar</button>
+      <button type="button"
+              onclick="closeModal()"
+              class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 font-semibold">
+        Cancelar
+      </button>
       <form id="deleteForm" method="POST">
         {% csrf_token %}
+        <input type="hidden" name="user_id" id="modalUserId">
         <button type="submit" name="delete_user"
-                class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold">Eliminar</button>
+                class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white font-semibold">
+          Eliminar
+        </button>
       </form>
     </div>
   </div>
@@ -116,11 +273,97 @@
     document.getElementById('confirmModal').classList.remove('hidden');
     document.getElementById('modalMessage').textContent =
       `¿Estás seguro de que deseas eliminar al usuario "${username}"?`;
-    document.getElementById('deleteForm').action = `/dashboard_admin/usuarios/eliminar/${userId}/`;
+    document.getElementById('modalUserId').value = userId;
   }
 
   function closeModal() {
     document.getElementById('confirmModal').classList.add('hidden');
   }
+
+  (function () {
+    const form = document.getElementById('form-filtros');
+    if (!form) return;
+
+    const isTouch    = matchMedia('(pointer:coarse)').matches;
+    const textInputs = form.querySelectorAll('input[type="text"]');
+    const selects    = form.querySelectorAll('select');
+    const KEY = 'usuarios_admin_filtros_focus_v1';
+
+    function rememberCaret(el) {
+      try {
+        const pos = typeof el.selectionStart === 'number'
+          ? el.selectionStart
+          : (el.value || '').length;
+        sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+      } catch (_) {}
+    }
+
+    function submitNow(fromEl) {
+      rememberCaret(fromEl);
+      form.requestSubmit();
+    }
+
+    // Inputs de texto => debounce / blur
+    textInputs.forEach(el => {
+      if (isTouch) {
+        el.addEventListener('blur', () => submitNow(el));
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitNow(el);
+          }
+        });
+      } else {
+        let t, composing = false;
+
+        function doSubmit() {
+          clearTimeout(t);
+          t = setTimeout(() => {
+            if (!composing) submitNow(el);
+          }, 700);
+        }
+
+        el.addEventListener('compositionstart', () => composing = true);
+        el.addEventListener('compositionend', () => { composing = false; doSubmit(); });
+        el.addEventListener('input', doSubmit);
+        el.addEventListener('change', doSubmit);
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitNow(el);
+          }
+        });
+      }
+    });
+
+    // Selects => submit inmediato
+    selects.forEach(el => {
+      el.addEventListener('change', () => submitNow(el));
+    });
+
+    // Restaurar foco/caret
+    function restoreCaret() {
+      try {
+        const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (!data) return;
+        const el = form.elements[data.name];
+        if (!el) return;
+
+        el.focus({ preventScroll: true });
+        const len = (el.value || '').length;
+        const p = Math.min((data.pos ?? len), len);
+
+        if (typeof el.setSelectionRange === 'function') {
+          el.setSelectionRange(p, p);
+        }
+      } catch (_) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      restoreCaret();
+      requestAnimationFrame(restoreCaret);
+    });
+    window.addEventListener('pageshow', restoreCaret);
+  })();
 </script>
 {% endblock %}

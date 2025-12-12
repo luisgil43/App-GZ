@@ -99,6 +99,7 @@ INSTALLED_APPS = [
     "subcontrato",
     "facturacion",
     "usuarios",
+    "notificaciones",
     "dashboard_admin.apps.DashboardAdminConfig",
     "dal",
     "dal_select2",
@@ -188,6 +189,8 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")
 
 
 DIRECT_UPLOADS_ENABLED = os.environ.get("DIRECT_UPLOADS_ENABLED", "1") == "1"

@@ -24,6 +24,7 @@ DATABASES = {
 
 # No forzar HTTPS en desarrollo
 
+TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")
 
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False

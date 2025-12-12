@@ -6,7 +6,7 @@ import io
 import locale
 import logging
 from datetime import datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 import pandas as pd
 import requests
@@ -39,6 +39,7 @@ from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
 from facturacion.models import CartolaMovimiento
+from notificaciones.services import notificar_asignacion_servicio_tecnicos
 from operaciones.forms import AsignarTrabajadoresForm
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
@@ -61,6 +62,8 @@ except locale.Error:
     except locale.Error:
         locale.setlocale(locale.LC_TIME, '')  # Usa el del sistema
 
+
+logger = logging.getLogger(__name__)
 
 @login_required
 @rol_requerido('usuario')
@@ -745,13 +748,42 @@ def asignar_trabajadores(request, pk):
             cotizacion.supervisor_asigna = request.user
             cotizacion.save()
 
-            # Notificar a los trabajadores seleccionados
+            # 🔔 Notificar a los trabajadores seleccionados (campanita)
             for trabajador in trabajadores:
                 crear_notificacion(
                     usuario=trabajador,
                     mensaje=f"Se te ha asignado una nueva tarea: DU{str(cotizacion.du).zfill(8)}.",
                     url=reverse('operaciones:mis_servicios_tecnico'),
                 )
+
+            # 📲 Notificación por Telegram usando el helper centralizado
+            try:
+                enlace_app = request.build_absolute_uri(
+                    reverse('operaciones:mis_servicios_tecnico')
+                )
+
+                logs = notificar_asignacion_servicio_tecnicos(
+                    servicio=cotizacion,
+                    actor=request.user,
+                    url=enlace_app,
+                    extra={
+                        "du": cotizacion.du,
+                        "id_claro": cotizacion.id_claro,
+                    },
+                )
+
+                # Log para debug: ver qué pasó con cada envío
+                for log in logs:
+                    logger.info(
+                        "Telegram asignación servicio DU%s -> usuario_id=%s status=%s error=%s",
+                        str(cotizacion.du).zfill(8),
+                        log.usuario_id,
+                        log.status,
+                        getattr(log, "error", ""),
+                    )
+
+            except Exception:
+                logger.exception("Error enviando notificación Telegram de asignación")
 
             messages.success(request, "Trabajadores asignados correctamente.")
             return redirect('operaciones:listar_servicios_supervisor')
@@ -767,7 +799,6 @@ def asignar_trabajadores(request, pk):
         'cotizacion': cotizacion,
         'form': form
     })
-
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
@@ -841,9 +872,32 @@ def mis_servicios_tecnico(request):
 
     servicios_info = []
     for servicio in servicios:
-        total_mmoo = servicio.monto_mmoo or 0
+        # ===== Monto MMOO por técnico con decimales =====
+        monto_total = (
+            servicio.monto_mmoo
+            or servicio.monto_cotizado
+            or Decimal("0")
+        )
+
+        if not isinstance(monto_total, Decimal):
+            try:
+                monto_total = Decimal(str(monto_total))
+            except Exception:
+                monto_total = Decimal("0")
+
         total_tecnicos = servicio.trabajadores_asignados.count() or 1
-        monto_tecnico = total_mmoo / total_tecnicos
+
+        try:
+            monto_tecnico = (monto_total / Decimal(total_tecnicos)).quantize(
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+        except Exception:
+            monto_tecnico = Decimal("0.00")
+
+        # string para el template (ej: "1.50")
+        monto_str = f"{monto_tecnico:.2f}"
+        # ===============================================
 
         sesion = _get_or_create_sesion(servicio)
         a = sesion.asignaciones.filter(tecnico=usuario).first()
@@ -886,7 +940,8 @@ def mis_servicios_tecnico(request):
 
         servicios_info.append({
             'servicio': servicio,
-            'monto_tecnico': round(monto_tecnico, 2),
+            'monto_tecnico': monto_tecnico,   # por si lo quieres usar después
+            'monto_str': monto_str,           # 👈 este es el que usa tu template
             'yo_acepte': yo_acepte,
             'puedo_aceptar': puedo_aceptar,
             'aceptados': aceptados,
@@ -896,6 +951,7 @@ def mis_servicios_tecnico(request):
     return render(request, 'operaciones/mis_servicios_tecnico.html', {
         'servicios_info': servicios_info
     })
+
 
 @login_required
 @rol_requerido('usuario')

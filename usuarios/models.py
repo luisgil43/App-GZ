@@ -1,16 +1,16 @@
 import json
+from datetime import date, timedelta
 
-from django.utils import timezone
-from django.contrib.auth.models import AbstractUser
-from django.db import models
+from cloudinary_storage.storage import MediaCloudinaryStorage
 from django.conf import settings
+from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ImproperlyConfigured
+from django.core.files.storage import default_storage
+from django.db import models
+from django.db.models import Sum
+from django.utils import timezone
 from django.utils.functional import LazyObject
 from django.utils.module_loading import import_string
-from django.core.exceptions import ImproperlyConfigured
-from datetime import timedelta, date
-from django.db.models import Sum
-from django.core.files.storage import default_storage
-from cloudinary_storage.storage import MediaCloudinaryStorage
 
 # ✅ Firma en Cloudinary
 
@@ -50,6 +50,26 @@ class CustomUser(AbstractUser):
         storage=cloudinary_storage,
         blank=True,
         null=True
+    )
+
+    telegram_chat_id = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        verbose_name="Chat ID de Telegram",
+        help_text="ID interno del chat de Telegram para enviar notificaciones."
+    )
+
+    telegram_activo = models.BooleanField(
+        default=False,
+        verbose_name="Telegram activo",
+        help_text="Si está activo, se enviarán notificaciones vía Telegram."
+    )
+
+    email_notificaciones_activo = models.BooleanField(
+        default=True,
+        verbose_name="Correo de notificaciones activo",
+        help_text="Si está activo, se enviarán correos de notificación a este usuario."
     )
 
     # Responsables jerárquicos
@@ -129,7 +149,7 @@ class CustomUser(AbstractUser):
         return primer_rol.nombre if primer_rol else None
 
     def obtener_dias_vacaciones_disponibles(self):
-        from rrhh.models import SolicitudVacaciones, ContratoTrabajo
+        from rrhh.models import ContratoTrabajo, SolicitudVacaciones
 
         contrato = ContratoTrabajo.objects.filter(
             tecnico=self).order_by('fecha_inicio').first()

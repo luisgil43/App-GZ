@@ -1,5 +1,6 @@
-from .base import *  # noqa
 import os
+
+from .base import *  # noqa
 
 # ===== Producción =====
 DEBUG = False
@@ -15,6 +16,8 @@ ALLOWED_HOSTS = ['app-gz.onrender.com']
 # Archivos multimedia (Django requiere estos valores definidos)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")
 
 # Seguridad
 CSRF_COOKIE_SECURE = True
