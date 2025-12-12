@@ -199,6 +199,55 @@ def ver_pdf_liquidacion(request, pk):
         return redirect('liquidaciones:listar')
 
 
+def _build_signature_rect(page, label_candidates, side='left'):
+    """
+    Busca el texto de la línea de firma (ej: 'FIRMA DEL EMPLEADOR')
+    y construye un rectángulo justo encima de esa línea.
+
+    side: 'left' o 'right' solo se usa para un fallback proporcional.
+    """
+    rect = None
+
+    # Intentar cada variante de texto (por si cambia may/minúsculas)
+    for text in label_candidates:
+        hits = page.search_for(text)
+        if hits:
+            rect = hits[0]
+            break
+
+    page_rect = page.rect
+    page_w = page_rect.width
+    page_h = page_rect.height
+
+    sig_height = 40          # alto de la firma
+    margin_top = 10          # separación entre texto y firma
+    extra_x = 20             # espacio lateral extra respecto al texto
+
+    if rect:
+        # Coordenadas basadas en la posición real del texto
+        bottom = rect.y0 - margin_top          # un poco sobre la línea de texto
+        top = bottom - sig_height              # más arriba todavía
+        left = max(rect.x0 - extra_x, page_rect.x0)
+        right = min(rect.x1 + extra_x, page_rect.x1)
+
+        # Aseguramos que top < bottom
+        if top < bottom:
+            return fitz.Rect(left, top, right, bottom)
+
+    # ---- Fallback si no se encontró el texto ----
+    # Usamos posiciones proporcionales al tamaño de la página
+    y_bottom = page_h * 0.87
+    y_top = y_bottom - sig_height
+    if side == 'left':
+        x_left = page_w * 0.10
+        x_right = page_w * 0.40
+    else:  # 'right'
+        x_left = page_w * 0.60
+        x_right = page_w * 0.90
+
+    return fitz.Rect(x_left, y_top, x_right, y_bottom)
+
+
 @login_required
 def firmar_liquidacion(request, pk):
     usuario = request.user
@@ -212,8 +261,7 @@ def firmar_liquidacion(request, pk):
         usuario.firma_digital.open()
     except Exception as e:
         logger.warning(f"[firmar_liquidacion] Firma digital no accesible: {e}")
-        messages.warning(
-            "Tu firma ya no está disponible. Vuelve a registrarla.")
+        messages.warning(request, "Tu firma ya no está disponible. Vuelve a registrarla.")
         return redirect('liquidaciones:registrar_firma')
 
     if request.method == 'POST':
@@ -230,22 +278,19 @@ def firmar_liquidacion(request, pk):
                 firma_usuario_io = BytesIO(f.read())
 
             # 3. Firma del representante legal (desde modelo en Cloudinary)
-            firma_representante = FirmaRepresentanteLegal.objects.order_by(
-                '-fecha_subida').first()
+            firma_representante = FirmaRepresentanteLegal.objects.order_by('-fecha_subida').first()
             if not firma_representante or not firma_representante.archivo:
                 return HttpResponseBadRequest("No se encontró la firma del representante legal.")
 
             url_representante = firma_representante.archivo.url
             response = requests.get(url_representante)
             if response.status_code != 200:
-                raise Exception(
-                    "No se pudo descargar la firma del representante legal.")
+                raise Exception("No se pudo descargar la firma del representante legal.")
             firma_representante_io = BytesIO(response.content)
 
             # 4. Convertir firmas a PNG
             img_usuario = Image.open(firma_usuario_io).convert("RGBA")
-            img_representante = Image.open(
-                firma_representante_io).convert("RGBA")
+            img_representante = Image.open(firma_representante_io).convert("RGBA")
 
             output_usuario = BytesIO()
             img_usuario.save(output_usuario, format='PNG')
@@ -255,17 +300,27 @@ def firmar_liquidacion(request, pk):
             img_representante.save(output_representante, format='PNG')
             output_representante.seek(0)
 
-            # 5. Insertar firmas en PDF
+            # 5. Insertar firmas en PDF (última página)
             doc = fitz.open(stream=original_pdf, filetype='pdf')
             page = doc[-1]
 
-            # Firma del usuario
-            page.insert_image(fitz.Rect(425, 710, 575, 760),
-                              stream=output_usuario)
+            # Rectángulos de firmas ANCLADOS AL TEXTO
+            rect_empleador = _build_signature_rect(
+                page,
+                ["FIRMA DEL EMPLEADOR", "Firma del empleador"],
+                side='left'
+            )
+            rect_trabajador = _build_signature_rect(
+                page,
+                ["FIRMA DEL TRABAJADOR", "Firma del trabajador"],
+                side='right'
+            )
 
             # Firma del representante legal
-            page.insert_image(fitz.Rect(100, 710, 250, 760),
-                              stream=output_representante)
+            page.insert_image(rect_empleador, stream=output_representante)
+
+            # Firma del usuario
+            page.insert_image(rect_trabajador, stream=output_usuario)
 
             # 6. Guardar PDF firmado
             pdf_firmado_io = BytesIO()
@@ -294,7 +349,6 @@ def firmar_liquidacion(request, pk):
         'solo_lectura': True,
         'firmar_documento': True
     })
-
 
 @login_required
 def registrar_firma(request):
