@@ -13,6 +13,19 @@ from .models import NotificationLog
 logger = logging.getLogger(__name__)
 
 
+def _clean_info(value: Any) -> str:
+    """
+    Normaliza textos que vienen desde la BD (SitioMovil, etc.).
+    Convierte 'nan', 'None', 'null', '-' y cadenas vacías en ''.
+    """
+    if value is None:
+        return ""
+    txt = str(value).strip()
+    if txt.lower() in ("nan", "none", "null", "-", ""):
+        return ""
+    return txt
+
+
 # ========== Helpers de permisos de canal ==========
 
 def can_notify_telegram(user: CustomUser) -> bool:
@@ -54,7 +67,9 @@ def _get_bot_token() -> Optional[str]:
         settings, "TELEGRAM_BOT_TOKEN", None
     )
     if not token:
-        logger.warning("Telegram: no se encontró TELEGRAM_BOT_TOKEN_GZ ni TELEGRAM_BOT_TOKEN en settings.")
+        logger.warning(
+            "Telegram: no se encontró TELEGRAM_BOT_TOKEN_GZ ni TELEGRAM_BOT_TOKEN en settings."
+        )
     return token
 
 
@@ -147,10 +162,10 @@ def enviar_telegram(
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
     payload = {
-    "chat_id": chat_id,
-    "text": mensaje,
-    "parse_mode": "Markdown",
-    "disable_web_page_preview": True,
+        "chat_id": chat_id,
+        "text": mensaje,
+        # 👇 Sin Markdown para evitar errores "can't parse entities"
+        "disable_web_page_preview": True,
     }
 
     try:
@@ -168,7 +183,9 @@ def enviar_telegram(
                 description = data.get("description") or ""
             if not description:
                 description = resp.text[:500]
-            log.mark_error(f"Error API Telegram ({resp.status_code}): {description}")
+            log.mark_error(
+                f"Error API Telegram ({resp.status_code}): {description}"
+            )
 
         logger.info(
             "Telegram notificación tipo=%s usuario_id=%s servicio_id=%s status=%s",
@@ -233,15 +250,16 @@ def _build_mensaje_asignacion(
 ) -> tuple[str, str]:
     """
     Construye título y mensaje para la asignación de un servicio.
-    Intenta agregar nombre/dirección del sitio, link a Google Maps
-    y calcula el MONTO MMOO POR TÉCNICO con decimales.
+    Intenta agregar nombre/dirección del sitio, datos de acceso
+    (Candado BT, Acceso, Claves, Llaves, Cantidad Llaves),
+    link a Google Maps y calcula el MONTO MMOO POR TÉCNICO con decimales.
     """
     du_raw = getattr(servicio, "du", None)
     du_txt = f"DU{str(du_raw).zfill(8)}" if du_raw else "Sin DU"
 
-    id_claro = getattr(servicio, "id_claro", "") or "Sin ID Claro"
-    region = getattr(servicio, "region", "") or "Sin región"
-    detalle = getattr(servicio, "detalle_tarea", "") or "Sin detalle"
+    id_claro = _clean_info(getattr(servicio, "id_claro", "")) or "Sin ID Claro"
+    region = _clean_info(getattr(servicio, "region", "")) or "Sin región"
+    detalle = _clean_info(getattr(servicio, "detalle_tarea", "")) or "Sin detalle"
 
     # ====== Monto MMOO POR TÉCNICO (con decimales) ======
     monto_total = (
@@ -267,21 +285,26 @@ def _build_mensaje_asignacion(
         monto_por_tecnico = Decimal("0.00")
 
     # Formato tipo 1.500,50 (puntos miles, coma decimal)
-    monto_txt_raw = f"{monto_por_tecnico:,.2f}"          # ej: 1500.5 -> '1,500.50'
+    monto_txt_raw = f"{monto_por_tecnico:,.2f}"
     monto_txt = (
         monto_txt_raw
         .replace(",", "X")  # '1X500.50'
         .replace(".", ",")  # '1X500,50'
         .replace("X", ".")  # '1.500,50'
     )
-    # ====================================
 
     asignador_txt = actor.get_full_name() if actor else "Sistema"
 
-    # ================== Buscar SitioMovil + link Google Maps ==================
+    # ================== Buscar SitioMovil + link Google Maps + accesos ==================
     sitio_nombre = ""
     sitio_direccion = ""
     google_link = ""
+
+    candado_bt = ""
+    acceso = ""           # condiciones_acceso
+    claves = ""
+    llaves = ""
+    cantidad_llaves = ""
 
     try:
         from operaciones.models import \
@@ -299,9 +322,17 @@ def _build_mensaje_asignacion(
             sitio = qs.filter(id_sites_new=id_new_val).first()
 
         if sitio:
-            sitio_nombre = (sitio.nombre or "").strip()
-            sitio_direccion = (sitio.direccion or "").strip()
+            sitio_nombre = _clean_info(sitio.nombre)
+            sitio_direccion = _clean_info(sitio.direccion)
 
+            # Datos de acceso / seguridad (limpios)
+            candado_bt = _clean_info(getattr(sitio, "candado_bt", ""))
+            acceso = _clean_info(getattr(sitio, "condiciones_acceso", ""))
+            claves = _clean_info(getattr(sitio, "claves", ""))
+            llaves = _clean_info(getattr(sitio, "llaves", ""))
+            cantidad_llaves = _clean_info(getattr(sitio, "cantidad_llaves", ""))
+
+            # Link Google Maps, si hay coordenadas
             if sitio.latitud is not None and sitio.longitud is not None:
                 lat = str(sitio.latitud).replace(",", ".")
                 lng = str(sitio.longitud).replace(",", ".")
@@ -313,24 +344,41 @@ def _build_mensaje_asignacion(
     titulo = f"Asignación de servicio {du_txt}"
 
     mensaje = (
-        "🔔 *Nueva asignación de servicio*\n\n"
-        f"*{du_txt}*\n"
-        f"ID Claro: `{id_claro}`\n"
+        "🔔 Nueva asignación de servicio\n\n"
+        f"{du_txt}\n"
+        f"ID Claro: {id_claro}\n"
         f"Región: {region}\n"
         f"Detalle: {detalle}\n"
         f"Monto MMOO (por técnico): ${monto_txt}\n"
     )
 
+    # Bloque info de sitio
     if sitio_nombre or sitio_direccion:
-        mensaje += "\n📍 *Sitio:*\n"
+        mensaje += "\n📍 Sitio:\n"
         if sitio_nombre:
             mensaje += f"{sitio_nombre}\n"
         if sitio_direccion:
             mensaje += f"{sitio_direccion}\n"
 
+    # Bloque accesos / seguridad
+    if any([candado_bt, acceso, claves, llaves, cantidad_llaves]):
+        mensaje += "\n🔐 Accesos / Seguridad:\n"
+        if candado_bt:
+            mensaje += f"- Candado BT: {candado_bt}\n"
+        if acceso:
+            mensaje += f"- Acceso: {acceso}\n"
+        if claves:
+            mensaje += f"- Claves: {claves}\n"
+        if llaves:
+            mensaje += f"- Llaves: {llaves}\n"
+        if cantidad_llaves:
+            mensaje += f"- Cantidad llaves: {cantidad_llaves}\n"
+
+    # Link Google Maps (si hay)
     if google_link:
         mensaje += f"\n🌐 Google Maps:\n{google_link}\n"
 
+    # Footer
     mensaje += (
         "\n"
         f"👷 Técnico: {tecnico.get_full_name() or tecnico.username}\n"
