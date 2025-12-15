@@ -8,6 +8,7 @@ from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
+from django.core.exceptions import FieldError
 from django.db.models import Q, Sum
 from django.utils import timezone
 
@@ -63,8 +64,6 @@ _STOPWORDS = {
     "en",
     "a",
     "al",
-    "este",
-    "mes",
     "quiero",
     "necesito",
     "dime",
@@ -144,12 +143,29 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     Ej: 'contrato de Edgardo', 'liquidación de Juan', etc.
     Solo se usa para mostrar mensajes de privacidad.
     """
-    # Posibles nombres propios en el texto (primera letra mayúscula)
-    posibles = {
-        m.group(0).strip()
-        for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original)
+    # Palabras que suelen venir capitalizadas pero NO son nombres de personas
+    # (se normalizan con _normalize, por eso van sin tildes)
+    NO_NOMBRES = {
+        "cual", "que", "quien", "cuando", "donde", "como",
+        "necesito", "quiero", "dime", "decime", "ayudame", "pasame", "muestrame",
+        "hola", "buenas", "buenos", "gracias", "por", "favor",
+        "mi", "mis", "mio", "mia",
+        "contrato", "liquidacion", "produccion", "rendicion", "rendiciones", "proyecto", "proyectos", "servicio", "servicios",
+        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "setiembre", "octubre", "noviembre", "diciembre",
     }
-    if not posibles:
+
+    # Posibles nombres propios en el texto (primera letra mayúscula)
+    candidatos = []
+    for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original or ""):
+        raw = m.group(0).strip()
+        n_norm = _normalize(raw)
+        if not n_norm:
+            continue
+        if n_norm in NO_NOMBRES:
+            continue
+        candidatos.append(n_norm)
+
+    if not candidatos:
         return False
 
     # Normalizamos nombres del usuario
@@ -160,9 +176,8 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
                 if trozo:
                     nombres_usuario.add(trozo)
 
-    # Comparamos nombres detectados vs nombres del usuario
-    for nombre in posibles:
-        n_norm = _normalize(nombre)
+    # Si detecta un "nombre" que no coincide con el usuario -> considera que menciona a otra persona
+    for n_norm in candidatos:
         if n_norm and n_norm not in nombres_usuario:
             return True
 
@@ -429,6 +444,10 @@ def detect_intent_from_text(
             or "asignados" in user_tokens
         ):
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
+    
+        # Asignación (sinónimo de proyectos/servicios asignados)
+    if {"asignacion", "asignaciones", "asignado", "asignados", "asignada", "asignadas"} & user_tokens:
+        add_keyword_candidate("mi_asignacion", 0.95)
 
     # ✅ EXTRA (SIN BORRAR): soporta singular y "proyectos" a secas (resumen PRO)
     if {"proyectos", "proyecto", "servicios", "servicio"} & user_tokens:
@@ -988,29 +1007,39 @@ def _parse_rango_fechas(texto: str):
     """
     Acepta:
     - 2025-08-01 a 2025-08-31
+    - 2025/08/01 al 2025/08/31
     - 01-08-2025 a 31-08-2025
-    - 01/08/2025 al 31/08/2025
+    - 01/08/2025 hasta 31/08/2025
     Devuelve (date_start, date_end) o None
     """
-    norm = _normalize(texto)
+    raw = _unaccent((texto or "").strip().lower())
+    if not raw:
+        return None
 
-    # YYYY-MM-DD ... YYYY-MM-DD
-    m = re.search(r"(\d{4})-(\d{2})-(\d{2}).{0,10}(\d{4})-(\d{2})-(\d{2})", norm)
-    if m:
-        y1, mo1, d1, y2, mo2, d2 = map(int, m.groups())
-        return date(y1, mo1, d1), date(y2, mo2, d2)
+    # normaliza guiones “raros”
+    raw = raw.replace("–", "-").replace("—", "-")
 
-    # DD-MM-YYYY ... DD-MM-YYYY (también /)
-    m2 = re.search(
-        r"(\d{1,2})[-/](\d{1,2})[-/](\d{4}).{0,10}(\d{1,2})[-/](\d{1,2})[-/](\d{4})",
-        norm,
-    )
-    if m2:
-        d1, mo1, y1, d2, mo2, y2 = map(int, m2.groups())
-        return date(y1, mo1, d1), date(y2, mo2, d2)
+    # 1) Buscar dos fechas YYYY-MM-DD o YYYY/MM/DD
+    ymd = re.findall(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", raw)
+    if len(ymd) >= 2:
+        try:
+            y1, m1, d1 = map(int, ymd[0])
+            y2, m2, d2 = map(int, ymd[1])
+            return date(y1, m1, d1), date(y2, m2, d2)
+        except ValueError:
+            return None
+
+    # 2) Buscar dos fechas DD-MM-YYYY o DD/MM/YYYY
+    dmy = re.findall(r"\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b", raw)
+    if len(dmy) >= 2:
+        try:
+            d1, m1, y1 = map(int, dmy[0])
+            d2, m2, y2 = map(int, dmy[1])
+            return date(y1, m1, d1), date(y2, m2, d2)
+        except ValueError:
+            return None
 
     return None
-
 
 def _parse_mes_produccion(texto: str):
     """
@@ -1065,6 +1094,7 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
 
     tokens = set(_tokenize(texto_usuario))
     hoy = timezone.localdate()
+    norm = _normalize(texto_usuario)
 
     flags = _parse_flags_estados_produccion(tokens)
 
@@ -1077,35 +1107,32 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
         return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
 
     # 2) "hasta hoy / a la fecha"
-    if {"hoy", "ahora", "fecha"} & tokens:
+    if {"hoy", "ahora", "fecha"} & tokens or ("hasta hoy" in norm) or ("a la fecha" in norm):
         return _responder_produccion_hasta_hoy(usuario)
 
-    # 3) "este mes" / "mes actual"
-    if ({"este", "actual"} & tokens and "mes" in tokens) or ("mes" in tokens and "actual" in tokens):
-        start, end = _month_start_end(hoy.year, hoy.month)
-        # hasta la fecha (hoy)
-        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+    # 3) "este mes" / "mes actual" => desde inicio de mes hasta HOY
+    if ("este mes" in norm) or ("mes actual" in norm) or ("mes" in tokens and ({"este", "actual"} & tokens)):
+        start, _end = _month_start_end(hoy.year, hoy.month)
+        return responder_produccion_rango(usuario, start, hoy, incluir_estados=flags)
 
-    # 4) "mes anterior" / "mes pasado"
-    if ({"anterior", "pasado"} & tokens and "mes" in tokens) or ("mes" in tokens and "anterior" in tokens):
-        # mes anterior
+    # 4) "mes anterior" / "mes pasado" => mes completo anterior
+    if ("mes anterior" in norm) or ("mes pasado" in norm) or ("mes" in tokens and ({"anterior", "pasado"} & tokens)):
         year = hoy.year
         month = hoy.month - 1
         if month == 0:
             month = 12
             year -= 1
         start, end = _month_start_end(year, month)
-        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+        return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
     # 5) Mes específico (ej: "agosto", "julio 2025", "08/2025")
     parsed_mes = _parse_mes_produccion(texto_usuario)
     if parsed_mes:
         mes, anio = parsed_mes
         start, end = _month_start_end(anio, mes)
-        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+        return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
-    # 6) Si el usuario solo dice "mi producción" o algo genérico => MENÚ PRO
-    # (no decir "por ahora solo..."; damos opciones)
+    # 6) Menú PRO
     return (
         "📊 ¿Qué producción necesitas?\n\n"
         "Puedo ayudarte con:\n"
@@ -1576,7 +1603,125 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     )
     return msg
 
+_ASIGNACION_ESTADOS_ACTIVOS = ["asignado", "en_progreso", "en_revision_supervisor"]
 
+def _svc_assignment_date_field() -> str:
+    """
+    Campo de fecha para interpretar "me asignaron hoy".
+    Preferimos fecha_asignacion si existe. Si no, caemos a fecha_creacion.
+    """
+    candidatos = ["fecha_asignacion", "fecha_asignado", "fecha_creacion", "created_at", "creado"]
+    nombres = {f.name for f in ServicioCotizado._meta.get_fields() if hasattr(f, "name")}
+    for c in candidatos:
+        if c in nombres:
+            return c
+    return "fecha_creacion"
+
+
+def _filter_by_day(qs, field_name: str, day):
+    """
+    Filtra por día tolerando DateTimeField vs DateField.
+    """
+    try:
+        return qs.filter(**{f"{field_name}__date": day})
+    except FieldError:
+        # si el campo es DateField, __date puede fallar
+        return qs.filter(**{field_name: day})
+
+
+def _fmt_servicio_asignacion_line(s: ServicioCotizado, estados_dict: dict) -> str:
+    du = s.du or "—"
+    idref = s.id_claro or (getattr(s, "id_new", None) or "—")
+    est = estados_dict.get(s.estado, s.estado)
+    det = (s.detalle_tarea or "").strip()
+    if len(det) > 90:
+        det = det[:87] + "…"
+    return f"• DU {du} / {idref} – {est} – {det}"
+
+
+def _handler_asignacion(usuario: CustomUser, texto_usuario: str) -> str:
+    tokens = set(_tokenize(texto_usuario))
+    hoy = timezone.localdate()
+
+    # “de hoy / para hoy / hoy”
+    es_hoy = bool({"hoy"} & tokens) or ("de hoy" in _normalize(texto_usuario)) or ("para hoy" in _normalize(texto_usuario))
+
+    base = ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
+    estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
+    # Activos (lo que normalmente se entiende como “mi asignación”)
+    activos = base.filter(estado__in=_ASIGNACION_ESTADOS_ACTIVOS).order_by("fecha_creacion")
+
+    date_field = _svc_assignment_date_field()
+
+    if es_hoy:
+        asignados_hoy = _filter_by_day(activos, date_field, hoy).order_by("fecha_creacion")
+
+        if asignados_hoy.exists():
+            lista = list(asignados_hoy[:15])
+            msg = f"📌 *Tu asignación de hoy* ({hoy.strftime('%d-%m-%Y')})\n"
+            msg += f"Campo usado: *{date_field}*\n\n"
+            msg += f"Total: *{asignados_hoy.count()}*\n\n"
+            for s in lista:
+                msg += _fmt_servicio_asignacion_line(s, estados_dict) + "\n"
+
+            if asignados_hoy.count() > len(lista):
+                msg += f"\nMostrando {len(lista)} de {asignados_hoy.count()}."
+
+            return msg.strip()
+
+        # Si NO hay asignación hoy => avisar + mostrar pendientes activos
+        pendientes = activos.order_by("fecha_creacion")
+        total_pend = pendientes.count()
+
+        msg = f"✅ No tienes asignación *creada/asignada hoy* ({hoy.strftime('%d-%m-%Y')}).\n"
+        msg += f"(Campo usado para “hoy”: *{date_field}*)\n\n"
+
+        if total_pend == 0:
+            msg += "También estás sin pendientes activos. 👌"
+            return msg.strip()
+
+        msg += f"Pero tienes *{total_pend}* pendiente(s) activo(s):\n\n"
+        for s in list(pendientes[:10]):
+            msg += _fmt_servicio_asignacion_line(s, estados_dict) + "\n"
+
+        if total_pend > 10:
+            msg += f"\n… y {total_pend - 10} más."
+
+        msg += "\n\nTip: escribe `asignación` para ver el resumen completo."
+        return msg.strip()
+
+    # Caso “asignación” (sin hoy): resumen + listado
+    total = activos.count()
+    if total == 0:
+        return "No tienes asignaciones/pendientes activos en este momento. ✅"
+
+    # Conteo por estado dentro de activos
+    counts = {}
+    for s in activos.only("estado"):
+        k = s.estado or "—"
+        counts[k] = counts.get(k, 0) + 1
+
+    msg = "🧭 *Tu asignación (pendientes/activos)*\n\n"
+    msg += f"Total activos: *{total}*\n\n"
+    msg += "📌 *Por estado:*\n"
+    orden = ["asignado", "en_progreso", "en_revision_supervisor"]
+    usados = set()
+    for k in orden:
+        if k in counts:
+            usados.add(k)
+            msg += f"• {estados_dict.get(k, k)}: {counts[k]}\n"
+    for k, c in sorted(counts.items(), key=lambda x: x[0]):
+        if k in usados:
+            continue
+        msg += f"• {estados_dict.get(k, k)}: {c}\n"
+
+    msg += "\n🧾 *Pendientes más próximos:*\n"
+    for s in list(activos[:12]):
+        msg += _fmt_servicio_asignacion_line(s, estados_dict) + "\n"
+
+    msg += "\n📲 Puedes pedir:\n• `asignación de hoy`\n• `asignación`"
+    return msg.strip()
 
 def _handler_mis_proyectos_pendientes(usuario: CustomUser) -> str:
     estados = ["asignado", "en_progreso", "en_revision_supervisor"]
@@ -1908,6 +2053,15 @@ def run_intent(
                     "• `monto total de mis proyectos`\n"
                 )
                 return msg
+            
+
+        
+                # Atajo: "asignación" (aunque no haya intent)
+        if {"asignacion", "asignaciones", "asignado", "asignados"} & tokens:
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            return _handler_asignacion(usuario, texto_usuario)
 
         # Atajo: si menciona proyectos/servicios sin intent (evita fallback)
         if {"proyectos", "proyecto", "servicios", "servicio"} & tokens:
@@ -1980,7 +2134,6 @@ def run_intent(
         return _handler_info_sitio_id_claro(texto_usuario)
 
     if slug == "mis_proyectos_pendientes":
-        # ✅ IMPORTANTE: mantengo firma original (solo usuario) para no romper nada
         return _handler_mis_proyectos_pendientes(usuario)
 
     if slug == "mis_proyectos_rechazados":
@@ -1997,6 +2150,9 @@ def run_intent(
 
     if slug == "direccion_basura":
         return _handler_direccion_basura(usuario)
+    
+    if slug == "mi_asignacion":
+        return _handler_asignacion(usuario, texto_usuario)
 
     # Otros intents que todavía no implementamos bien:
     return (
