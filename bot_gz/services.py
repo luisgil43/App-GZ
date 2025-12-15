@@ -18,6 +18,10 @@ from rrhh.models import ContratoTrabajo, CronogramaPago
 from usuarios.models import CustomUser
 
 from .models import BotIntent, BotMessageLog, BotSession, BotTrainingExample
+from .services_tecnico import \
+    responder_direccion_basura as _responder_direccion_basura
+from .services_tecnico import \
+    responder_produccion_hasta_hoy as _responder_produccion_hasta_hoy
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +64,6 @@ _STOPWORDS = {
     "a",
     "al",
     "este",
-    "este",
     "mes",
     "quiero",
     "necesito",
@@ -82,6 +85,7 @@ _STOPWORDS = {
     "días",
     "tardes",
     "noches",
+    "y",
 }
 
 
@@ -103,6 +107,66 @@ def _tokenize(text: str):
     norm = _normalize(text)
     tokens = norm.split()
     return [t for t in tokens if t not in _STOPWORDS]
+
+
+def _es_saludo(texto: str) -> bool:
+    """
+    Detecta saludos simples tipo 'hola', 'buenas', 'buenos días', etc.
+    Sin usar STOPWORDS, para no perder la señal.
+    """
+    norm = _normalize(texto)
+    if not norm:
+        return False
+
+    tokens = norm.split()
+    if not tokens:
+        return False
+
+    primeras = {"hola", "buenas", "buenos"}
+    if tokens[0] in primeras:
+        return True
+
+    frases = {
+        "hola",
+        "hola bot",
+        "buenas",
+        "buenas tardes",
+        "buenas noches",
+        "buenos dias",
+        "buen dia",
+    }
+    return norm in frases
+
+
+def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
+    """
+    Intenta detectar si el mensaje habla de otra persona distinta al usuario.
+    Ej: 'contrato de Edgardo', 'liquidación de Juan', etc.
+    Solo se usa para mostrar mensajes de privacidad.
+    """
+    # Posibles nombres propios en el texto (primera letra mayúscula)
+    posibles = {
+        m.group(0).strip()
+        for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original)
+    }
+    if not posibles:
+        return False
+
+    # Normalizamos nombres del usuario
+    nombres_usuario = set()
+    for campo in [usuario.first_name, usuario.last_name, getattr(usuario, "full_name", "")]:
+        if campo:
+            for trozo in _normalize(str(campo)).split():
+                if trozo:
+                    nombres_usuario.add(trozo)
+
+    # Comparamos nombres detectados vs nombres del usuario
+    for nombre in posibles:
+        n_norm = _normalize(nombre)
+        if n_norm and n_norm not in nombres_usuario:
+            return True
+
+    return False
 
 
 # ===================== Parsing de mes/año =====================
@@ -267,6 +331,10 @@ def detect_intent_from_text(
     if "contrato" in user_tokens or "contratos" in user_tokens:
         add_keyword_candidate("mi_contrato_vigente", 0.9)
 
+    # Producción
+    if "produccion" in user_tokens:
+        add_keyword_candidate("mi_produccion_hasta_hoy", 0.8)
+
     # Proyectos pendientes / asignados
     if "proyectos" in user_tokens or "servicios" in user_tokens:
         if (
@@ -277,7 +345,12 @@ def detect_intent_from_text(
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
 
     # Proyectos rechazados
-    if "rechazados" in user_tokens or "rechazado" in user_tokens:
+    if (
+        "rechazados" in user_tokens
+        or "rechazado" in user_tokens
+        or "rechazadas" in user_tokens
+        or "rechazada" in user_tokens
+    ):
         add_keyword_candidate("mis_proyectos_rechazados", 0.8)
 
     # Rendiciones / gastos
@@ -288,8 +361,15 @@ def detect_intent_from_text(
         or "gastos" in user_tokens
     ):
         add_keyword_candidate("mis_rendiciones_pendientes", 0.8)
-        # también lo mapeamos al intent de ayuda de rendición
         add_keyword_candidate("ayuda_rendicion_gastos", 0.8)
+
+    # Dirección de la basura / residuos
+    if (
+        "basura" in user_tokens
+        or "residuos" in user_tokens
+        or "desechos" in user_tokens
+    ):
+        add_keyword_candidate("direccion_basura", 0.9)
 
     # Corte de producción / cuándo pagan
     if (
@@ -457,12 +537,24 @@ def _handler_cronograma_produccion(usuario: CustomUser) -> str:
 
 
 def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
-    qs = Liquidacion.objects.filter(tecnico=usuario)
+    """
+    Maneja consultas de liquidaciones:
+    - Si menciona a otra persona -> mensaje de privacidad.
+    - Si indica mes/año -> devuelve enlace directo.
+    - Si no indica mes/año -> lista las liquidaciones disponibles y pide que elija.
+    """
+    if _menciona_otra_persona(texto_usuario, usuario):
+        return (
+            "Por seguridad solo puedo mostrarte *tus propias* liquidaciones de sueldo.\n"
+            "Si un compañero necesita la suya, debe pedirla directamente a RRHH o entrar con su usuario."
+        )
+
+    qs = Liquidacion.objects.filter(tecnico=usuario).order_by("-año", "-mes")
 
     if not qs.exists():
         return "Por ahora no tengo liquidaciones de sueldo cargadas a tu nombre en el sistema."
 
-    objetivo = None
+    # Intentar extraer mes/año desde el texto
     parsed = _parse_mes_anio_desde_texto(texto_usuario)
     if parsed:
         mes, anio = parsed
@@ -473,11 +565,23 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
                 "Revisa si ya fue cargada en el sistema o intenta con otro mes/año."
             )
     else:
-        # Si el usuario no especificó, le mando la última
-        objetivo = qs.order_by("-año", "-mes").first()
+        # Sin mes/año -> mostramos listado y pedimos precisión
+        lineas = []
+        lineas.append("🧾 *Liquidaciones registradas a tu nombre*")
+        lineas.append("")
+        for liq in qs[:12]:
+            estado = "firmada ✅" if liq.firmada else "pendiente de firma ✍️"
+            lineas.append(f"• {liq.mes:02d}/{liq.año} – {estado}")
+        if qs.count() > 12:
+            lineas.append("")
+            lineas.append("Mostrando solo las 12 más recientes.")
 
-    if not objetivo:
-        return "No encontré liquidaciones que coincidan con tu consulta."
+        lineas.append("")
+        lineas.append(
+            "Dime de qué mes/año necesitas el PDF.\n"
+            "Por ejemplo: `liquidación de 11/2025` o `liquidación de noviembre 2025`."
+        )
+        return "\n".join(lineas)
 
     # Preferimos el PDF firmado si existe
     url = None
@@ -499,7 +603,17 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     )
 
 
-def _handler_mi_contrato(usuario: CustomUser) -> str:
+def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
+    """
+    Solo muestra el contrato del propio usuario.
+    Si el mensaje parece referirse a otro (nombre distinto) -> mensaje de privacidad.
+    """
+    if _menciona_otra_persona(texto_usuario, usuario):
+        return (
+            "Por seguridad solo puedo mostrarte *tu propio contrato de trabajo*.\n"
+            "No tengo permiso para mostrar contratos de otros compañeros."
+        )
+
     contrato = (
         ContratoTrabajo.objects.filter(tecnico=usuario)
         .order_by("-fecha_inicio")
@@ -523,6 +637,41 @@ def _handler_mi_contrato(usuario: CustomUser) -> str:
         msg += "\n(No tengo un archivo PDF/subido para este contrato)."
 
     return msg
+
+
+def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
+    """
+    Maneja consultas de producción:
+    - Si menciona a otra persona -> mensaje de privacidad.
+    - Si incluye 'hoy' / 'hasta hoy' / 'a la fecha' -> usa responder_produccion_hasta_hoy.
+    - Si es muy genérico -> guía al usuario.
+    """
+    if _menciona_otra_persona(texto_usuario, usuario):
+        return (
+            "Solo puedo mostrarte *tu propia producción*.\n"
+            "No tengo permiso para entregar información de producción de otros compañeros."
+        )
+
+    tokens = set(_tokenize(texto_usuario))
+
+    # Producción hasta hoy
+    if "hoy" in tokens or "ahora" in tokens or "fecha" in tokens:
+        return _responder_produccion_hasta_hoy(usuario)
+
+    # Si menciona 'mes' o un mes específico pero todavía no tenemos desglose por mes
+    if "mes" in tokens or any(t in _MESES for t in tokens):
+        return (
+            "Por ahora solo puedo calcular tu *producción estimada acumulada hasta hoy*.\n"
+            "En una siguiente versión te podré mostrar también por mes específico.\n\n"
+            "Si quieres verla, dime por ejemplo: `mi producción hasta hoy`."
+        )
+
+    # Mensaje genérico para 'producción', 'produccion', etc.
+    return (
+        "¿Sobre qué periodo quieres saber tu producción?\n\n"
+        "Por ahora puedo mostrarte tu *producción estimada acumulada hasta hoy*.\n"
+        "Pídeme, por ejemplo: `mi producción hasta hoy`."
+    )
 
 
 def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
@@ -635,11 +784,22 @@ def _handler_mis_rendiciones_pendientes(
 ) -> str:
     """
     Resumen de rendiciones de gastos.
+    - Si el mensaje habla de "hacer / crear / declarar" -> explica que el flujo
+      de creación por bot aún no está activo.
     - Si el mensaje es muy genérico ("gasto", "rendiciones"), pregunta qué tipo quiere.
     - Soporta filtros por pendientes / aprobadas / rechazadas.
     - Soporta filtro por día con "hoy" o "ayer".
     """
     tokens = set(_tokenize(texto_usuario))
+
+    # Caso: el usuario quiere CREAR una rendición nueva
+    if {"hacer", "crear", "nueva", "nuevo", "declarar"} & tokens:
+        return (
+            "Por ahora todavía *no puedo crear rendiciones nuevas* desde el bot 🤖.\n\n"
+            "Para declarar un gasto debes hacerlo en la sección de *Mis Rendiciones* "
+            "de la app web.\n"
+            "A futuro iremos habilitando este flujo por aquí para que sea más rápido."
+        )
 
     # Caso 1: mensaje ultra-genérico -> hacemos preguntas
     generic = {"gasto", "gastos", "rendicion", "rendiciones"}
@@ -649,7 +809,8 @@ def _handler_mis_rendiciones_pendientes(
             "• Si quieres ver las *pendientes*: escribe `rendiciones pendientes`\n"
             "• Si quieres las *aprobadas* y por quién: `rendiciones aprobadas`\n"
             "• Si quieres las *rechazadas*: `rendiciones rechazadas`\n"
-            "• Si son solo de *hoy*: agrega `de hoy`, por ejemplo `rendiciones pendientes de hoy`."
+            "• Si son solo de *hoy*: agrega `de hoy`, por ejemplo `rendiciones pendientes de hoy`.\n"
+            "• Si quieres ver todas tus rendiciones de un día específico: `rendiciones de hoy` o `rendiciones de ayer`."
         )
 
     # Filtro por estado
@@ -657,11 +818,11 @@ def _handler_mis_rendiciones_pendientes(
     titulo = ""
     extra_label = ""
 
-    if "rechazadas" in tokens or "rechazado" in tokens:
+    if "rechazadas" in tokens or "rechazado" in tokens or "rechazada" in tokens:
         estados = ["rechazado_supervisor", "rechazado_pm", "rechazado_finanzas"]
         titulo = "Rendiciones rechazadas"
         extra_label = "rechazadas"
-    elif "aprobadas" in tokens or "aprobado" in tokens:
+    elif "aprobadas" in tokens or "aprobado" in tokens or "aprobada" in tokens:
         estados = ["aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"]
         titulo = "Rendiciones aprobadas"
         extra_label = "aprobadas"
@@ -731,6 +892,13 @@ def _handler_mis_rendiciones_pendientes(
     return msg
 
 
+def _handler_direccion_basura(usuario: CustomUser) -> str:
+    """
+    Llama al helper de services_tecnico que lee BOT_GZ_URL_BASURA / BOT_GZ_TEXTO_BASURA.
+    """
+    return _responder_direccion_basura()
+
+
 # ===================== Router principal de intents =====================
 
 def run_intent(
@@ -752,8 +920,42 @@ def run_intent(
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
         return _respuesta_sin_usuario(chat_id)
 
-    # Si no se detectó intent, devolvemos un fallback amable
+    # Si no se detectó intent, probamos algunos casos especiales antes del fallback
     if not intent:
+        tokens = set(_tokenize(texto_usuario))
+
+        # 1) Saludo simple
+        if _es_saludo(texto_usuario):
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            nombre = usuario.first_name or usuario.get_full_name() or ""
+            nombre = nombre.strip()
+            saludo_nombre = f"{nombre}, " if nombre else ""
+            return (
+                f"👋 Hola {saludo_nombre}soy el bot de GZ Services.\n\n"
+                "Puedo ayudarte con cosas como:\n"
+                "• ver tu liquidación de sueldo\n"
+                "• consultar tu contrato de trabajo\n"
+                "• ver tus proyectos pendientes\n"
+                "• revisar tus rendiciones de gastos\n\n"
+                "Escríbeme con frases cortas, por ejemplo: `liquidación de 11/2025`."
+            )
+
+        # 2) Seguimiento de conversación sobre rendiciones:
+        #    Ej: primero pregunta por pendientes, luego escribe solo "y rechazadas?"
+        if (
+            sesion.ultimo_intent
+            and sesion.ultimo_intent.slug
+            in ["mis_rendiciones_pendientes", "ayuda_rendicion_gastos"]
+        ):
+            if {"rechazadas", "rechazada", "aprobadas", "aprobada", "pendientes", "hoy", "ayer"} & tokens:
+                inbound_log.status = "ok"
+                inbound_log.marcar_para_entrenamiento = False
+                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+                return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+
+        # Si nada de lo anterior aplica -> fallback estándar
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
@@ -783,7 +985,10 @@ def run_intent(
         return _handler_mis_liquidaciones(usuario, texto_usuario)
 
     if slug == "mi_contrato_vigente":
-        return _handler_mi_contrato(usuario)
+        return _handler_mi_contrato(usuario, texto_usuario)
+
+    if slug == "mi_produccion_hasta_hoy":
+        return _handler_mi_produccion(usuario, texto_usuario)
 
     if slug == "info_sitio_id_claro":
         return _handler_info_sitio_id_claro(texto_usuario)
@@ -801,6 +1006,9 @@ def run_intent(
 
     if slug == "mis_rendiciones_pendientes":
         return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+
+    if slug == "direccion_basura":
+        return _handler_direccion_basura(usuario)
 
     # Otros intents que todavía no implementamos bien:
     return (
