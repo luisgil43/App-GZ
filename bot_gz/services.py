@@ -4,12 +4,13 @@ import logging
 import re
 import unicodedata
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
 from django.core.exceptions import FieldError
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from facturacion.models import CartolaMovimiento
@@ -216,6 +217,7 @@ _NUM_PALABRAS = {
     "once": 11,
     "doce": 12,
 }
+
 
 def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
     """
@@ -444,7 +446,7 @@ def detect_intent_from_text(
             or "asignados" in user_tokens
         ):
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
-    
+
         # Asignación (sinónimo de proyectos/servicios asignados)
     if {"asignacion", "asignaciones", "asignado", "asignados", "asignada", "asignadas"} & user_tokens:
         add_keyword_candidate("mi_asignacion", 0.95)
@@ -838,6 +840,7 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     lineas.append("• `liquidación de noviembre 2025`")
     return "\n".join(lineas)
 
+
 def _get_contrato_actual_y_extensiones(qs):
     """
     qs: ContratoTrabajo queryset order_by('-fecha_inicio')
@@ -886,7 +889,6 @@ def _buscar_anexos_rrhh(usuario: CustomUser):
         trabajador=usuario,
         tipo_documento__nombre__iregex=r"(anex|extens)"
     ).select_related("tipo_documento").order_by("-creado")
-
 
 
 def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
@@ -1041,6 +1043,7 @@ def _parse_rango_fechas(texto: str):
 
     return None
 
+
 def _parse_mes_produccion(texto: str):
     """
     Devuelve (mes, año) si detecta mes en texto.
@@ -1067,6 +1070,7 @@ def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
         "incluye_todo": bool({"todo", "todos", "completo"} & tokens),
     }
 
+
 def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=None):
     """
     Implementa el cálculo por rango.
@@ -1083,6 +1087,7 @@ def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=N
         "⚙️ (Pendiente: aplicar filtro por fechas en el cálculo)\n"
         "Si quieres, dime qué fecha del servicio usar: creación, aprobación supervisor o finalización."
     )
+
 
 def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
     # Privacidad: producción solo del propio usuario
@@ -1143,6 +1148,7 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
         "También puedo darte un *estimado ampliado* según estados (si lo pides así):\n"
         "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`"
     )
+
 
 def _extract_site_key(texto: str) -> Optional[Tuple[str, str]]:
     """
@@ -1220,7 +1226,6 @@ def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], 
     return None, "id_sites_new"
 
 
-
 def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
     key = _extract_site_key(texto_usuario)
 
@@ -1290,7 +1295,6 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
     return msg
 
 
-
 # ===================== PROYECTOS (PRO) =====================
 
 _PROJ_BUCKETS = {
@@ -1311,6 +1315,7 @@ _PROJ_BUCKET_LABEL = {
     "rechazados": "Rechazados",
 }
 
+
 def _fmt_clp(val) -> str:
     try:
         n = float(val or 0)
@@ -1318,6 +1323,67 @@ def _fmt_clp(val) -> str:
         n = 0
     entero = int(round(n, 0))
     return "$" + f"{entero:,}".replace(",", ".")
+
+
+def _mmoo_share_for_user(s: ServicioCotizado, usuario: CustomUser) -> Decimal:
+    """
+    Retorna el monto de mano de obra que le corresponde al usuario.
+    - Si existe un monto por técnico en el through (asignación), usa eso.
+    - Si no, divide monto_mmoo total por cantidad de técnicos asignados.
+    """
+    total = Decimal(str(getattr(s, "monto_mmoo", None) or 0))
+
+    # 1) Intentar monto por técnico si existe en el through model
+    try:
+        through = ServicioCotizado.trabajadores_asignados.through
+        field_names = {f.name for f in through._meta.get_fields() if hasattr(f, "name")}
+
+        candidate_amount_fields = [
+            "monto_mmoo_tecnico",
+            "monto_mano_obra_tecnico",
+            "monto_mmoo",
+            "monto_mano_obra",
+            "monto_asignado",
+            "mmoo",
+            "monto",
+        ]
+        amount_field = next((f for f in candidate_amount_fields if f in field_names), None)
+
+        if amount_field:
+            svc_fk = next(
+                (f.name for f in through._meta.fields
+                 if getattr(f, "is_relation", False) and getattr(f, "related_model", None) == ServicioCotizado),
+                None
+            )
+            usr_fk = next(
+                (f.name for f in through._meta.fields
+                 if getattr(f, "is_relation", False) and getattr(f, "related_model", None) == CustomUser),
+                None
+            )
+
+            if svc_fk and usr_fk:
+                val = (
+                    through.objects
+                    .filter(**{svc_fk: s, usr_fk: usuario})
+                    .values_list(amount_field, flat=True)
+                    .first()
+                )
+                if val is not None:
+                    return Decimal(str(val or 0))
+    except Exception:
+        pass
+
+    # 2) Fallback: división por cantidad de técnicos asignados
+    n = getattr(s, "n_tecs", None)
+    if not n:
+        try:
+            n = s.trabajadores_asignados.count()
+        except Exception:
+            n = 1
+    n = int(n or 1)
+
+    return (total / Decimal(n)) if n else total
+
 
 def _extract_project_id(texto: str) -> Optional[str]:
     """
@@ -1341,6 +1407,7 @@ def _extract_project_id(texto: str) -> Optional[str]:
         return m3.group(0)
 
     return None
+
 
 def _project_month_filter(texto_usuario: str):
     """
@@ -1374,6 +1441,7 @@ def _project_month_filter(texto_usuario: str):
 
     return None
 
+
 def _pick_project_buckets(tokens: set[str]) -> list[str]:
     """
     Decide qué grupos mostrar según el texto.
@@ -1384,9 +1452,9 @@ def _pick_project_buckets(tokens: set[str]) -> list[str]:
         wants.append("asignados")
     if {"ejecucion", "ejecución", "progreso", "ejecutando"} & tokens:
         wants.append("en_ejecucion")
-    if {"revision", "revisión", "supervisor"} & tokens:
+    if {"revision", "revisión"} & tokens:
         wants.append("revision_supervisor")
-    if {"aprobado", "aprobados"} & tokens and "supervisor" in tokens:
+    if {"aprobado", "aprobados", "aprobada", "aprobadas", "aprobacion", "aprobación"} & tokens and "supervisor" in tokens:
         wants.append("aprobado_supervisor")
     if {"finalizado", "finalizados", "terminado", "terminados"} & tokens:
         wants.append("finalizados")
@@ -1394,6 +1462,7 @@ def _pick_project_buckets(tokens: set[str]) -> list[str]:
         wants.append("rechazados")
 
     return wants or ["asignados", "en_ejecucion", "revision_supervisor", "aprobado_supervisor", "finalizados", "rechazados"]
+
 
 def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Optional[str], list[str]]:
     """
@@ -1451,10 +1520,15 @@ def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Op
     ruta = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&waypoints={waypoints}&travelmode=driving"
     return ruta, links_individuales
 
+
 def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     tokens = set(_tokenize(texto_usuario))
 
-    base = ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
+    base = (
+        ServicioCotizado.objects
+        .filter(trabajadores_asignados=usuario)
+        .annotate(n_tecs=Count("trabajadores_asignados", distinct=True))
+    )
 
     # filtro por mes (usa fecha_creacion como referencia)
     mf = _project_month_filter(texto_usuario)
@@ -1485,14 +1559,21 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
 
         estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
         estado_legible = estados_dict.get(s.estado, s.estado)
+
         msg = "🧾 *Detalle de proyecto*\n\n"
         msg += f"• DU: {s.du or '—'}\n"
         msg += f"• ID Claro: {s.id_claro or '—'}\n"
         msg += f"• ID New: {s.id_new or '—'}\n"
         msg += f"• Estado: {estado_legible}\n"
-        msg += f"• Monto cotizado: {_fmt_clp(s.monto_cotizado)}\n"
+
+        # MMOO: siempre mostramos "tu parte" (lo que te corresponde)
+        tu_mmoo = _mmoo_share_for_user(s, usuario)
+        msg += f"• Tu MMOO: {_fmt_clp(tu_mmoo)}\n"
+
         if s.monto_mmoo is not None:
-            msg += f"• Monto MMOO: {_fmt_clp(s.monto_mmoo)}\n"
+            n = int(getattr(s, "n_tecs", None) or 1)
+            msg += f"• MMOO total: {_fmt_clp(s.monto_mmoo)} (técnicos: {n})\n"
+
         if s.detalle_tarea:
             det = s.detalle_tarea.strip()
             msg += f"\n🛠️ Tarea:\n{det}\n"
@@ -1536,10 +1617,14 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     if {"monto", "montos", "total", "suma", "sumo", "cuanto", "cuánto"} & tokens:
         bucket_keys = _pick_project_buckets(tokens)
         estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
-        qs = base.filter(estado__in=list(estados))
+        qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")
 
-        total_proy = qs.count()
-        total_monto = qs.aggregate(t=Sum("monto_cotizado"))["t"] or 0
+        servicios = list(qs)
+        total_proy = len(servicios)
+
+        total_mmoo = Decimal("0")
+        for s in servicios:
+            total_mmoo += _mmoo_share_for_user(s, usuario)
 
         extra = f" (mes {mes_label})" if mes_label else ""
         labels = ", ".join(_PROJ_BUCKET_LABEL[k] for k in bucket_keys)
@@ -1548,12 +1633,11 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             f"💰 *Total proyectos / montos*{extra}\n\n"
             f"Grupos: *{labels}*\n"
             f"• Proyectos: *{total_proy}*\n"
-            f"• Monto total: *{_fmt_clp(total_monto)}*\n\n"
+            f"• Tu MMOO total: *{_fmt_clp(total_mmoo)}*\n\n"
             "Si quieres el detalle de uno, dime: `monto proyecto 13_913` (o pega el DU / ID NEW)."
         )
 
     # RESUMEN PRO (default): conteo por estados + mini listado + menú
-    bucket_keys = _pick_project_buckets(tokens)
     estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
 
     # Para resumen, consideramos TODOS los buckets (aunque pidan "proyectos" a secas)
@@ -1565,19 +1649,24 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     msg += "\n"
 
     total_general = 0
-    total_monto_general = 0
+    total_mmoo_general = Decimal("0")
 
     for key in bucket_keys:
         estados = _PROJ_BUCKETS[key]
         qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")
-        c = qs.count()
-        m = qs.aggregate(t=Sum("monto_cotizado"))["t"] or 0
+        servicios = list(qs)
+
+        c = len(servicios)
+        m = Decimal("0")
+        for s in servicios:
+            m += _mmoo_share_for_user(s, usuario)
+
         total_general += c
-        total_monto_general += float(m or 0)
+        total_mmoo_general += m
 
-        msg += f"• {_PROJ_BUCKET_LABEL[key]}: *{c}* (monto {_fmt_clp(m)})\n"
+        msg += f"• {_PROJ_BUCKET_LABEL[key]}: *{c}* (tu MMOO {_fmt_clp(m)})\n"
 
-    msg += f"\n✅ Total: *{total_general}* proyectos (monto {_fmt_clp(total_monto_general)})\n\n"
+    msg += f"\n✅ Total: *{total_general}* proyectos (tu MMOO {_fmt_clp(total_mmoo_general)})\n\n"
 
     # muestra ejemplos recientes (mezclados)
     ejemplos = list(base.order_by("-fecha_creacion")[:8])
@@ -1594,6 +1683,7 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
 
     msg += (
         "\n📲 Pídemelo así (PRO):\n"
+        "• `proyectos aprobados por el supervisor`\n"
         "• `proyectos asignados este mes`\n"
         "• `proyectos en ejecución`\n"
         "• `proyectos finalizados mes pasado`\n"
@@ -1603,7 +1693,9 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     )
     return msg
 
+
 _ASIGNACION_ESTADOS_ACTIVOS = ["asignado", "en_progreso", "en_revision_supervisor"]
+
 
 def _svc_assignment_date_field() -> str:
     """
@@ -1722,6 +1814,7 @@ def _handler_asignacion(usuario: CustomUser, texto_usuario: str) -> str:
 
     msg += "\n📲 Puedes pedir:\n• `asignación de hoy`\n• `asignación`"
     return msg.strip()
+
 
 def _handler_mis_proyectos_pendientes(usuario: CustomUser) -> str:
     estados = ["asignado", "en_progreso", "en_revision_supervisor"]
@@ -1924,6 +2017,13 @@ def run_intent(
     if not intent:
         tokens = set(_tokenize(texto_usuario))
 
+        # ✅ EXTRA: si preguntan "aprobados por el supervisor" (aunque no digan "proyectos")
+        if ("supervisor" in tokens) and ({"aprobado", "aprobados", "aprobada", "aprobadas", "aprobacion", "aprobación"} & tokens):
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            return _handler_mis_proyectos(usuario, texto_usuario)
+
         # 1) Saludo simple
         if _es_saludo(texto_usuario):
             inbound_log.status = "ok"
@@ -1992,18 +2092,23 @@ def run_intent(
                 inbound_log.marcar_para_entrenamiento = False
                 inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
-                qs_all = ServicioCotizado.objects.filter(
-                    trabajadores_asignados=usuario
-                ).order_by("-fecha_creacion")
+                qs_all = (
+                    ServicioCotizado.objects
+                    .filter(trabajadores_asignados=usuario)
+                    .annotate(n_tecs=Count("trabajadores_asignados", distinct=True))
+                    .order_by("-fecha_creacion")
+                )
 
                 total = qs_all.count()
                 if total == 0:
                     return "No tienes proyectos/servicios asignados actualmente. ✅"
 
-                # total $ (usa Sum ya importado)
-                total_monto = qs_all.aggregate(total=Sum("monto_cotizado"))["total"] or 0
+                # total MMOO (tu parte)
+                total_mmoo = Decimal("0")
+                for s in list(qs_all):
+                    total_mmoo += _mmoo_share_for_user(s, usuario)
 
-                # conteo por estado (sin Count para no tocar imports)
+                # conteo por estado
                 counts = {}
                 for s in qs_all.only("estado"):
                     k = s.estado or "—"
@@ -2013,7 +2118,7 @@ def run_intent(
 
                 msg = "🧭 *Resumen de tus proyectos*\n\n"
                 msg += f"• Total: *{total}*\n"
-                msg += f"• Monto total (cotizado): *${total_monto:,.0f}*\n\n"
+                msg += f"• Tu MMOO total: *{_fmt_clp(total_mmoo)}*\n\n"
                 msg += "📌 *Por estado:*\n"
                 # orden pro: primero los “activos”
                 orden_preferido = [
@@ -2053,10 +2158,8 @@ def run_intent(
                     "• `monto total de mis proyectos`\n"
                 )
                 return msg
-            
 
-        
-                # Atajo: "asignación" (aunque no haya intent)
+        # Atajo: "asignación" (aunque no haya intent)
         if {"asignacion", "asignaciones", "asignado", "asignados"} & tokens:
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
@@ -2068,8 +2171,8 @@ def run_intent(
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
             inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            # por ahora usamos tu handler existente (pendientes/resumen)
-            return _handler_mis_proyectos_pendientes(usuario)
+            # por ahora usamos el handler PRO completo (robusto)
+            return _handler_mis_proyectos(usuario, texto_usuario)
 
         # =========================
         # 5) PRODUCCIÓN (INTEGRADO)
@@ -2134,7 +2237,8 @@ def run_intent(
         return _handler_info_sitio_id_claro(texto_usuario)
 
     if slug == "mis_proyectos_pendientes":
-        return _handler_mis_proyectos_pendientes(usuario)
+        # usamos el handler PRO completo (robusto)
+        return _handler_mis_proyectos(usuario, texto_usuario)
 
     if slug == "mis_proyectos_rechazados":
         # ✅ IMPORTANTE: mantengo firma original (solo usuario) para no romper nada
@@ -2150,7 +2254,7 @@ def run_intent(
 
     if slug == "direccion_basura":
         return _handler_direccion_basura(usuario)
-    
+
     if slug == "mi_asignacion":
         return _handler_asignacion(usuario, texto_usuario)
 
@@ -2160,6 +2264,8 @@ def run_intent(
         "pero esta funcionalidad aún se está terminando de implementar en el bot.\n\n"
         "Mientras tanto, puedes revisar esa información directamente en la app web."
     )
+
+
 # ===================== Entry point: manejar update de Telegram =====================
 
 def handle_telegram_update(update: dict) -> None:
