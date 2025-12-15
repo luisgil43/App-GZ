@@ -320,7 +320,7 @@ AXES_IPWARE_META_PRECEDENCE_ORDER = (
 AXES_IPWARE_PROXY_COUNT = 1
 
 # Opcional: configuración de lugar donde se bota la basura
-BOT_GZ_URL_BASURA = "https://www.google.com/maps/...."  # si quieres
+BOT_GZ_URL_BASURA = "https://www.google.com/maps/search/?api=1&query=-33.5954,-70.5778"  # si quieres
 BOT_GZ_TEXTO_BASURA = "Punto autorizado para disposición de residuos de GZ Services."
 
 # ===== CSRF / SSL / Cookies seguras =====

@@ -41,12 +41,65 @@ def _get_bot_token() -> Optional[str]:
 # ===================== Helpers de normalización =====================
 
 _STOPWORDS = {
-    "yo", "mi", "mis", "de", "del", "la", "el", "los", "las",
-    "un", "una", "por", "para", "que", "en", "a", "al",
-    "este", "este", "mes", "hoy", "ayer",
-    "quiero", "necesito", "dime", "decime", "muéstrame", "muestrame",
-    "pásame", "pasame", "ayudame", "ayúdame",
-    "porfa", "porfavor", "por", "favor",
+    # pronombres / artículos
+    "yo",
+    "tu",
+    "tus",
+    "mi",
+    "mis",
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "un",
+    "una",
+    "unos",
+    "unas",
+    "por",
+    "para",
+    "que",
+    "en",
+    "a",
+    "al",
+    "este",
+    "esta",
+    "estos",
+    "estas",
+    "mes",
+    "hoy",
+    "ayer",
+    # verbos genéricos de pedir / hablar
+    "quiero",
+    "quisiera",
+    "necesito",
+    "dime",
+    "decime",
+    "muéstrame",
+    "muestrame",
+    "mostrar",
+    "muestra",
+    "pásame",
+    "pasame",
+    "mandame",
+    "mándame",
+    "enviame",
+    "envíame",
+    "manda",
+    "envia",
+    "envía",
+    "ayudame",
+    "ayúdame",
+    "consultar",
+    "consulta",
+    "ver",
+    "verme",
+    # frases de relleno
+    "porfa",
+    "porfavor",
+    "por",
+    "favor",
 }
 
 
@@ -70,13 +123,73 @@ def _tokenize(text: str):
     return [t for t in tokens if t not in _STOPWORDS]
 
 
+def _match_quick_intent(tokens) -> Optional[str]:
+    """
+    Reglas rápidas para intents frecuentes del técnico.
+    No depende tanto de la frase exacta, sino de las palabras clave.
+    Devuelve el slug del intent o None.
+    """
+    tokens = set(tokens)
+
+    # Liquidaciones de sueldo
+    if any(t.startswith("liquidacion") for t in tokens) or "liquidaciones" in tokens:
+        return "mis_liquidaciones"
+
+    # Contratos
+    if "contrato" in tokens or "contratos" in tokens:
+        return "mi_contrato_vigente"
+
+    # Proyectos/servicios pendientes
+    if (
+        {"proyecto", "proyectos", "servicio", "servicios"} & tokens
+        and {"pendiente", "pendientes"} & tokens
+    ):
+        return "mis_proyectos_pendientes"
+
+    # Proyectos rechazados
+    if (
+        {"proyecto", "proyectos", "servicio", "servicios"} & tokens
+        and {"rechazado", "rechazados"} & tokens
+    ):
+        return "mis_proyectos_rechazados"
+
+    # Rendiciones / gastos pendientes
+    if (
+        {"rendicion", "rendiciones", "gasto", "gastos"} & tokens
+        and {"pendiente", "pendientes", "aprobacion"} & tokens
+    ):
+        return "mis_rendiciones_pendientes"
+
+    # Corte de producción / “cuándo pagan”
+    if (
+        {"corte", "pago", "pagos", "pagan", "depositan"} & tokens
+        and "produccion" in tokens
+    ):
+        return "cronograma_produccion_corte"
+
+    # Basura / residuos (por si luego creamos ese intent)
+    if {"basura", "residuos", "desechos"} & tokens:
+        return "direccion_basura"
+
+    return None
+
+
 # ===================== Parsing de mes/año =====================
 
 _MESES = {
-    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4,
-    "mayo": 5, "junio": 6, "julio": 7, "agosto": 8,
-    "septiembre": 9, "setiembre": 9, "octubre": 10,
-    "noviembre": 11, "diciembre": 12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 
 
@@ -125,7 +238,9 @@ def _parse_mes_anio_desde_texto(texto: str) -> Optional[Tuple[int, int]]:
 
 # ===================== Sesiones y usuarios =====================
 
-def get_or_create_session(chat_id: str, from_user: Optional[dict] = None) -> Tuple[BotSession, Optional[CustomUser]]:
+def get_or_create_session(
+    chat_id: str, from_user: Optional[dict] = None
+) -> Tuple[BotSession, Optional[CustomUser]]:
     """
     Obtiene o crea la sesión del bot para este chat.
     Intenta vincularla con un CustomUser que tenga ese telegram_chat_id.
@@ -159,15 +274,33 @@ def get_or_create_session(chat_id: str, from_user: Optional[dict] = None) -> Tup
 
 # ===================== Detección de intent =====================
 
-def detect_intent_from_text(texto: str, scope: Optional[str] = None) -> Tuple[Optional[BotIntent], float]:
+def detect_intent_from_text(
+    texto: str, scope: Optional[str] = None
+) -> Tuple[Optional[BotIntent], float]:
     """
-    Detección simple de intent basada en overlap de tokens con ejemplos de entrenamiento.
+    Detección simple de intent basada en:
+    1) Reglas rápidas por palabras clave.
+    2) Overlap de tokens con ejemplos de entrenamiento.
     Devuelve (intent, confianza). Si no encuentra nada sólido, intent = None.
     """
-    user_tokens = set(_tokenize(texto))
-    if not user_tokens:
+    user_tokens_list = _tokenize(texto)
+    if not user_tokens_list:
         return None, 0.0
 
+    user_tokens = set(user_tokens_list)
+
+    # 1) Reglas rápidas
+    quick_slug = _match_quick_intent(user_tokens)
+    if quick_slug:
+        try:
+            intent = BotIntent.objects.get(slug=quick_slug, activo=True)
+            # Alta confianza porque viene de una regla directa
+            return intent, 0.95
+        except BotIntent.DoesNotExist:
+            # Si por alguna razón no existe el intent, seguimos con modo entrenamiento
+            pass
+
+    # 2) Modo "aprendizaje" con ejemplos
     examples_qs = BotTrainingExample.objects.filter(activo=True).select_related("intent")
 
     if scope:
@@ -322,7 +455,10 @@ def _handler_cronograma_produccion(usuario: CustomUser) -> str:
 
     msg = "📆 *Corte de producción*\n\n"
     if fecha_mes:
-        msg += f"Para *{nombre_mes}* el corte está definido el *{fecha_mes.strftime('%d-%m-%Y')}*.\n"
+        msg += (
+            f"Para *{nombre_mes}* el corte está definido el "
+            f"*{fecha_mes.strftime('%d-%m-%Y')}*.\n"
+        )
     else:
         msg += f"Para *{nombre_mes}* no tengo una fecha de corte configurada.\n"
 
@@ -540,6 +676,31 @@ def _handler_mis_rendiciones_pendientes(usuario: CustomUser) -> str:
     return msg
 
 
+def _build_fallback_message() -> str:
+    """
+    Mensaje estándar cuando no entendemos la intención,
+    con ejemplos más profesionales.
+    """
+    ejemplos = [
+        "ver mi liquidación de sueldo",
+        "consultar mi contrato de trabajo",
+        "ver mis proyectos pendientes",
+        "ver mis rendiciones de gastos pendientes por aprobación",
+    ]
+
+    lineas = [
+        "Por ahora todavía estoy aprendiendo y no pude entender bien tu mensaje 🤖.",
+        "",
+        "Puedes pedirme, por ejemplo:",
+    ]
+    for e in ejemplos:
+        lineas.append(f"• {e}")
+    lineas.append("")
+    lineas.append("Intenta usar frases cortas y directas, y yo te voy guiando.")
+
+    return "\n".join(lineas)
+
+
 # ===================== Router principal de intents =====================
 
 def run_intent(
@@ -567,14 +728,7 @@ def run_intent(
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
-        return (
-            "Por ahora no entendí bien tu mensaje 🤔.\n\n"
-            "Puedes probar con frases como:\n"
-            "• \"pásame mi liquidación de este mes\"\n"
-            "• \"pásame mi contrato de trabajo\"\n"
-            "• \"qué proyectos tengo pendientes\"\n"
-            "• \"cuántas declaraciones tengo pendientes por aprobación\""
-        )
+        return _build_fallback_message()
 
     # Marcamos el intent y confianza como OK
     inbound_log.status = "ok"
