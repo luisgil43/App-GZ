@@ -3,6 +3,7 @@
 import logging
 import re
 import unicodedata
+from datetime import timedelta
 from typing import Optional, Tuple
 
 import requests
@@ -41,10 +42,7 @@ def _get_bot_token() -> Optional[str]:
 # ===================== Helpers de normalización =====================
 
 _STOPWORDS = {
-    # pronombres / artículos
     "yo",
-    "tu",
-    "tus",
     "mi",
     "mis",
     "de",
@@ -55,8 +53,6 @@ _STOPWORDS = {
     "las",
     "un",
     "una",
-    "unos",
-    "unas",
     "por",
     "para",
     "que",
@@ -64,42 +60,28 @@ _STOPWORDS = {
     "a",
     "al",
     "este",
-    "esta",
-    "estos",
-    "estas",
+    "este",
     "mes",
-    "hoy",
-    "ayer",
-    # verbos genéricos de pedir / hablar
     "quiero",
-    "quisiera",
     "necesito",
     "dime",
     "decime",
     "muéstrame",
     "muestrame",
-    "mostrar",
-    "muestra",
     "pásame",
     "pasame",
-    "mandame",
-    "mándame",
-    "enviame",
-    "envíame",
-    "manda",
-    "envia",
-    "envía",
     "ayudame",
     "ayúdame",
-    "consultar",
-    "consulta",
-    "ver",
-    "verme",
-    # frases de relleno
     "porfa",
     "porfavor",
     "por",
     "favor",
+    "hola",
+    "buenos",
+    "dias",
+    "días",
+    "tardes",
+    "noches",
 }
 
 
@@ -108,7 +90,7 @@ def _unaccent(text: str) -> str:
     return "".join(ch for ch in text if not unicodedata.combining(ch))
 
 
-def _normalize_text(text: str) -> str:
+def _normalize(text: str) -> str:
     t = (text or "").strip().lower()
     t = _unaccent(t)
     # dejar solo letras/números/espacios
@@ -118,60 +100,9 @@ def _normalize_text(text: str) -> str:
 
 
 def _tokenize(text: str):
-    norm = _normalize_text(text)
+    norm = _normalize(text)
     tokens = norm.split()
     return [t for t in tokens if t not in _STOPWORDS]
-
-
-def _match_quick_intent(tokens) -> Optional[str]:
-    """
-    Reglas rápidas para intents frecuentes del técnico.
-    No depende tanto de la frase exacta, sino de las palabras clave.
-    Devuelve el slug del intent o None.
-    """
-    tokens = set(tokens)
-
-    # Liquidaciones de sueldo
-    if any(t.startswith("liquidacion") for t in tokens) or "liquidaciones" in tokens:
-        return "mis_liquidaciones"
-
-    # Contratos
-    if "contrato" in tokens or "contratos" in tokens:
-        return "mi_contrato_vigente"
-
-    # Proyectos/servicios pendientes
-    if (
-        {"proyecto", "proyectos", "servicio", "servicios"} & tokens
-        and {"pendiente", "pendientes"} & tokens
-    ):
-        return "mis_proyectos_pendientes"
-
-    # Proyectos rechazados
-    if (
-        {"proyecto", "proyectos", "servicio", "servicios"} & tokens
-        and {"rechazado", "rechazados"} & tokens
-    ):
-        return "mis_proyectos_rechazados"
-
-    # Rendiciones / gastos pendientes
-    if (
-        {"rendicion", "rendiciones", "gasto", "gastos"} & tokens
-        and {"pendiente", "pendientes", "aprobacion"} & tokens
-    ):
-        return "mis_rendiciones_pendientes"
-
-    # Corte de producción / “cuándo pagan”
-    if (
-        {"corte", "pago", "pagos", "pagan", "depositan"} & tokens
-        and "produccion" in tokens
-    ):
-        return "cronograma_produccion_corte"
-
-    # Basura / residuos (por si luego creamos ese intent)
-    if {"basura", "residuos", "desechos"} & tokens:
-        return "direccion_basura"
-
-    return None
 
 
 # ===================== Parsing de mes/año =====================
@@ -227,7 +158,7 @@ def _parse_mes_anio_desde_texto(texto: str) -> Optional[Tuple[int, int]]:
                 return val, anio
 
     # intentos tipo 07-2025 o 07/2025
-    m2 = re.search(r"(0?[1-9]|1[0-2])[-/](20\d{2})", _normalize_text(texto))
+    m2 = re.search(r"(0?[1-9]|1[0-2])[-/](20\d{2})", _normalize(texto))
     if m2:
         mes = int(m2.group(1))
         anio = int(m2.group(2))
@@ -278,30 +209,21 @@ def detect_intent_from_text(
     texto: str, scope: Optional[str] = None
 ) -> Tuple[Optional[BotIntent], float]:
     """
-    Detección simple de intent basada en:
-    1) Reglas rápidas por palabras clave.
-    2) Overlap de tokens con ejemplos de entrenamiento.
-    Devuelve (intent, confianza). Si no encuentra nada sólido, intent = None.
+    Detección de intent basada en:
+    1) overlap de tokens con ejemplos de entrenamiento
+    2) refuerzo por palabras clave (liquidación, contrato, rendiciones, etc.)
+
+    Así, frases como "liquidacion", "ver mi liquidacion", "necesito mi contrato",
+    etc. se entienden aunque sean muy cortas.
     """
-    user_tokens_list = _tokenize(texto)
-    if not user_tokens_list:
+    user_tokens = set(_tokenize(texto))
+    if not user_tokens:
         return None, 0.0
 
-    user_tokens = set(user_tokens_list)
-
-    # 1) Reglas rápidas
-    quick_slug = _match_quick_intent(user_tokens)
-    if quick_slug:
-        try:
-            intent = BotIntent.objects.get(slug=quick_slug, activo=True)
-            # Alta confianza porque viene de una regla directa
-            return intent, 0.95
-        except BotIntent.DoesNotExist:
-            # Si por alguna razón no existe el intent, seguimos con modo entrenamiento
-            pass
-
-    # 2) Modo "aprendizaje" con ejemplos
-    examples_qs = BotTrainingExample.objects.filter(activo=True).select_related("intent")
+    # --- 1) Matching con ejemplos de entrenamiento ---
+    examples_qs = (
+        BotTrainingExample.objects.filter(activo=True).select_related("intent")
+    )
 
     if scope:
         examples_qs = examples_qs.filter(intent__scope__in=[scope, "global"])
@@ -322,11 +244,80 @@ def detect_intent_from_text(
             best_score = score
             best_intent = ex.intent
 
-    # Umbral mínimo para aceptar un intent
-    if best_score < 0.3:
-        return None, best_score
+    # --- 2) Reglas rápidas por palabras clave ---
+    keyword_intent: Optional[BotIntent] = None
+    keyword_score: float = 0.0
 
-    return best_intent, float(best_score)
+    def add_keyword_candidate(slug: str, score: float):
+        nonlocal keyword_intent, keyword_score
+        if score <= keyword_score:
+            return
+        try:
+            intent = BotIntent.objects.get(slug=slug, activo=True)
+        except BotIntent.DoesNotExist:
+            return
+        keyword_intent = intent
+        keyword_score = score
+
+    # Liquidaciones
+    if {"liquidacion", "liquidaciones"} & user_tokens:
+        add_keyword_candidate("mis_liquidaciones", 0.9)
+
+    # Contrato
+    if "contrato" in user_tokens or "contratos" in user_tokens:
+        add_keyword_candidate("mi_contrato_vigente", 0.9)
+
+    # Proyectos pendientes / asignados
+    if "proyectos" in user_tokens or "servicios" in user_tokens:
+        if (
+            "pendientes" in user_tokens
+            or "pendiente" in user_tokens
+            or "asignados" in user_tokens
+        ):
+            add_keyword_candidate("mis_proyectos_pendientes", 0.8)
+
+    # Proyectos rechazados
+    if "rechazados" in user_tokens or "rechazado" in user_tokens:
+        add_keyword_candidate("mis_proyectos_rechazados", 0.8)
+
+    # Rendiciones / gastos
+    if (
+        "rendicion" in user_tokens
+        or "rendiciones" in user_tokens
+        or "gasto" in user_tokens
+        or "gastos" in user_tokens
+    ):
+        add_keyword_candidate("mis_rendiciones_pendientes", 0.8)
+        # también lo mapeamos al intent de ayuda de rendición
+        add_keyword_candidate("ayuda_rendicion_gastos", 0.8)
+
+    # Corte de producción / cuándo pagan
+    if (
+        "pago" in user_tokens
+        or "pagan" in user_tokens
+        or "pagar" in user_tokens
+        or "corte" in user_tokens
+        or "cronograma" in user_tokens
+    ):
+        add_keyword_candidate("cronograma_produccion_corte", 0.7)
+
+    # Info sitio por ID Claro
+    if "sitio" in user_tokens or "site" in user_tokens:
+        add_keyword_candidate("info_sitio_id_claro", 0.7)
+
+    # --- Elegir el mejor resultado entre ejemplos y reglas ---
+    final_intent = best_intent
+    final_score = best_score
+
+    if keyword_intent and keyword_score > final_score:
+        final_intent = keyword_intent
+        final_score = keyword_score
+
+    # Umbral mínimo para aceptar un intent
+    if final_score < 0.3:
+        return None, float(final_score)
+
+    return final_intent, float(final_score)
 
 
 # ===================== Envío de mensajes a Telegram + log =====================
@@ -417,9 +408,9 @@ def send_telegram_message(
 
 def _respuesta_sin_usuario(chat_id: str) -> str:
     return (
-        "👋 Hola! Aún no tengo vinculado este chat de Telegram con un usuario de GZ Services.\n\n"
-        "Por favor pídele al administrador que configure tu `telegram_chat_id` en tu ficha "
-        "de usuario dentro del sistema para que pueda ayudarte con tus datos personales."
+        "👋 Hola. Todavía no tengo vinculado este chat de Telegram con tu usuario de GZ Services.\n\n"
+        "Pídele al administrador que configure tu `telegram_chat_id` en tu ficha de usuario "
+        "para que pueda mostrarte tu información personal (liquidaciones, contratos, proyectos, etc.)."
     )
 
 
@@ -455,10 +446,7 @@ def _handler_cronograma_produccion(usuario: CustomUser) -> str:
 
     msg = "📆 *Corte de producción*\n\n"
     if fecha_mes:
-        msg += (
-            f"Para *{nombre_mes}* el corte está definido el "
-            f"*{fecha_mes.strftime('%d-%m-%Y')}*.\n"
-        )
+        msg += f"Para *{nombre_mes}* el corte está definido el *{fecha_mes.strftime('%d-%m-%Y')}*.\n"
     else:
         msg += f"Para *{nombre_mes}* no tengo una fecha de corte configurada.\n"
 
@@ -642,63 +630,105 @@ def _handler_mis_proyectos_rechazados(usuario: CustomUser) -> str:
     return msg
 
 
-def _handler_mis_rendiciones_pendientes(usuario: CustomUser) -> str:
-    estados_pendientes = [
-        "pendiente_abono_usuario",
-        "pendiente_supervisor",
-        "aprobado_supervisor",
-        "aprobado_pm",
-    ]
+def _handler_mis_rendiciones_pendientes(
+    usuario: CustomUser, texto_usuario: str
+) -> str:
+    """
+    Resumen de rendiciones de gastos.
+    - Si el mensaje es muy genérico ("gasto", "rendiciones"), pregunta qué tipo quiere.
+    - Soporta filtros por pendientes / aprobadas / rechazadas.
+    - Soporta filtro por día con "hoy" o "ayer".
+    """
+    tokens = set(_tokenize(texto_usuario))
 
-    qs = CartolaMovimiento.objects.filter(
-        usuario=usuario,
-        status__in=estados_pendientes,
-    )
+    # Caso 1: mensaje ultra-genérico -> hacemos preguntas
+    generic = {"gasto", "gastos", "rendicion", "rendiciones"}
+    if tokens and tokens <= generic:
+        return (
+            "Para ayudarte mejor con tus rendiciones dime qué necesitas exactamente:\n\n"
+            "• Si quieres ver las *pendientes*: escribe `rendiciones pendientes`\n"
+            "• Si quieres las *aprobadas* y por quién: `rendiciones aprobadas`\n"
+            "• Si quieres las *rechazadas*: `rendiciones rechazadas`\n"
+            "• Si son solo de *hoy*: agrega `de hoy`, por ejemplo `rendiciones pendientes de hoy`."
+        )
+
+    # Filtro por estado
+    estados = []
+    titulo = ""
+    extra_label = ""
+
+    if "rechazadas" in tokens or "rechazado" in tokens:
+        estados = ["rechazado_supervisor", "rechazado_pm", "rechazado_finanzas"]
+        titulo = "Rendiciones rechazadas"
+        extra_label = "rechazadas"
+    elif "aprobadas" in tokens or "aprobado" in tokens:
+        estados = ["aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"]
+        titulo = "Rendiciones aprobadas"
+        extra_label = "aprobadas"
+    else:
+        estados = [
+            "pendiente_abono_usuario",
+            "pendiente_supervisor",
+            "pendiente_pm",
+            "pendiente_finanzas",
+        ]
+        titulo = "Rendiciones pendientes en el flujo de aprobación"
+        extra_label = "pendientes"
+
+    # Filtro por día (hoy / ayer)
+    hoy = timezone.localdate()
+    fecha = None
+    if "hoy" in tokens:
+        fecha = hoy
+    elif "ayer" in tokens:
+        fecha = hoy - timedelta(days=1)
+
+    filtros = {"usuario": usuario, "status__in": estados}
+    if fecha is not None:
+        filtros["fecha"] = fecha
+
+    qs = CartolaMovimiento.objects.filter(**filtros)
 
     total = qs.count()
     if total == 0:
-        return "No tienes rendiciones de gastos pendientes por aprobación. ✅"
+        if fecha:
+            return (
+                f"No tienes rendiciones {extra_label} para el día "
+                f"{fecha.strftime('%d-%m-%Y')}."
+            )
+        return f"No tienes rendiciones {extra_label} en este momento. ✅"
 
     suma_cargos = qs.aggregate(total=Sum("cargos"))["total"] or 0
 
-    msg = (
-        f"Tienes *{total}* rendiciones pendientes en el flujo de aprobación.\n"
-        f"Monto total declarado (cargos): ${suma_cargos:,.0f}\n\n"
+    msg = f"🧾 *{titulo}*\n"
+    if fecha:
+        msg += f"Del día {fecha.strftime('%d-%m-%Y')}.\n"
+
+    msg += (
+        f"\nTienes *{total}* rendiciones en este grupo.\n"
+        f"Monto total (cargos): ${suma_cargos:,.0f}\n\n"
         "Ejemplos recientes:\n"
     )
+
+    estados_dict = dict(getattr(CartolaMovimiento, "ESTADOS", []))
 
     for m in qs.order_by("-fecha")[:5]:
         proyecto = m.proyecto.nombre if m.proyecto else "Sin proyecto"
         tipo = m.tipo.nombre if m.tipo else "Sin tipo"
-        msg += f"• {m.fecha.strftime('%d-%m-%Y')} – {proyecto} – {tipo} – ${m.cargos:,.0f}\n"
+        estado_legible = estados_dict.get(m.status, m.status)
+        msg += (
+            f"• {m.fecha.strftime('%d-%m-%Y')} – {proyecto} – {tipo} – "
+            f"${m.cargos:,.0f} – {estado_legible}\n"
+        )
 
-    msg += "\nSi quieres más detalle, puedes verlo en la sección de rendiciones de la app web."
+    msg += (
+        "\nSi quieres otro filtro, puedes decirme por ejemplo:\n"
+        "• `rendiciones aprobadas`\n"
+        "• `rendiciones rechazadas`\n"
+        "• `rendiciones pendientes de hoy`"
+    )
+
     return msg
-
-
-def _build_fallback_message() -> str:
-    """
-    Mensaje estándar cuando no entendemos la intención,
-    con ejemplos más profesionales.
-    """
-    ejemplos = [
-        "ver mi liquidación de sueldo",
-        "consultar mi contrato de trabajo",
-        "ver mis proyectos pendientes",
-        "ver mis rendiciones de gastos pendientes por aprobación",
-    ]
-
-    lineas = [
-        "Por ahora todavía estoy aprendiendo y no pude entender bien tu mensaje 🤖.",
-        "",
-        "Puedes pedirme, por ejemplo:",
-    ]
-    for e in ejemplos:
-        lineas.append(f"• {e}")
-    lineas.append("")
-    lineas.append("Intenta usar frases cortas y directas, y yo te voy guiando.")
-
-    return "\n".join(lineas)
 
 
 # ===================== Router principal de intents =====================
@@ -728,7 +758,15 @@ def run_intent(
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
-        return _build_fallback_message()
+        return (
+            "Por ahora todavía estoy aprendiendo y no pude entender bien tu mensaje 🤖.\n\n"
+            "Puedes pedirme, por ejemplo:\n"
+            "• ver mi liquidación de sueldo\n"
+            "• consultar mi contrato de trabajo\n"
+            "• ver mis proyectos pendientes\n"
+            "• ver mis rendiciones de gastos pendientes por aprobación\n\n"
+            "Intenta usar frases cortas y directas, y yo te voy guiando."
+        )
 
     # Marcamos el intent y confianza como OK
     inbound_log.status = "ok"
@@ -756,8 +794,13 @@ def run_intent(
     if slug == "mis_proyectos_rechazados":
         return _handler_mis_proyectos_rechazados(usuario)
 
+    # Tanto para "ayuda_rendicion_gastos" como para "mis_rendiciones_pendientes"
+    # usamos el mismo handler que entiende pendientes/aprobadas/rechazadas/hoy/ayer.
+    if slug == "ayuda_rendicion_gastos":
+        return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+
     if slug == "mis_rendiciones_pendientes":
-        return _handler_mis_rendiciones_pendientes(usuario)
+        return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
 
     # Otros intents que todavía no implementamos bien:
     return (
