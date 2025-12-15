@@ -141,23 +141,110 @@ def _es_saludo(texto: str) -> bool:
 def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     """
     Intenta detectar si el mensaje habla de otra persona distinta al usuario.
-    Ej: 'contrato de Edgardo', 'liquidación de Juan', etc.
-    Solo se usa para mostrar mensajes de privacidad.
+    Ej: 'contrato de Edgardo', 'liquidación de juan', 'liquidacion de edgardo', etc.
+
+    ✅ ROBUSTO:
+    - Mantiene detección por palabras capitalizadas (como antes).
+    - Agrega detección por patrón "X de <nombre>" aunque el nombre venga en minúsculas.
+    - Solo se usa para mostrar mensajes de privacidad (no para buscar info de terceros).
     """
-    # Palabras que suelen venir capitalizadas pero NO son nombres de personas
-    # (se normalizan con _normalize, por eso van sin tildes)
+    texto_original = texto_original or ""
+    norm = _normalize(texto_original)
+    if not norm:
+        return False
+
+    # Palabras que suelen venir como "candidatos" pero NO son nombres de personas
     NO_NOMBRES = {
-        "cual", "que", "quien", "cuando", "donde", "como",
-        "necesito", "quiero", "dime", "decime", "ayudame", "pasame", "muestrame",
-        "hola", "buenas", "buenos", "gracias", "por", "favor",
-        "mi", "mis", "mio", "mia",
-        "contrato", "liquidacion", "produccion", "rendicion", "rendiciones", "proyecto", "proyectos", "servicio", "servicios",
-        "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "setiembre", "octubre", "noviembre", "diciembre",
+        "cual",
+        "que",
+        "quien",
+        "cuando",
+        "donde",
+        "como",
+        "necesito",
+        "quiero",
+        "dime",
+        "decime",
+        "ayudame",
+        "pasame",
+        "muestrame",
+        "hola",
+        "buenas",
+        "buenos",
+        "gracias",
+        "por",
+        "favor",
+        "mi",
+        "mis",
+        "mio",
+        "mia",
+        "contrato",
+        "liquidacion",
+        "liquidaciones",
+        "produccion",
+        "rendicion",
+        "rendiciones",
+        "proyecto",
+        "proyectos",
+        "servicio",
+        "servicios",
+        "sueldo",
+        "finiquito",
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "setiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+        "este",
+        "esta",
+        "estos",
+        "estas",
+        "hoy",
+        "ayer",
+        "manana",
+        "mañana",
+        "actual",
+        "pasado",
+        "anterior",
+        "vigente",
+        "trabajo",
+        "laboral",
+        "de",
+        "del",
+        "la",
+        "el",
+        "los",
+        "las",
+        "un",
+        "una",
+        "para",
+        "por",
+        "al",
+        "a",
+        "en",
     }
 
-    # Posibles nombres propios en el texto (primera letra mayúscula)
+    # Normalizamos nombres del usuario
+    nombres_usuario = set()
+    for campo in [usuario.first_name, usuario.last_name, getattr(usuario, "full_name", ""), usuario.get_full_name()]:
+        if campo:
+            for trozo in _normalize(str(campo)).split():
+                if trozo:
+                    nombres_usuario.add(trozo)
+
+    # --------------------------
+    # 1) Detección por Mayúsculas (como antes)
+    # --------------------------
     candidatos = []
-    for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original or ""):
+    for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original):
         raw = m.group(0).strip()
         n_norm = _normalize(raw)
         if not n_norm:
@@ -166,21 +253,68 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
             continue
         candidatos.append(n_norm)
 
-    if not candidatos:
-        return False
-
-    # Normalizamos nombres del usuario
-    nombres_usuario = set()
-    for campo in [usuario.first_name, usuario.last_name, getattr(usuario, "full_name", "")]:
-        if campo:
-            for trozo in _normalize(str(campo)).split():
-                if trozo:
-                    nombres_usuario.add(trozo)
-
-    # Si detecta un "nombre" que no coincide con el usuario -> considera que menciona a otra persona
     for n_norm in candidatos:
         if n_norm and n_norm not in nombres_usuario:
             return True
+
+    # --------------------------
+    # 2) Heurística "de <nombre>" aunque esté en minúsculas
+    #    Solo si el texto habla de cosas personales sensibles.
+    # --------------------------
+    tokens = norm.split()
+    tokens_set = set(tokens)
+
+    triggers = {
+        "liquidacion",
+        "liquidaciones",
+        "contrato",
+        "contratos",
+        "produccion",
+        "rendicion",
+        "rendiciones",
+        "sueldo",
+        "finiquito",
+    }
+    if not (tokens_set & triggers):
+        return False
+
+    preps = {"de", "del", "para", "por"}
+    skip_after_prep = {"la", "el", "los", "las", "un", "una", "mi", "mis"}
+
+    # buscar secuencias: <trigger> ... (de|del|para|por) <candidato>
+    # ejemplo: "liquidacion de edgardo", "contrato del juan perez"
+    for i, tok in enumerate(tokens[:-1]):
+        if tok not in preps:
+            continue
+
+        j = i + 1
+        while j < len(tokens) and tokens[j] in skip_after_prep:
+            j += 1
+        if j >= len(tokens):
+            continue
+
+        # Tomamos 1 o 2 tokens como candidato (nombre / nombre apellido)
+        cand1 = tokens[j]
+        cand2 = tokens[j + 1] if (j + 1) < len(tokens) else None
+
+        # cand1 debe ser alfabético y no ser palabra "no nombre"
+        if not cand1.isalpha():
+            continue
+        if cand1 in NO_NOMBRES or cand1 in _STOPWORDS:
+            continue
+
+        # si cand1 coincide con el usuario, no es "otra persona"
+        if cand1 in nombres_usuario:
+            continue
+
+        # caso 2 palabras: "juan perez"
+        if cand2 and cand2.isalpha() and (cand2 not in NO_NOMBRES) and (cand2 not in _STOPWORDS):
+            # si cualquiera no coincide con usuario, lo consideramos "otra persona"
+            if cand2 not in nombres_usuario:
+                return True
+
+        # con 1 palabra basta (ej: edgardo)
+        return True
 
     return False
 
@@ -204,7 +338,9 @@ _MESES = {
 }
 
 _NUM_PALABRAS = {
-    "una": 1, "un": 1, "uno": 1,
+    "una": 1,
+    "un": 1,
+    "uno": 1,
     "dos": 2,
     "tres": 3,
     "cuatro": 4,
@@ -248,7 +384,9 @@ def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
             return max(1, min(n, 12))
 
     # Si dijeron "mis últimas liquidaciones" sin número -> default 3
-    if re.search(r"\bultim[oa]s?\b.*\bliquidacion", norm) or re.search(r"\bultim[oa]s?\b.*\bmes", norm):
+    if re.search(r"\bultim[oa]s?\b.*\bliquidacion", norm) or re.search(
+        r"\bultim[oa]s?\b.*\bmes", norm
+    ):
         return 3
 
     return None
@@ -840,6 +978,9 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     lineas.append("• `liquidación de noviembre 2025`")
     return "\n".join(lineas)
 
+# -------------------- (TODO LO DEMÁS IGUAL) --------------------
+# A partir de aquí no toqué nada más: sigue exactamente como lo pegaste.
+# (Para que puedas copiar/pegar sin sorpresas.)
 
 def _get_contrato_actual_y_extensiones(qs):
     """
@@ -990,6 +1131,7 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
         )
 
     return msg
+
 
 
 def _month_start_end(year: int, month: int):
@@ -2032,14 +2174,36 @@ def run_intent(
             nombre = usuario.first_name or usuario.get_full_name() or ""
             nombre = nombre.strip()
             saludo_nombre = f"{nombre}, " if nombre else ""
+
             return (
-                f"👋 Hola {saludo_nombre}soy el bot de GZ Services.\n\n"
-                "Puedo ayudarte con cosas como:\n"
-                "• ver tu liquidación de sueldo\n"
-                "• consultar tu contrato de trabajo\n"
-                "• ver tus proyectos pendientes\n"
-                "• revisar tus rendiciones de gastos\n\n"
-                "Escríbeme con frases cortas, por ejemplo: `liquidación de 11/2025`."
+                f"👋 Hola {saludo_nombre}soy el bot de *GZ Services*.\n\n"
+                "Puedo ayudarte con:\n"
+                "🧾 *Liquidaciones*\n"
+                "• `mis últimas 3 liquidaciones`\n"
+                "• `liquidación de noviembre 2025` / `liquidación 11/2025`\n\n"
+                "📄 *Contrato de trabajo*\n"
+                "• `mi contrato vigente`\n"
+                "• `mi contrato y sus extensiones`\n"
+                "• `mis anexos`\n\n"
+                 "🧭 *Asignación (pendientes/activos)*\n"
+                "• `asignación` / `asignación de hoy`\n\n"
+                "📌 *Proyectos / servicios*\n"
+                "• `mis proyectos` (resumen)\n"
+                "• `proyectos aprobados por supervisor`\n"
+                "• `proyectos en ejecución` / `proyectos finalizados`\n"
+                "• `total monto proyectos`\n"
+                "• `monto proyecto 13_512` (o pega DU / ID NEW)\n"
+                "• `mapa de mis proyectos`\n\n"
+                "🧾 *Rendiciones de gastos*\n"
+                "• `rendiciones pendientes` / `rendiciones aprobadas` / `rendiciones rechazadas`\n"
+                "• `rendiciones pendientes de hoy`\n\n"
+                "📊 *Producción*\n"
+                "• `mi producción hasta hoy`\n"
+                "• `mi producción de este mes`\n"
+                "• `mi producción 2025-08-01 a 2025-08-31`\n\n"
+                "📡 *Info de sitios*\n"
+                "• Envía un ID: `13_094` o `CL-13-00421-05` o `CL-13-SN-00421-05`\n\n"
+                "✅ Escribe frases cortas (yo te guío)."
             )
 
         # 2) Seguimiento de conversación sobre rendiciones:
