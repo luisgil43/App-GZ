@@ -3,18 +3,18 @@
 import logging
 import re
 import unicodedata
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from facturacion.models import CartolaMovimiento
 from liquidaciones.models import Liquidacion
 from operaciones.models import ServicioCotizado, SitioMovil
-from rrhh.models import ContratoTrabajo, CronogramaPago
+from rrhh.models import ContratoTrabajo, CronogramaPago, DocumentoTrabajador
 from usuarios.models import CustomUser
 
 from .models import BotIntent, BotMessageLog, BotSession, BotTrainingExample
@@ -187,6 +187,92 @@ _MESES = {
     "diciembre": 12,
 }
 
+_NUM_PALABRAS = {
+    "una": 1, "un": 1, "uno": 1,
+    "dos": 2,
+    "tres": 3,
+    "cuatro": 4,
+    "cinco": 5,
+    "seis": 6,
+    "siete": 7,
+    "ocho": 8,
+    "nueve": 9,
+    "diez": 10,
+    "once": 11,
+    "doce": 12,
+}
+
+def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
+    """
+    Detecta "ultimas 3 liquidaciones", "ultimos tres meses", "últimas dos", etc.
+    Devuelve N o None.
+    """
+    norm = _normalize(texto)
+
+    # "ultimas" / "últimos" / "ultimo" / "última"
+    if not re.search(r"\bultim[oa]s?\b", norm):
+        return None
+
+    # 1) número explícito
+    m = re.search(r"\bultim[oa]s?\s+(\d{1,2})\b", norm)
+    if m:
+        try:
+            n = int(m.group(1))
+            return max(1, min(n, 12))
+        except Exception:
+            return None
+
+    # 2) número en palabras
+    m2 = re.search(r"\bultim[oa]s?\s+([a-z]+)\b", norm)
+    if m2:
+        palabra = m2.group(1)
+        if palabra in _NUM_PALABRAS:
+            n = _NUM_PALABRAS[palabra]
+            return max(1, min(n, 12))
+
+    # Si dijeron "mis últimas liquidaciones" sin número -> default 3
+    if re.search(r"\bultim[oa]s?\b.*\bliquidacion", norm) or re.search(r"\bultim[oa]s?\b.*\bmes", norm):
+        return 3
+
+    return None
+
+
+def _parse_meses_multi(texto: str) -> list[int]:
+    """
+    Extrae TODOS los meses mencionados en el texto (por nombre).
+    Ej: "julio y septiembre" -> [7, 9]
+    """
+    tokens = set(_tokenize(texto))
+    meses = []
+    for t in tokens:
+        if t in _MESES:
+            meses.append(_MESES[t])
+    return sorted(set(meses))
+
+
+def _parse_anio_explicito(texto: str) -> Optional[int]:
+    tokens = _tokenize(texto)
+    for t in tokens:
+        if re.match(r"20\d{2}$", t):
+            return int(t)
+    return None
+
+
+def _get_liquidacion_pdf_url(liq: Liquidacion) -> Optional[str]:
+    if getattr(liq, "pdf_firmado", None):
+        return liq.pdf_firmado.url
+    if getattr(liq, "archivo_pdf_liquidacion", None):
+        return liq.archivo_pdf_liquidacion.url
+    return None
+
+
+def _fmt_liq_line(liq: Liquidacion) -> str:
+    estado = "firmada ✅" if liq.firmada else "pendiente ✍️"
+    url = _get_liquidacion_pdf_url(liq)
+    if url:
+        return f"• {liq.mes:02d}/{liq.año} – {estado}\n{url}"
+    return f"• {liq.mes:02d}/{liq.año} – {estado}\n(Sin PDF asociado aún)"
+
 
 def _parse_mes_anio_desde_texto(texto: str) -> Optional[Tuple[int, int]]:
     """
@@ -335,7 +421,7 @@ def detect_intent_from_text(
     if "produccion" in user_tokens:
         add_keyword_candidate("mi_produccion_hasta_hoy", 0.8)
 
-    # Proyectos pendientes / asignados
+    # Proyectos pendientes / asignados (mantengo tu lógica)
     if "proyectos" in user_tokens or "servicios" in user_tokens:
         if (
             "pendientes" in user_tokens
@@ -344,7 +430,13 @@ def detect_intent_from_text(
         ):
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
 
-    # Proyectos rechazados
+    # ✅ EXTRA (SIN BORRAR): soporta singular y "proyectos" a secas (resumen PRO)
+    if {"proyectos", "proyecto", "servicios", "servicio"} & user_tokens:
+        # si NO pidió rechazados explícito, igual lo mandamos a resumen/pendientes
+        if not ({"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens):
+            add_keyword_candidate("mis_proyectos_pendientes", 0.75)
+
+    # Proyectos rechazados (mantengo tu lógica)
     if (
         "rechazados" in user_tokens
         or "rechazado" in user_tokens
@@ -381,9 +473,21 @@ def detect_intent_from_text(
     ):
         add_keyword_candidate("cronograma_produccion_corte", 0.7)
 
-    # Info sitio por ID Claro
+    # Info sitio por ID Claro (tu lógica)
     if "sitio" in user_tokens or "site" in user_tokens:
         add_keyword_candidate("info_sitio_id_claro", 0.7)
+
+    # ✅ EXTRA (SIN BORRAR): si el texto parece un ID de sitio, aunque no diga "sitio"
+    # - ID CLARO: 13_094 o 13 094
+    # - ID SITES / NEW: CL-13-00421-05, CL-13-SN-00421-05
+    # - Otros cortos tipo MA5694
+    txt_up = (texto or "").strip().upper()
+    if (
+        re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
+        or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
+        or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
+    ):
+        add_keyword_candidate("info_sitio_id_claro", 0.72)
 
     # --- Elegir el mejor resultado entre ejemplos y reglas ---
     final_intent = best_intent
@@ -538,10 +642,10 @@ def _handler_cronograma_produccion(usuario: CustomUser) -> str:
 
 def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     """
-    Maneja consultas de liquidaciones:
-    - Si menciona a otra persona -> mensaje de privacidad.
-    - Si indica mes/año -> devuelve enlace directo.
-    - Si no indica mes/año -> lista las liquidaciones disponibles y pide que elija.
+    Maneja consultas de liquidaciones (PRO):
+    - "últimas N" => devuelve N liquidaciones (más recientes) en 1 solo mensaje
+    - "julio y septiembre" => devuelve ambas (si año es ambiguo, pregunta cuál)
+    - "julio" (sin año) => si hay varios años, pregunta el año
     """
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
@@ -554,181 +658,924 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     if not qs.exists():
         return "Por ahora no tengo liquidaciones de sueldo cargadas a tu nombre en el sistema."
 
-    # Intentar extraer mes/año desde el texto
-    parsed = _parse_mes_anio_desde_texto(texto_usuario)
-    if parsed:
-        mes, anio = parsed
-        objetivo = qs.filter(mes=mes, año=anio).first()
-        if not objetivo:
-            return (
-                f"No encontré una liquidación para {mes:02d}/{anio}.\n"
-                "Revisa si ya fue cargada en el sistema o intenta con otro mes/año."
-            )
-    else:
-        # Sin mes/año -> mostramos listado y pedimos precisión
-        lineas = []
-        lineas.append("🧾 *Liquidaciones registradas a tu nombre*")
-        lineas.append("")
-        for liq in qs[:12]:
-            estado = "firmada ✅" if liq.firmada else "pendiente de firma ✍️"
-            lineas.append(f"• {liq.mes:02d}/{liq.año} – {estado}")
-        if qs.count() > 12:
+    # ========= 1) "últimas N liquidaciones" =========
+    n = _parse_ultimas_n_desde_texto(texto_usuario)
+    if n:
+        liqs = list(qs[:n])
+        if not liqs:
+            return "No encontré liquidaciones recientes a tu nombre."
+
+        lineas = [f"🧾 Tus últimas {len(liqs)} liquidaciones (más recientes):", ""]
+        for liq in liqs:
+            lineas.append(_fmt_liq_line(liq))
             lineas.append("")
-            lineas.append("Mostrando solo las 12 más recientes.")
+        return "\n".join(lineas).strip()
 
-        lineas.append("")
-        lineas.append(
-            "Dime de qué mes/año necesitas el PDF.\n"
-            "Por ejemplo: `liquidación de 11/2025` o `liquidación de noviembre 2025`."
-        )
-        return "\n".join(lineas)
+    # ========= 2) Lista de meses (julio y septiembre, etc.) =========
+    meses_multi = _parse_meses_multi(texto_usuario)
+    anio_explicito = _parse_anio_explicito(texto_usuario)
 
-    # Preferimos el PDF firmado si existe
-    url = None
-    if objetivo.pdf_firmado:
-        url = objetivo.pdf_firmado.url
-    elif objetivo.archivo_pdf_liquidacion:
-        url = objetivo.archivo_pdf_liquidacion.url
+    if meses_multi:
+        # Si no viene año, verificamos ambigüedad por mes
+        if not anio_explicito:
+            ambiguos = {}
+            for mes in meses_multi:
+                years = list(
+                    qs.filter(mes=mes)
+                    .values_list("año", flat=True)
+                    .distinct()
+                    .order_by("-año")
+                )
+                if len(years) > 1:
+                    ambiguos[mes] = years
 
-    if not url:
+            if ambiguos:
+                parts = ["📌 Tengo esas liquidaciones en más de un año. ¿De qué año las necesitas?\n"]
+                for mes, years in ambiguos.items():
+                    nombre_mes = [k for k, v in _MESES.items() if v == mes][0]
+                    parts.append(f"• {nombre_mes.capitalize()}: {', '.join(str(y) for y in years)}")
+                parts.append("\nEjemplo: `liquidaciones de julio y septiembre 2025`")
+                return "\n".join(parts).strip()
+
+        # Ya tenemos año (explícito o no ambiguo)
+        # Si no hay año explícito, elegimos el único año disponible por mes (si existe)
+        resultados = []
+        faltantes = []
+
+        for mes in meses_multi:
+            if anio_explicito:
+                liq = qs.filter(mes=mes, año=anio_explicito).first()
+            else:
+                years = list(
+                    qs.filter(mes=mes)
+                    .values_list("año", flat=True)
+                    .distinct()
+                    .order_by("-año")
+                )
+                liq = qs.filter(mes=mes, año=years[0]).first() if len(years) == 1 else None
+
+            if liq:
+                resultados.append(liq)
+            else:
+                faltantes.append(mes)
+
+        if not resultados:
+            if anio_explicito:
+                return f"No encontré liquidaciones para esos meses en el año {anio_explicito}."
+            return "No encontré liquidaciones para esos meses."
+
+        # Ordenamos por año/mes desc para que se vea pro
+        resultados.sort(key=lambda x: (x.año, x.mes), reverse=True)
+
+        lineas = ["🧾 Aquí tienes tus liquidaciones solicitadas:", ""]
+        for liq in resultados:
+            lineas.append(_fmt_liq_line(liq))
+            lineas.append("")
+
+        if faltantes:
+            nombres = []
+            inv_me = {v: k for k, v in _MESES.items()}
+            for m in faltantes:
+                nombres.append(inv_me.get(m, str(m)).capitalize())
+            lineas.append("⚠️ No encontré: " + ", ".join(nombres))
+
+        return "\n".join(lineas).strip()
+
+    # ========= 3) Un solo mes (con o sin año) =========
+    tokens = _tokenize(texto_usuario)
+
+    # detectar mes por nombre (sin forzar año actual)
+    mes = None
+    for t in tokens:
+        if t in _MESES:
+            mes = _MESES[t]
+            break
+
+    # detectar mes por número (si escriben "07/2025" ya lo toma el regex de abajo)
+    if mes is None:
+        mnum = re.search(r"\b(0?[1-9]|1[0-2])\b", _normalize(texto_usuario))
+        if mnum:
+            mes = int(mnum.group(1))
+
+    # detectar patrón 07/2025 o 07-2025
+    m_my = re.search(r"(0?[1-9]|1[0-2])[-/](20\d{2})", _normalize(texto_usuario))
+    if m_my:
+        mes = int(m_my.group(1))
+        anio_explicito = int(m_my.group(2))
+
+    if mes is not None:
+        if not anio_explicito:
+            years = list(
+                qs.filter(mes=mes)
+                .values_list("año", flat=True)
+                .distinct()
+                .order_by("-año")
+            )
+            if not years:
+                return "No encontré una liquidación para ese mes en ningún año."
+            if len(years) > 1:
+                inv_me = {v: k for k, v in _MESES.items()}
+                nombre_mes = inv_me.get(mes, str(mes)).capitalize()
+                return (
+                    f"📌 Tengo {nombre_mes} en más de un año: {', '.join(str(y) for y in years)}.\n"
+                    f"¿De cuál año la necesitas?\n\n"
+                    f"Ejemplo: `liquidación de {nombre_mes} {years[0]}`"
+                )
+            anio_explicito = years[0]
+
+        objetivo = qs.filter(mes=mes, año=anio_explicito).first()
+        if not objetivo:
+            return f"No encontré una liquidación para {mes:02d}/{anio_explicito}."
+
+        url = _get_liquidacion_pdf_url(objetivo)
+        if not url:
+            return (
+                f"Tengo registrada tu liquidación de {objetivo.mes:02d}/{objetivo.año}, "
+                "pero aún no tiene un archivo PDF asociado."
+            )
+
         return (
-            f"Tengo registrada tu liquidación de {objetivo.mes:02d}/{objetivo.año}, "
-            "pero aún no tiene un archivo PDF asociado."
+            f"🧾 Tu liquidación de sueldo {objetivo.mes:02d}/{objetivo.año}:\n\n"
+            f"{url}\n\n"
+            "Puedes abrir ese enlace para descargarla."
         )
 
-    return (
-        f"🧾 Tu liquidación de sueldo {objetivo.mes:02d}/{objetivo.año}:\n\n"
-        f"{url}\n\n"
-        "Puedes abrir ese enlace para descargarla."
-    )
+    # ========= 4) Sin mes/año y sin "últimas N" -> guía =========
+    lineas = []
+    lineas.append("🧾 Liquidaciones registradas a tu nombre (más recientes):")
+    lineas.append("")
+    for liq in qs[:12]:
+        estado = "firmada ✅" if liq.firmada else "pendiente ✍️"
+        lineas.append(f"• {liq.mes:02d}/{liq.año} – {estado}")
+    if qs.count() > 12:
+        lineas.append("")
+        lineas.append("Mostrando solo las 12 más recientes.")
+
+    lineas.append("")
+    lineas.append("Pídemelas así y te las mando en un solo mensaje:")
+    lineas.append("• `mis últimas 3 liquidaciones`")
+    lineas.append("• `mis últimas 4 liquidaciones`")
+    lineas.append("• `liquidaciones de julio y septiembre 2025`")
+    lineas.append("• `liquidación de noviembre 2025`")
+    return "\n".join(lineas)
+
+def _get_contrato_actual_y_extensiones(qs):
+    """
+    qs: ContratoTrabajo queryset order_by('-fecha_inicio')
+    Retorna (contrato_actual, extensiones_vencidas, otros_activos)
+    """
+    hoy = timezone.localdate()
+
+    contratos = list(qs)
+    if not contratos:
+        return None, [], []
+
+    activos = []
+    vencidos = []
+
+    for c in contratos:
+        # Usa tu lógica del modelo
+        code = getattr(c, "status_code", None) or c.status_code
+        if code in ("indefinido", "vigente", "por_vencer"):
+            activos.append(c)
+        else:
+            # fallback por fecha si algo raro
+            if c.fecha_termino and c.fecha_termino < hoy:
+                vencidos.append(c)
+            else:
+                vencidos.append(c)
+
+    # contrato actual = el más reciente activo, si existe; sino el más reciente de todos
+    contrato_actual = activos[0] if activos else contratos[0]
+
+    # extensiones = todo lo anterior al contrato actual (por fecha_inicio), normalmente vencidos
+    extensiones = [c for c in contratos if c.id != contrato_actual.id and c.fecha_inicio <= contrato_actual.fecha_inicio]
+    extensiones_vencidas = [c for c in extensiones if c.status_code == "vencido"]
+
+    # por si existieran 2 activos (raro pero posible), lo reportamos
+    otros_activos = [c for c in activos if c.id != contrato_actual.id]
+
+    return contrato_actual, extensiones_vencidas, otros_activos
+
+
+def _buscar_anexos_rrhh(usuario: CustomUser):
+    """
+    Anexos como 'DocumentoTrabajador' (RRHH).
+    Heurística: tipo_documento.nombre contiene 'anexo' o 'extension'.
+    """
+    return DocumentoTrabajador.objects.filter(
+        trabajador=usuario,
+        tipo_documento__nombre__iregex=r"(anex|extens)"
+    ).select_related("tipo_documento").order_by("-creado")
+
 
 
 def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
-    """
-    Solo muestra el contrato del propio usuario.
-    Si el mensaje parece referirse a otro (nombre distinto) -> mensaje de privacidad.
-    """
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
             "Por seguridad solo puedo mostrarte *tu propio contrato de trabajo*.\n"
             "No tengo permiso para mostrar contratos de otros compañeros."
         )
 
-    contrato = (
-        ContratoTrabajo.objects.filter(tecnico=usuario)
-        .order_by("-fecha_inicio")
-        .first()
-    )
-    if not contrato:
+    tokens = set(_tokenize(texto_usuario))
+
+    quiere_extensiones = bool({"extension", "extensiones", "anteriores", "vencidos", "historial"} & tokens)
+    quiere_anexos = bool({"anexo", "anexos"} & tokens)
+    quiere_todos = bool({"todos", "todas"} & tokens) or ("contratos" in tokens)
+
+    qs = ContratoTrabajo.objects.filter(tecnico=usuario).order_by("-fecha_inicio")
+    if not qs.exists():
         return "No tengo registrado ningún contrato de trabajo asociado a tu usuario."
 
-    url = contrato.archivo.url if contrato.archivo else None
-    estado = contrato.status_label
+    # === Si pide "todos mis contratos" o "mis contratos" ===
+    if quiere_todos:
+        contratos = list(qs[:20])
+        msg = "📄 Tus contratos registrados:\n\n"
+        for c in contratos:
+            termino = "Indefinido" if not c.fecha_termino else c.fecha_termino.strftime("%d-%m-%Y")
+            msg += f"• Inicio: {c.fecha_inicio.strftime('%d-%m-%Y')} | Término: {termino} | Estado: {c.status_label}\n"
+            if c.archivo:
+                msg += f"  {c.archivo.url}\n"
+            else:
+                msg += "  (Sin PDF asociado)\n"
 
-    msg = "📄 *Tu contrato de trabajo*\n\n"
-    msg += f"• Estado: *{estado}*\n"
-    msg += f"• Fecha de inicio: {contrato.fecha_inicio.strftime('%d-%m-%Y')}\n"
-    if contrato.fecha_termino:
-        msg += f"• Fecha de término: {contrato.fecha_termino.strftime('%d-%m-%Y')}\n"
+        if qs.count() > len(contratos):
+            msg += f"\nMostrando {len(contratos)} de {qs.count()}."
+        msg += (
+            "\n\nSi quieres solo el vigente, dime: `mi contrato vigente`.\n"
+            "Si quieres el vigente + extensiones vencidas: `mi contrato y sus extensiones`."
+        )
+        return msg
 
-    if url:
-        msg += f"\n🔗 Archivo del contrato:\n{url}"
+    # === Caso normal: contrato actual + (opcional) extensiones ===
+    contrato_actual, extensiones_vencidas, otros_activos = _get_contrato_actual_y_extensiones(qs)
+
+    termino = "Indefinido" if not contrato_actual.fecha_termino else contrato_actual.fecha_termino.strftime("%d-%m-%Y")
+
+    msg = "📄 Tu contrato más reciente (vigente):\n\n"
+    msg += f"• Estado: {contrato_actual.status_label}\n"
+    msg += f"• Fecha de inicio: {contrato_actual.fecha_inicio.strftime('%d-%m-%Y')}\n"
+    msg += f"• Fecha de término: {termino}\n"
+
+    if contrato_actual.archivo:
+        msg += f"\n🔗 Archivo del contrato:\n{contrato_actual.archivo.url}"
     else:
         msg += "\n(No tengo un archivo PDF/subido para este contrato)."
+
+    # Si hay más de un activo (por si acaso), lo avisamos
+    if otros_activos:
+        msg += "\n\n⚠️ Nota: veo más de un contrato marcado como vigente/activo en el sistema."
+
+    # Extensiones vencidas (si el usuario las pidió)
+    if quiere_extensiones or ({"extension", "extensiones"} & tokens):
+        if not extensiones_vencidas:
+            msg += (
+                "\n\n📎 Extensiones / contratos anteriores:\n"
+                "No tienes extensiones vencidas registradas como contratos separados en el sistema."
+            )
+        else:
+            msg += "\n\n📎 Extensiones / contratos anteriores (vencidos):\n"
+            for c in extensiones_vencidas[:10]:
+                termino2 = "Indefinido" if not c.fecha_termino else c.fecha_termino.strftime("%d-%m-%Y")
+                msg += f"• Inicio: {c.fecha_inicio.strftime('%d-%m-%Y')} | Término: {termino2} | Estado: {c.status_label}\n"
+                if c.archivo:
+                    msg += f"  {c.archivo.url}\n"
+                else:
+                    msg += "  (Sin PDF asociado)\n"
+
+    # Anexos RRHH (DocumentoTrabajador), si el usuario los pidió
+    if quiere_anexos:
+        anexos = list(_buscar_anexos_rrhh(usuario)[:10])
+        if not anexos:
+            msg += (
+                "\n\n📎 Anexos:\n"
+                "Usted no posee anexos cargados en el sistema.\n"
+                "Comunícate con *Recursos Humanos* para que puedan cargarte tus anexos.\n"
+                "Te estoy compartiendo el contrato más reciente."
+            )
+        else:
+            msg += "\n\n📎 Anexos (RRHH):\n"
+            for a in anexos:
+                nombre = a.tipo_documento.nombre if a.tipo_documento else "Anexo"
+                msg += f"• {nombre}\n"
+                msg += f"  {a.archivo.url}\n"
+
+    # Si NO pidió extensiones/anexos y existen extensiones vencidas, pregúntale (PRO, sin ser latero)
+    if (not quiere_extensiones) and (not quiere_anexos) and extensiones_vencidas:
+        msg += (
+            f"\n\nTengo además *{len(extensiones_vencidas)}* contrato(s) anterior(es) vencido(s) (extensiones).\n"
+            "¿Quieres que te los envíe también?\n"
+            "Ejemplo: `mi contrato y sus extensiones`"
+        )
 
     return msg
 
 
+def _month_start_end(year: int, month: int):
+    from datetime import date
+
+    # inicio
+    start = date(year, month, 1)
+    # fin (inicio del mes siguiente - 1 día)
+    if month == 12:
+        end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(year, month + 1, 1) - timedelta(days=1)
+    return start, end
+
+
+def _parse_rango_fechas(texto: str):
+    """
+    Acepta:
+    - 2025-08-01 a 2025-08-31
+    - 01-08-2025 a 31-08-2025
+    - 01/08/2025 al 31/08/2025
+    Devuelve (date_start, date_end) o None
+    """
+    norm = _normalize(texto)
+
+    # YYYY-MM-DD ... YYYY-MM-DD
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2}).{0,10}(\d{4})-(\d{2})-(\d{2})", norm)
+    if m:
+        y1, mo1, d1, y2, mo2, d2 = map(int, m.groups())
+        return date(y1, mo1, d1), date(y2, mo2, d2)
+
+    # DD-MM-YYYY ... DD-MM-YYYY (también /)
+    m2 = re.search(
+        r"(\d{1,2})[-/](\d{1,2})[-/](\d{4}).{0,10}(\d{1,2})[-/](\d{1,2})[-/](\d{4})",
+        norm,
+    )
+    if m2:
+        d1, mo1, y1, d2, mo2, y2 = map(int, m2.groups())
+        return date(y1, mo1, d1), date(y2, mo2, d2)
+
+    return None
+
+
+def _parse_mes_produccion(texto: str):
+    """
+    Devuelve (mes, año) si detecta mes en texto.
+    Si no viene año, usa el año actual.
+    """
+    parsed = _parse_mes_anio_desde_texto(texto)  # tu helper existente
+    if parsed:
+        mes, anio = parsed
+        return mes, anio
+    return None
+
+
+def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
+    """
+    Decide si el usuario quiere incluir estados:
+    - asignados, ejecución, pendientes, finalizados, etc.
+    Si no dice nada, devolvemos default "lo que ya calcula hasta hoy".
+    """
+    return {
+        "incluye_asignados": bool({"asignado", "asignados"} & tokens),
+        "incluye_ejecucion": bool({"ejecucion", "ejecución", "en_progreso", "progreso"} & tokens),
+        "incluye_pendiente_supervisor": bool({"pendiente", "pendientes", "supervisor"} & tokens),
+        "incluye_finalizados": bool({"finalizado", "finalizados"} & tokens),
+        "incluye_todo": bool({"todo", "todos", "completo"} & tokens),
+    }
+
+def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=None):
+    """
+    Implementa el cálculo por rango.
+    - date_from/date_to: date
+    - incluir_estados: dict flags opcional
+    Debe devolver string listo para Telegram.
+    """
+    # TODO: aquí reutiliza tu lógica actual pero filtrando por fechas del servicio
+    # (fecha_creacion / fecha_aprobacion_supervisor / fecha_finalizado según tu criterio)
+    # Mientras tanto, puedes devolver un mensaje temporal si aún no filtras.
+    return (
+        f"📊 *Producción estimada*\n"
+        f"Rango: {date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}\n\n"
+        "⚙️ (Pendiente: aplicar filtro por fechas en el cálculo)\n"
+        "Si quieres, dime qué fecha del servicio usar: creación, aprobación supervisor o finalización."
+    )
+
 def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
-    """
-    Maneja consultas de producción:
-    - Si menciona a otra persona -> mensaje de privacidad.
-    - Si incluye 'hoy' / 'hasta hoy' / 'a la fecha' -> usa responder_produccion_hasta_hoy.
-    - Si es muy genérico -> guía al usuario.
-    """
+    # Privacidad: producción solo del propio usuario
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
-            "Solo puedo mostrarte *tu propia producción*.\n"
+            "Por seguridad solo puedo mostrarte *tu propia producción*.\n"
             "No tengo permiso para entregar información de producción de otros compañeros."
         )
 
     tokens = set(_tokenize(texto_usuario))
+    hoy = timezone.localdate()
 
-    # Producción hasta hoy
-    if "hoy" in tokens or "ahora" in tokens or "fecha" in tokens:
+    flags = _parse_flags_estados_produccion(tokens)
+
+    # 1) Rango explícito de fechas
+    rango = _parse_rango_fechas(texto_usuario)
+    if rango:
+        d1, d2 = rango
+        if d2 < d1:
+            d1, d2 = d2, d1
+        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+
+    # 2) "hasta hoy / a la fecha"
+    if {"hoy", "ahora", "fecha"} & tokens:
         return _responder_produccion_hasta_hoy(usuario)
 
-    # Si menciona 'mes' o un mes específico pero todavía no tenemos desglose por mes
-    if "mes" in tokens or any(t in _MESES for t in tokens):
-        return (
-            "Por ahora solo puedo calcular tu *producción estimada acumulada hasta hoy*.\n"
-            "En una siguiente versión te podré mostrar también por mes específico.\n\n"
-            "Si quieres verla, dime por ejemplo: `mi producción hasta hoy`."
-        )
+    # 3) "este mes" / "mes actual"
+    if ({"este", "actual"} & tokens and "mes" in tokens) or ("mes" in tokens and "actual" in tokens):
+        start, end = _month_start_end(hoy.year, hoy.month)
+        # hasta la fecha (hoy)
+        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
 
-    # Mensaje genérico para 'producción', 'produccion', etc.
+    # 4) "mes anterior" / "mes pasado"
+    if ({"anterior", "pasado"} & tokens and "mes" in tokens) or ("mes" in tokens and "anterior" in tokens):
+        # mes anterior
+        year = hoy.year
+        month = hoy.month - 1
+        if month == 0:
+            month = 12
+            year -= 1
+        start, end = _month_start_end(year, month)
+        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+
+    # 5) Mes específico (ej: "agosto", "julio 2025", "08/2025")
+    parsed_mes = _parse_mes_produccion(texto_usuario)
+    if parsed_mes:
+        mes, anio = parsed_mes
+        start, end = _month_start_end(anio, mes)
+        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
+
+    # 6) Si el usuario solo dice "mi producción" o algo genérico => MENÚ PRO
+    # (no decir "por ahora solo..."; damos opciones)
     return (
-        "¿Sobre qué periodo quieres saber tu producción?\n\n"
-        "Por ahora puedo mostrarte tu *producción estimada acumulada hasta hoy*.\n"
-        "Pídeme, por ejemplo: `mi producción hasta hoy`."
+        "📊 ¿Qué producción necesitas?\n\n"
+        "Puedo ayudarte con:\n"
+        "• *Este mes hasta hoy*: `mi producción de este mes`\n"
+        "• *Mes anterior completo*: `mi producción del mes anterior`\n"
+        "• *Un mes específico*: `mi producción de agosto 2025` (o `agosto 2025`)\n"
+        "• *Rango de fechas*: `mi producción 2025-08-01 a 2025-08-31`\n\n"
+        "También puedo darte un *estimado ampliado* según estados (si lo pides así):\n"
+        "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`"
     )
+
+def _extract_site_key(texto: str) -> Optional[Tuple[str, str]]:
+    """
+    Detecta IDs de sitio en el texto y devuelve:
+    - ("id_claro", "13_094")
+    - ("cl_code",  "CL-13-00421-05" / "CL-13-SN-00421-05" / "CL-13-ÑÑ-01837-11")
+    """
+    raw = (texto or "").strip()
+    if not raw:
+        return None
+
+    # 1) ID CLARO: 13_094 o 13-094
+    m = re.search(r"\b(\d{2})[_-](\d{3})\b", raw)
+    if m:
+        return ("id_claro", f"{m.group(1)}_{m.group(2)}")
+
+    # 2) ID SITES / ID NEW: CL-13-00421-05 | CL-13-SN-00421-05 | CL-13-ÑÑ-01837-11
+    #    - Segmento medio (SN/TC/CN/ÑÑ) es opcional, pero si viene, lo soporta.
+    m2 = re.search(
+        r"\b(CL-\d{2}-(?:[A-ZÑ]{2,3}-)?\d{5}-\d{2})\b",
+        raw,
+        flags=re.IGNORECASE,
+    )
+    if m2:
+        return ("cl_code", m2.group(1).upper())
+
+    return None
+
+
+def _is_only_site_id(texto: str, kind: str, value: str) -> bool:
+    """
+    True si el usuario mandó básicamente solo el ID (con o sin backticks/comillas).
+    """
+    cleaned = (texto or "").strip().strip("`'\"").upper()
+
+    if kind == "id_claro":
+        # aceptar 13_094 o 13-094
+        return cleaned == value.upper() or cleaned == value.replace("_", "-").upper()
+
+    return cleaned == value.upper()
+
+
+def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], str]:
+    """
+    Busca por:
+    - id_claro (13_094)
+    - id_sites (CL-13-00421-05)
+    - id_sites_new (CL-13-SN-00421-05 / CL-13-ÑÑ-01837-11)
+    Devuelve (sitio, matched_field)
+    """
+    qs = SitioMovil.objects.all()
+
+    if kind == "id_claro":
+        variants = [value, value.replace("_", "-")]
+        for v in variants:
+            sm = qs.filter(id_claro__iexact=v).first()
+            if sm:
+                return sm, "id_claro"
+        return None, "id_claro"
+
+    # cl_code: puede ser id_sites o id_sites_new
+    sm = qs.filter(id_sites__iexact=value).first()
+    if sm:
+        return sm, "id_sites"
+
+    sm = qs.filter(id_sites_new__iexact=value).first()
+    if sm:
+        return sm, "id_sites_new"
+
+    # (por si acaso alguien pega algo raro y coincide con id_claro)
+    sm = qs.filter(id_claro__iexact=value).first()
+    if sm:
+        return sm, "id_claro"
+
+    return None, "id_sites_new"
+
 
 
 def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
-    # Buscar algo tipo MA5694, CL1234, etc.
-    match = re.search(r"\b[A-Za-z]{1,3}\d{3,6}\b", texto_usuario)
-    if not match:
+    key = _extract_site_key(texto_usuario)
+
+    if not key:
         return (
-            "Para ayudarte con la información del sitio necesito que me indiques el *ID Claro*, "
-            "por ejemplo: `MA5694`."
+            "Para darte información del sitio, indícame uno de estos IDs:\n"
+            "• *ID CLARO*: `13_094`\n"
+            "• *ID SITES*: `CL-13-00421-05`\n"
+            "• *ID NEW*: `CL-13-SN-00421-05`\n"
         )
 
-    id_claro = match.group(0).upper()
-
-    sitio = (
-        SitioMovil.objects.filter(id_claro__iexact=id_claro).first()
-        or SitioMovil.objects.filter(id_sites__iexact=id_claro).first()
-        or SitioMovil.objects.filter(id_sites_new__iexact=id_claro).first()
-    )
+    kind, value = key
+    sitio, matched_field = _find_sitio_by_any_id(kind, value)
 
     if not sitio:
-        return f"No encontré un sitio con ID Claro `{id_claro}` en el sistema."
+        if kind == "id_claro":
+            return (
+                f"No encontré un sitio con *ID CLARO* `{value}`.\n\n"
+                "Si no lo tienes a mano, dime el *ID SITES* (ej: `CL-13-00421-05`) "
+                "o el *ID NEW* (ej: `CL-13-SN-00421-05`)."
+            )
+        return (
+            f"No encontré un sitio con ese ID `{value}`.\n\n"
+            "Prueba enviándome el *ID CLARO* (ej: `13_094`). "
+            "Si no lo tienes, dime el *ID SITES* o el *ID NEW*."
+        )
 
-    msg = f"📡 *Sitio {id_claro}*\n\n"
+    # Respuesta PRO
+    msg = "📡 *Información del Sitio*\n\n"
+
+    msg += f"• ID Sites: {sitio.id_sites or '—'}\n"
+    msg += f"• ID Claro: {sitio.id_claro or '—'}\n"
+    msg += f"• ID New: {sitio.id_sites_new or '—'}\n"
+    msg += f"• Región: {sitio.region or '—'}\n"
+
     if sitio.nombre:
         msg += f"• Nombre: {sitio.nombre}\n"
     if sitio.direccion:
         msg += f"• Dirección: {sitio.direccion}\n"
     if sitio.comuna:
         msg += f"• Comuna: {sitio.comuna}\n"
-    if sitio.region:
-        msg += f"• Región: {sitio.region}\n"
 
-    # Seguridad / acceso
+    # Acceso / seguridad
     detalles = []
     if sitio.candado_bt:
         detalles.append(f"Candado BT: {sitio.candado_bt}")
     if sitio.condiciones_acceso:
-        detalles.append(f"Acceso: {sitio.condiciones_acceso}")
+        detalles.append(f"Condiciones acceso: {sitio.condiciones_acceso}")
     if sitio.claves:
         detalles.append(f"Claves: {sitio.claves}")
     if sitio.llaves:
         detalles.append(f"Llaves: {sitio.llaves}")
     if sitio.cantidad_llaves:
-        detalles.append(f"Cantidad de llaves: {sitio.cantidad_llaves}")
+        detalles.append(f"Cantidad llaves: {sitio.cantidad_llaves}")
 
     if detalles:
-        msg += "\n🔐 *Acceso / Seguridad:*\n"
+        msg += "\n🔐 *Acceso / Seguridad*\n"
         for d in detalles:
             msg += f"• {d}\n"
 
+    # Coordenadas
     if sitio.latitud is not None and sitio.longitud is not None:
         lat = str(sitio.latitud).replace(",", ".")
         lng = str(sitio.longitud).replace(",", ".")
-        google_link = f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
-        msg += f"\n📍 Google Maps:\n{google_link}"
+        msg += f"\n📍 Google Maps:\nhttps://www.google.com/maps/search/?api=1&query={lat},{lng}"
 
     return msg
+
+
+
+# ===================== PROYECTOS (PRO) =====================
+
+_PROJ_BUCKETS = {
+    "asignados": {"asignado"},
+    "en_ejecucion": {"en_progreso"},
+    "revision_supervisor": {"en_revision_supervisor"},
+    "aprobado_supervisor": {"aprobado_supervisor"},
+    "finalizados": {"finalizado_trabajador", "informe_subido", "finalizado"},
+    "rechazados": {"rechazado_supervisor"},
+}
+
+_PROJ_BUCKET_LABEL = {
+    "asignados": "Asignados",
+    "en_ejecucion": "En ejecución",
+    "revision_supervisor": "En revisión supervisor",
+    "aprobado_supervisor": "Aprobado por supervisor",
+    "finalizados": "Finalizados",
+    "rechazados": "Rechazados",
+}
+
+def _fmt_clp(val) -> str:
+    try:
+        n = float(val or 0)
+    except Exception:
+        n = 0
+    entero = int(round(n, 0))
+    return "$" + f"{entero:,}".replace(",", ".")
+
+def _extract_project_id(texto: str) -> Optional[str]:
+    """
+    Detecta:
+    - ID CLARO: 13_094
+    - ID SITES: CL-13-00421-05
+    - ID NEW:   CL-13-SN-00421-05 (y variantes CN/TC/TE/TA/ÑÑ etc)
+    """
+    t = (texto or "").strip()
+
+    m = re.search(r"\b\d{2}_\d{3,5}\b", t)  # 13_094, 13_913, etc
+    if m:
+        return m.group(0)
+
+    m2 = re.search(r"\bCL-\d{2}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)  # id_sites
+    if m2:
+        return m2.group(0)
+
+    m3 = re.search(r"\bCL-\d{2}-[A-ZÑ]{1,3}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)  # id_new
+    if m3:
+        return m3.group(0)
+
+    return None
+
+def _project_month_filter(texto_usuario: str):
+    """
+    Soporta:
+    - "este mes", "mes actual"
+    - "mes pasado", "mes anterior"
+    - "agosto 2025", "08/2025"
+    Retorna (start_date, end_date, label) o None
+    """
+    tokens = set(_tokenize(texto_usuario))
+    hoy = timezone.localdate()
+
+    if ("mes" in tokens and ({"este", "actual"} & tokens)):
+        start, end = _month_start_end(hoy.year, hoy.month)
+        return start, end, f"{hoy.month:02d}/{hoy.year}"
+
+    if ("mes" in tokens and ({"pasado", "anterior"} & tokens)):
+        year = hoy.year
+        month = hoy.month - 1
+        if month == 0:
+            month = 12
+            year -= 1
+        start, end = _month_start_end(year, month)
+        return start, end, f"{month:02d}/{year}"
+
+    parsed = _parse_mes_anio_desde_texto(texto_usuario)
+    if parsed:
+        mes, anio = parsed
+        start, end = _month_start_end(anio, mes)
+        return start, end, f"{mes:02d}/{anio}"
+
+    return None
+
+def _pick_project_buckets(tokens: set[str]) -> list[str]:
+    """
+    Decide qué grupos mostrar según el texto.
+    Si no especifica, devolvemos TODOS (resumen pro).
+    """
+    wants = []
+    if {"asignado", "asignados"} & tokens:
+        wants.append("asignados")
+    if {"ejecucion", "ejecución", "progreso", "ejecutando"} & tokens:
+        wants.append("en_ejecucion")
+    if {"revision", "revisión", "supervisor"} & tokens:
+        wants.append("revision_supervisor")
+    if {"aprobado", "aprobados"} & tokens and "supervisor" in tokens:
+        wants.append("aprobado_supervisor")
+    if {"finalizado", "finalizados", "terminado", "terminados"} & tokens:
+        wants.append("finalizados")
+    if {"rechazado", "rechazados", "rechazada", "rechazadas"} & tokens:
+        wants.append("rechazados")
+
+    return wants or ["asignados", "en_ejecucion", "revision_supervisor", "aprobado_supervisor", "finalizados", "rechazados"]
+
+def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Optional[str], list[str]]:
+    """
+    Devuelve:
+    - 1 link "ruta" (dir) si hay >=2 puntos
+    - y una lista de links individuales (search) como fallback
+    """
+    id_claros = [s.id_claro for s in servicios if s.id_claro]
+    id_news = [s.id_new for s in servicios if s.id_new]
+
+    sitios = list(
+        SitioMovil.objects.filter(
+            Q(id_claro__in=id_claros) | Q(id_sites_new__in=id_news)
+        ).only("id_claro", "id_sites_new", "nombre", "direccion", "latitud", "longitud")
+    )
+
+    by_id = {}
+    for sm in sitios:
+        if sm.id_claro:
+            by_id[str(sm.id_claro).strip()] = sm
+        if sm.id_sites_new:
+            by_id[str(sm.id_sites_new).strip()] = sm
+
+    puntos = []
+    links_individuales = []
+
+    for s in servicios:
+        key = (s.id_claro or "").strip() or (s.id_new or "").strip()
+        sm = by_id.get(key)
+        if not sm:
+            continue
+        if sm.latitud is None or sm.longitud is None:
+            continue
+
+        lat = str(sm.latitud).replace(",", ".")
+        lng = str(sm.longitud).replace(",", ".")
+        name = (sm.nombre or key or "Sitio").strip()
+
+        links_individuales.append(f"• {name}: https://www.google.com/maps/search/?api=1&query={lat},{lng}")
+        puntos.append(f"{lat},{lng}")
+
+    if not puntos:
+        return None, links_individuales
+
+    # Google limita waypoints; mandamos máximo 10 puntos (1 destino + 9 waypoints)
+    puntos = puntos[:10]
+
+    if len(puntos) == 1:
+        return None, links_individuales
+
+    origin = "Current+Location"
+    destination = puntos[-1]
+    waypoints = "|".join(puntos[:-1])
+
+    ruta = f"https://www.google.com/maps/dir/?api=1&origin={origin}&destination={destination}&waypoints={waypoints}&travelmode=driving"
+    return ruta, links_individuales
+
+def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
+    tokens = set(_tokenize(texto_usuario))
+
+    base = ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
+
+    # filtro por mes (usa fecha_creacion como referencia)
+    mf = _project_month_filter(texto_usuario)
+    mes_label = None
+    if mf:
+        start, end, mes_label = mf
+        base = base.filter(fecha_creacion__date__gte=start, fecha_creacion__date__lte=end)
+
+    # consulta específica por ID (13_913 / CL-xx / CL-xx-YY-xxxx-zz)
+    pid = _extract_project_id(texto_usuario)
+    if pid:
+        pid_u = pid.strip().upper()
+        s = (
+            base.filter(id_claro__iexact=pid_u).first()
+            or base.filter(id_new__iexact=pid_u).first()
+            or base.filter(du__iexact=pid_u).first()
+        )
+        if not s:
+            # si lo mandaron como ID Sites/NEW pero el servicio guarda id_claro/id_new, igual damos pista
+            return (
+                f"No encontré un proyecto asignado a ti con identificador `{pid_u}`.\n\n"
+                "Puedes mandarme:\n"
+                "• `13_094` (ID Claro)\n"
+                "• `CL-13-00421-05` (ID Sites)\n"
+                "• `CL-13-SN-00421-05` (ID New)\n"
+                "• o el `DU 00000131`"
+            )
+
+        estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+        estado_legible = estados_dict.get(s.estado, s.estado)
+        msg = "🧾 *Detalle de proyecto*\n\n"
+        msg += f"• DU: {s.du or '—'}\n"
+        msg += f"• ID Claro: {s.id_claro or '—'}\n"
+        msg += f"• ID New: {s.id_new or '—'}\n"
+        msg += f"• Estado: {estado_legible}\n"
+        msg += f"• Monto cotizado: {_fmt_clp(s.monto_cotizado)}\n"
+        if s.monto_mmoo is not None:
+            msg += f"• Monto MMOO: {_fmt_clp(s.monto_mmoo)}\n"
+        if s.detalle_tarea:
+            det = s.detalle_tarea.strip()
+            msg += f"\n🛠️ Tarea:\n{det}\n"
+        msg += "\nSi quieres, dime: `mapa de mis proyectos` o `total monto proyectos`."
+        return msg
+
+    # “mapa / maps”
+    if {"mapa", "maps", "google", "ubicacion", "ubicación"} & tokens:
+        # para mapa tomamos activos por defecto
+        bucket_keys = _pick_project_buckets(tokens)
+        estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
+        qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")[:20]
+        servicios = list(qs)
+
+        if not servicios:
+            extra = f" en {mes_label}" if mes_label else ""
+            return f"No encontré proyectos para mapear{extra}."
+
+        ruta, links = _build_maps_link_for_services(servicios)
+        msg = "🗺️ *Mapa de tus proyectos*\n\n"
+        if mes_label:
+            msg += f"Filtro mes: *{mes_label}*\n\n"
+
+        if ruta:
+            msg += f"Ruta sugerida (usa tu ubicación actual):\n{ruta}\n\n"
+        else:
+            msg += "No pude armar una ruta única (puede faltar coordenadas), pero aquí van links individuales:\n\n"
+
+        if links:
+            msg += "Links (algunos sitios pueden no tener coordenadas cargadas):\n"
+            msg += "\n".join(links[:12])
+            if len(links) > 12:
+                msg += f"\n… y {len(links)-12} más."
+        else:
+            msg += "No encontré coordenadas en SitioMovil para tus proyectos."
+
+        msg += "\n\nTip: si quieres solo `asignados este mes` escribe: `mapa proyectos asignados este mes`."
+        return msg
+
+    # “monto / total / suma”
+    if {"monto", "montos", "total", "suma", "sumo", "cuanto", "cuánto"} & tokens:
+        bucket_keys = _pick_project_buckets(tokens)
+        estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
+        qs = base.filter(estado__in=list(estados))
+
+        total_proy = qs.count()
+        total_monto = qs.aggregate(t=Sum("monto_cotizado"))["t"] or 0
+
+        extra = f" (mes {mes_label})" if mes_label else ""
+        labels = ", ".join(_PROJ_BUCKET_LABEL[k] for k in bucket_keys)
+
+        return (
+            f"💰 *Total proyectos / montos*{extra}\n\n"
+            f"Grupos: *{labels}*\n"
+            f"• Proyectos: *{total_proy}*\n"
+            f"• Monto total: *{_fmt_clp(total_monto)}*\n\n"
+            "Si quieres el detalle de uno, dime: `monto proyecto 13_913` (o pega el DU / ID NEW)."
+        )
+
+    # RESUMEN PRO (default): conteo por estados + mini listado + menú
+    bucket_keys = _pick_project_buckets(tokens)
+    estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
+    # Para resumen, consideramos TODOS los buckets (aunque pidan "proyectos" a secas)
+    bucket_keys = ["asignados", "en_ejecucion", "revision_supervisor", "aprobado_supervisor", "finalizados", "rechazados"]
+
+    msg = "📌 *Resumen de tus proyectos*\n"
+    if mes_label:
+        msg += f"Filtro mes: *{mes_label}*\n"
+    msg += "\n"
+
+    total_general = 0
+    total_monto_general = 0
+
+    for key in bucket_keys:
+        estados = _PROJ_BUCKETS[key]
+        qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")
+        c = qs.count()
+        m = qs.aggregate(t=Sum("monto_cotizado"))["t"] or 0
+        total_general += c
+        total_monto_general += float(m or 0)
+
+        msg += f"• {_PROJ_BUCKET_LABEL[key]}: *{c}* (monto {_fmt_clp(m)})\n"
+
+    msg += f"\n✅ Total: *{total_general}* proyectos (monto {_fmt_clp(total_monto_general)})\n\n"
+
+    # muestra ejemplos recientes (mezclados)
+    ejemplos = list(base.order_by("-fecha_creacion")[:8])
+    if ejemplos:
+        msg += "Últimos proyectos (recientes):\n"
+        for s in ejemplos:
+            du = s.du or "—"
+            idc = s.id_claro or (s.id_new or "—")
+            est = estados_dict.get(s.estado, s.estado)
+            det = (s.detalle_tarea or "").strip()
+            if len(det) > 60:
+                det = det[:57] + "…"
+            msg += f"• DU {du} / {idc} – {est} – {det}\n"
+
+    msg += (
+        "\n📲 Pídemelo así (PRO):\n"
+        "• `proyectos asignados este mes`\n"
+        "• `proyectos en ejecución`\n"
+        "• `proyectos finalizados mes pasado`\n"
+        "• `total monto proyectos (asignados + ejecución + revisión)`\n"
+        "• `monto proyecto 13_913`\n"
+        "• `mapa de mis proyectos asignados`"
+    )
+    return msg
+
 
 
 def _handler_mis_proyectos_pendientes(usuario: CustomUser) -> str:
@@ -743,16 +1590,20 @@ def _handler_mis_proyectos_pendientes(usuario: CustomUser) -> str:
     if total == 0:
         return "No tienes proyectos/servicios pendientes en este momento. ✅"
 
+    estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
     msg = f"Tienes *{total}* proyectos pendientes.\n\n"
     msg += "Te muestro los últimos asignados:\n"
 
     for s in qs[:10]:
         du = s.du or "—"
-        id_claro = s.id_claro or "Sin ID Claro"
+        id_ref = s.id_claro or (getattr(s, "id_new", None) or "Sin ID")
         detalle = (s.detalle_tarea or "").strip()
         if len(detalle) > 80:
             detalle = detalle[:77] + "…"
-        msg += f"• DU {du} / {id_claro}: {detalle}\n"
+
+        est = estados_dict.get(s.estado, s.estado)
+        msg += f"• DU {du} / {id_ref} – {est}: {detalle}\n"
 
     return msg
 
@@ -767,14 +1618,18 @@ def _handler_mis_proyectos_rechazados(usuario: CustomUser) -> str:
     if total == 0:
         return "No tienes proyectos rechazados actualmente. ✅"
 
+    estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
     msg = f"Tienes *{total}* proyectos rechazados por supervisor.\n\n"
     for s in qs[:10]:
         du = s.du or "—"
-        id_claro = s.id_claro or "Sin ID Claro"
+        id_ref = s.id_claro or (getattr(s, "id_new", None) or "Sin ID")
         motivo = (s.motivo_rechazo or "").strip()
         if len(motivo) > 80:
             motivo = motivo[:77] + "…"
-        msg += f"• DU {du} / {id_claro} – Motivo: {motivo or 'Sin detalle'}\n"
+
+        est = estados_dict.get(s.estado, s.estado)
+        msg += f"• DU {du} / {id_ref} – {est} – Motivo: {motivo or 'Sin detalle'}\n"
 
     return msg
 
@@ -955,6 +1810,137 @@ def run_intent(
                 inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
                 return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
 
+        # ==========================================================
+        # 3) SITIOS: si mandan un ID (ID CLARO / ID SITES / ID NEW)
+        #    aunque no digan "sitio", igual responder.
+        # ==========================================================
+        txt_up = (texto_usuario or "").strip().upper()
+        site_hit = (
+            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)  # 13_094 o 13 094
+            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)  # CL-13-00421-05 / CL-13-SN-00421-05
+            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)  # MA5694 (u otros)
+        )
+        if site_hit:
+            # Si veníamos hablando de sitios, o si menciona "sitio", o si mandó solo el ID
+            if (
+                (sesion.ultimo_intent and sesion.ultimo_intent.slug == "info_sitio_id_claro")
+                or ("sitio" in tokens or "site" in tokens)
+                or _normalize(texto_usuario) == _normalize(site_hit.group(0))
+            ):
+                inbound_log.status = "ok"
+                inbound_log.marcar_para_entrenamiento = False
+                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+                return _handler_info_sitio_id_claro(texto_usuario)
+
+        # =========================
+        # 4) PROYECTOS (PRO)
+        # =========================
+        # Si veníamos hablando de proyectos y preguntan "estado/status/en ejecución/finalizados/monto/total"
+        # evitamos el fallback y damos un resumen pro (counts + total $ + últimos).
+        if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mis_proyectos_pendientes", "mis_proyectos_rechazados"]:
+            if (
+                {"estado", "estados", "status", "situacion", "situación", "ejecucion", "ejecución", "progreso",
+                 "revision", "revisión", "supervisor", "finalizados", "finalizado",
+                 "rechazados", "rechazado", "asignados", "asignado", "monto", "total", "suma"} & tokens
+            ):
+                inbound_log.status = "ok"
+                inbound_log.marcar_para_entrenamiento = False
+                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+                qs_all = ServicioCotizado.objects.filter(
+                    trabajadores_asignados=usuario
+                ).order_by("-fecha_creacion")
+
+                total = qs_all.count()
+                if total == 0:
+                    return "No tienes proyectos/servicios asignados actualmente. ✅"
+
+                # total $ (usa Sum ya importado)
+                total_monto = qs_all.aggregate(total=Sum("monto_cotizado"))["total"] or 0
+
+                # conteo por estado (sin Count para no tocar imports)
+                counts = {}
+                for s in qs_all.only("estado"):
+                    k = s.estado or "—"
+                    counts[k] = counts.get(k, 0) + 1
+
+                estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
+                msg = "🧭 *Resumen de tus proyectos*\n\n"
+                msg += f"• Total: *{total}*\n"
+                msg += f"• Monto total (cotizado): *${total_monto:,.0f}*\n\n"
+                msg += "📌 *Por estado:*\n"
+                # orden pro: primero los “activos”
+                orden_preferido = [
+                    "asignado",
+                    "en_progreso",
+                    "en_revision_supervisor",
+                    "aprobado_supervisor",
+                    "rechazado_supervisor",
+                    "informe_subido",
+                    "finalizado_trabajador",
+                    "finalizado",
+                ]
+                usados = set()
+                for key in orden_preferido:
+                    if key in counts:
+                        usados.add(key)
+                        msg += f"• {estados_dict.get(key, key)}: {counts[key]}\n"
+                # otros estados que existan
+                for key, c in sorted(counts.items(), key=lambda x: x[0]):
+                    if key in usados:
+                        continue
+                    msg += f"• {estados_dict.get(key, key)}: {c}\n"
+
+                msg += "\n🧾 *Últimos asignados/actualizados:*\n"
+                for s in qs_all[:8]:
+                    du = s.du or "—"
+                    id_claro = s.id_claro or "Sin ID Claro"
+                    detalle = (s.detalle_tarea or "").strip()
+                    if len(detalle) > 60:
+                        detalle = detalle[:57] + "…"
+                    est = estados_dict.get(s.estado, s.estado)
+                    msg += f"• DU {du} / {id_claro} – {est}: {detalle}\n"
+
+                msg += (
+                    "\nSi quieres algo más específico, dime por ejemplo:\n"
+                    "• `proyectos asignados` / `proyectos en progreso` / `proyectos finalizados`\n"
+                    "• `monto total de mis proyectos`\n"
+                )
+                return msg
+
+        # Atajo: si menciona proyectos/servicios sin intent (evita fallback)
+        if {"proyectos", "proyecto", "servicios", "servicio"} & tokens:
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            # por ahora usamos tu handler existente (pendientes/resumen)
+            return _handler_mis_proyectos_pendientes(usuario)
+
+        # =========================
+        # 5) PRODUCCIÓN (INTEGRADO)
+        # =========================
+
+        # 5.1) Seguimiento de conversación sobre producción:
+        #      si veníamos hablando de producción y el usuario dice solo "agosto", "mes anterior", etc.
+        if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mi_produccion_hasta_hoy"]:
+            if (
+                {"mes", "anterior", "pasado", "este", "actual", "produccion", "producción", "hoy", "fecha"} & tokens
+                or any(t in _MESES for t in tokens)
+            ):
+                inbound_log.status = "ok"
+                inbound_log.marcar_para_entrenamiento = False
+                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+                return _handler_mi_produccion(usuario, texto_usuario)
+
+        # 5.2) Atajo por keywords:
+        #      si NO hubo intent pero el texto menciona producción, lo mandamos al handler igual.
+        if {"produccion", "producción"} & tokens:
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            return _handler_mi_produccion(usuario, texto_usuario)
+
         # Si nada de lo anterior aplica -> fallback estándar
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
@@ -994,9 +1980,11 @@ def run_intent(
         return _handler_info_sitio_id_claro(texto_usuario)
 
     if slug == "mis_proyectos_pendientes":
+        # ✅ IMPORTANTE: mantengo firma original (solo usuario) para no romper nada
         return _handler_mis_proyectos_pendientes(usuario)
 
     if slug == "mis_proyectos_rechazados":
+        # ✅ IMPORTANTE: mantengo firma original (solo usuario) para no romper nada
         return _handler_mis_proyectos_rechazados(usuario)
 
     # Tanto para "ayuda_rendicion_gastos" como para "mis_rendiciones_pendientes"
@@ -1016,8 +2004,6 @@ def run_intent(
         "pero esta funcionalidad aún se está terminando de implementar en el bot.\n\n"
         "Mientras tanto, puedes revisar esa información directamente en la app web."
     )
-
-
 # ===================== Entry point: manejar update de Telegram =====================
 
 def handle_telegram_update(update: dict) -> None:
