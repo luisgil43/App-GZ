@@ -1,0 +1,185 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}Entrenamiento Bot GZ{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-4 py-4 sm:p-6">
+
+  <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+    🤖 Entrenamiento del Bot GZ
+  </h1>
+
+  <p class="text-sm text-gray-600 mb-4">
+    Aquí puedes revisar los mensajes que el bot no entendió bien o que marcaste para entrenamiento,
+    corregir el intent y marcar si deben usarse para entrenar el modelo.
+  </p>
+
+  <!-- Filtros -->
+  <form method="get" class="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3 items-end text-sm">
+
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Estado interno</label>
+      <select name="status" class="w-full border rounded-lg px-2 py-1.5">
+        <option value="">Todos</option>
+        <option value="ok" {% if status_actual == "ok" %}selected{% endif %}>OK</option>
+        <option value="fallback" {% if status_actual == "fallback" %}selected{% endif %}>Fallback (no entendido)</option>
+        <option value="error" {% if status_actual == "error" %}selected{% endif %}>Error interno</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="block text-xs font-semibold text-gray-600 mb-1">Intent</label>
+      <select name="intent" class="w-full border rounded-lg px-2 py-1.5">
+        <option value="">Todos</option>
+        {% for intent in intents %}
+          <option value="{{ intent.slug }}"
+                  {% if intent_actual == intent.slug %}selected{% endif %}>
+            {{ intent.slug }} ({{ intent.get_scope_display }})
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex items-center gap-2 mt-2 md:mt-0">
+      <input type="checkbox"
+             id="solo_entrenamiento"
+             name="solo_entrenamiento"
+             value="1"
+             class="rounded border-gray-300"
+             {% if solo_entrenamiento %}checked{% endif %}>
+      <label for="solo_entrenamiento" class="text-xs font-semibold text-gray-600">
+        Solo mensajes para entrenamiento / con error
+      </label>
+    </div>
+
+    <div class="flex justify-start md:justify-end">
+      <button type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+        🔍 Filtrar
+      </button>
+    </div>
+
+  </form>
+
+  <!-- Tabla -->
+  <div class="overflow-x-auto text-sm">
+    <table class="min-w-full border border-gray-200 rounded-lg overflow-hidden">
+      <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+        <tr>
+          <th class="px-2 py-2 border-b text-left">Fecha</th>
+          <th class="px-2 py-2 border-b text-left">Dir.</th>
+          <th class="px-2 py-2 border-b text-left">Usuario</th>
+          <th class="px-2 py-2 border-b text-left">Texto</th>
+          <th class="px-2 py-2 border-b text-left">Intent detectado</th>
+          <th class="px-2 py-2 border-b text-left">Intent corregido</th>
+          <th class="px-2 py-2 border-b text-left">Conf.</th>
+          <th class="px-2 py-2 border-b text-left">Status</th>
+          <th class="px-2 py-2 border-b text-center">Entrenar</th>
+          <th class="px-2 py-2 border-b text-center">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if logs %}
+          {% for m in logs %}
+            <tr class="border-b last:border-b-0 hover:bg-gray-50">
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {{ m.creado_en|date:"Y-m-d H:i" }}
+              </td>
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {% if m.direccion == "in" %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Usuario</span>
+                {% else %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">Bot</span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {% if m.usuario %}
+                  {{ m.usuario.get_full_name|default:m.usuario.username }}
+                {% else %}
+                  <span class="text-gray-400">Sin usuario</span>
+                {% endif %}
+                <div class="text-[11px] text-gray-400">Chat: {{ m.chat_id }}</div>
+              </td>
+              <td class="px-2 py-2 align-top max-w-xs">
+                {% with txt=m.texto|default:"" %}
+                  {% if txt|length > 80 %}
+                    {{ txt|slice:":80" }}…
+                  {% else %}
+                    {{ txt }}
+                  {% endif %}
+                {% endwith %}
+              </td>
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {% if m.intent_detectado %}
+                  <span class="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
+                    {{ m.intent_detectado.slug }}
+                  </span>
+                {% else %}
+                  <span class="text-gray-400 text-xs">—</span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {% if m.intent_corregido %}
+                  <span class="font-mono text-xs bg-amber-100 px-2 py-0.5 rounded">
+                    {{ m.intent_corregido.slug }}
+                  </span>
+                {% else %}
+                  <span class="text-gray-400 text-xs">—</span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top text-right whitespace-nowrap">
+                {% if m.confianza is not None %}
+                  {{ m.confianza|floatformat:2 }}
+                {% else %}
+                  <span class="text-gray-400 text-xs">—</span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top whitespace-nowrap">
+                {% if m.status == "ok" %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                    OK
+                  </span>
+                {% elif m.status == "fallback" %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    Fallback
+                  </span>
+                {% else %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                    Error
+                  </span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top text-center">
+                {% if m.marcar_para_entrenamiento %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                    Sí
+                  </span>
+                {% else %}
+                  <span class="text-xs text-gray-400">No</span>
+                {% endif %}
+              </td>
+              <td class="px-2 py-2 align-top text-center">
+                <a href="{% url 'bot_gz:training_edit_message' m.id %}"
+                   class="inline-flex items-center justify-center px-3 py-1.5 rounded-full text-xs bg-blue-600 text-white hover:bg-blue-700">
+                  ✏️ Corregir
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="10" class="px-3 py-4 text-center text-gray-500 text-sm">
+              No hay mensajes pendientes de entrenamiento con los filtros actuales.
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="mt-3 text-xs text-gray-400">
+    Mostrando como máximo 200 mensajes más recientes.
+  </p>
+
+</div>
+{% endblock %}

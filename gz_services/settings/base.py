@@ -100,6 +100,7 @@ INSTALLED_APPS = [
     "facturacion",
     "usuarios",
     "notificaciones",
+    "bot_gz",
     "dashboard_admin.apps.DashboardAdminConfig",
     "dal",
     "dal_select2",
@@ -318,6 +319,9 @@ AXES_IPWARE_META_PRECEDENCE_ORDER = (
 # Útil para auditoría
 AXES_IPWARE_PROXY_COUNT = 1
 
+# Opcional: configuración de lugar donde se bota la basura
+BOT_GZ_URL_BASURA = "https://www.google.com/maps/...."  # si quieres
+BOT_GZ_TEXTO_BASURA = "Punto autorizado para disposición de residuos de GZ Services."
 
 # ===== CSRF / SSL / Cookies seguras =====
 

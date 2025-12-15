@@ -126,6 +126,8 @@ urlpatterns = [
         )
     ),
 
+    path("bot-gz/", include("bot_gz.urls", namespace="bot_gz")),
+
 
 ]
 
