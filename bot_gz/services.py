@@ -2730,6 +2730,23 @@ def _get_recent_tipos_for_user(usuario: CustomUser, limit: int = 6) -> list[tupl
                 break
     return out
 
+def _merge_unique(primary: list[tuple[int, str]], fallback: list[tuple[int, str]], limit: int = 10) -> list[tuple[int, str]]:
+    seen = set()
+    out: list[tuple[int, str]] = []
+    for _id, name in (primary or []):
+        if _id and _id not in seen:
+            seen.add(_id)
+            out.append((_id, name))
+            if len(out) >= limit:
+                return out
+    for _id, name in (fallback or []):
+        if _id and _id not in seen:
+            seen.add(_id)
+            out.append((_id, name))
+            if len(out) >= limit:
+                return out
+    return out
+
 
 def _search_tipos(query: str, limit: int = 10) -> list[tuple[int, str]]:
     q = (query or "").strip()
@@ -2950,7 +2967,7 @@ def _rendicion_wizard_handle_message(
         opts = choices.get("tipos") or []
         if not opts:
             rec = _get_recent_tipos_for_user(usuario, limit=6)
-            opts = rec or _get_default_tipos(limit=10)
+            opts = _merge_unique(rec, _get_default_tipos(limit=10), limit=10)
             state["choices"]["tipos"] = opts
             _rend_wiz_set(chat_id, state)
         msg = ""
@@ -3095,7 +3112,7 @@ def _rendicion_wizard_handle_message(
                     return back
 
                 rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
-                state["choices"]["tipos"] = rec_tipos or _get_default_tipos(limit=10)
+                state["choices"]["tipos"] = _merge_unique(rec_tipos, _get_default_tipos(limit=10), limit=10)
                 _rend_wiz_set(chat_id, state)
 
                 return (
@@ -3131,7 +3148,7 @@ def _rendicion_wizard_handle_message(
                 return back
 
             rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
-            state["choices"]["tipos"] = rec_tipos or _get_default_tipos(limit=10)
+            state["choices"]["tipos"] = _merge_unique(rec_tipos, _get_default_tipos(limit=10), limit=10)
             _rend_wiz_set(chat_id, state)
 
             return (
@@ -3472,7 +3489,8 @@ def _rendicion_wizard_handle_message(
 
             if op == 3:
                 state["step"] = "tipo"
-                state["choices"]["tipos"] = _get_recent_tipos_for_user(usuario, 6) or _get_default_tipos(10)
+                rec_tipos = _get_recent_tipos_for_user(usuario, 6)
+                state["choices"]["tipos"] = _merge_unique(rec_tipos, _get_default_tipos(10), limit=10)
                 _rend_wiz_set(chat_id, state)
                 return (
                     "✏️ <b>Cambiar tipo de gasto</b>\n\n"
