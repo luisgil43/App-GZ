@@ -684,11 +684,16 @@ def send_telegram_message(
     reply_markup: Optional[dict] = None,
 ) -> BotMessageLog:
     """
-    Envía un mensaje a Telegram y registra el BotMessageLog (salida).
+    Versión PRO:
+    - Usa parse_mode=HTML (más estable que Markdown en Telegram)
+    - Convierte *bold* -> <b>bold</b>, `code` -> <code>code</code>
+    - Split automático por límite de 4096 chars
+    - Fallback a texto plano si algo falla
     """
+    import html as _html  # stdlib
+
     token = _get_bot_token()
     chat_id_str = str(chat_id)
-
     meta = meta or {}
 
     log = BotMessageLog.objects.create(
@@ -711,52 +716,183 @@ def send_telegram_message(
         return log
 
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {
-        "chat_id": chat_id_str,
-        "text": text,
-        "parse_mode": "Markdown",  # ✅ para que salgan los *bold* y `code`
-        "disable_web_page_preview": False,
-    }
-    if reply_markup:
-        payload["reply_markup"] = reply_markup
 
-    try:
-        resp = requests.post(api_url, json=payload, timeout=10)
+    # ---------------------------
+    # Helpers internos
+    # ---------------------------
+    def _split_text(raw: str, limit: int = 3800) -> list[str]:
+        """
+        Divide texto para no pasar el límite de Telegram.
+        Trata de cortar por bloques / saltos de línea primero.
+        """
+        raw = (raw or "").replace("\r\n", "\n").strip()
+        if not raw:
+            return [""]
+
+        if len(raw) <= limit:
+            return [raw]
+
+        parts: list[str] = []
+        buf: list[str] = []
+
+        # intentamos por párrafos
+        for block in raw.split("\n\n"):
+            candidate = ("\n\n".join(buf + [block])).strip()
+            if len(candidate) <= limit:
+                buf.append(block)
+                continue
+
+            if buf:
+                parts.append("\n\n".join(buf).strip())
+                buf = []
+
+            # si un bloque es gigante, lo partimos por líneas
+            if len(block) > limit:
+                line_buf = ""
+                for line in block.split("\n"):
+                    cand2 = (line_buf + ("\n" if line_buf else "") + line).strip()
+                    if len(cand2) <= limit:
+                        line_buf = cand2
+                    else:
+                        if line_buf:
+                            parts.append(line_buf)
+                        # si una línea sola supera el límite, la cortamos duro
+                        if len(line) > limit:
+                            start = 0
+                            while start < len(line):
+                                parts.append(line[start:start + limit])
+                                start += limit
+                            line_buf = ""
+                        else:
+                            line_buf = line
+                if line_buf:
+                    parts.append(line_buf)
+            else:
+                buf = [block]
+
+        if buf:
+            parts.append("\n\n".join(buf).strip())
+
+        return [p for p in parts if p is not None and p != ""]
+
+    def _bold_to_html(escaped_text: str) -> str:
+        """
+        Convierte *bold* a <b>bold</b> sobre texto ya escapado.
+        Heurística simple (no cruza asteriscos anidados).
+        """
+        return re.sub(r"\*(.+?)\*", r"<b>\1</b>", escaped_text)
+
+    def _markdownish_to_html(raw: str) -> str:
+        """
+        Convierte el formato actual que tú generas (Markdown básico) a HTML seguro:
+        - `code` -> <code>code</code>
+        - *bold* -> <b>bold</b>
+        Todo lo demás se escapa.
+        """
+        raw = (raw or "").replace("\r\n", "\n")
+
+        # Si hay backticks impares, no intentamos code spans (evita tags rotas)
+        if raw.count("`") % 2 == 1:
+            return _bold_to_html(_html.escape(raw))
+
+        parts = raw.split("`")  # pares => ok
+        out: list[str] = []
+        for i, seg in enumerate(parts):
+            if i % 2 == 1:
+                # code
+                out.append(f"<code>{_html.escape(seg)}</code>")
+            else:
+                out.append(_bold_to_html(_html.escape(seg)))
+        return "".join(out)
+
+    # ---------------------------
+    # Envío (con split)
+    # ---------------------------
+    chunks = _split_text(text, limit=3800)
+
+    results = []
+    any_error = False
+
+    for idx, chunk in enumerate(chunks):
+        payload = {
+            "chat_id": chat_id_str,
+            "text": _markdownish_to_html(chunk),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
+        }
+
+        # reply_markup solo en el primer chunk (para no repetir teclados)
+        if reply_markup and idx == 0:
+            payload["reply_markup"] = reply_markup
+
         try:
-            data = resp.json()
-        except Exception:
-            data = None
+            resp = requests.post(api_url, json=payload, timeout=10)
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
 
-        if resp.status_code == 200 and isinstance(data, dict) and data.get("ok"):
-            logger.info("Mensaje bot OUT ok chat_id=%s", chat_id_str)
-        else:
+            ok = (resp.status_code == 200 and isinstance(data, dict) and data.get("ok"))
+            if ok:
+                results.append({"chunk": idx, "ok": True})
+                continue
+
             desc = ""
             if isinstance(data, dict):
                 desc = data.get("description") or ""
             if not desc:
                 desc = resp.text[:500]
 
-            log.status = "error"
-            meta_error = dict(meta)
-            meta_error["telegram_error"] = {
-                "status_code": resp.status_code,
-                "description": desc,
-            }
-            log.meta = meta_error
-            log.save(update_fields=["status", "meta"])
-            logger.error("Error enviando mensaje bot OUT a Telegram: %s", desc)
+            # Fallback: reintenta como texto plano sin parse_mode
+            payload_plain = dict(payload)
+            payload_plain.pop("parse_mode", None)
+            payload_plain["text"] = chunk  # texto original
 
-    except Exception as e:
+            resp2 = requests.post(api_url, json=payload_plain, timeout=10)
+            try:
+                data2 = resp2.json()
+            except Exception:
+                data2 = None
+
+            ok2 = (resp2.status_code == 200 and isinstance(data2, dict) and data2.get("ok"))
+            if ok2:
+                logger.warning(
+                    "Telegram HTML falló, enviado como texto plano (chat_id=%s, chunk=%s): %s",
+                    chat_id_str, idx, desc
+                )
+                results.append({"chunk": idx, "ok": True, "fallback_plain": True, "first_error": desc})
+                continue
+
+            desc2 = ""
+            if isinstance(data2, dict):
+                desc2 = data2.get("description") or ""
+            if not desc2:
+                desc2 = resp2.text[:500]
+
+            any_error = True
+            results.append(
+                {"chunk": idx, "ok": False, "first_error": desc, "fallback_error": desc2}
+            )
+            logger.error(
+                "Error enviando mensaje bot OUT a Telegram (chunk=%s): %s | fallback: %s",
+                idx, desc, desc2
+            )
+
+        except Exception as e:
+            any_error = True
+            results.append({"chunk": idx, "ok": False, "exception": str(e)})
+            logger.exception("Excepción enviando mensaje bot OUT a Telegram (chunk=%s)", idx)
+
+    # Guardamos detalles en meta (útil para debug)
+    log.meta = {**meta, "telegram_send_results": results}
+
+    if any_error:
         log.status = "error"
-        meta_error = dict(meta)
-        meta_error["exception"] = str(e)
-        log.meta = meta_error
         log.save(update_fields=["status", "meta"])
-        logger.exception("Excepción enviando mensaje bot OUT a Telegram")
+    else:
+        log.save(update_fields=["meta"])
 
     return log
-
-
 # ===================== Handlers de intents (respuestas) =====================
 
 def _respuesta_sin_usuario(chat_id: str) -> str:
