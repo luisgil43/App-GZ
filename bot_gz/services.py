@@ -2678,8 +2678,8 @@ def _get_default_projects(limit: int = 10) -> list[tuple[int, str]]:
     return [(p.id, p.nombre) for p in qs]
 
 
-def _get_default_tipos(limit: int = 10) -> list[tuple[int, str]]:
-    qs = TipoGasto.objects.order_by("nombre")[:limit]
+def _get_default_tipos(limit: int = 50) -> list[tuple[int, str]]:
+    qs = TipoGasto._base_manager.order_by("nombre")[:limit]
     return [(t.id, t.nombre) for t in qs]
 
 
@@ -2964,12 +2964,13 @@ def _rendicion_wizard_handle_message(
         return msg
 
     def _tipos_sugeridos_msg(extra_top: str = "") -> str:
-        opts = choices.get("tipos") or []
-        if not opts:
-            rec = _get_recent_tipos_for_user(usuario, limit=6)
-            opts = _merge_unique(rec, _get_default_tipos(limit=10), limit=10)
-            state["choices"]["tipos"] = opts
-            _rend_wiz_set(chat_id, state)
+        # ✅ SIEMPRE regenerar lista desde BD (recientes + todos)
+        rec = _get_recent_tipos_for_user(usuario, limit=6)
+        opts = _merge_unique(rec, _get_default_tipos(limit=50), limit=50)
+
+        state["choices"]["tipos"] = opts
+        _rend_wiz_set(chat_id, state)
+
         msg = ""
         if extra_top:
             msg += extra_top.strip() + "\n\n"
@@ -3112,7 +3113,7 @@ def _rendicion_wizard_handle_message(
                     return back
 
                 rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
-                state["choices"]["tipos"] = _merge_unique(rec_tipos, _get_default_tipos(limit=10), limit=10)
+                state["choices"]["tipos"] = _merge_unique(rec_tipos, _get_default_tipos(limit=50), limit=50)
                 _rend_wiz_set(chat_id, state)
 
                 return (
