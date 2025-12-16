@@ -2738,6 +2738,27 @@ def _search_tipos(query: str, limit: int = 10) -> list[tuple[int, str]]:
     qs = TipoGasto.objects.filter(nombre__icontains=q).order_by("nombre")[:limit]
     return [(t.id, t.nombre) for t in qs]
 
+TIPO_DOC_MAP = {
+    "1": "factura",
+    "2": "boleta",
+    "3": "otros",
+    "factura": "factura",
+    "boleta": "boleta",
+    "otros": "otros",
+}
+
+def _norm_doc_choice(txt: str) -> str | None:
+    t = (txt or "").strip().lower()
+    return TIPO_DOC_MAP.get(t)
+
+def _clean_num_doc(txt: str) -> str:
+    # deja solo dígitos (si quieres permitir guiones, ajusta acá)
+    t = re.sub(r"\D+", "", (txt or "").strip())
+    return t
+
+def _doc_requires_sii(tipo_doc: str) -> bool:
+    return tipo_doc in ("factura", "boleta")
+
 
 def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
     """
@@ -2757,6 +2778,10 @@ def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
             "cargos": None,
             "comprobante_file_id": None,
             "comprobante_filename": None,
+            "tipo_doc": None,
+            "numero_doc": None,
+            "rut_factura": None,
+            "step": "tipo_doc",
         },
         "choices": {
             "proyectos": recents or defaults or [],
@@ -2832,6 +2857,48 @@ def _tg_download_file(token: str, file_id: str) -> tuple[str, bytes]:
     filename = file_path.split("/")[-1] or "comprobante"
     return filename, r2.content
 
+import re
+
+import requests
+
+
+def validar_rut_chileno(rut: str) -> bool:
+    """Valida DV del RUT chileno (acepta puntos/guión y K)."""
+    if not rut:
+        return False
+    rut = rut.replace(".", "").replace("-", "").strip().upper()
+    if len(rut) < 2:
+        return False
+    cuerpo, dv = rut[:-1], rut[-1]
+    if not cuerpo.isdigit():
+        return False
+
+    suma = 0
+    multiplo = 2
+    for c in reversed(cuerpo):
+        suma += int(c) * multiplo
+        multiplo = 2 if multiplo == 7 else multiplo + 1
+
+    resto = suma % 11
+    dv_esperado = "0" if resto == 0 else "K" if resto == 1 else str(11 - resto)
+    return dv == dv_esperado
+
+
+def verificar_rut_sii(rut: str) -> bool:
+    """
+    Verifica RUT contra el endpoint clásico del SII.
+    Si el SII cambia/bloquea, esto podría fallar. Maneja excepción afuera.
+    """
+    url = "https://zeus.sii.cl/cgi_rut/CONSULTA.cgi"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        resp = requests.post(url, data={"RUT": rut}, headers=headers, timeout=7)
+        txt = resp.text or ""
+        # Heurística simple (como la que ya usabas):
+        return "RUT no válido" not in txt and "RUT INVALIDO" not in txt.upper()
+    except Exception:
+        # Si hay problema de red, no bloqueamos
+        return True
 
 def _rendicion_wizard_handle_message(
     *,
@@ -2842,9 +2909,14 @@ def _rendicion_wizard_handle_message(
     """
     Wizard con UX PRO:
     - En Proyecto/Tipo: muestra lista y permite elegir por número.
+    - ✅ Ahora incluye: Tipo de documento + Nº documento + Validación SII (RUT)
     - Al final: CONFIRMACIÓN antes de guardar.
     """
     import html as _html
+    import re as _re
+    from decimal import Decimal
+
+    from django.core.files.base import ContentFile
 
     state = _rend_wiz_get(chat_id)
     if not state:
@@ -2860,7 +2932,9 @@ def _rendicion_wizard_handle_message(
     step = state.get("step")
     data = state.get("data") or {}
     choices = state.get("choices") or {}
+    state.setdefault("choices", choices)
 
+    # =================== Helpers UX ===================
     def _proyectos_sugeridos_msg(extra_top: str = "") -> str:
         opts = choices.get("proyectos") or []
         if not opts:
@@ -2890,16 +2964,50 @@ def _rendicion_wizard_handle_message(
         msg += "\n\nEscribe <b>cancelar</b> para salir."
         return msg
 
+    def _tipo_doc_prompt(extra_top: str = "") -> str:
+        top = (extra_top.strip() + "\n\n") if extra_top else ""
+        return (
+            top
+            + "📄 Paso 3/9: <b>Tipo de documento</b>\n"
+              "Responde con el <b>número</b>:\n\n"
+              "1) Factura\n"
+              "2) Boleta\n"
+              "3) Otros\n\n"
+              "Escribe <b>cancelar</b> para salir."
+        )
+
+    def _norm_tipo_doc(s: str) -> str | None:
+        t = (s or "").strip().lower()
+        if t in {"1", "factura"}:
+            return "factura"
+        if t in {"2", "boleta"}:
+            return "boleta"
+        if t in {"3", "otros", "otro"}:
+            return "otros"
+        return None
+
+    def _clean_num_doc(s: str) -> str:
+        # Nº documento solo dígitos (para SII)
+        return _re.sub(r"\D+", "", (s or "").strip())
+
     def _confirm_msg(proyecto_nombre: str, tipo_nombre: str) -> str:
+        tipo_doc = (data.get("tipo_doc") or "").strip() or "—"
+        rut = (data.get("rut_factura") or "").strip() or "—"
+        n_doc = (data.get("numero_doc") or "").strip() or "—"
+
         obs = _html.escape((data.get("observaciones") or "").strip() or "—")
         nt = _html.escape((data.get("numero_transferencia") or "").strip() or "—")
+
         monto = data.get("cargos")
         monto_txt = _html.escape(_fmt_clp(monto)) if monto is not None else "—"
 
         msg = (
             "🧾 <b>Revisa tu rendición</b>\n\n"
             f"• <b>Proyecto:</b> {_html.escape(proyecto_nombre)}\n"
-            f"• <b>Tipo:</b> {_html.escape(tipo_nombre)}\n"
+            f"• <b>Tipo gasto:</b> {_html.escape(tipo_nombre)}\n"
+            f"• <b>Tipo doc:</b> {_html.escape(tipo_doc)}\n"
+            f"• <b>RUT emisor:</b> {_html.escape(rut)}\n"
+            f"• <b>N° doc:</b> {_html.escape(n_doc)}\n"
             f"• <b>Observaciones:</b> {obs}\n"
             f"• <b>N° transferencia:</b> {nt}\n"
             f"• <b>Monto:</b> <b>{monto_txt}</b>\n"
@@ -2907,11 +3015,14 @@ def _rendicion_wizard_handle_message(
             "<b>¿Confirmas para enviar?</b>\n"
             "1) ✅ Confirmar y guardar\n"
             "2) ✏️ Cambiar proyecto\n"
-            "3) ✏️ Cambiar tipo\n"
-            "4) ✏️ Cambiar observaciones\n"
-            "5) ✏️ Cambiar N° transferencia\n"
-            "6) ✏️ Cambiar monto\n"
-            "7) ❌ Cancelar\n\n"
+            "3) ✏️ Cambiar tipo de gasto\n"
+            "4) ✏️ Cambiar tipo de documento\n"
+            "5) ✏️ Cambiar RUT emisor\n"
+            "6) ✏️ Cambiar Nº documento\n"
+            "7) ✏️ Cambiar observaciones\n"
+            "8) ✏️ Cambiar N° transferencia\n"
+            "9) ✏️ Cambiar monto\n"
+            "10) ❌ Cancelar\n\n"
             "Responde con el <b>número</b>."
         )
         return msg
@@ -2934,7 +3045,7 @@ def _rendicion_wizard_handle_message(
 
                 return (
                     f"✅ <b>Proyecto seleccionado:</b> {_html.escape(pname)}\n\n"
-                    "Paso 2/7: <b>Tipo de gasto</b>\n"
+                    "Paso 2/9: <b>Tipo de gasto</b>\n"
                     "Responde con el <b>número</b> (recomendado) o escribe parte del nombre para buscar.\n\n"
                     + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
                     + "\n\nEscribe <b>cancelar</b> para salir."
@@ -2965,7 +3076,7 @@ def _rendicion_wizard_handle_message(
 
             return (
                 f"✅ <b>Proyecto:</b> {_html.escape(pname)}\n\n"
-                "Paso 2/7: <b>Tipo de gasto</b>\n"
+                "Paso 2/9: <b>Tipo de gasto</b>\n"
                 "Responde con el <b>número</b> (recomendado) o escribe parte del nombre para buscar.\n\n"
                 + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
                 + "\n\nEscribe <b>cancelar</b> para salir."
@@ -2987,14 +3098,15 @@ def _rendicion_wizard_handle_message(
             if 1 <= idx <= len(opts):
                 tid, tname = opts[idx - 1]
                 data["tipo_id"] = tid
-                state["step"] = "observaciones"
+
+                # ✅ ahora viene tipo_doc antes de observaciones
+                state["step"] = "tipo_doc"
                 state["data"] = data
                 _rend_wiz_set(chat_id, state)
+
                 return (
                     f"✅ <b>Tipo seleccionado:</b> {_html.escape(tname)}\n\n"
-                    "Paso 3/7: <b>Observaciones</b>\n"
-                    "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
-                    "Escribe <b>cancelar</b> para salir."
+                    + _tipo_doc_prompt()
                 )
             return _tipos_sugeridos_msg("Ese número no está en la lista. Prueba otra opción.")
 
@@ -3010,14 +3122,12 @@ def _rendicion_wizard_handle_message(
         if len(found) == 1:
             tid, tname = found[0]
             data["tipo_id"] = tid
-            state["step"] = "observaciones"
+            state["step"] = "tipo_doc"
             state["data"] = data
             _rend_wiz_set(chat_id, state)
             return (
                 f"✅ <b>Tipo:</b> {_html.escape(tname)}\n\n"
-                "Paso 3/7: <b>Observaciones</b>\n"
-                "Escribe una breve observación.\n\n"
-                "Escribe <b>cancelar</b> para salir."
+                + _tipo_doc_prompt()
             )
 
         state["choices"]["tipos"] = found
@@ -3026,6 +3136,83 @@ def _rendicion_wizard_handle_message(
             "Encontré estos tipos. Responde con el <b>número</b>:\n\n"
             + _wiz_fmt_choices(found, "Resultados:")
             + "\n\nEscribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: TIPO DOC ✅ ===================
+    if step == "tipo_doc":
+        td = _norm_tipo_doc(norm)
+        if not td:
+            return _tipo_doc_prompt("No entendí el tipo de documento. Elige 1, 2 o 3.")
+
+        data["tipo_doc"] = td
+
+        # Si es "otros", no exigimos rut/numero doc
+        if td == "otros":
+            data["rut_factura"] = ""
+            data["numero_doc"] = ""
+            state["step"] = "observaciones"
+            state["data"] = data
+            _rend_wiz_set(chat_id, state)
+            return (
+                "✅ <b>Tipo de documento:</b> Otros\n\n"
+                "Paso 4/9: <b>Observaciones</b>\n"
+                "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
+                "Escribe <b>cancelar</b> para salir."
+            )
+
+        # Factura / Boleta => pedir RUT (validar SII)
+        state["step"] = "rut_factura"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            f"✅ <b>Tipo de documento:</b> {_html.escape(td.title())}\n\n"
+            "Paso 4/9: <b>RUT emisor</b>\n"
+            "Escribe el RUT del emisor (Ej: <code>77.084.679-K</code> o <code>77084679-K</code>).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: RUT FACTURA/BOLETA ✅ (SII) ===================
+    if step == "rut_factura":
+        rut = (text_in or "").strip()
+        if not validar_rut_chileno(rut):
+            return "❌ RUT inválido. Ejemplo: <code>12.345.678-5</code>"
+
+        ok_sii = True
+        try:
+            ok_sii = verificar_rut_sii(rut)
+        except Exception:
+            # si el SII falla por red, no bloqueamos (tu función ya hace algo similar)
+            ok_sii = True
+
+        if not ok_sii:
+            return "❌ No pude validar ese RUT en SII. Revisa el RUT e intenta nuevamente."
+
+        data["rut_factura"] = rut
+        state["step"] = "numero_doc"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            "✅ <b>RUT validado.</b>\n\n"
+            "Paso 5/9: <b>N° de documento</b>\n"
+            "Escribe el número de la boleta/factura (solo números).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: NUMERO DOC ✅ ===================
+    if step == "numero_doc":
+        n = _clean_num_doc(text_in)
+        if not n:
+            return "❌ Número de documento inválido. Debe contener solo números (sin puntos)."
+
+        data["numero_doc"] = n
+        state["step"] = "observaciones"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            f"✅ <b>N° documento guardado:</b> <code>{_html.escape(n)}</code>\n\n"
+            "Paso 6/9: <b>Observaciones</b>\n"
+            "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
+            "Escribe <b>cancelar</b> para salir."
         )
 
     # =================== STEP: OBSERVACIONES ===================
@@ -3039,7 +3226,7 @@ def _rendicion_wizard_handle_message(
         _rend_wiz_set(chat_id, state)
         return (
             "✅ <b>Observaciones guardadas.</b>\n\n"
-            "Paso 4/7: <b>N° transferencia</b>\n"
+            "Paso 7/9: <b>N° transferencia</b>\n"
             "Escribe el número de transferencia (o el identificador que usas).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3055,7 +3242,7 @@ def _rendicion_wizard_handle_message(
         _rend_wiz_set(chat_id, state)
         return (
             "✅ <b>N° transferencia guardado.</b>\n\n"
-            "Paso 5/7: <b>Monto</b>\n"
+            "Paso 8/9: <b>Monto</b>\n"
             "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3071,7 +3258,7 @@ def _rendicion_wizard_handle_message(
         _rend_wiz_set(chat_id, state)
         return (
             f"✅ <b>Monto guardado:</b> <b>{_html.escape(_fmt_clp(v))}</b>\n\n"
-            "Paso 6/7: <b>Comprobante</b>\n"
+            "Paso 9/9: <b>Comprobante</b>\n"
             "Ahora envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3107,6 +3294,7 @@ def _rendicion_wizard_handle_message(
 
     # =================== STEP: CONFIRM ===================
     if step == "confirm":
+        # Permitir reemplazar comprobante si mandan otro archivo en confirm
         file_info = _tg_extract_file_from_message(message)
         if file_info and file_info.get("file_id"):
             fname = (file_info.get("filename") or "comprobante").strip()
@@ -3119,6 +3307,7 @@ def _rendicion_wizard_handle_message(
 
         if norm.isdigit():
             op = int(norm)
+
             if op == 1:
                 token = _get_bot_token()
                 if not token:
@@ -3137,9 +3326,19 @@ def _rendicion_wizard_handle_message(
                     _rend_wiz_set(chat_id, state)
                     return (
                         "No tengo el comprobante registrado. Envíamelo otra vez.\n\n"
-                        "Paso 6/7: <b>Comprobante</b>\n"
+                        "Paso 9/9: <b>Comprobante</b>\n"
                         "Envíame el comprobante como PDF o imagen."
                     )
+
+                # Validación mínima de doc antes de guardar (por seguridad)
+                td = (data.get("tipo_doc") or "").strip()
+                if td in {"factura", "boleta"}:
+                    rut = (data.get("rut_factura") or "").strip()
+                    n_doc = (data.get("numero_doc") or "").strip()
+                    if not rut or not n_doc:
+                        state["step"] = "tipo_doc"
+                        _rend_wiz_set(chat_id, state)
+                        return "⚠️ Falta Tipo doc / RUT / Nº doc. Volvamos a <b>Tipo de documento</b>."
 
                 try:
                     fname_dl, blob = _tg_download_file(token, file_id)
@@ -3153,6 +3352,11 @@ def _rendicion_wizard_handle_message(
                     usuario=usuario,
                     proyecto=proyecto,
                     tipo=tipo,
+                    # ✅ NUEVOS CAMPOS IMPORTANTES
+                    tipo_doc=(data.get("tipo_doc") or "").strip() or None,
+                    rut_factura=(data.get("rut_factura") or "").strip() or None,
+                    numero_doc=(data.get("numero_doc") or "").strip() or None,
+                    # existentes
                     observaciones=data.get("observaciones") or "",
                     numero_transferencia=data.get("numero_transferencia") or "",
                     cargos=Decimal(str(data.get("cargos") or 0)),
@@ -3167,7 +3371,10 @@ def _rendicion_wizard_handle_message(
                 return (
                     "✅ <b>Rendición creada y enviada</b>\n\n"
                     f"• <b>Proyecto:</b> {_html.escape(proyecto.nombre)}\n"
-                    f"• <b>Tipo:</b> {_html.escape(tipo.nombre)}\n"
+                    f"• <b>Tipo gasto:</b> {_html.escape(tipo.nombre)}\n"
+                    f"• <b>Tipo doc:</b> {_html.escape((mov.tipo_doc or '—'))}\n"
+                    f"• <b>RUT:</b> {_html.escape((mov.rut_factura or '—'))}\n"
+                    f"• <b>N° doc:</b> {_html.escape((mov.numero_doc or '—'))}\n"
                     f"• <b>Monto:</b> <b>{_html.escape(_fmt_clp(mov.cargos))}</b>\n"
                     f"• <b>Estado:</b> <b>Pendiente supervisor</b>\n\n"
                     "Puedes ver el detalle en la web en <b>Mis Rendiciones</b>."
@@ -3178,7 +3385,7 @@ def _rendicion_wizard_handle_message(
                 _rend_wiz_set(chat_id, state)
                 return (
                     "✏️ <b>Cambiar proyecto</b>\n\n"
-                    "Paso 1/7: <b>Proyecto</b>\n"
+                    "Paso 1/9: <b>Proyecto</b>\n"
                     "Responde con el número o escribe parte del nombre para buscar.\n\n"
                     + _wiz_fmt_choices(state["choices"].get("proyectos") or _get_default_projects(10), "Opciones:")
                     + "\n\nEscribe <b>cancelar</b> para salir."
@@ -3189,44 +3396,78 @@ def _rendicion_wizard_handle_message(
                 state["choices"]["tipos"] = _get_recent_tipos_for_user(usuario, 6) or _get_default_tipos(10)
                 _rend_wiz_set(chat_id, state)
                 return (
-                    "✏️ <b>Cambiar tipo</b>\n\n"
-                    "Paso 2/7: <b>Tipo de gasto</b>\n"
+                    "✏️ <b>Cambiar tipo de gasto</b>\n\n"
+                    "Paso 2/9: <b>Tipo de gasto</b>\n"
                     "Responde con el número o escribe parte del nombre para buscar.\n\n"
                     + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
                     + "\n\nEscribe <b>cancelar</b> para salir."
                 )
 
             if op == 4:
-                state["step"] = "observaciones"
+                state["step"] = "tipo_doc"
                 _rend_wiz_set(chat_id, state)
-                return (
-                    "✏️ <b>Cambiar observaciones</b>\n\n"
-                    "Paso 3/7: <b>Observaciones</b>\n"
-                    "Escribe una breve observación.\n\n"
-                    "Escribe <b>cancelar</b> para salir."
-                )
+                return _tipo_doc_prompt("✏️ <b>Cambiar tipo de documento</b>")
 
             if op == 5:
-                state["step"] = "num_transferencia"
+                # si estaba en "otros", primero fuerza tipo_doc
+                if (data.get("tipo_doc") or "").strip() == "otros":
+                    state["step"] = "tipo_doc"
+                    _rend_wiz_set(chat_id, state)
+                    return _tipo_doc_prompt("⚠️ Para cambiar RUT, primero elige Factura o Boleta.")
+                state["step"] = "rut_factura"
                 _rend_wiz_set(chat_id, state)
                 return (
-                    "✏️ <b>Cambiar N° transferencia</b>\n\n"
-                    "Paso 4/7: <b>N° transferencia</b>\n"
-                    "Escribe el número de transferencia.\n\n"
+                    "✏️ <b>Cambiar RUT emisor</b>\n\n"
+                    "Paso 4/9: <b>RUT emisor</b>\n"
+                    "Escribe el RUT del emisor (Ej: <code>77.084.679-K</code>).\n\n"
                     "Escribe <b>cancelar</b> para salir."
                 )
 
             if op == 6:
+                if (data.get("tipo_doc") or "").strip() == "otros":
+                    state["step"] = "tipo_doc"
+                    _rend_wiz_set(chat_id, state)
+                    return _tipo_doc_prompt("⚠️ Para cambiar Nº doc, primero elige Factura o Boleta.")
+                state["step"] = "numero_doc"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar Nº documento</b>\n\n"
+                    "Paso 5/9: <b>N° de documento</b>\n"
+                    "Escribe el número (solo números).\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 7:
+                state["step"] = "observaciones"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar observaciones</b>\n\n"
+                    "Paso 6/9: <b>Observaciones</b>\n"
+                    "Escribe una breve observación.\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 8:
+                state["step"] = "num_transferencia"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar N° transferencia</b>\n\n"
+                    "Paso 7/9: <b>N° transferencia</b>\n"
+                    "Escribe el número de transferencia.\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 9:
                 state["step"] = "monto"
                 _rend_wiz_set(chat_id, state)
                 return (
                     "✏️ <b>Cambiar monto</b>\n\n"
-                    "Paso 5/7: <b>Monto</b>\n"
+                    "Paso 8/9: <b>Monto</b>\n"
                     "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>)."
                     "\n\nEscribe <b>cancelar</b> para salir."
                 )
 
-            if op == 7:
+            if op == 10:
                 _rend_wiz_clear(chat_id)
                 return "✅ Listo, cancelé la creación de la rendición."
 
@@ -3235,6 +3476,6 @@ def _rendicion_wizard_handle_message(
             message2["text"] = "1"
             return _rendicion_wizard_handle_message(chat_id=chat_id, usuario=usuario, message=message2)
 
-        return "Responde con el <b>número</b> (1 a 7) para confirmar, editar o cancelar."
+        return "Responde con el <b>número</b> (1 a 10) para confirmar, editar o cancelar."
 
     return "No entendí ese paso. Escribe <b>cancelar</b> y vuelve a intentar."
