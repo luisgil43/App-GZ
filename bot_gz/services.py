@@ -77,7 +77,6 @@ _STOPWORDS = {
     "ayúdame",
     "porfa",
     "porfavor",
-    "por",
     "favor",
     "hola",
     "buenos",
@@ -234,7 +233,12 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
 
     # Normalizamos nombres del usuario
     nombres_usuario = set()
-    for campo in [usuario.first_name, usuario.last_name, getattr(usuario, "full_name", ""), usuario.get_full_name()]:
+    for campo in [
+        usuario.first_name,
+        usuario.last_name,
+        getattr(usuario, "full_name", ""),
+        usuario.get_full_name(),
+    ]:
         if campo:
             for trozo in _normalize(str(campo)).split():
                 if trozo:
@@ -281,8 +285,6 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     preps = {"de", "del", "para", "por"}
     skip_after_prep = {"la", "el", "los", "las", "un", "una", "mi", "mis"}
 
-    # buscar secuencias: <trigger> ... (de|del|para|por) <candidato>
-    # ejemplo: "liquidacion de edgardo", "contrato del juan perez"
     for i, tok in enumerate(tokens[:-1]):
         if tok not in preps:
             continue
@@ -293,27 +295,21 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
         if j >= len(tokens):
             continue
 
-        # Tomamos 1 o 2 tokens como candidato (nombre / nombre apellido)
         cand1 = tokens[j]
         cand2 = tokens[j + 1] if (j + 1) < len(tokens) else None
 
-        # cand1 debe ser alfabético y no ser palabra "no nombre"
         if not cand1.isalpha():
             continue
         if cand1 in NO_NOMBRES or cand1 in _STOPWORDS:
             continue
 
-        # si cand1 coincide con el usuario, no es "otra persona"
         if cand1 in nombres_usuario:
             continue
 
-        # caso 2 palabras: "juan perez"
         if cand2 and cand2.isalpha() and (cand2 not in NO_NOMBRES) and (cand2 not in _STOPWORDS):
-            # si cualquiera no coincide con usuario, lo consideramos "otra persona"
             if cand2 not in nombres_usuario:
                 return True
 
-        # con 1 palabra basta (ej: edgardo)
         return True
 
     return False
@@ -362,11 +358,9 @@ def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
     """
     norm = _normalize(texto)
 
-    # "ultimas" / "últimos" / "ultimo" / "última"
     if not re.search(r"\bultim[oa]s?\b", norm):
         return None
 
-    # 1) número explícito
     m = re.search(r"\bultim[oa]s?\s+(\d{1,2})\b", norm)
     if m:
         try:
@@ -375,7 +369,6 @@ def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
         except Exception:
             return None
 
-    # 2) número en palabras
     m2 = re.search(r"\bultim[oa]s?\s+([a-z]+)\b", norm)
     if m2:
         palabra = m2.group(1)
@@ -383,7 +376,6 @@ def _parse_ultimas_n_desde_texto(texto: str) -> Optional[int]:
             n = _NUM_PALABRAS[palabra]
             return max(1, min(n, 12))
 
-    # Si dijeron "mis últimas liquidaciones" sin número -> default 3
     if re.search(r"\bultim[oa]s?\b.*\bliquidacion", norm) or re.search(
         r"\bultim[oa]s?\b.*\bmes", norm
     ):
@@ -440,7 +432,6 @@ def _parse_mes_anio_desde_texto(texto: str) -> Optional[Tuple[int, int]]:
     if not tokens:
         return None
 
-    # año explícito
     anio = None
     for t in tokens:
         m = re.match(r"20\d{2}$", t)
@@ -450,19 +441,16 @@ def _parse_mes_anio_desde_texto(texto: str) -> Optional[Tuple[int, int]]:
     if not anio:
         anio = timezone.localdate().year
 
-    # mes por nombre
     for t in tokens:
         if t in _MESES:
             return _MESES[t], anio
 
-    # mes numérico simple
     for t in tokens:
         if t.isdigit():
             val = int(t)
             if 1 <= val <= 12:
                 return val, anio
 
-    # intentos tipo 07-2025 o 07/2025
     m2 = re.search(r"(0?[1-9]|1[0-2])[-/](20\d{2})", _normalize(texto))
     if m2:
         mes = int(m2.group(1))
@@ -500,12 +488,52 @@ def get_or_create_session(
         defaults=defaults,
     )
 
-    # Si luego encontramos usuario y la sesión no lo tenía, actualizamos
     if not created and usuario and sesion.usuario_id != usuario.id:
         sesion.usuario = usuario
         sesion.save(update_fields=["usuario"])
 
     return sesion, sesion.usuario
+
+
+def _ik_main_menu() -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "🧾 Liquidaciones", "callback_data": "liquidaciones"},
+                {"text": "📄 Contrato", "callback_data": "contrato"},
+            ],
+            [
+                {"text": "🧭 Asignación", "callback_data": "asignacion"},
+                {"text": "📌 Proyectos", "callback_data": "proyectos"},
+            ],
+            [
+                {"text": "🧾 Rendiciones", "callback_data": "rendiciones"},
+                {"text": "📊 Producción", "callback_data": "produccion"},
+            ],
+            [
+                {"text": "📡 Sitio (ID)", "callback_data": "sitio"},
+                {"text": "❓ Ayuda / Menú", "callback_data": "menu"},
+            ],
+        ]
+    }
+
+
+def _ik_produccion_menu() -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📊 Este mes", "callback_data": "mi produccion de este mes"},
+                {"text": "📅 Mes anterior", "callback_data": "mi produccion del mes anterior"},
+            ],
+            [
+                {"text": "🗓 Agosto 2025", "callback_data": "mi produccion de agosto 2025"},
+                {"text": "🗓 Septiembre 2025", "callback_data": "mi produccion de septiembre 2025"},
+            ],
+            [
+                {"text": "⬅️ Menú", "callback_data": "menu"},
+            ],
+        ]
+    }
 
 
 # ===================== Detección de intent =====================
@@ -525,7 +553,6 @@ def detect_intent_from_text(
     if not user_tokens:
         return None, 0.0
 
-    # --- 1) Matching con ejemplos de entrenamiento ---
     examples_qs = (
         BotTrainingExample.objects.filter(activo=True).select_related("intent")
     )
@@ -549,7 +576,6 @@ def detect_intent_from_text(
             best_score = score
             best_intent = ex.intent
 
-    # --- 2) Reglas rápidas por palabras clave ---
     keyword_intent: Optional[BotIntent] = None
     keyword_score: float = 0.0
 
@@ -564,19 +590,15 @@ def detect_intent_from_text(
         keyword_intent = intent
         keyword_score = score
 
-    # Liquidaciones
     if {"liquidacion", "liquidaciones"} & user_tokens:
         add_keyword_candidate("mis_liquidaciones", 0.9)
 
-    # Contrato
     if "contrato" in user_tokens or "contratos" in user_tokens:
         add_keyword_candidate("mi_contrato_vigente", 0.9)
 
-    # Producción
     if "produccion" in user_tokens:
         add_keyword_candidate("mi_produccion_hasta_hoy", 0.8)
 
-    # Proyectos pendientes / asignados (mantengo tu lógica)
     if "proyectos" in user_tokens or "servicios" in user_tokens:
         if (
             "pendientes" in user_tokens
@@ -585,17 +607,13 @@ def detect_intent_from_text(
         ):
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
 
-        # Asignación (sinónimo de proyectos/servicios asignados)
     if {"asignacion", "asignaciones", "asignado", "asignados", "asignada", "asignadas"} & user_tokens:
         add_keyword_candidate("mi_asignacion", 0.95)
 
-    # ✅ EXTRA (SIN BORRAR): soporta singular y "proyectos" a secas (resumen PRO)
     if {"proyectos", "proyecto", "servicios", "servicio"} & user_tokens:
-        # si NO pidió rechazados explícito, igual lo mandamos a resumen/pendientes
         if not ({"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens):
             add_keyword_candidate("mis_proyectos_pendientes", 0.75)
 
-    # Proyectos rechazados (mantengo tu lógica)
     if (
         "rechazados" in user_tokens
         or "rechazado" in user_tokens
@@ -604,17 +622,14 @@ def detect_intent_from_text(
     ):
         add_keyword_candidate("mis_proyectos_rechazados", 0.8)
 
-    # Rendiciones / gastos
     if (
         "rendicion" in user_tokens
         or "rendiciones" in user_tokens
         or "gasto" in user_tokens
         or "gastos" in user_tokens
     ):
-        add_keyword_candidate("mis_rendiciones_pendientes", 0.8)
-        add_keyword_candidate("ayuda_rendicion_gastos", 0.8)
+        add_keyword_candidate("mis_rendiciones_pendientes", 0.85)
 
-    # Dirección de la basura / residuos
     if (
         "basura" in user_tokens
         or "residuos" in user_tokens
@@ -622,7 +637,6 @@ def detect_intent_from_text(
     ):
         add_keyword_candidate("direccion_basura", 0.9)
 
-    # Corte de producción / cuándo pagan
     if (
         "pago" in user_tokens
         or "pagan" in user_tokens
@@ -632,14 +646,9 @@ def detect_intent_from_text(
     ):
         add_keyword_candidate("cronograma_produccion_corte", 0.7)
 
-    # Info sitio por ID Claro (tu lógica)
     if "sitio" in user_tokens or "site" in user_tokens:
         add_keyword_candidate("info_sitio_id_claro", 0.7)
 
-    # ✅ EXTRA (SIN BORRAR): si el texto parece un ID de sitio, aunque no diga "sitio"
-    # - ID CLARO: 13_094 o 13 094
-    # - ID SITES / NEW: CL-13-00421-05, CL-13-SN-00421-05
-    # - Otros cortos tipo MA5694
     txt_up = (texto or "").strip().upper()
     if (
         re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
@@ -648,7 +657,6 @@ def detect_intent_from_text(
     ):
         add_keyword_candidate("info_sitio_id_claro", 0.72)
 
-    # --- Elegir el mejor resultado entre ejemplos y reglas ---
     final_intent = best_intent
     final_score = best_score
 
@@ -656,7 +664,6 @@ def detect_intent_from_text(
         final_intent = keyword_intent
         final_score = keyword_score
 
-    # Umbral mínimo para aceptar un intent
     if final_score < 0.3:
         return None, float(final_score)
 
@@ -674,6 +681,7 @@ def send_telegram_message(
     intent: Optional[BotIntent] = None,
     meta: Optional[dict] = None,
     marcar_para_entrenamiento: bool = False,
+    reply_markup: Optional[dict] = None,
 ) -> BotMessageLog:
     """
     Envía un mensaje a Telegram y registra el BotMessageLog (salida).
@@ -706,8 +714,11 @@ def send_telegram_message(
     payload = {
         "chat_id": chat_id_str,
         "text": text,
+        "parse_mode": "Markdown",  # ✅ para que salgan los *bold* y `code`
         "disable_web_page_preview": False,
     }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
 
     try:
         resp = requests.post(api_url, json=payload, timeout=10)
@@ -717,7 +728,6 @@ def send_telegram_message(
             data = None
 
         if resp.status_code == 200 and isinstance(data, dict) and data.get("ok"):
-            # ok
             logger.info("Mensaje bot OUT ok chat_id=%s", chat_id_str)
         else:
             desc = ""
@@ -817,7 +827,6 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     if not qs.exists():
         return "Por ahora no tengo liquidaciones de sueldo cargadas a tu nombre en el sistema."
 
-    # ========= 1) "últimas N liquidaciones" =========
     n = _parse_ultimas_n_desde_texto(texto_usuario)
     if n:
         liqs = list(qs[:n])
@@ -830,12 +839,10 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
             lineas.append("")
         return "\n".join(lineas).strip()
 
-    # ========= 2) Lista de meses (julio y septiembre, etc.) =========
     meses_multi = _parse_meses_multi(texto_usuario)
     anio_explicito = _parse_anio_explicito(texto_usuario)
 
     if meses_multi:
-        # Si no viene año, verificamos ambigüedad por mes
         if not anio_explicito:
             ambiguos = {}
             for mes in meses_multi:
@@ -856,8 +863,6 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
                 parts.append("\nEjemplo: `liquidaciones de julio y septiembre 2025`")
                 return "\n".join(parts).strip()
 
-        # Ya tenemos año (explícito o no ambiguo)
-        # Si no hay año explícito, elegimos el único año disponible por mes (si existe)
         resultados = []
         faltantes = []
 
@@ -883,7 +888,6 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
                 return f"No encontré liquidaciones para esos meses en el año {anio_explicito}."
             return "No encontré liquidaciones para esos meses."
 
-        # Ordenamos por año/mes desc para que se vea pro
         resultados.sort(key=lambda x: (x.año, x.mes), reverse=True)
 
         lineas = ["🧾 Aquí tienes tus liquidaciones solicitadas:", ""]
@@ -900,23 +904,19 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
 
         return "\n".join(lineas).strip()
 
-    # ========= 3) Un solo mes (con o sin año) =========
     tokens = _tokenize(texto_usuario)
 
-    # detectar mes por nombre (sin forzar año actual)
     mes = None
     for t in tokens:
         if t in _MESES:
             mes = _MESES[t]
             break
 
-    # detectar mes por número (si escriben "07/2025" ya lo toma el regex de abajo)
     if mes is None:
         mnum = re.search(r"\b(0?[1-9]|1[0-2])\b", _normalize(texto_usuario))
         if mnum:
             mes = int(mnum.group(1))
 
-    # detectar patrón 07/2025 o 07-2025
     m_my = re.search(r"(0?[1-9]|1[0-2])[-/](20\d{2})", _normalize(texto_usuario))
     if m_my:
         mes = int(m_my.group(1))
@@ -959,7 +959,6 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
             "Puedes abrir ese enlace para descargarla."
         )
 
-    # ========= 4) Sin mes/año y sin "últimas N" -> guía =========
     lineas = []
     lineas.append("🧾 Liquidaciones registradas a tu nombre (más recientes):")
     lineas.append("")
@@ -978,9 +977,6 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     lineas.append("• `liquidación de noviembre 2025`")
     return "\n".join(lineas)
 
-# -------------------- (TODO LO DEMÁS IGUAL) --------------------
-# A partir de aquí no toqué nada más: sigue exactamente como lo pegaste.
-# (Para que puedas copiar/pegar sin sorpresas.)
 
 def _get_contrato_actual_y_extensiones(qs):
     """
@@ -997,25 +993,24 @@ def _get_contrato_actual_y_extensiones(qs):
     vencidos = []
 
     for c in contratos:
-        # Usa tu lógica del modelo
         code = getattr(c, "status_code", None) or c.status_code
         if code in ("indefinido", "vigente", "por_vencer"):
             activos.append(c)
         else:
-            # fallback por fecha si algo raro
             if c.fecha_termino and c.fecha_termino < hoy:
                 vencidos.append(c)
             else:
                 vencidos.append(c)
 
-    # contrato actual = el más reciente activo, si existe; sino el más reciente de todos
     contrato_actual = activos[0] if activos else contratos[0]
 
-    # extensiones = todo lo anterior al contrato actual (por fecha_inicio), normalmente vencidos
-    extensiones = [c for c in contratos if c.id != contrato_actual.id and c.fecha_inicio <= contrato_actual.fecha_inicio]
+    extensiones = [
+        c
+        for c in contratos
+        if c.id != contrato_actual.id and c.fecha_inicio <= contrato_actual.fecha_inicio
+    ]
     extensiones_vencidas = [c for c in extensiones if c.status_code == "vencido"]
 
-    # por si existieran 2 activos (raro pero posible), lo reportamos
     otros_activos = [c for c in activos if c.id != contrato_actual.id]
 
     return contrato_actual, extensiones_vencidas, otros_activos
@@ -1049,7 +1044,6 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
     if not qs.exists():
         return "No tengo registrado ningún contrato de trabajo asociado a tu usuario."
 
-    # === Si pide "todos mis contratos" o "mis contratos" ===
     if quiere_todos:
         contratos = list(qs[:20])
         msg = "📄 Tus contratos registrados:\n\n"
@@ -1069,7 +1063,6 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
         )
         return msg
 
-    # === Caso normal: contrato actual + (opcional) extensiones ===
     contrato_actual, extensiones_vencidas, otros_activos = _get_contrato_actual_y_extensiones(qs)
 
     termino = "Indefinido" if not contrato_actual.fecha_termino else contrato_actual.fecha_termino.strftime("%d-%m-%Y")
@@ -1084,11 +1077,9 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
     else:
         msg += "\n(No tengo un archivo PDF/subido para este contrato)."
 
-    # Si hay más de un activo (por si acaso), lo avisamos
     if otros_activos:
         msg += "\n\n⚠️ Nota: veo más de un contrato marcado como vigente/activo en el sistema."
 
-    # Extensiones vencidas (si el usuario las pidió)
     if quiere_extensiones or ({"extension", "extensiones"} & tokens):
         if not extensiones_vencidas:
             msg += (
@@ -1105,7 +1096,6 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
                 else:
                     msg += "  (Sin PDF asociado)\n"
 
-    # Anexos RRHH (DocumentoTrabajador), si el usuario los pidió
     if quiere_anexos:
         anexos = list(_buscar_anexos_rrhh(usuario)[:10])
         if not anexos:
@@ -1122,7 +1112,6 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
                 msg += f"• {nombre}\n"
                 msg += f"  {a.archivo.url}\n"
 
-    # Si NO pidió extensiones/anexos y existen extensiones vencidas, pregúntale (PRO, sin ser latero)
     if (not quiere_extensiones) and (not quiere_anexos) and extensiones_vencidas:
         msg += (
             f"\n\nTengo además *{len(extensiones_vencidas)}* contrato(s) anterior(es) vencido(s) (extensiones).\n"
@@ -1133,13 +1122,8 @@ def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
     return msg
 
 
-
 def _month_start_end(year: int, month: int):
-    from datetime import date
-
-    # inicio
     start = date(year, month, 1)
-    # fin (inicio del mes siguiente - 1 día)
     if month == 12:
         end = date(year + 1, 1, 1) - timedelta(days=1)
     else:
@@ -1160,10 +1144,8 @@ def _parse_rango_fechas(texto: str):
     if not raw:
         return None
 
-    # normaliza guiones “raros”
     raw = raw.replace("–", "-").replace("—", "-")
 
-    # 1) Buscar dos fechas YYYY-MM-DD o YYYY/MM/DD
     ymd = re.findall(r"\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b", raw)
     if len(ymd) >= 2:
         try:
@@ -1173,7 +1155,6 @@ def _parse_rango_fechas(texto: str):
         except ValueError:
             return None
 
-    # 2) Buscar dos fechas DD-MM-YYYY o DD/MM/YYYY
     dmy = re.findall(r"\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b", raw)
     if len(dmy) >= 2:
         try:
@@ -1187,11 +1168,7 @@ def _parse_rango_fechas(texto: str):
 
 
 def _parse_mes_produccion(texto: str):
-    """
-    Devuelve (mes, año) si detecta mes en texto.
-    Si no viene año, usa el año actual.
-    """
-    parsed = _parse_mes_anio_desde_texto(texto)  # tu helper existente
+    parsed = _parse_mes_anio_desde_texto(texto)
     if parsed:
         mes, anio = parsed
         return mes, anio
@@ -1199,11 +1176,6 @@ def _parse_mes_produccion(texto: str):
 
 
 def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
-    """
-    Decide si el usuario quiere incluir estados:
-    - asignados, ejecución, pendientes, finalizados, etc.
-    Si no dice nada, devolvemos default "lo que ya calcula hasta hoy".
-    """
     return {
         "incluye_asignados": bool({"asignado", "asignados"} & tokens),
         "incluye_ejecucion": bool({"ejecucion", "ejecución", "en_progreso", "progreso"} & tokens),
@@ -1214,15 +1186,6 @@ def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
 
 
 def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=None):
-    """
-    Implementa el cálculo por rango.
-    - date_from/date_to: date
-    - incluir_estados: dict flags opcional
-    Debe devolver string listo para Telegram.
-    """
-    # TODO: aquí reutiliza tu lógica actual pero filtrando por fechas del servicio
-    # (fecha_creacion / fecha_aprobacion_supervisor / fecha_finalizado según tu criterio)
-    # Mientras tanto, puedes devolver un mensaje temporal si aún no filtras.
     return (
         f"📊 *Producción estimada*\n"
         f"Rango: {date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}\n\n"
@@ -1232,7 +1195,6 @@ def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=N
 
 
 def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
-    # Privacidad: producción solo del propio usuario
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
             "Por seguridad solo puedo mostrarte *tu propia producción*.\n"
@@ -1245,7 +1207,6 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
 
     flags = _parse_flags_estados_produccion(tokens)
 
-    # 1) Rango explícito de fechas
     rango = _parse_rango_fechas(texto_usuario)
     if rango:
         d1, d2 = rango
@@ -1253,16 +1214,13 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
             d1, d2 = d2, d1
         return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
 
-    # 2) "hasta hoy / a la fecha"
     if {"hoy", "ahora", "fecha"} & tokens or ("hasta hoy" in norm) or ("a la fecha" in norm):
         return _responder_produccion_hasta_hoy(usuario)
 
-    # 3) "este mes" / "mes actual" => desde inicio de mes hasta HOY
     if ("este mes" in norm) or ("mes actual" in norm) or ("mes" in tokens and ({"este", "actual"} & tokens)):
         start, _end = _month_start_end(hoy.year, hoy.month)
         return responder_produccion_rango(usuario, start, hoy, incluir_estados=flags)
 
-    # 4) "mes anterior" / "mes pasado" => mes completo anterior
     if ("mes anterior" in norm) or ("mes pasado" in norm) or ("mes" in tokens and ({"anterior", "pasado"} & tokens)):
         year = hoy.year
         month = hoy.month - 1
@@ -1272,14 +1230,12 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
         start, end = _month_start_end(year, month)
         return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
-    # 5) Mes específico (ej: "agosto", "julio 2025", "08/2025")
     parsed_mes = _parse_mes_produccion(texto_usuario)
     if parsed_mes:
         mes, anio = parsed_mes
         start, end = _month_start_end(anio, mes)
         return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
-    # 6) Menú PRO
     return (
         "📊 ¿Qué producción necesitas?\n\n"
         "Puedo ayudarte con:\n"
@@ -1302,13 +1258,10 @@ def _extract_site_key(texto: str) -> Optional[Tuple[str, str]]:
     if not raw:
         return None
 
-    # 1) ID CLARO: 13_094 o 13-094
-    m = re.search(r"\b(\d{2})[_-](\d{3})\b", raw)
+    m = re.search(r"\b(\d{2})[_\-\s](\d{3})\b", raw)  # ✅ acepta 13_094, 13-094, 13 094
     if m:
         return ("id_claro", f"{m.group(1)}_{m.group(2)}")
 
-    # 2) ID SITES / ID NEW: CL-13-00421-05 | CL-13-SN-00421-05 | CL-13-ÑÑ-01837-11
-    #    - Segmento medio (SN/TC/CN/ÑÑ) es opcional, pero si viene, lo soporta.
     m2 = re.search(
         r"\b(CL-\d{2}-(?:[A-ZÑ]{2,3}-)?\d{5}-\d{2})\b",
         raw,
@@ -1321,26 +1274,15 @@ def _extract_site_key(texto: str) -> Optional[Tuple[str, str]]:
 
 
 def _is_only_site_id(texto: str, kind: str, value: str) -> bool:
-    """
-    True si el usuario mandó básicamente solo el ID (con o sin backticks/comillas).
-    """
-    cleaned = (texto or "").strip().strip("`'\"").upper()
+    cleaned = (texto or "").strip().strip("`'\"").upper().replace(" ", "_")
 
     if kind == "id_claro":
-        # aceptar 13_094 o 13-094
         return cleaned == value.upper() or cleaned == value.replace("_", "-").upper()
 
     return cleaned == value.upper()
 
 
 def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], str]:
-    """
-    Busca por:
-    - id_claro (13_094)
-    - id_sites (CL-13-00421-05)
-    - id_sites_new (CL-13-SN-00421-05 / CL-13-ÑÑ-01837-11)
-    Devuelve (sitio, matched_field)
-    """
     qs = SitioMovil.objects.all()
 
     if kind == "id_claro":
@@ -1351,7 +1293,6 @@ def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], 
                 return sm, "id_claro"
         return None, "id_claro"
 
-    # cl_code: puede ser id_sites o id_sites_new
     sm = qs.filter(id_sites__iexact=value).first()
     if sm:
         return sm, "id_sites"
@@ -1360,7 +1301,6 @@ def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], 
     if sm:
         return sm, "id_sites_new"
 
-    # (por si acaso alguien pega algo raro y coincide con id_claro)
     sm = qs.filter(id_claro__iexact=value).first()
     if sm:
         return sm, "id_claro"
@@ -1395,12 +1335,11 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
             "Si no lo tienes, dime el *ID SITES* o el *ID NEW*."
         )
 
-    # Respuesta PRO
     msg = "📡 *Información del Sitio*\n\n"
 
-    msg += f"• ID Sites: {sitio.id_sites or '—'}\n"
-    msg += f"• ID Claro: {sitio.id_claro or '—'}\n"
-    msg += f"• ID New: {sitio.id_sites_new or '—'}\n"
+    msg += f"• ID Sites: `{sitio.id_sites or '—'}`\n"
+    msg += f"• ID Claro: `{sitio.id_claro or '—'}`\n"
+    msg += f"• ID New: `{sitio.id_sites_new or '—'}`\n"
     msg += f"• Región: {sitio.region or '—'}\n"
 
     if sitio.nombre:
@@ -1410,7 +1349,6 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
     if sitio.comuna:
         msg += f"• Comuna: {sitio.comuna}\n"
 
-    # Acceso / seguridad
     detalles = []
     if sitio.candado_bt:
         detalles.append(f"Candado BT: {sitio.candado_bt}")
@@ -1428,7 +1366,6 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
         for d in detalles:
             msg += f"• {d}\n"
 
-    # Coordenadas
     if sitio.latitud is not None and sitio.longitud is not None:
         lat = str(sitio.latitud).replace(",", ".")
         lng = str(sitio.longitud).replace(",", ".")
@@ -1468,14 +1405,8 @@ def _fmt_clp(val) -> str:
 
 
 def _mmoo_share_for_user(s: ServicioCotizado, usuario: CustomUser) -> Decimal:
-    """
-    Retorna el monto de mano de obra que le corresponde al usuario.
-    - Si existe un monto por técnico en el through (asignación), usa eso.
-    - Si no, divide monto_mmoo total por cantidad de técnicos asignados.
-    """
     total = Decimal(str(getattr(s, "monto_mmoo", None) or 0))
 
-    # 1) Intentar monto por técnico si existe en el through model
     try:
         through = ServicioCotizado.trabajadores_asignados.through
         field_names = {f.name for f in through._meta.get_fields() if hasattr(f, "name")}
@@ -1493,14 +1424,22 @@ def _mmoo_share_for_user(s: ServicioCotizado, usuario: CustomUser) -> Decimal:
 
         if amount_field:
             svc_fk = next(
-                (f.name for f in through._meta.fields
-                 if getattr(f, "is_relation", False) and getattr(f, "related_model", None) == ServicioCotizado),
-                None
+                (
+                    f.name
+                    for f in through._meta.fields
+                    if getattr(f, "is_relation", False)
+                    and getattr(f, "related_model", None) == ServicioCotizado
+                ),
+                None,
             )
             usr_fk = next(
-                (f.name for f in through._meta.fields
-                 if getattr(f, "is_relation", False) and getattr(f, "related_model", None) == CustomUser),
-                None
+                (
+                    f.name
+                    for f in through._meta.fields
+                    if getattr(f, "is_relation", False)
+                    and getattr(f, "related_model", None) == CustomUser
+                ),
+                None,
             )
 
             if svc_fk and usr_fk:
@@ -1515,7 +1454,6 @@ def _mmoo_share_for_user(s: ServicioCotizado, usuario: CustomUser) -> Decimal:
     except Exception:
         pass
 
-    # 2) Fallback: división por cantidad de técnicos asignados
     n = getattr(s, "n_tecs", None)
     if not n:
         try:
@@ -1528,23 +1466,17 @@ def _mmoo_share_for_user(s: ServicioCotizado, usuario: CustomUser) -> Decimal:
 
 
 def _extract_project_id(texto: str) -> Optional[str]:
-    """
-    Detecta:
-    - ID CLARO: 13_094
-    - ID SITES: CL-13-00421-05
-    - ID NEW:   CL-13-SN-00421-05 (y variantes CN/TC/TE/TA/ÑÑ etc)
-    """
     t = (texto or "").strip()
 
-    m = re.search(r"\b\d{2}_\d{3,5}\b", t)  # 13_094, 13_913, etc
+    m = re.search(r"\b\d{2}_\d{3,5}\b", t)
     if m:
         return m.group(0)
 
-    m2 = re.search(r"\bCL-\d{2}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)  # id_sites
+    m2 = re.search(r"\bCL-\d{2}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)
     if m2:
         return m2.group(0)
 
-    m3 = re.search(r"\bCL-\d{2}-[A-ZÑ]{1,3}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)  # id_new
+    m3 = re.search(r"\bCL-\d{2}-[A-ZÑ]{1,3}-\d{4,6}-\d{2}\b", t, flags=re.IGNORECASE)
     if m3:
         return m3.group(0)
 
@@ -1552,13 +1484,6 @@ def _extract_project_id(texto: str) -> Optional[str]:
 
 
 def _project_month_filter(texto_usuario: str):
-    """
-    Soporta:
-    - "este mes", "mes actual"
-    - "mes pasado", "mes anterior"
-    - "agosto 2025", "08/2025"
-    Retorna (start_date, end_date, label) o None
-    """
     tokens = set(_tokenize(texto_usuario))
     hoy = timezone.localdate()
 
@@ -1585,10 +1510,6 @@ def _project_month_filter(texto_usuario: str):
 
 
 def _pick_project_buckets(tokens: set[str]) -> list[str]:
-    """
-    Decide qué grupos mostrar según el texto.
-    Si no especifica, devolvemos TODOS (resumen pro).
-    """
     wants = []
     if {"asignado", "asignados"} & tokens:
         wants.append("asignados")
@@ -1607,13 +1528,8 @@ def _pick_project_buckets(tokens: set[str]) -> list[str]:
 
 
 def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Optional[str], list[str]]:
-    """
-    Devuelve:
-    - 1 link "ruta" (dir) si hay >=2 puntos
-    - y una lista de links individuales (search) como fallback
-    """
     id_claros = [s.id_claro for s in servicios if s.id_claro]
-    id_news = [s.id_new for s in servicios if s.id_new]
+    id_news = [getattr(s, "id_new", None) for s in servicios if getattr(s, "id_new", None)]
 
     sitios = list(
         SitioMovil.objects.filter(
@@ -1632,7 +1548,7 @@ def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Op
     links_individuales = []
 
     for s in servicios:
-        key = (s.id_claro or "").strip() or (s.id_new or "").strip()
+        key = (s.id_claro or "").strip() or (getattr(s, "id_new", None) or "").strip()
         sm = by_id.get(key)
         if not sm:
             continue
@@ -1649,7 +1565,6 @@ def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Op
     if not puntos:
         return None, links_individuales
 
-    # Google limita waypoints; mandamos máximo 10 puntos (1 destino + 9 waypoints)
     puntos = puntos[:10]
 
     if len(puntos) == 1:
@@ -1672,14 +1587,12 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
         .annotate(n_tecs=Count("trabajadores_asignados", distinct=True))
     )
 
-    # filtro por mes (usa fecha_creacion como referencia)
     mf = _project_month_filter(texto_usuario)
     mes_label = None
     if mf:
         start, end, mes_label = mf
         base = base.filter(fecha_creacion__date__gte=start, fecha_creacion__date__lte=end)
 
-    # consulta específica por ID (13_913 / CL-xx / CL-xx-YY-xxxx-zz)
     pid = _extract_project_id(texto_usuario)
     if pid:
         pid_u = pid.strip().upper()
@@ -1689,7 +1602,6 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             or base.filter(du__iexact=pid_u).first()
         )
         if not s:
-            # si lo mandaron como ID Sites/NEW pero el servicio guarda id_claro/id_new, igual damos pista
             return (
                 f"No encontré un proyecto asignado a ti con identificador `{pid_u}`.\n\n"
                 "Puedes mandarme:\n"
@@ -1703,12 +1615,11 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
         estado_legible = estados_dict.get(s.estado, s.estado)
 
         msg = "🧾 *Detalle de proyecto*\n\n"
-        msg += f"• DU: {s.du or '—'}\n"
-        msg += f"• ID Claro: {s.id_claro or '—'}\n"
-        msg += f"• ID New: {s.id_new or '—'}\n"
+        msg += f"• DU: `{s.du or '—'}`\n"
+        msg += f"• ID Claro: `{s.id_claro or '—'}`\n"
+        msg += f"• ID New: `{getattr(s, 'id_new', None) or '—'}`\n"
         msg += f"• Estado: {estado_legible}\n"
 
-        # MMOO: siempre mostramos "tu parte" (lo que te corresponde)
         tu_mmoo = _mmoo_share_for_user(s, usuario)
         msg += f"• Tu MMOO: {_fmt_clp(tu_mmoo)}\n"
 
@@ -1722,9 +1633,7 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
         msg += "\nSi quieres, dime: `mapa de mis proyectos` o `total monto proyectos`."
         return msg
 
-    # “mapa / maps”
     if {"mapa", "maps", "google", "ubicacion", "ubicación"} & tokens:
-        # para mapa tomamos activos por defecto
         bucket_keys = _pick_project_buckets(tokens)
         estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
         qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")[:20]
@@ -1755,7 +1664,6 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
         msg += "\n\nTip: si quieres solo `asignados este mes` escribe: `mapa proyectos asignados este mes`."
         return msg
 
-    # “monto / total / suma”
     if {"monto", "montos", "total", "suma", "sumo", "cuanto", "cuánto"} & tokens:
         bucket_keys = _pick_project_buckets(tokens)
         estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
@@ -1779,10 +1687,7 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             "Si quieres el detalle de uno, dime: `monto proyecto 13_913` (o pega el DU / ID NEW)."
         )
 
-    # RESUMEN PRO (default): conteo por estados + mini listado + menú
     estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
-
-    # Para resumen, consideramos TODOS los buckets (aunque pidan "proyectos" a secas)
     bucket_keys = ["asignados", "en_ejecucion", "revision_supervisor", "aprobado_supervisor", "finalizados", "rechazados"]
 
     msg = "📌 *Resumen de tus proyectos*\n"
@@ -1810,13 +1715,12 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
 
     msg += f"\n✅ Total: *{total_general}* proyectos (tu MMOO {_fmt_clp(total_mmoo_general)})\n\n"
 
-    # muestra ejemplos recientes (mezclados)
     ejemplos = list(base.order_by("-fecha_creacion")[:8])
     if ejemplos:
         msg += "Últimos proyectos (recientes):\n"
         for s in ejemplos:
             du = s.du or "—"
-            idc = s.id_claro or (s.id_new or "—")
+            idc = s.id_claro or (getattr(s, "id_new", None) or "—")
             est = estados_dict.get(s.estado, s.estado)
             det = (s.detalle_tarea or "").strip()
             if len(det) > 60:
@@ -1840,10 +1744,6 @@ _ASIGNACION_ESTADOS_ACTIVOS = ["asignado", "en_progreso", "en_revision_superviso
 
 
 def _svc_assignment_date_field() -> str:
-    """
-    Campo de fecha para interpretar "me asignaron hoy".
-    Preferimos fecha_asignacion si existe. Si no, caemos a fecha_creacion.
-    """
     candidatos = ["fecha_asignacion", "fecha_asignado", "fecha_creacion", "created_at", "creado"]
     nombres = {f.name for f in ServicioCotizado._meta.get_fields() if hasattr(f, "name")}
     for c in candidatos:
@@ -1853,13 +1753,9 @@ def _svc_assignment_date_field() -> str:
 
 
 def _filter_by_day(qs, field_name: str, day):
-    """
-    Filtra por día tolerando DateTimeField vs DateField.
-    """
     try:
         return qs.filter(**{f"{field_name}__date": day})
     except FieldError:
-        # si el campo es DateField, __date puede fallar
         return qs.filter(**{field_name: day})
 
 
@@ -1870,20 +1766,18 @@ def _fmt_servicio_asignacion_line(s: ServicioCotizado, estados_dict: dict) -> st
     det = (s.detalle_tarea or "").strip()
     if len(det) > 90:
         det = det[:87] + "…"
-    return f"• DU {du} / {idref} – {est} – {det}"
+    return f"• DU `{du}` / `{idref}` – {est} – {det}"
 
 
 def _handler_asignacion(usuario: CustomUser, texto_usuario: str) -> str:
     tokens = set(_tokenize(texto_usuario))
     hoy = timezone.localdate()
 
-    # “de hoy / para hoy / hoy”
     es_hoy = bool({"hoy"} & tokens) or ("de hoy" in _normalize(texto_usuario)) or ("para hoy" in _normalize(texto_usuario))
 
     base = ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
     estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
 
-    # Activos (lo que normalmente se entiende como “mi asignación”)
     activos = base.filter(estado__in=_ASIGNACION_ESTADOS_ACTIVOS).order_by("fecha_creacion")
 
     date_field = _svc_assignment_date_field()
@@ -1904,7 +1798,6 @@ def _handler_asignacion(usuario: CustomUser, texto_usuario: str) -> str:
 
             return msg.strip()
 
-        # Si NO hay asignación hoy => avisar + mostrar pendientes activos
         pendientes = activos.order_by("fecha_creacion")
         total_pend = pendientes.count()
 
@@ -1925,12 +1818,10 @@ def _handler_asignacion(usuario: CustomUser, texto_usuario: str) -> str:
         msg += "\n\nTip: escribe `asignación` para ver el resumen completo."
         return msg.strip()
 
-    # Caso “asignación” (sin hoy): resumen + listado
     total = activos.count()
     if total == 0:
         return "No tienes asignaciones/pendientes activos en este momento. ✅"
 
-    # Conteo por estado dentro de activos
     counts = {}
     for s in activos.only("estado"):
         k = s.estado or "—"
@@ -1983,7 +1874,7 @@ def _handler_mis_proyectos_pendientes(usuario: CustomUser) -> str:
             detalle = detalle[:77] + "…"
 
         est = estados_dict.get(s.estado, s.estado)
-        msg += f"• DU {du} / {id_ref} – {est}: {detalle}\n"
+        msg += f"• DU `{du}` / `{id_ref}` – {est}: {detalle}\n"
 
     return msg
 
@@ -2009,7 +1900,7 @@ def _handler_mis_proyectos_rechazados(usuario: CustomUser) -> str:
             motivo = motivo[:77] + "…"
 
         est = estados_dict.get(s.estado, s.estado)
-        msg += f"• DU {du} / {id_ref} – {est} – Motivo: {motivo or 'Sin detalle'}\n"
+        msg += f"• DU `{du}` / `{id_ref}` – {est} – Motivo: {motivo or 'Sin detalle'}\n"
 
     return msg
 
@@ -2017,17 +1908,8 @@ def _handler_mis_proyectos_rechazados(usuario: CustomUser) -> str:
 def _handler_mis_rendiciones_pendientes(
     usuario: CustomUser, texto_usuario: str
 ) -> str:
-    """
-    Resumen de rendiciones de gastos.
-    - Si el mensaje habla de "hacer / crear / declarar" -> explica que el flujo
-      de creación por bot aún no está activo.
-    - Si el mensaje es muy genérico ("gasto", "rendiciones"), pregunta qué tipo quiere.
-    - Soporta filtros por pendientes / aprobadas / rechazadas.
-    - Soporta filtro por día con "hoy" o "ayer".
-    """
     tokens = set(_tokenize(texto_usuario))
 
-    # Caso: el usuario quiere CREAR una rendición nueva
     if {"hacer", "crear", "nueva", "nuevo", "declarar"} & tokens:
         return (
             "Por ahora todavía *no puedo crear rendiciones nuevas* desde el bot 🤖.\n\n"
@@ -2036,7 +1918,6 @@ def _handler_mis_rendiciones_pendientes(
             "A futuro iremos habilitando este flujo por aquí para que sea más rápido."
         )
 
-    # Caso 1: mensaje ultra-genérico -> hacemos preguntas
     generic = {"gasto", "gastos", "rendicion", "rendiciones"}
     if tokens and tokens <= generic:
         return (
@@ -2048,7 +1929,6 @@ def _handler_mis_rendiciones_pendientes(
             "• Si quieres ver todas tus rendiciones de un día específico: `rendiciones de hoy` o `rendiciones de ayer`."
         )
 
-    # Filtro por estado
     estados = []
     titulo = ""
     extra_label = ""
@@ -2071,7 +1951,6 @@ def _handler_mis_rendiciones_pendientes(
         titulo = "Rendiciones pendientes en el flujo de aprobación"
         extra_label = "pendientes"
 
-    # Filtro por día (hoy / ayer)
     hoy = timezone.localdate()
     fecha = None
     if "hoy" in tokens:
@@ -2128,9 +2007,6 @@ def _handler_mis_rendiciones_pendientes(
 
 
 def _handler_direccion_basura(usuario: CustomUser) -> str:
-    """
-    Llama al helper de services_tecnico que lee BOT_GZ_URL_BASURA / BOT_GZ_TEXTO_BASURA.
-    """
     return _responder_direccion_basura()
 
 
@@ -2143,30 +2019,23 @@ def run_intent(
     usuario: Optional[CustomUser],
     inbound_log: BotMessageLog,
 ) -> str:
-    """
-    Dado un intent detectado (o None), decide qué responder.
-    """
     chat_id = sesion.chat_id
 
     if usuario is None:
-        # No hay usuario vinculado -> mensaje estándar
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
         return _respuesta_sin_usuario(chat_id)
 
-    # Si no se detectó intent, probamos algunos casos especiales antes del fallback
     if not intent:
         tokens = set(_tokenize(texto_usuario))
 
-        # ✅ EXTRA: si preguntan "aprobados por el supervisor" (aunque no digan "proyectos")
         if ("supervisor" in tokens) and ({"aprobado", "aprobados", "aprobada", "aprobadas", "aprobacion", "aprobación"} & tokens):
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
             inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
             return _handler_mis_proyectos(usuario, texto_usuario)
 
-        # 1) Saludo simple
         if _es_saludo(texto_usuario):
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
@@ -2185,7 +2054,7 @@ def run_intent(
                 "• `mi contrato vigente`\n"
                 "• `mi contrato y sus extensiones`\n"
                 "• `mis anexos`\n\n"
-                 "🧭 *Asignación (pendientes/activos)*\n"
+                "🧭 *Asignación (pendientes/activos)*\n"
                 "• `asignación` / `asignación de hoy`\n\n"
                 "📌 *Proyectos / servicios*\n"
                 "• `mis proyectos` (resumen)\n"
@@ -2206,8 +2075,6 @@ def run_intent(
                 "✅ Escribe frases cortas (yo te guío)."
             )
 
-        # 2) Seguimiento de conversación sobre rendiciones:
-        #    Ej: primero pregunta por pendientes, luego escribe solo "y rechazadas?"
         if (
             sesion.ultimo_intent
             and sesion.ultimo_intent.slug
@@ -2219,18 +2086,13 @@ def run_intent(
                 inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
                 return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
 
-        # ==========================================================
-        # 3) SITIOS: si mandan un ID (ID CLARO / ID SITES / ID NEW)
-        #    aunque no digan "sitio", igual responder.
-        # ==========================================================
         txt_up = (texto_usuario or "").strip().upper()
         site_hit = (
-            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)  # 13_094 o 13 094
-            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)  # CL-13-00421-05 / CL-13-SN-00421-05
-            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)  # MA5694 (u otros)
+            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
+            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
+            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
         )
         if site_hit:
-            # Si veníamos hablando de sitios, o si menciona "sitio", o si mandó solo el ID
             if (
                 (sesion.ultimo_intent and sesion.ultimo_intent.slug == "info_sitio_id_claro")
                 or ("sitio" in tokens or "site" in tokens)
@@ -2241,11 +2103,6 @@ def run_intent(
                 inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
                 return _handler_info_sitio_id_claro(texto_usuario)
 
-        # =========================
-        # 4) PROYECTOS (PRO)
-        # =========================
-        # Si veníamos hablando de proyectos y preguntan "estado/status/en ejecución/finalizados/monto/total"
-        # evitamos el fallback y damos un resumen pro (counts + total $ + últimos).
         if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mis_proyectos_pendientes", "mis_proyectos_rechazados"]:
             if (
                 {"estado", "estados", "status", "situacion", "situación", "ejecucion", "ejecución", "progreso",
@@ -2267,12 +2124,10 @@ def run_intent(
                 if total == 0:
                     return "No tienes proyectos/servicios asignados actualmente. ✅"
 
-                # total MMOO (tu parte)
                 total_mmoo = Decimal("0")
                 for s in list(qs_all):
                     total_mmoo += _mmoo_share_for_user(s, usuario)
 
-                # conteo por estado
                 counts = {}
                 for s in qs_all.only("estado"):
                     k = s.estado or "—"
@@ -2284,7 +2139,6 @@ def run_intent(
                 msg += f"• Total: *{total}*\n"
                 msg += f"• Tu MMOO total: *{_fmt_clp(total_mmoo)}*\n\n"
                 msg += "📌 *Por estado:*\n"
-                # orden pro: primero los “activos”
                 orden_preferido = [
                     "asignado",
                     "en_progreso",
@@ -2300,7 +2154,6 @@ def run_intent(
                     if key in counts:
                         usados.add(key)
                         msg += f"• {estados_dict.get(key, key)}: {counts[key]}\n"
-                # otros estados que existan
                 for key, c in sorted(counts.items(), key=lambda x: x[0]):
                     if key in usados:
                         continue
@@ -2314,7 +2167,7 @@ def run_intent(
                     if len(detalle) > 60:
                         detalle = detalle[:57] + "…"
                     est = estados_dict.get(s.estado, s.estado)
-                    msg += f"• DU {du} / {id_claro} – {est}: {detalle}\n"
+                    msg += f"• DU `{du}` / `{id_claro}` – {est}: {detalle}\n"
 
                 msg += (
                     "\nSi quieres algo más específico, dime por ejemplo:\n"
@@ -2323,27 +2176,18 @@ def run_intent(
                 )
                 return msg
 
-        # Atajo: "asignación" (aunque no haya intent)
         if {"asignacion", "asignaciones", "asignado", "asignados"} & tokens:
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
             inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
             return _handler_asignacion(usuario, texto_usuario)
 
-        # Atajo: si menciona proyectos/servicios sin intent (evita fallback)
         if {"proyectos", "proyecto", "servicios", "servicio"} & tokens:
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
             inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            # por ahora usamos el handler PRO completo (robusto)
             return _handler_mis_proyectos(usuario, texto_usuario)
 
-        # =========================
-        # 5) PRODUCCIÓN (INTEGRADO)
-        # =========================
-
-        # 5.1) Seguimiento de conversación sobre producción:
-        #      si veníamos hablando de producción y el usuario dice solo "agosto", "mes anterior", etc.
         if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mi_produccion_hasta_hoy"]:
             if (
                 {"mes", "anterior", "pasado", "este", "actual", "produccion", "producción", "hoy", "fecha"} & tokens
@@ -2354,15 +2198,12 @@ def run_intent(
                 inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
                 return _handler_mi_produccion(usuario, texto_usuario)
 
-        # 5.2) Atajo por keywords:
-        #      si NO hubo intent pero el texto menciona producción, lo mandamos al handler igual.
         if {"produccion", "producción"} & tokens:
             inbound_log.status = "ok"
             inbound_log.marcar_para_entrenamiento = False
             inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
             return _handler_mi_produccion(usuario, texto_usuario)
 
-        # Si nada de lo anterior aplica -> fallback estándar
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
@@ -2377,14 +2218,12 @@ def run_intent(
             "Intenta usar frases cortas y directas, y yo te voy guiando."
         )
 
-    # Marcamos el intent y confianza como OK
     inbound_log.status = "ok"
     inbound_log.marcar_para_entrenamiento = intent.requiere_revision_humana
     inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
     slug = intent.slug
 
-    # === Router por slug ===
     if slug == "cronograma_produccion_corte":
         return _handler_cronograma_produccion(usuario)
 
@@ -2401,15 +2240,11 @@ def run_intent(
         return _handler_info_sitio_id_claro(texto_usuario)
 
     if slug == "mis_proyectos_pendientes":
-        # usamos el handler PRO completo (robusto)
         return _handler_mis_proyectos(usuario, texto_usuario)
 
     if slug == "mis_proyectos_rechazados":
-        # ✅ IMPORTANTE: mantengo firma original (solo usuario) para no romper nada
         return _handler_mis_proyectos_rechazados(usuario)
 
-    # Tanto para "ayuda_rendicion_gastos" como para "mis_rendiciones_pendientes"
-    # usamos el mismo handler que entiende pendientes/aprobadas/rechazadas/hoy/ayer.
     if slug == "ayuda_rendicion_gastos":
         return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
 
@@ -2422,7 +2257,6 @@ def run_intent(
     if slug == "mi_asignacion":
         return _handler_asignacion(usuario, texto_usuario)
 
-    # Otros intents que todavía no implementamos bien:
     return (
         f"Recibí tu consulta y la reconocí como '{intent.nombre}', "
         "pero esta funcionalidad aún se está terminando de implementar en el bot.\n\n"
@@ -2451,7 +2285,6 @@ def handle_telegram_update(update: dict) -> None:
     text = message.get("text") or ""
 
     if not text.strip():
-        # Por ahora ignoramos mensajes sin texto (stickers, fotos, etc.)
         logger.info("Mensaje sin texto recibido (chat_id=%s)", chat.get("id"))
         return
 
@@ -2461,7 +2294,6 @@ def handle_telegram_update(update: dict) -> None:
     sesion.ultima_interaccion = timezone.now()
     sesion.save(update_fields=["ultima_interaccion"])
 
-    # Log IN
     inbound_log = BotMessageLog.objects.create(
         sesion=sesion,
         usuario=usuario,
@@ -2472,7 +2304,6 @@ def handle_telegram_update(update: dict) -> None:
         meta={"update_id": update.get("update_id")},
     )
 
-    # Detect intent
     intent, confianza = detect_intent_from_text(text, scope=sesion.contexto)
     if intent:
         sesion.ultimo_intent = intent
@@ -2482,10 +2313,8 @@ def handle_telegram_update(update: dict) -> None:
     inbound_log.confianza = confianza
     inbound_log.save(update_fields=["intent_detectado", "confianza"])
 
-    # Ejecutar intent
     reply_text = run_intent(intent, text, sesion, usuario, inbound_log)
 
-    # Enviar OUT
     marcar_train_out = (intent is None) or intent.requiere_revision_humana
     send_telegram_message(
         chat_id,
