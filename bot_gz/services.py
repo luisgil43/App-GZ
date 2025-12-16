@@ -9,11 +9,14 @@ from typing import Optional, Tuple
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import FieldError
+from django.core.files.base import ContentFile
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from facturacion.models import CartolaMovimiento
+from facturacion.models import (CartolaMovimiento, Proyecto,  # <-- nuevos
+                                TipoGasto)
 from liquidaciones.models import Liquidacion
 from operaciones.models import ServicioCotizado, SitioMovil
 from rrhh.models import ContratoTrabajo, CronogramaPago, DocumentoTrabajador
@@ -2046,7 +2049,7 @@ def _handler_mis_rendiciones_pendientes(
 ) -> str:
     tokens = set(_tokenize(texto_usuario))
 
-    if {"hacer", "crear", "nueva", "nuevo", "declarar"} & tokens:
+    if {"hacer", "crear", "nueva", "nuevo", "declarar", "ingresar"} & tokens:
         return (
             "Por ahora todavía *no puedo crear rendiciones nuevas* desde el bot 🤖.\n\n"
             "Para declarar un gasto debes hacerlo en la sección de *Mis Rendiciones* "
@@ -2142,7 +2145,69 @@ def _handler_mis_rendiciones_pendientes(
     return msg
 
 
-def _handler_direccion_basura(usuario: CustomUser) -> str:
+def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
+    """
+    Lee la dirección de retiro de basura desde settings.
+    Soporta varios nombres por compatibilidad.
+    Acepta string directo o dict por sucursal/ciudad (opcional).
+    """
+    candidates = [
+        "GZ_DIRECCION_RETIRO_BASURA",
+        "DIRECCION_RETIRO_BASURA",
+        "RETIRO_BASURA_DIRECCION",
+        "DIRECCION_BASURA",
+        "BASURA_DIRECCION",
+    ]
+
+    for key in candidates:
+        val = getattr(settings, key, None)
+        if not val:
+            continue
+
+        # Si es dict (opcional): {"Santiago": "...", "Concepcion": "...", "default": "..."}
+        if isinstance(val, dict):
+            default = val.get("default") or val.get("DEFAULT")
+            if default:
+                txt = str(default).strip()
+                if txt:
+                    return txt
+            # si no hay default, toma el primer valor no vacío
+            for _k, _v in val.items():
+                if _v:
+                    txt = str(_v).strip()
+                    if txt:
+                        return txt
+            continue
+
+        # String / otros
+        txt = str(val).strip()
+        if txt:
+            return txt
+
+    return None
+
+
+def _handler_direccion_basura(usuario: CustomUser, texto_usuario: str = "") -> str:
+    """
+    Responde la dirección para botar/retirar basura.
+    - Si hay dirección configurada en settings: la usa.
+    - Si no: fallback a lo antiguo (_responder_direccion_basura()).
+    - Incluye un mensaje más claro si el usuario pregunta "dónde botar/tirar".
+    """
+    direccion = _get_direccion_retiro_basura_from_settings()
+    norm = _normalize(texto_usuario or "")
+
+    titulo = "🗑️ *Retiro de basura*"
+    if ("donde" in norm and ("botar" in norm or "tira" in norm or "tirar" in norm)) or "direccion" in norm:
+        titulo = "🗑️ *¿Dónde botar la basura?*"
+
+    if direccion:
+        return (
+            f"{titulo}\n\n"
+            f"📍 Dirección: {direccion}\n"
+        )
+
+    # Fallback (compatibilidad con lo antiguo)
     return _responder_direccion_basura()
 
 
@@ -2162,6 +2227,43 @@ def run_intent(
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
         return _respuesta_sin_usuario(chat_id)
+
+    # ============================
+    # ✅ Punto 3: Wizard Rendición
+    # - Si hay wizard activo, o si el texto dispara "nueva rendición",
+    #   NO caemos al fallback de intent.
+    # - Aquí soporta pasos por TEXTO (para archivo/foto lo maneja handle_telegram_update).
+    # ============================
+    try:
+        wiz_state = _rend_wiz_get(chat_id)
+    except Exception:
+        wiz_state = None
+
+    norm = _normalize(texto_usuario or "")
+    triggers_start = {
+        "nueva rendicion",
+        "nueva rendicion gasto",
+        "nueva rendicion de gasto",
+        "crear rendicion",
+        "crear rendicion gasto",
+        "nueva rendicion de gastos",
+        "nueva rendicion gastos",
+    }
+
+    if usuario is not None and (wiz_state or norm in triggers_start):
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+        if norm in triggers_start and not wiz_state:
+            return _rendicion_wizard_start(chat_id, usuario)
+
+        # Continuación wizard (solo texto)
+        return _rendicion_wizard_handle_message(
+            chat_id=chat_id,
+            usuario=usuario,
+            message={"text": texto_usuario or ""},
+        )
 
     if not intent:
         tokens = set(_tokenize(texto_usuario))
@@ -2399,48 +2501,131 @@ def run_intent(
         "Mientras tanto, puedes revisar esa información directamente en la app web."
     )
 
-
 # ===================== Entry point: manejar update de Telegram =====================
 
 def handle_telegram_update(update: dict) -> None:
     """
     Punto de entrada para el webhook de Telegram.
-    - Lee el mensaje
-    - Crea/actualiza sesión
-    - Detecta intent
-    - Genera respuesta
-    - Envía respuesta y registra logs
+    ✅ Soporta:
+    - message / edited_message (texto y/o caption)
+    - callback_query (inline_keyboard)
+    - wizard de rendición (incluye comprobante como PDF/foto aunque venga SIN texto)
     """
-    message = update.get("message") or update.get("edited_message")
-    if not message:
-        logger.info("Update de Telegram sin 'message': %s", update)
+    # ----------------------------
+    # 1) Detectar tipo de update
+    # ----------------------------
+    callback = update.get("callback_query")
+    if callback:
+        # Inline keyboard: el "texto" viene en callback_query.data
+        msg_obj = callback.get("message") or {}
+        chat = msg_obj.get("chat") or {}
+        from_user = callback.get("from") or {}
+        text = (callback.get("data") or "").strip()
+
+        # Ack (quita el “loading…” del botón)
+        cb_id = callback.get("id")
+        token = _get_bot_token()
+        if token and cb_id:
+            try:
+                requests.post(
+                    f"https://api.telegram.org/bot{token}/answerCallbackQuery",
+                    json={"callback_query_id": cb_id},
+                    timeout=5,
+                )
+            except Exception:
+                logger.exception("No se pudo hacer answerCallbackQuery (callback_id=%s)", cb_id)
+
+        # Para reutilizar el flujo, armamos un "message" compatible
+        message = dict(msg_obj)
+        message["text"] = text
+
+    else:
+        message = update.get("message") or update.get("edited_message")
+        if not message:
+            logger.info("Update de Telegram sin 'message' ni 'callback_query': %s", update)
+            return
+
+        chat = message.get("chat") or {}
+        from_user = message.get("from") or {}
+        text = ((message.get("text") or message.get("caption") or "")).strip()
+
+    chat_id = str(chat.get("id") or "")
+    if not chat_id:
+        logger.info("Update de Telegram sin chat_id: %s", update)
         return
 
-    chat = message.get("chat") or {}
-    from_user = message.get("from") or {}
-    text = message.get("text") or ""
-
-    if not text.strip():
-        logger.info("Mensaje sin texto recibido (chat_id=%s)", chat.get("id"))
-        return
-
-    chat_id = str(chat.get("id"))
-
+    # ----------------------------
+    # 2) Sesión + usuario
+    # ----------------------------
     sesion, usuario = get_or_create_session(chat_id, from_user)
     sesion.ultima_interaccion = timezone.now()
     sesion.save(update_fields=["ultima_interaccion"])
+
+    # Si viene solo archivo/foto y no texto, dejamos trazabilidad igual
+    has_file = bool(message.get("document") or message.get("photo"))
+    text_for_log = text if text else ("[archivo]" if has_file else "")
+
+    # Si no hay nada procesable y no hay wizard activo, ignorar
+    wizard_state = _rend_wiz_get(chat_id)
+    if not text_for_log and not wizard_state:
+        logger.info("Mensaje sin texto/caption y sin wizard activo (chat_id=%s)", chat_id)
+        return
 
     inbound_log = BotMessageLog.objects.create(
         sesion=sesion,
         usuario=usuario,
         chat_id=chat_id,
         direccion="in",
-        texto=text,
+        texto=text_for_log,
         status="ok",
-        meta={"update_id": update.get("update_id")},
+        meta={"update_id": update.get("update_id"), "callback": bool(callback)},
     )
 
-    intent, confianza = detect_intent_from_text(text, scope=sesion.contexto)
+    # ----------------------------
+    # 3) WIZARD rendición (punto 3 y 4)
+    # ----------------------------
+    norm = _normalize(text or "")
+
+    triggers_start = {
+        "nueva rendicion",
+        "nueva rendicion gasto",
+        "nueva rendicion de gasto",
+        "crear rendicion",
+        "crear rendicion gasto",
+        "nueva rendicion de gastos",
+        "nueva rendicion gastos",
+        "nueva rendicion de gastos",
+    }
+
+    if usuario is not None and (wizard_state or norm in triggers_start):
+        if norm in triggers_start and not wizard_state:
+            reply_text = _rendicion_wizard_start(chat_id, usuario)
+        else:
+            reply_text = _rendicion_wizard_handle_message(
+                chat_id=chat_id,
+                usuario=usuario,
+                message=message,
+            )
+
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+        send_telegram_message(
+            chat_id,
+            reply_text,
+            sesion=sesion,
+            usuario=usuario,
+            intent=None,
+            meta={"from_update_id": update.get("update_id"), "wizard": True},
+            marcar_para_entrenamiento=False,
+        )
+        return
+
+    # ----------------------------
+    # 4) Flujo normal por intents
+    # ----------------------------
+    intent, confianza = detect_intent_from_text(text, scope=sesion.contexto) if text else (None, 0.0)
     if intent:
         sesion.ultimo_intent = intent
         sesion.save(update_fields=["ultimo_intent"])
@@ -2461,3 +2646,475 @@ def handle_telegram_update(update: dict) -> None:
         meta={"from_update_id": update.get("update_id")},
         marcar_para_entrenamiento=marcar_train_out,
     )
+
+
+# ===================== WIZARD: Crear rendición (gasto) =====================
+
+_REND_WIZ_TTL = 60 * 30  # 30 min
+
+
+def _rend_wiz_key(chat_id: str) -> str:
+    return f"gzbot:rendicion:{str(chat_id)}"
+
+
+def _rend_wiz_get(chat_id: str) -> Optional[dict]:
+    return cache.get(_rend_wiz_key(chat_id))
+
+
+def _rend_wiz_set(chat_id: str, data: dict) -> None:
+    cache.set(_rend_wiz_key(chat_id), data, timeout=_REND_WIZ_TTL)
+
+
+def _rend_wiz_clear(chat_id: str) -> None:
+    cache.delete(_rend_wiz_key(chat_id))
+
+
+def _parse_clp_to_decimal(raw: str) -> Optional[Decimal]:
+    """
+    Acepta: 320240 | 320.240 | 320,240 | $320.240 | 320.240,50
+    Devuelve Decimal con 2 decimales.
+    """
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    s = s.replace("$", "").replace(" ", "")
+
+    # si viene con coma decimal (1.234,56)
+    if "," in s and "." in s:
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        # si solo hay comas, asumimos decimal si tiene 2 dígitos al final tipo 123,45
+        if "," in s:
+            parts = s.split(",")
+            if len(parts[-1]) in (1, 2):
+                s = s.replace(".", "").replace(",", ".")
+            else:
+                s = s.replace(",", "")
+        else:
+            # solo puntos: normalmente miles
+            # si hay más de 1 punto, miles; si hay 1 punto y 3 dígitos después => miles
+            if s.count(".") >= 2:
+                s = s.replace(".", "")
+            elif s.count(".") == 1:
+                a, b = s.split(".")
+                if len(b) == 3:
+                    s = a + b
+
+    try:
+        v = Decimal(s).quantize(Decimal("0.01"))
+        if v < 0:
+            return None
+        return v
+    except Exception:
+        return None
+
+
+def _wiz_fmt_choices(items: list[tuple[int, str]], title: str) -> str:
+    msg = f"{title}\n"
+    for i, (_id, name) in enumerate(items, start=1):
+        msg += f"{i}) {name}\n"
+    return msg.strip()
+
+
+def _get_recent_projects_for_user(usuario: CustomUser, limit: int = 6) -> list[tuple[int, str]]:
+    qs = (
+        CartolaMovimiento.objects
+        .filter(usuario=usuario, proyecto__isnull=False)
+        .select_related("proyecto")
+        .order_by("-fecha")
+        .only("proyecto_id", "proyecto__nombre")
+    )
+    seen = set()
+    out = []
+    for m in qs[:50]:
+        pid = m.proyecto_id
+        if pid and pid not in seen:
+            seen.add(pid)
+            out.append((pid, m.proyecto.nombre))
+            if len(out) >= limit:
+                break
+    return out
+
+
+def _search_projects(query: str, limit: int = 8) -> list[tuple[int, str]]:
+    q = (query or "").strip()
+    if not q:
+        return []
+    qs = Proyecto.objects.filter(nombre__icontains=q).order_by("nombre")[:limit]
+    return [(p.id, p.nombre) for p in qs]
+
+
+def _get_recent_tipos_for_user(usuario: CustomUser, limit: int = 6) -> list[tuple[int, str]]:
+    qs = (
+        CartolaMovimiento.objects
+        .filter(usuario=usuario, tipo__isnull=False)
+        .select_related("tipo")
+        .order_by("-fecha")
+        .only("tipo_id", "tipo__nombre")
+    )
+    seen = set()
+    out = []
+    for m in qs[:80]:
+        tid = m.tipo_id
+        if tid and tid not in seen:
+            seen.add(tid)
+            out.append((tid, m.tipo.nombre))
+            if len(out) >= limit:
+                break
+    return out
+
+
+def _search_tipos(query: str, limit: int = 10) -> list[tuple[int, str]]:
+    q = (query or "").strip()
+    if not q:
+        return []
+    qs = TipoGasto.objects.filter(nombre__icontains=q).order_by("nombre")[:limit]
+    return [(t.id, t.nombre) for t in qs]
+
+
+def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
+    """
+    Inicia flujo de rendición (gasto) igual a CartolaGastoForm:
+    proyecto, tipo, observaciones, numero_transferencia, cargos, comprobante.
+    """
+    state = {
+        "step": "proyecto",
+        "data": {
+            "proyecto_id": None,
+            "tipo_id": None,
+            "observaciones": "",
+            "numero_transferencia": "",
+            "cargos": None,
+            "comprobante_ready": False,
+        },
+        "choices": {
+            "proyectos": [],
+            "tipos": [],
+        }
+    }
+    _rend_wiz_set(chat_id, state)
+
+    recents = _get_recent_projects_for_user(usuario, limit=6)
+    if recents:
+        state["choices"]["proyectos"] = recents
+        _rend_wiz_set(chat_id, state)
+        return (
+            "🧾 <b>Nueva rendición (gasto)</b>\n\n"
+            "Paso 1/6: <b>Proyecto</b>\n"
+            "Responde con el <b>número</b> o escribe parte del nombre para buscar.\n\n"
+            + _wiz_fmt_choices(recents, "Proyectos recientes:")
+            + "\n\nEscribe <b>cancelar</b> para salir."
+        )
+
+    return (
+        "🧾 <b>Nueva rendición (gasto)</b>\n\n"
+        "Paso 1/6: <b>Proyecto</b>\n"
+        "Escribe parte del nombre del proyecto para buscar.\n\n"
+        "Escribe <b>cancelar</b> para salir."
+    )
+
+
+def _tg_extract_file_from_message(message: dict) -> Optional[dict]:
+    """
+    Devuelve dict con file_id + filename_hint.
+    Soporta document y photo.
+    """
+    doc = message.get("document")
+    if doc and doc.get("file_id"):
+        return {
+            "file_id": doc["file_id"],
+            "filename": doc.get("file_name") or "comprobante",
+        }
+
+    photos = message.get("photo") or []
+    if photos:
+        # tomar el más grande
+        best = photos[-1]
+        if best.get("file_id"):
+            return {
+                "file_id": best["file_id"],
+                "filename": "comprobante.jpg",
+            }
+
+    return None
+
+
+def _tg_download_file(token: str, file_id: str) -> tuple[str, bytes]:
+    """
+    Descarga un archivo desde Telegram y retorna (filename, bytes).
+    """
+    r = requests.get(
+        f"https://api.telegram.org/bot{token}/getFile",
+        params={"file_id": file_id},
+        timeout=15
+    )
+    data = r.json()
+    if not (isinstance(data, dict) and data.get("ok") and data.get("result")):
+        raise RuntimeError(f"getFile failed: {str(data)[:250]}")
+    file_path = data["result"].get("file_path")
+    if not file_path:
+        raise RuntimeError("getFile ok pero sin file_path")
+
+    url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+    r2 = requests.get(url, timeout=30)
+    r2.raise_for_status()
+
+    filename = file_path.split("/")[-1] or "comprobante"
+    return filename, r2.content
+
+
+def _rendicion_wizard_handle_message(
+    *,
+    chat_id: str,
+    usuario: CustomUser,
+    message: dict,
+) -> str:
+    """
+    Procesa pasos del wizard. Acepta texto y/o archivo.
+    """
+    state = _rend_wiz_get(chat_id)
+    if not state:
+        return "No tengo un flujo activo. Escribe: <b>nueva rendición</b>."
+
+    # cancelar
+    text_in = (message.get("text") or message.get("caption") or "").strip()
+    norm = _normalize(text_in)
+    if norm == "cancelar":
+        _rend_wiz_clear(chat_id)
+        return "✅ Listo, cancelé la creación de la rendición."
+
+    step = state.get("step")
+    data = state.get("data") or {}
+    choices = state.get("choices") or {}
+
+    # =================== STEP: PROYECTO ===================
+    if step == "proyecto":
+        # si responde número
+        if norm.isdigit():
+            idx = int(norm)
+            opts = choices.get("proyectos") or []
+            if 1 <= idx <= len(opts):
+                pid, pname = opts[idx - 1]
+                data["proyecto_id"] = pid
+                state["step"] = "tipo"
+                state["data"] = data
+                _rend_wiz_set(chat_id, state)
+
+                rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
+                if rec_tipos:
+                    state["choices"]["tipos"] = rec_tipos
+                    _rend_wiz_set(chat_id, state)
+                    return (
+                        f"✅ Proyecto: <b>{pname}</b>\n\n"
+                        "Paso 2/6: <b>Tipo de gasto</b>\n"
+                        "Responde con el <b>número</b> o escribe parte del nombre para buscar.\n\n"
+                        + _wiz_fmt_choices(rec_tipos, "Tipos recientes:")
+                        + "\n\nEscribe <b>cancelar</b> para salir."
+                    )
+
+                return (
+                    f"✅ Proyecto: <b>{pname}</b>\n\n"
+                    "Paso 2/6: <b>Tipo de gasto</b>\n"
+                    "Escribe parte del nombre del tipo (ej: combustible, peaje, hotel...).\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+        # si no, buscar por texto
+        q = (text_in or "").strip()
+        found = _search_projects(q, limit=8)
+        if not found:
+            recents = _get_recent_projects_for_user(usuario, limit=6)
+            if recents:
+                state["choices"]["proyectos"] = recents
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "No encontré proyectos con ese texto.\n\n"
+                    "Responde con el número o escribe otro texto:\n\n"
+                    + _wiz_fmt_choices(recents, "Proyectos recientes:")
+                )
+            return "No encontré proyectos con ese texto. Escribe otro nombre (o <b>cancelar</b>)."
+
+        # si solo 1 match, tomarlo
+        if len(found) == 1:
+            pid, pname = found[0]
+            data["proyecto_id"] = pid
+            state["step"] = "tipo"
+            state["data"] = data
+            _rend_wiz_set(chat_id, state)
+            return (
+                f"✅ Proyecto: <b>{pname}</b>\n\n"
+                "Paso 2/6: <b>Tipo de gasto</b>\n"
+                "Escribe parte del nombre del tipo (ej: combustible, peaje, hotel...).\n\n"
+                "Escribe <b>cancelar</b> para salir."
+            )
+
+        state["choices"]["proyectos"] = found
+        _rend_wiz_set(chat_id, state)
+        return (
+            "Encontré estos proyectos. Responde con el <b>número</b>:\n\n"
+            + _wiz_fmt_choices(found, "Resultados:")
+            + "\n\nEscribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: TIPO ===================
+    if step == "tipo":
+        if norm.isdigit():
+            idx = int(norm)
+            opts = choices.get("tipos") or []
+            if 1 <= idx <= len(opts):
+                tid, tname = opts[idx - 1]
+                data["tipo_id"] = tid
+                state["step"] = "observaciones"
+                state["data"] = data
+                _rend_wiz_set(chat_id, state)
+                return (
+                    f"✅ Tipo: <b>{tname}</b>\n\n"
+                    "Paso 3/6: <b>Observaciones</b>\n"
+                    "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+        q = (text_in or "").strip()
+        found = _search_tipos(q, limit=10)
+        if not found:
+            rec = _get_recent_tipos_for_user(usuario, limit=6)
+            if rec:
+                state["choices"]["tipos"] = rec
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "No encontré tipos con ese texto.\n\n"
+                    "Responde con el número o escribe otro texto:\n\n"
+                    + _wiz_fmt_choices(rec, "Tipos recientes:")
+                )
+            return "No encontré ese tipo. Escribe otro (o <b>cancelar</b>)."
+
+        if len(found) == 1:
+            tid, tname = found[0]
+            data["tipo_id"] = tid
+            state["step"] = "observaciones"
+            state["data"] = data
+            _rend_wiz_set(chat_id, state)
+            return (
+                f"✅ Tipo: <b>{tname}</b>\n\n"
+                "Paso 3/6: <b>Observaciones</b>\n"
+                "Escribe una breve observación.\n\n"
+                "Escribe <b>cancelar</b> para salir."
+            )
+
+        state["choices"]["tipos"] = found
+        _rend_wiz_set(chat_id, state)
+        return (
+            "Encontré estos tipos. Responde con el <b>número</b>:\n\n"
+            + _wiz_fmt_choices(found, "Resultados:")
+            + "\n\nEscribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: OBSERVACIONES ===================
+    if step == "observaciones":
+        obs = (text_in or "").strip()
+        if len(obs) < 3:
+            return "Escribe una observación un poquito más clara (mínimo 3 caracteres)."
+        data["observaciones"] = obs
+        state["step"] = "num_transferencia"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            "✅ Observaciones guardadas.\n\n"
+            "Paso 4/6: <b>N° transferencia</b>\n"
+            "Escribe el número de transferencia (o el identificador que usas).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: NUM TRANSFERENCIA ===================
+    if step == "num_transferencia":
+        nt = (text_in or "").strip()
+        if not nt:
+            return "El número de transferencia es obligatorio. Escríbelo (o <b>cancelar</b>)."
+        data["numero_transferencia"] = nt
+        state["step"] = "monto"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            "✅ Número de transferencia guardado.\n\n"
+            "Paso 5/6: <b>Monto</b>\n"
+            "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: MONTO ===================
+    if step == "monto":
+        v = _parse_clp_to_decimal(text_in)
+        if v is None:
+            return "Monto inválido. Ejemplo válido: <code>320.240</code> (o <code>$320.240</code>)."
+        data["cargos"] = v
+        state["step"] = "comprobante"
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+        return (
+            f"✅ Monto guardado: <b>{_fmt_clp(v)}</b>\n\n"
+            "Paso 6/6: <b>Comprobante</b>\n"
+            "Ahora envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: COMPROBANTE (archivo) ===================
+    if step == "comprobante":
+        file_info = _tg_extract_file_from_message(message)
+        if not file_info:
+            return (
+                "Necesito que envíes el comprobante como archivo (PDF/JPG/PNG) o foto.\n"
+                "Si ya lo tienes, envíalo ahora. (o <b>cancelar</b>)"
+            )
+
+        token = _get_bot_token()
+        if not token:
+            return "No tengo token de Telegram configurado. No puedo descargar el comprobante."
+
+        try:
+            fname, blob = _tg_download_file(token, file_info["file_id"])
+        except Exception as e:
+            logger.exception("Error descargando comprobante Telegram")
+            return f"Tuve un problema descargando el archivo desde Telegram: {e}"
+
+        # Validar extensión (tu modelo acepta pdf/jpg/jpeg/png)
+        low = (fname or "").lower()
+        if not any(low.endswith(ext) for ext in (".pdf", ".jpg", ".jpeg", ".png")):
+            return "Formato no permitido. Envíalo como PDF o imagen (jpg/png)."
+
+        # Crear registro en DB
+        try:
+            proyecto = Proyecto.objects.get(id=data["proyecto_id"])
+            tipo = TipoGasto.objects.get(id=data["tipo_id"])
+        except Exception:
+            _rend_wiz_clear(chat_id)
+            return "Se perdió la selección de proyecto/tipo. Inicia de nuevo con: <b>nueva rendición</b>."
+
+        mov = CartolaMovimiento(
+            usuario=usuario,
+            proyecto=proyecto,
+            tipo=tipo,
+            observaciones=data["observaciones"],
+            numero_transferencia=data["numero_transferencia"],
+            cargos=Decimal(str(data["cargos"] or 0)),
+            abonos=Decimal("0.00"),
+            status="pendiente_supervisor",  # 👈 igual a flujo normal de gasto
+        )
+
+        # asignar comprobante
+        mov.comprobante = ContentFile(blob, name=fname)
+        mov.save()
+
+        _rend_wiz_clear(chat_id)
+
+        return (
+            "✅ <b>Rendición creada</b>\n\n"
+            f"• Proyecto: {proyecto.nombre}\n"
+            f"• Tipo: {tipo.nombre}\n"
+            f"• Monto: <b>{_fmt_clp(mov.cargos)}</b>\n"
+            f"• Estado: <b>Pendiente supervisor</b>\n\n"
+            "Puedes ver el detalle en la web en <b>Mis Rendiciones</b>."
+        )
+
+    return "No entendí ese paso. Escribe <b>cancelar</b> y vuelve a intentar."
