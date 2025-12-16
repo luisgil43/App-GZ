@@ -15,8 +15,7 @@ from django.core.files.base import ContentFile
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from facturacion.models import (CartolaMovimiento, Proyecto,  # <-- nuevos
-                                TipoGasto)
+from facturacion.models import CartolaMovimiento, Proyecto, TipoGasto
 from liquidaciones.models import Liquidacion
 from operaciones.models import ServicioCotizado, SitioMovil
 from rrhh.models import ContratoTrabajo, CronogramaPago, DocumentoTrabajador
@@ -143,7 +142,7 @@ def _es_saludo(texto: str) -> bool:
 def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     """
     Intenta detectar si el mensaje habla de otra persona distinta al usuario.
-    Ej: 'contrato de Edgardo', 'liquidación de juan', 'liquidacion de edgardo', etc.
+    Ej: 'contrato de Edgardo', 'liquidación de juan', etc.
 
     ✅ ROBUSTO:
     - Mantiene detección por palabras capitalizadas (como antes).
@@ -155,7 +154,6 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     if not norm:
         return False
 
-    # Palabras que suelen venir como "candidatos" pero NO son nombres de personas
     NO_NOMBRES = {
         "cual",
         "que",
@@ -234,7 +232,6 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
         "en",
     }
 
-    # Normalizamos nombres del usuario
     nombres_usuario = set()
     for campo in [
         usuario.first_name,
@@ -247,9 +244,7 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
                 if trozo:
                     nombres_usuario.add(trozo)
 
-    # --------------------------
     # 1) Detección por Mayúsculas (como antes)
-    # --------------------------
     candidatos = []
     for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúñ]{2,}\b", texto_original):
         raw = m.group(0).strip()
@@ -264,10 +259,7 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
         if n_norm and n_norm not in nombres_usuario:
             return True
 
-    # --------------------------
     # 2) Heurística "de <nombre>" aunque esté en minúsculas
-    #    Solo si el texto habla de cosas personales sensibles.
-    # --------------------------
     tokens = norm.split()
     tokens_set = set(tokens)
 
@@ -305,7 +297,6 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
             continue
         if cand1 in NO_NOMBRES or cand1 in _STOPWORDS:
             continue
-
         if cand1 in nombres_usuario:
             continue
 
@@ -548,17 +539,12 @@ def detect_intent_from_text(
     Detección de intent basada en:
     1) overlap de tokens con ejemplos de entrenamiento
     2) refuerzo por palabras clave (liquidación, contrato, rendiciones, etc.)
-
-    Así, frases como "liquidacion", "ver mi liquidacion", "necesito mi contrato",
-    etc. se entienden aunque sean muy cortas.
     """
     user_tokens = set(_tokenize(texto))
     if not user_tokens:
         return None, 0.0
 
-    examples_qs = (
-        BotTrainingExample.objects.filter(activo=True).select_related("intent")
-    )
+    examples_qs = BotTrainingExample.objects.filter(activo=True).select_related("intent")
 
     if scope:
         examples_qs = examples_qs.filter(intent__scope__in=[scope, "global"])
@@ -603,11 +589,7 @@ def detect_intent_from_text(
         add_keyword_candidate("mi_produccion_hasta_hoy", 0.8)
 
     if "proyectos" in user_tokens or "servicios" in user_tokens:
-        if (
-            "pendientes" in user_tokens
-            or "pendiente" in user_tokens
-            or "asignados" in user_tokens
-        ):
+        if {"pendientes", "pendiente", "asignados"} & user_tokens:
             add_keyword_candidate("mis_proyectos_pendientes", 0.8)
 
     if {"asignacion", "asignaciones", "asignado", "asignados", "asignada", "asignadas"} & user_tokens:
@@ -617,36 +599,16 @@ def detect_intent_from_text(
         if not ({"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens):
             add_keyword_candidate("mis_proyectos_pendientes", 0.75)
 
-    if (
-        "rechazados" in user_tokens
-        or "rechazado" in user_tokens
-        or "rechazadas" in user_tokens
-        or "rechazada" in user_tokens
-    ):
+    if {"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens:
         add_keyword_candidate("mis_proyectos_rechazados", 0.8)
 
-    if (
-        "rendicion" in user_tokens
-        or "rendiciones" in user_tokens
-        or "gasto" in user_tokens
-        or "gastos" in user_tokens
-    ):
+    if {"rendicion", "rendiciones", "gasto", "gastos"} & user_tokens:
         add_keyword_candidate("mis_rendiciones_pendientes", 0.85)
 
-    if (
-        "basura" in user_tokens
-        or "residuos" in user_tokens
-        or "desechos" in user_tokens
-    ):
+    if {"basura", "residuos", "desechos"} & user_tokens:
         add_keyword_candidate("direccion_basura", 0.9)
 
-    if (
-        "pago" in user_tokens
-        or "pagan" in user_tokens
-        or "pagar" in user_tokens
-        or "corte" in user_tokens
-        or "cronograma" in user_tokens
-    ):
+    if {"pago", "pagan", "pagar", "corte", "cronograma"} & user_tokens:
         add_keyword_candidate("cronograma_produccion_corte", 0.7)
 
     if "sitio" in user_tokens or "site" in user_tokens:
@@ -688,10 +650,11 @@ def send_telegram_message(
 ) -> BotMessageLog:
     """
     Versión PRO:
-    - Usa parse_mode=HTML (más estable que Markdown en Telegram)
-    - Convierte *bold* -> <b>bold</b>, `code` -> <code>code</code>
-    - Split automático por límite de 4096 chars
-    - Fallback a texto plano si algo falla
+    - parse_mode=HTML
+    - A) Texto ya en HTML => se envía tal cual
+    - B) Texto "markdownish" (*bold*, `code`) => se convierte a HTML seguro
+    - Split automático por límite Telegram
+    - Fallback a texto plano si falla HTML
     """
     import html as _html  # stdlib
 
@@ -720,14 +683,7 @@ def send_telegram_message(
 
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    # ---------------------------
-    # Helpers internos
-    # ---------------------------
     def _split_text(raw: str, limit: int = 3800) -> list[str]:
-        """
-        Divide texto para no pasar el límite de Telegram.
-        Trata de cortar por bloques / saltos de línea primero.
-        """
         raw = (raw or "").replace("\r\n", "\n").strip()
         if not raw:
             return [""]
@@ -738,7 +694,6 @@ def send_telegram_message(
         parts: list[str] = []
         buf: list[str] = []
 
-        # intentamos por párrafos
         for block in raw.split("\n\n"):
             candidate = ("\n\n".join(buf + [block])).strip()
             if len(candidate) <= limit:
@@ -749,7 +704,6 @@ def send_telegram_message(
                 parts.append("\n\n".join(buf).strip())
                 buf = []
 
-            # si un bloque es gigante, lo partimos por líneas
             if len(block) > limit:
                 line_buf = ""
                 for line in block.split("\n"):
@@ -759,7 +713,6 @@ def send_telegram_message(
                     else:
                         if line_buf:
                             parts.append(line_buf)
-                        # si una línea sola supera el límite, la cortamos duro
                         if len(line) > limit:
                             start = 0
                             while start < len(line):
@@ -778,39 +731,38 @@ def send_telegram_message(
 
         return [p for p in parts if p is not None and p != ""]
 
+    _HTML_TAG_RE = re.compile(
+        r"</?(b|strong|i|em|u|s|strike|code|pre|a)(\s|>)", re.IGNORECASE
+    )
+
+    def _looks_like_html(raw: str) -> bool:
+        if not raw:
+            return False
+        return bool(_HTML_TAG_RE.search(raw))
+
     def _bold_to_html(escaped_text: str) -> str:
-        """
-        Convierte *bold* a <b>bold</b> sobre texto ya escapado.
-        Heurística simple (no cruza asteriscos anidados).
-        """
         return re.sub(r"\*(.+?)\*", r"<b>\1</b>", escaped_text)
 
     def _markdownish_to_html(raw: str) -> str:
-        """
-        Convierte el formato actual que tú generas (Markdown básico) a HTML seguro:
-        - `code` -> <code>code</code>
-        - *bold* -> <b>bold</b>
-        Todo lo demás se escapa.
-        """
         raw = (raw or "").replace("\r\n", "\n")
 
-        # Si hay backticks impares, no intentamos code spans (evita tags rotas)
         if raw.count("`") % 2 == 1:
             return _bold_to_html(_html.escape(raw))
 
-        parts = raw.split("`")  # pares => ok
+        parts = raw.split("`")
         out: list[str] = []
         for i, seg in enumerate(parts):
             if i % 2 == 1:
-                # code
                 out.append(f"<code>{_html.escape(seg)}</code>")
             else:
                 out.append(_bold_to_html(_html.escape(seg)))
         return "".join(out)
 
-    # ---------------------------
-    # Envío (con split)
-    # ---------------------------
+    def _to_html(raw: str) -> str:
+        if _looks_like_html(raw):
+            return (raw or "").replace("\r\n", "\n")
+        return _markdownish_to_html(raw)
+
     chunks = _split_text(text, limit=3800)
 
     results = []
@@ -819,12 +771,11 @@ def send_telegram_message(
     for idx, chunk in enumerate(chunks):
         payload = {
             "chat_id": chat_id_str,
-            "text": _markdownish_to_html(chunk),
+            "text": _to_html(chunk),
             "parse_mode": "HTML",
             "disable_web_page_preview": False,
         }
 
-        # reply_markup solo en el primer chunk (para no repetir teclados)
         if reply_markup and idx == 0:
             payload["reply_markup"] = reply_markup
 
@@ -846,10 +797,9 @@ def send_telegram_message(
             if not desc:
                 desc = resp.text[:500]
 
-            # Fallback: reintenta como texto plano sin parse_mode
             payload_plain = dict(payload)
             payload_plain.pop("parse_mode", None)
-            payload_plain["text"] = chunk  # texto original
+            payload_plain["text"] = chunk
 
             resp2 = requests.post(api_url, json=payload_plain, timeout=10)
             try:
@@ -873,9 +823,7 @@ def send_telegram_message(
                 desc2 = resp2.text[:500]
 
             any_error = True
-            results.append(
-                {"chunk": idx, "ok": False, "first_error": desc, "fallback_error": desc2}
-            )
+            results.append({"chunk": idx, "ok": False, "first_error": desc, "fallback_error": desc2})
             logger.error(
                 "Error enviando mensaje bot OUT a Telegram (chunk=%s): %s | fallback: %s",
                 idx, desc, desc2
@@ -886,7 +834,6 @@ def send_telegram_message(
             results.append({"chunk": idx, "ok": False, "exception": str(e)})
             logger.exception("Excepción enviando mensaje bot OUT a Telegram (chunk=%s)", idx)
 
-    # Guardamos detalles en meta (útil para debug)
     log.meta = {**meta, "telegram_send_results": results}
 
     if any_error:
@@ -896,6 +843,8 @@ def send_telegram_message(
         log.save(update_fields=["meta"])
 
     return log
+
+
 # ===================== Handlers de intents (respuestas) =====================
 
 def _respuesta_sin_usuario(chat_id: str) -> str:
@@ -950,10 +899,7 @@ def _handler_cronograma_produccion(usuario: CustomUser) -> str:
 
 def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     """
-    Maneja consultas de liquidaciones (PRO):
-    - "últimas N" => devuelve N liquidaciones (más recientes) en 1 solo mensaje
-    - "julio y septiembre" => devuelve ambas (si año es ambiguo, pregunta cuál)
-    - "julio" (sin año) => si hay varios años, pregunta el año
+    Maneja consultas de liquidaciones (PRO).
     """
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
@@ -1397,7 +1343,7 @@ def _extract_site_key(texto: str) -> Optional[Tuple[str, str]]:
     if not raw:
         return None
 
-    m = re.search(r"\b(\d{2})[_\-\s](\d{3})\b", raw)  # ✅ acepta 13_094, 13-094, 13 094
+    m = re.search(r"\b(\d{2})[_\-\s](\d{3})\b", raw)
     if m:
         return ("id_claro", f"{m.group(1)}_{m.group(2)}")
 
@@ -2044,9 +1990,7 @@ def _handler_mis_proyectos_rechazados(usuario: CustomUser) -> str:
     return msg
 
 
-def _handler_mis_rendiciones_pendientes(
-    usuario: CustomUser, texto_usuario: str
-) -> str:
+def _handler_mis_rendiciones_pendientes(usuario: CustomUser, texto_usuario: str) -> str:
     tokens = set(_tokenize(texto_usuario))
 
     if {"hacer", "crear", "nueva", "nuevo", "declarar", "ingresar"} & tokens:
@@ -2145,6 +2089,30 @@ def _handler_mis_rendiciones_pendientes(
     return msg
 
 
+def _get_basura_info_from_settings() -> dict:
+    """
+    Lee configuración de basura desde settings.
+    Nuevo formato:
+      - BOT_GZ_TEXTO_BASURA
+      - BOT_GZ_URL_BASURA (Google Maps)
+    Mantiene compatibilidad con claves antiguas (dirección en texto).
+    """
+    texto = getattr(settings, "BOT_GZ_TEXTO_BASURA", None)
+    texto = str(texto).strip() if texto else ""
+
+    url = getattr(settings, "BOT_GZ_URL_BASURA", None)
+    url = str(url).strip() if url else ""
+
+    direccion = _get_direccion_retiro_basura_from_settings() or ""
+    direccion = str(direccion).strip() if direccion else ""
+
+    if direccion.lower().startswith("http") and not url:
+        url = direccion
+        direccion = ""
+
+    return {"texto": texto, "url": url, "direccion": direccion}
+
+
 def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
     """
     Lee la dirección de retiro de basura desde settings.
@@ -2164,14 +2132,12 @@ def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
         if not val:
             continue
 
-        # Si es dict (opcional): {"Santiago": "...", "Concepcion": "...", "default": "..."}
         if isinstance(val, dict):
             default = val.get("default") or val.get("DEFAULT")
             if default:
                 txt = str(default).strip()
                 if txt:
                     return txt
-            # si no hay default, toma el primer valor no vacío
             for _k, _v in val.items():
                 if _v:
                     txt = str(_v).strip()
@@ -2179,7 +2145,6 @@ def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
                         return txt
             continue
 
-        # String / otros
         txt = str(val).strip()
         if txt:
             return txt
@@ -2189,25 +2154,31 @@ def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
 
 def _handler_direccion_basura(usuario: CustomUser, texto_usuario: str = "") -> str:
     """
-    Responde la dirección para botar/retirar basura.
-    - Si hay dirección configurada en settings: la usa.
-    - Si no: fallback a lo antiguo (_responder_direccion_basura()).
-    - Incluye un mensaje más claro si el usuario pregunta "dónde botar/tirar".
+    Responde info de disposición/retiro de basura usando settings:
+      - BOT_GZ_TEXTO_BASURA
+      - BOT_GZ_URL_BASURA
     """
-    direccion = _get_direccion_retiro_basura_from_settings()
+    info = _get_basura_info_from_settings() or {}
     norm = _normalize(texto_usuario or "")
 
     titulo = "🗑️ *Retiro de basura*"
-    if ("donde" in norm and ("botar" in norm or "tira" in norm or "tirar" in norm)) or "direccion" in norm:
+    if (("donde" in norm and ("botar" in norm or "tira" in norm or "tirar" in norm)) or ("direccion" in norm)):
         titulo = "🗑️ *¿Dónde botar la basura?*"
 
-    if direccion:
-        return (
-            f"{titulo}\n\n"
-            f"📍 Dirección: {direccion}\n"
-        )
+    texto = (info.get("texto") or "").strip()
+    direccion = (info.get("direccion") or "").strip()
+    url = (info.get("url") or "").strip()
 
-    # Fallback (compatibilidad con lo antiguo)
+    if texto or direccion or url:
+        msg = f"{titulo}\n\n"
+        if texto:
+            msg += f"📝 {texto}\n"
+        if direccion:
+            msg += f"📍 Dirección: {direccion}\n"
+        if url:
+            msg += f"🗺️ Mapa: {url}\n"
+        return msg.strip()
+
     return _responder_direccion_basura()
 
 
@@ -2229,10 +2200,7 @@ def run_intent(
         return _respuesta_sin_usuario(chat_id)
 
     # ============================
-    # ✅ Punto 3: Wizard Rendición
-    # - Si hay wizard activo, o si el texto dispara "nueva rendición",
-    #   NO caemos al fallback de intent.
-    # - Aquí soporta pasos por TEXTO (para archivo/foto lo maneja handle_telegram_update).
+    # ✅ Wizard Rendición (texto)
     # ============================
     try:
         wiz_state = _rend_wiz_get(chat_id)
@@ -2258,7 +2226,6 @@ def run_intent(
         if norm in triggers_start and not wiz_state:
             return _rendicion_wizard_start(chat_id, usuario)
 
-        # Continuación wizard (solo texto)
         return _rendicion_wizard_handle_message(
             chat_id=chat_id,
             usuario=usuario,
@@ -2267,6 +2234,13 @@ def run_intent(
 
     if not intent:
         tokens = set(_tokenize(texto_usuario))
+
+        # ✅ Basura (fallback directo por tokens)
+        if {"basura", "residuos", "desechos"} & tokens:
+            inbound_log.status = "ok"
+            inbound_log.marcar_para_entrenamiento = False
+            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+            return _handler_direccion_basura(usuario, texto_usuario)
 
         if ("supervisor" in tokens) and ({"aprobado", "aprobados", "aprobada", "aprobadas", "aprobacion", "aprobación"} & tokens):
             inbound_log.status = "ok"
@@ -2490,7 +2464,7 @@ def run_intent(
         return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
 
     if slug == "direccion_basura":
-        return _handler_direccion_basura(usuario)
+        return _handler_direccion_basura(usuario, texto_usuario)
 
     if slug == "mi_asignacion":
         return _handler_asignacion(usuario, texto_usuario)
@@ -2500,6 +2474,7 @@ def run_intent(
         "pero esta funcionalidad aún se está terminando de implementar en el bot.\n\n"
         "Mientras tanto, puedes revisar esa información directamente en la app web."
     )
+
 
 # ===================== Entry point: manejar update de Telegram =====================
 
@@ -2511,18 +2486,13 @@ def handle_telegram_update(update: dict) -> None:
     - callback_query (inline_keyboard)
     - wizard de rendición (incluye comprobante como PDF/foto aunque venga SIN texto)
     """
-    # ----------------------------
-    # 1) Detectar tipo de update
-    # ----------------------------
     callback = update.get("callback_query")
     if callback:
-        # Inline keyboard: el "texto" viene en callback_query.data
         msg_obj = callback.get("message") or {}
         chat = msg_obj.get("chat") or {}
         from_user = callback.get("from") or {}
         text = (callback.get("data") or "").strip()
 
-        # Ack (quita el “loading…” del botón)
         cb_id = callback.get("id")
         token = _get_bot_token()
         if token and cb_id:
@@ -2535,7 +2505,6 @@ def handle_telegram_update(update: dict) -> None:
             except Exception:
                 logger.exception("No se pudo hacer answerCallbackQuery (callback_id=%s)", cb_id)
 
-        # Para reutilizar el flujo, armamos un "message" compatible
         message = dict(msg_obj)
         message["text"] = text
 
@@ -2554,18 +2523,13 @@ def handle_telegram_update(update: dict) -> None:
         logger.info("Update de Telegram sin chat_id: %s", update)
         return
 
-    # ----------------------------
-    # 2) Sesión + usuario
-    # ----------------------------
     sesion, usuario = get_or_create_session(chat_id, from_user)
     sesion.ultima_interaccion = timezone.now()
     sesion.save(update_fields=["ultima_interaccion"])
 
-    # Si viene solo archivo/foto y no texto, dejamos trazabilidad igual
     has_file = bool(message.get("document") or message.get("photo"))
     text_for_log = text if text else ("[archivo]" if has_file else "")
 
-    # Si no hay nada procesable y no hay wizard activo, ignorar
     wizard_state = _rend_wiz_get(chat_id)
     if not text_for_log and not wizard_state:
         logger.info("Mensaje sin texto/caption y sin wizard activo (chat_id=%s)", chat_id)
@@ -2581,11 +2545,8 @@ def handle_telegram_update(update: dict) -> None:
         meta={"update_id": update.get("update_id"), "callback": bool(callback)},
     )
 
-    # ----------------------------
-    # 3) WIZARD rendición (punto 3 y 4)
-    # ----------------------------
+    # WIZARD rendición
     norm = _normalize(text or "")
-
     triggers_start = {
         "nueva rendicion",
         "nueva rendicion gasto",
@@ -2622,9 +2583,6 @@ def handle_telegram_update(update: dict) -> None:
         )
         return
 
-    # ----------------------------
-    # 4) Flujo normal por intents
-    # ----------------------------
     intent, confianza = detect_intent_from_text(text, scope=sesion.contexto) if text else (None, 0.0)
     if intent:
         sesion.ultimo_intent = intent
@@ -2681,11 +2639,9 @@ def _parse_clp_to_decimal(raw: str) -> Optional[Decimal]:
         return None
     s = s.replace("$", "").replace(" ", "")
 
-    # si viene con coma decimal (1.234,56)
     if "," in s and "." in s:
         s = s.replace(".", "").replace(",", ".")
     else:
-        # si solo hay comas, asumimos decimal si tiene 2 dígitos al final tipo 123,45
         if "," in s:
             parts = s.split(",")
             if len(parts[-1]) in (1, 2):
@@ -2693,8 +2649,6 @@ def _parse_clp_to_decimal(raw: str) -> Optional[Decimal]:
             else:
                 s = s.replace(",", "")
         else:
-            # solo puntos: normalmente miles
-            # si hay más de 1 punto, miles; si hay 1 punto y 3 dígitos después => miles
             if s.count(".") >= 2:
                 s = s.replace(".", "")
             elif s.count(".") == 1:
@@ -2712,10 +2666,21 @@ def _parse_clp_to_decimal(raw: str) -> Optional[Decimal]:
 
 
 def _wiz_fmt_choices(items: list[tuple[int, str]], title: str) -> str:
-    msg = f"{title}\n"
+    import html as _html
+    msg = f"<b>{_html.escape(title)}</b>\n"
     for i, (_id, name) in enumerate(items, start=1):
-        msg += f"{i}) {name}\n"
+        msg += f"{i}) {_html.escape(name or '—')}\n"
     return msg.strip()
+
+
+def _get_default_projects(limit: int = 10) -> list[tuple[int, str]]:
+    qs = Proyecto.objects.order_by("nombre")[:limit]
+    return [(p.id, p.nombre) for p in qs]
+
+
+def _get_default_tipos(limit: int = 10) -> list[tuple[int, str]]:
+    qs = TipoGasto.objects.order_by("nombre")[:limit]
+    return [(t.id, t.nombre) for t in qs]
 
 
 def _get_recent_projects_for_user(usuario: CustomUser, limit: int = 6) -> list[tuple[int, str]]:
@@ -2728,7 +2693,7 @@ def _get_recent_projects_for_user(usuario: CustomUser, limit: int = 6) -> list[t
     )
     seen = set()
     out = []
-    for m in qs[:50]:
+    for m in qs[:80]:
         pid = m.proyecto_id
         if pid and pid not in seen:
             seen.add(pid)
@@ -2756,7 +2721,7 @@ def _get_recent_tipos_for_user(usuario: CustomUser, limit: int = 6) -> list[tupl
     )
     seen = set()
     out = []
-    for m in qs[:80]:
+    for m in qs[:120]:
         tid = m.tipo_id
         if tid and tid not in seen:
             seen.add(tid)
@@ -2776,9 +2741,12 @@ def _search_tipos(query: str, limit: int = 10) -> list[tuple[int, str]]:
 
 def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
     """
-    Inicia flujo de rendición (gasto) igual a CartolaGastoForm:
-    proyecto, tipo, observaciones, numero_transferencia, cargos, comprobante.
+    Inicia flujo de rendición (gasto):
+    proyecto, tipo, observaciones, numero_transferencia, cargos, comprobante, confirmación.
     """
+    recents = _get_recent_projects_for_user(usuario, limit=6)
+    defaults = _get_default_projects(limit=8)
+
     state = {
         "step": "proyecto",
         "data": {
@@ -2787,55 +2755,55 @@ def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
             "observaciones": "",
             "numero_transferencia": "",
             "cargos": None,
-            "comprobante_ready": False,
+            "comprobante_file_id": None,
+            "comprobante_filename": None,
         },
         "choices": {
-            "proyectos": [],
+            "proyectos": recents or defaults or [],
             "tipos": [],
         }
     }
     _rend_wiz_set(chat_id, state)
 
-    recents = _get_recent_projects_for_user(usuario, limit=6)
-    if recents:
-        state["choices"]["proyectos"] = recents
-        _rend_wiz_set(chat_id, state)
-        return (
-            "🧾 <b>Nueva rendición (gasto)</b>\n\n"
-            "Paso 1/6: <b>Proyecto</b>\n"
-            "Responde con el <b>número</b> o escribe parte del nombre para buscar.\n\n"
-            + _wiz_fmt_choices(recents, "Proyectos recientes:")
-            + "\n\nEscribe <b>cancelar</b> para salir."
-        )
-
-    return (
+    msg = (
         "🧾 <b>Nueva rendición (gasto)</b>\n\n"
-        "Paso 1/6: <b>Proyecto</b>\n"
-        "Escribe parte del nombre del proyecto para buscar.\n\n"
-        "Escribe <b>cancelar</b> para salir."
+        "Paso 1/7: <b>Proyecto</b>\n"
+        "Responde con el <b>número</b> (recomendado) o escribe parte del nombre para buscar.\n\n"
     )
+
+    if state["choices"]["proyectos"]:
+        label = "Proyectos recientes:" if recents else "Proyectos disponibles:"
+        msg += _wiz_fmt_choices(state["choices"]["proyectos"], label)
+        msg += "\n\nTambién puedes escribir otro texto para buscar."
+    else:
+        msg += "Escribe parte del nombre del proyecto para buscar."
+
+    msg += "\n\nEscribe <b>cancelar</b> para salir."
+    return msg
 
 
 def _tg_extract_file_from_message(message: dict) -> Optional[dict]:
     """
-    Devuelve dict con file_id + filename_hint.
-    Soporta document y photo.
+    Extrae un archivo desde un message de Telegram:
+    - document => file_id + filename
+    - photo => file_id (mayor resolución) + filename generado
+    Retorna: {"file_id": str, "filename": str}
     """
     doc = message.get("document")
     if doc and doc.get("file_id"):
         return {
-            "file_id": doc["file_id"],
+            "file_id": doc.get("file_id"),
             "filename": doc.get("file_name") or "comprobante",
         }
 
-    photos = message.get("photo") or []
-    if photos:
-        # tomar el más grande
-        best = photos[-1]
-        if best.get("file_id"):
+    photos = message.get("photo")
+    if photos and isinstance(photos, list):
+        best = photos[-1]  # usualmente el de mayor resolución
+        if best and best.get("file_id"):
+            fu = best.get("file_unique_id") or best.get("file_id")
             return {
-                "file_id": best["file_id"],
-                "filename": "comprobante.jpg",
+                "file_id": best.get("file_id"),
+                "filename": f"comprobante_{fu}.jpg",
             }
 
     return None
@@ -2872,15 +2840,19 @@ def _rendicion_wizard_handle_message(
     message: dict,
 ) -> str:
     """
-    Procesa pasos del wizard. Acepta texto y/o archivo.
+    Wizard con UX PRO:
+    - En Proyecto/Tipo: muestra lista y permite elegir por número.
+    - Al final: CONFIRMACIÓN antes de guardar.
     """
+    import html as _html
+
     state = _rend_wiz_get(chat_id)
     if not state:
         return "No tengo un flujo activo. Escribe: <b>nueva rendición</b>."
 
-    # cancelar
     text_in = (message.get("text") or message.get("caption") or "").strip()
     norm = _normalize(text_in)
+
     if norm == "cancelar":
         _rend_wiz_clear(chat_id)
         return "✅ Listo, cancelé la creación de la rendición."
@@ -2889,9 +2861,63 @@ def _rendicion_wizard_handle_message(
     data = state.get("data") or {}
     choices = state.get("choices") or {}
 
+    def _proyectos_sugeridos_msg(extra_top: str = "") -> str:
+        opts = choices.get("proyectos") or []
+        if not opts:
+            opts = _get_default_projects(limit=10)
+            state["choices"]["proyectos"] = opts
+            _rend_wiz_set(chat_id, state)
+        msg = ""
+        if extra_top:
+            msg += extra_top.strip() + "\n\n"
+        msg += _wiz_fmt_choices(opts, "Elige un proyecto:")
+        msg += "\n\nTip: también puedes escribir parte del nombre para buscar."
+        msg += "\n\nEscribe <b>cancelar</b> para salir."
+        return msg
+
+    def _tipos_sugeridos_msg(extra_top: str = "") -> str:
+        opts = choices.get("tipos") or []
+        if not opts:
+            rec = _get_recent_tipos_for_user(usuario, limit=6)
+            opts = rec or _get_default_tipos(limit=10)
+            state["choices"]["tipos"] = opts
+            _rend_wiz_set(chat_id, state)
+        msg = ""
+        if extra_top:
+            msg += extra_top.strip() + "\n\n"
+        msg += _wiz_fmt_choices(opts, "Elige un tipo de gasto:")
+        msg += "\n\nTip: también puedes escribir parte del nombre para buscar."
+        msg += "\n\nEscribe <b>cancelar</b> para salir."
+        return msg
+
+    def _confirm_msg(proyecto_nombre: str, tipo_nombre: str) -> str:
+        obs = _html.escape((data.get("observaciones") or "").strip() or "—")
+        nt = _html.escape((data.get("numero_transferencia") or "").strip() or "—")
+        monto = data.get("cargos")
+        monto_txt = _html.escape(_fmt_clp(monto)) if monto is not None else "—"
+
+        msg = (
+            "🧾 <b>Revisa tu rendición</b>\n\n"
+            f"• <b>Proyecto:</b> {_html.escape(proyecto_nombre)}\n"
+            f"• <b>Tipo:</b> {_html.escape(tipo_nombre)}\n"
+            f"• <b>Observaciones:</b> {obs}\n"
+            f"• <b>N° transferencia:</b> {nt}\n"
+            f"• <b>Monto:</b> <b>{monto_txt}</b>\n"
+            f"• <b>Comprobante:</b> recibido ✅\n\n"
+            "<b>¿Confirmas para enviar?</b>\n"
+            "1) ✅ Confirmar y guardar\n"
+            "2) ✏️ Cambiar proyecto\n"
+            "3) ✏️ Cambiar tipo\n"
+            "4) ✏️ Cambiar observaciones\n"
+            "5) ✏️ Cambiar N° transferencia\n"
+            "6) ✏️ Cambiar monto\n"
+            "7) ❌ Cancelar\n\n"
+            "Responde con el <b>número</b>."
+        )
+        return msg
+
     # =================== STEP: PROYECTO ===================
     if step == "proyecto":
-        # si responde número
         if norm.isdigit():
             idx = int(norm)
             opts = choices.get("proyectos") or []
@@ -2900,54 +2926,49 @@ def _rendicion_wizard_handle_message(
                 data["proyecto_id"] = pid
                 state["step"] = "tipo"
                 state["data"] = data
-                _rend_wiz_set(chat_id, state)
 
                 rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
-                if rec_tipos:
-                    state["choices"]["tipos"] = rec_tipos
-                    _rend_wiz_set(chat_id, state)
-                    return (
-                        f"✅ Proyecto: <b>{pname}</b>\n\n"
-                        "Paso 2/6: <b>Tipo de gasto</b>\n"
-                        "Responde con el <b>número</b> o escribe parte del nombre para buscar.\n\n"
-                        + _wiz_fmt_choices(rec_tipos, "Tipos recientes:")
-                        + "\n\nEscribe <b>cancelar</b> para salir."
-                    )
+                state["choices"]["tipos"] = rec_tipos or _get_default_tipos(limit=10)
 
-                return (
-                    f"✅ Proyecto: <b>{pname}</b>\n\n"
-                    "Paso 2/6: <b>Tipo de gasto</b>\n"
-                    "Escribe parte del nombre del tipo (ej: combustible, peaje, hotel...).\n\n"
-                    "Escribe <b>cancelar</b> para salir."
-                )
-
-        # si no, buscar por texto
-        q = (text_in or "").strip()
-        found = _search_projects(q, limit=8)
-        if not found:
-            recents = _get_recent_projects_for_user(usuario, limit=6)
-            if recents:
-                state["choices"]["proyectos"] = recents
                 _rend_wiz_set(chat_id, state)
-                return (
-                    "No encontré proyectos con ese texto.\n\n"
-                    "Responde con el número o escribe otro texto:\n\n"
-                    + _wiz_fmt_choices(recents, "Proyectos recientes:")
-                )
-            return "No encontré proyectos con ese texto. Escribe otro nombre (o <b>cancelar</b>)."
 
-        # si solo 1 match, tomarlo
+                return (
+                    f"✅ <b>Proyecto seleccionado:</b> {_html.escape(pname)}\n\n"
+                    "Paso 2/7: <b>Tipo de gasto</b>\n"
+                    "Responde con el <b>número</b> (recomendado) o escribe parte del nombre para buscar.\n\n"
+                    + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
+                    + "\n\nEscribe <b>cancelar</b> para salir."
+                )
+
+            return _proyectos_sugeridos_msg("Ese número no está en la lista. Prueba otra opción.")
+
+        q = (text_in or "").strip()
+        found = _search_projects(q, limit=10)
+
+        if not found:
+            rec = _get_recent_projects_for_user(usuario, limit=6)
+            opts = rec or _get_default_projects(limit=10)
+            state["choices"]["proyectos"] = opts
+            _rend_wiz_set(chat_id, state)
+            return _proyectos_sugeridos_msg("No encontré proyectos con ese texto.")
+
         if len(found) == 1:
             pid, pname = found[0]
             data["proyecto_id"] = pid
             state["step"] = "tipo"
             state["data"] = data
+
+            rec_tipos = _get_recent_tipos_for_user(usuario, limit=6)
+            state["choices"]["tipos"] = rec_tipos or _get_default_tipos(limit=10)
+
             _rend_wiz_set(chat_id, state)
+
             return (
-                f"✅ Proyecto: <b>{pname}</b>\n\n"
-                "Paso 2/6: <b>Tipo de gasto</b>\n"
-                "Escribe parte del nombre del tipo (ej: combustible, peaje, hotel...).\n\n"
-                "Escribe <b>cancelar</b> para salir."
+                f"✅ <b>Proyecto:</b> {_html.escape(pname)}\n\n"
+                "Paso 2/7: <b>Tipo de gasto</b>\n"
+                "Responde con el <b>número</b> (recomendado) o escribe parte del nombre para buscar.\n\n"
+                + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
+                + "\n\nEscribe <b>cancelar</b> para salir."
             )
 
         state["choices"]["proyectos"] = found
@@ -2970,25 +2991,21 @@ def _rendicion_wizard_handle_message(
                 state["data"] = data
                 _rend_wiz_set(chat_id, state)
                 return (
-                    f"✅ Tipo: <b>{tname}</b>\n\n"
-                    "Paso 3/6: <b>Observaciones</b>\n"
+                    f"✅ <b>Tipo seleccionado:</b> {_html.escape(tname)}\n\n"
+                    "Paso 3/7: <b>Observaciones</b>\n"
                     "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
                     "Escribe <b>cancelar</b> para salir."
                 )
+            return _tipos_sugeridos_msg("Ese número no está en la lista. Prueba otra opción.")
 
         q = (text_in or "").strip()
-        found = _search_tipos(q, limit=10)
+        found = _search_tipos(q, limit=12)
         if not found:
             rec = _get_recent_tipos_for_user(usuario, limit=6)
-            if rec:
-                state["choices"]["tipos"] = rec
-                _rend_wiz_set(chat_id, state)
-                return (
-                    "No encontré tipos con ese texto.\n\n"
-                    "Responde con el número o escribe otro texto:\n\n"
-                    + _wiz_fmt_choices(rec, "Tipos recientes:")
-                )
-            return "No encontré ese tipo. Escribe otro (o <b>cancelar</b>)."
+            opts = rec or _get_default_tipos(limit=10)
+            state["choices"]["tipos"] = opts
+            _rend_wiz_set(chat_id, state)
+            return _tipos_sugeridos_msg("No encontré ese tipo con ese texto.")
 
         if len(found) == 1:
             tid, tname = found[0]
@@ -2997,8 +3014,8 @@ def _rendicion_wizard_handle_message(
             state["data"] = data
             _rend_wiz_set(chat_id, state)
             return (
-                f"✅ Tipo: <b>{tname}</b>\n\n"
-                "Paso 3/6: <b>Observaciones</b>\n"
+                f"✅ <b>Tipo:</b> {_html.escape(tname)}\n\n"
+                "Paso 3/7: <b>Observaciones</b>\n"
                 "Escribe una breve observación.\n\n"
                 "Escribe <b>cancelar</b> para salir."
             )
@@ -3021,8 +3038,8 @@ def _rendicion_wizard_handle_message(
         state["data"] = data
         _rend_wiz_set(chat_id, state)
         return (
-            "✅ Observaciones guardadas.\n\n"
-            "Paso 4/6: <b>N° transferencia</b>\n"
+            "✅ <b>Observaciones guardadas.</b>\n\n"
+            "Paso 4/7: <b>N° transferencia</b>\n"
             "Escribe el número de transferencia (o el identificador que usas).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3037,8 +3054,8 @@ def _rendicion_wizard_handle_message(
         state["data"] = data
         _rend_wiz_set(chat_id, state)
         return (
-            "✅ Número de transferencia guardado.\n\n"
-            "Paso 5/6: <b>Monto</b>\n"
+            "✅ <b>N° transferencia guardado.</b>\n\n"
+            "Paso 5/7: <b>Monto</b>\n"
             "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3053,8 +3070,8 @@ def _rendicion_wizard_handle_message(
         state["data"] = data
         _rend_wiz_set(chat_id, state)
         return (
-            f"✅ Monto guardado: <b>{_fmt_clp(v)}</b>\n\n"
-            "Paso 6/6: <b>Comprobante</b>\n"
+            f"✅ <b>Monto guardado:</b> <b>{_html.escape(_fmt_clp(v))}</b>\n\n"
+            "Paso 6/7: <b>Comprobante</b>\n"
             "Ahora envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3065,25 +3082,20 @@ def _rendicion_wizard_handle_message(
         if not file_info:
             return (
                 "Necesito que envíes el comprobante como archivo (PDF/JPG/PNG) o foto.\n"
-                "Si ya lo tienes, envíalo ahora. (o <b>cancelar</b>)"
+                "Envíalo ahora. (o <b>cancelar</b>)"
             )
 
-        token = _get_bot_token()
-        if not token:
-            return "No tengo token de Telegram configurado. No puedo descargar el comprobante."
-
-        try:
-            fname, blob = _tg_download_file(token, file_info["file_id"])
-        except Exception as e:
-            logger.exception("Error descargando comprobante Telegram")
-            return f"Tuve un problema descargando el archivo desde Telegram: {e}"
-
-        # Validar extensión (tu modelo acepta pdf/jpg/jpeg/png)
-        low = (fname or "").lower()
+        fname = (file_info.get("filename") or "comprobante").strip()
+        low = fname.lower()
         if not any(low.endswith(ext) for ext in (".pdf", ".jpg", ".jpeg", ".png")):
             return "Formato no permitido. Envíalo como PDF o imagen (jpg/png)."
 
-        # Crear registro en DB
+        data["comprobante_file_id"] = file_info["file_id"]
+        data["comprobante_filename"] = fname
+        state["data"] = data
+        state["step"] = "confirm"
+        _rend_wiz_set(chat_id, state)
+
         try:
             proyecto = Proyecto.objects.get(id=data["proyecto_id"])
             tipo = TipoGasto.objects.get(id=data["tipo_id"])
@@ -3091,30 +3103,138 @@ def _rendicion_wizard_handle_message(
             _rend_wiz_clear(chat_id)
             return "Se perdió la selección de proyecto/tipo. Inicia de nuevo con: <b>nueva rendición</b>."
 
-        mov = CartolaMovimiento(
-            usuario=usuario,
-            proyecto=proyecto,
-            tipo=tipo,
-            observaciones=data["observaciones"],
-            numero_transferencia=data["numero_transferencia"],
-            cargos=Decimal(str(data["cargos"] or 0)),
-            abonos=Decimal("0.00"),
-            status="pendiente_supervisor",  # 👈 igual a flujo normal de gasto
-        )
+        return _confirm_msg(proyecto.nombre, tipo.nombre)
 
-        # asignar comprobante
-        mov.comprobante = ContentFile(blob, name=fname)
-        mov.save()
+    # =================== STEP: CONFIRM ===================
+    if step == "confirm":
+        file_info = _tg_extract_file_from_message(message)
+        if file_info and file_info.get("file_id"):
+            fname = (file_info.get("filename") or "comprobante").strip()
+            low = fname.lower()
+            if any(low.endswith(ext) for ext in (".pdf", ".jpg", ".jpeg", ".png")):
+                data["comprobante_file_id"] = file_info["file_id"]
+                data["comprobante_filename"] = fname
+                state["data"] = data
+                _rend_wiz_set(chat_id, state)
 
-        _rend_wiz_clear(chat_id)
+        if norm.isdigit():
+            op = int(norm)
+            if op == 1:
+                token = _get_bot_token()
+                if not token:
+                    return "No tengo token de Telegram configurado. No puedo descargar el comprobante."
 
-        return (
-            "✅ <b>Rendición creada</b>\n\n"
-            f"• Proyecto: {proyecto.nombre}\n"
-            f"• Tipo: {tipo.nombre}\n"
-            f"• Monto: <b>{_fmt_clp(mov.cargos)}</b>\n"
-            f"• Estado: <b>Pendiente supervisor</b>\n\n"
-            "Puedes ver el detalle en la web en <b>Mis Rendiciones</b>."
-        )
+                try:
+                    proyecto = Proyecto.objects.get(id=data["proyecto_id"])
+                    tipo = TipoGasto.objects.get(id=data["tipo_id"])
+                except Exception:
+                    _rend_wiz_clear(chat_id)
+                    return "Se perdió la selección de proyecto/tipo. Inicia de nuevo con: <b>nueva rendición</b>."
+
+                file_id = data.get("comprobante_file_id")
+                if not file_id:
+                    state["step"] = "comprobante"
+                    _rend_wiz_set(chat_id, state)
+                    return (
+                        "No tengo el comprobante registrado. Envíamelo otra vez.\n\n"
+                        "Paso 6/7: <b>Comprobante</b>\n"
+                        "Envíame el comprobante como PDF o imagen."
+                    )
+
+                try:
+                    fname_dl, blob = _tg_download_file(token, file_id)
+                except Exception as e:
+                    logger.exception("Error descargando comprobante Telegram (confirm)")
+                    return f"Tuve un problema descargando el archivo desde Telegram: {e}"
+
+                fname_final = (data.get("comprobante_filename") or fname_dl or "comprobante").strip()
+
+                mov = CartolaMovimiento(
+                    usuario=usuario,
+                    proyecto=proyecto,
+                    tipo=tipo,
+                    observaciones=data.get("observaciones") or "",
+                    numero_transferencia=data.get("numero_transferencia") or "",
+                    cargos=Decimal(str(data.get("cargos") or 0)),
+                    abonos=Decimal("0.00"),
+                    status="pendiente_supervisor",
+                )
+                mov.comprobante = ContentFile(blob, name=fname_final)
+                mov.save()
+
+                _rend_wiz_clear(chat_id)
+
+                return (
+                    "✅ <b>Rendición creada y enviada</b>\n\n"
+                    f"• <b>Proyecto:</b> {_html.escape(proyecto.nombre)}\n"
+                    f"• <b>Tipo:</b> {_html.escape(tipo.nombre)}\n"
+                    f"• <b>Monto:</b> <b>{_html.escape(_fmt_clp(mov.cargos))}</b>\n"
+                    f"• <b>Estado:</b> <b>Pendiente supervisor</b>\n\n"
+                    "Puedes ver el detalle en la web en <b>Mis Rendiciones</b>."
+                )
+
+            if op == 2:
+                state["step"] = "proyecto"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar proyecto</b>\n\n"
+                    "Paso 1/7: <b>Proyecto</b>\n"
+                    "Responde con el número o escribe parte del nombre para buscar.\n\n"
+                    + _wiz_fmt_choices(state["choices"].get("proyectos") or _get_default_projects(10), "Opciones:")
+                    + "\n\nEscribe <b>cancelar</b> para salir."
+                )
+
+            if op == 3:
+                state["step"] = "tipo"
+                state["choices"]["tipos"] = _get_recent_tipos_for_user(usuario, 6) or _get_default_tipos(10)
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar tipo</b>\n\n"
+                    "Paso 2/7: <b>Tipo de gasto</b>\n"
+                    "Responde con el número o escribe parte del nombre para buscar.\n\n"
+                    + _wiz_fmt_choices(state["choices"]["tipos"], "Opciones:")
+                    + "\n\nEscribe <b>cancelar</b> para salir."
+                )
+
+            if op == 4:
+                state["step"] = "observaciones"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar observaciones</b>\n\n"
+                    "Paso 3/7: <b>Observaciones</b>\n"
+                    "Escribe una breve observación.\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 5:
+                state["step"] = "num_transferencia"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar N° transferencia</b>\n\n"
+                    "Paso 4/7: <b>N° transferencia</b>\n"
+                    "Escribe el número de transferencia.\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 6:
+                state["step"] = "monto"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar monto</b>\n\n"
+                    "Paso 5/7: <b>Monto</b>\n"
+                    "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>)."
+                    "\n\nEscribe <b>cancelar</b> para salir."
+                )
+
+            if op == 7:
+                _rend_wiz_clear(chat_id)
+                return "✅ Listo, cancelé la creación de la rendición."
+
+        if norm in {"si", "sí", "ok", "confirmo", "confirmar", "confirmado", "dale"}:
+            message2 = dict(message)
+            message2["text"] = "1"
+            return _rendicion_wizard_handle_message(chat_id=chat_id, usuario=usuario, message=message2)
+
+        return "Responde con el <b>número</b> (1 a 7) para confirmar, editar o cancelar."
 
     return "No entendí ese paso. Escribe <b>cancelar</b> y vuelve a intentar."
