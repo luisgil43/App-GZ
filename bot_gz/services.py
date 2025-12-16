@@ -2781,7 +2781,6 @@ def _rendicion_wizard_start(chat_id: str, usuario: CustomUser) -> str:
             "numero_doc": None,
             "rut_factura": None,
             "observaciones": "",
-            "numero_transferencia": "",
             "cargos": None,
             "comprobante_file_id": None,
             "comprobante_filename": None,
@@ -2908,9 +2907,10 @@ def _rendicion_wizard_handle_message(
     """
     Wizard con UX PRO:
     - En Proyecto/Tipo: muestra lista y permite elegir por número.
-    - ✅ Incluye: Tipo de documento + Nº documento + Validación SII (RUT)
+    - ✅ Incluye: Tipo de documento + Nº documento (comprobante) + Validación SII (RUT)
     - Al final: CONFIRMACIÓN antes de guardar.
     - ✅ FIX: Si editas un campo desde CONFIRM, vuelve al resumen final (no re-pide todo).
+    - ✅ FIX: No pide N° transferencia (solo N° comprobante = numero_doc).
     """
     import html as _html
     import re as _re
@@ -2990,9 +2990,7 @@ def _rendicion_wizard_handle_message(
         tipo_doc = (data.get("tipo_doc") or "").strip() or "—"
         rut = (data.get("rut_factura") or "").strip() or "—"
         n_doc = (data.get("numero_doc") or "").strip() or "—"
-
         obs = _html.escape((data.get("observaciones") or "").strip() or "—")
-        nt = _html.escape((data.get("numero_transferencia") or "").strip() or "—")
 
         monto = data.get("cargos")
         monto_txt = _html.escape(_fmt_clp(monto)) if monto is not None else "—"
@@ -3003,10 +3001,9 @@ def _rendicion_wizard_handle_message(
             f"• <b>Tipo gasto:</b> {_html.escape(tipo_nombre)}\n"
             f"• <b>Tipo doc:</b> {_html.escape(tipo_doc)}\n"
             f"• <b>RUT emisor:</b> {_html.escape(rut)}\n"
-            f"• <b>N° doc:</b> {_html.escape(n_doc)}\n"
-            f"• <b>Observaciones:</b> {obs}\n"
-            f"• <b>N° transferencia:</b> {nt}\n"
+            f"• <b>N° comprobante:</b> {_html.escape(n_doc)}\n"
             f"• <b>Monto:</b> <b>{monto_txt}</b>\n"
+            f"• <b>Observaciones:</b> {obs}\n"
             f"• <b>Comprobante:</b> recibido ✅\n\n"
             "<b>¿Confirmas para enviar?</b>\n"
             "1) ✅ Confirmar y guardar\n"
@@ -3014,10 +3011,10 @@ def _rendicion_wizard_handle_message(
             "3) ✏️ Cambiar tipo de gasto\n"
             "4) ✏️ Cambiar tipo de documento\n"
             "5) ✏️ Cambiar RUT emisor\n"
-            "6) ✏️ Cambiar Nº documento\n"
-            "7) ✏️ Cambiar observaciones\n"
-            "8) ✏️ Cambiar N° transferencia\n"
-            "9) ✏️ Cambiar monto\n"
+            "6) ✏️ Cambiar N° comprobante\n"
+            "7) ✏️ Cambiar monto\n"
+            "8) ✏️ Cambiar observaciones\n"
+            "9) 📎 Cambiar comprobante\n"
             "10) ❌ Cancelar\n\n"
             "Responde con el <b>número</b>."
         )
@@ -3045,16 +3042,25 @@ def _rendicion_wizard_handle_message(
                 state["step"] = "numero_doc"
                 _rend_wiz_set(chat_id, state)
                 return (
-                    "Paso 5/9: <b>N° de documento</b>\n"
-                    "Escribe el número de la boleta/factura (solo números).\n\n"
+                    "Paso 5/9: <b>N° comprobante</b>\n"
+                    "Escribe el número del comprobante (solo números).\n\n"
                     "Escribe <b>cancelar</b> para salir."
                 )
+
+        if data.get("cargos") in (None, "", 0, 0.0):
+            state["step"] = "monto"
+            _rend_wiz_set(chat_id, state)
+            return (
+                "Paso 6/9: <b>Monto</b>\n"
+                "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
+                "Escribe <b>cancelar</b> para salir."
+            )
 
         if not data.get("comprobante_file_id"):
             state["step"] = "comprobante"
             _rend_wiz_set(chat_id, state)
             return (
-                "Paso 9/9: <b>Comprobante</b>\n"
+                "Paso 8/9: <b>Comprobante</b>\n"
                 "Ahora envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
                 "Escribe <b>cancelar</b> para salir."
             )
@@ -3081,7 +3087,6 @@ def _rendicion_wizard_handle_message(
                 data["proyecto_id"] = pid
                 state["data"] = data
 
-                # flujo normal: pasa a tipo (pero si venimos editando, volveremos a confirm)
                 state["step"] = "tipo"
                 _rend_wiz_set(chat_id, state)
 
@@ -3213,7 +3218,7 @@ def _rendicion_wizard_handle_message(
         if td == "otros":
             data["rut_factura"] = ""
             data["numero_doc"] = ""
-            state["step"] = "observaciones"
+            state["step"] = "monto"   # 👉 ahora va a monto
             state["data"] = data
             _rend_wiz_set(chat_id, state)
 
@@ -3223,8 +3228,8 @@ def _rendicion_wizard_handle_message(
 
             return (
                 "✅ <b>Tipo de documento:</b> Otros\n\n"
-                "Paso 4/9: <b>Observaciones</b>\n"
-                "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
+                "Paso 6/9: <b>Monto</b>\n"
+                "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
                 "Escribe <b>cancelar</b> para salir."
             )
 
@@ -3269,8 +3274,8 @@ def _rendicion_wizard_handle_message(
 
         return (
             "✅ <b>RUT validado.</b>\n\n"
-            "Paso 5/9: <b>N° de documento</b>\n"
-            "Escribe el número de la boleta/factura (solo números).\n\n"
+            "Paso 5/9: <b>N° comprobante</b>\n"
+            "Escribe el número del comprobante (solo números).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
 
@@ -3278,10 +3283,10 @@ def _rendicion_wizard_handle_message(
     if step == "numero_doc":
         n = _clean_num_doc_local(text_in)
         if not n:
-            return "❌ Número de documento inválido. Debe contener solo números (sin puntos)."
+            return "❌ Número de comprobante inválido. Debe contener solo números (sin puntos)."
 
         data["numero_doc"] = n
-        state["step"] = "observaciones"
+        state["step"] = "monto"   # 👉 ahora va a monto
         state["data"] = data
         _rend_wiz_set(chat_id, state)
 
@@ -3290,50 +3295,8 @@ def _rendicion_wizard_handle_message(
             return back
 
         return (
-            f"✅ <b>N° documento guardado:</b> <code>{_html.escape(n)}</code>\n\n"
-            "Paso 6/9: <b>Observaciones</b>\n"
-            "Escribe una breve observación (ej: “peaje ida a sitio”, “combustible camioneta”, etc.).\n\n"
-            "Escribe <b>cancelar</b> para salir."
-        )
-
-    # =================== STEP: OBSERVACIONES ===================
-    if step == "observaciones":
-        obs = (text_in or "").strip()
-        if len(obs) < 3:
-            return "Escribe una observación un poquito más clara (mínimo 3 caracteres)."
-        data["observaciones"] = obs
-        state["step"] = "num_transferencia"
-        state["data"] = data
-        _rend_wiz_set(chat_id, state)
-
-        back = _maybe_back_to_confirm()
-        if back:
-            return back
-
-        return (
-            "✅ <b>Observaciones guardadas.</b>\n\n"
-            "Paso 7/9: <b>N° transferencia</b>\n"
-            "Escribe el número de transferencia (o el identificador que usas).\n\n"
-            "Escribe <b>cancelar</b> para salir."
-        )
-
-    # =================== STEP: NUM TRANSFERENCIA ===================
-    if step == "num_transferencia":
-        nt = (text_in or "").strip()
-        if not nt:
-            return "El número de transferencia es obligatorio. Escríbelo (o <b>cancelar</b>)."
-        data["numero_transferencia"] = nt
-        state["step"] = "monto"
-        state["data"] = data
-        _rend_wiz_set(chat_id, state)
-
-        back = _maybe_back_to_confirm()
-        if back:
-            return back
-
-        return (
-            "✅ <b>N° transferencia guardado.</b>\n\n"
-            "Paso 8/9: <b>Monto</b>\n"
+            f"✅ <b>N° comprobante guardado:</b> <code>{_html.escape(n)}</code>\n\n"
+            "Paso 6/9: <b>Monto</b>\n"
             "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3344,7 +3307,7 @@ def _rendicion_wizard_handle_message(
         if v is None:
             return "Monto inválido. Ejemplo válido: <code>320.240</code> (o <code>$320.240</code>)."
         data["cargos"] = v
-        state["step"] = "comprobante"
+        state["step"] = "observaciones"   # 👉 monto -> observaciones
         state["data"] = data
         _rend_wiz_set(chat_id, state)
 
@@ -3354,7 +3317,27 @@ def _rendicion_wizard_handle_message(
 
         return (
             f"✅ <b>Monto guardado:</b> <b>{_html.escape(_fmt_clp(v))}</b>\n\n"
-            "Paso 9/9: <b>Comprobante</b>\n"
+            "Paso 7/9: <b>Observaciones</b>\n"
+            "Escribe observaciones (puede ir vacío si no aplica).\n\n"
+            "Escribe <b>cancelar</b> para salir."
+        )
+
+    # =================== STEP: OBSERVACIONES ===================
+    if step == "observaciones":
+        obs = (text_in or "").strip()
+        # ✅ Puede ir vacío (como en web)
+        data["observaciones"] = obs
+        state["step"] = "comprobante"  # 👉 observaciones -> comprobante
+        state["data"] = data
+        _rend_wiz_set(chat_id, state)
+
+        back = _maybe_back_to_confirm()
+        if back:
+            return back
+
+        return (
+            "✅ <b>Observaciones guardadas.</b>\n\n"
+            "Paso 8/9: <b>Comprobante</b>\n"
             "Ahora envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
             "Escribe <b>cancelar</b> para salir."
         )
@@ -3422,7 +3405,7 @@ def _rendicion_wizard_handle_message(
                     _rend_wiz_set(chat_id, state)
                     return (
                         "No tengo el comprobante registrado. Envíamelo otra vez.\n\n"
-                        "Paso 9/9: <b>Comprobante</b>\n"
+                        "Paso 8/9: <b>Comprobante</b>\n"
                         "Envíame el comprobante como PDF o imagen."
                     )
 
@@ -3433,7 +3416,7 @@ def _rendicion_wizard_handle_message(
                     if not rut or not n_doc:
                         state["step"] = "tipo_doc"
                         _rend_wiz_set(chat_id, state)
-                        return "⚠️ Falta Tipo doc / RUT / Nº doc. Volvamos a <b>Tipo de documento</b>."
+                        return "⚠️ Falta Tipo doc / RUT / Nº comprobante. Volvamos a <b>Tipo de documento</b>."
 
                 try:
                     fname_dl, blob = _tg_download_file(token, file_id)
@@ -3451,7 +3434,6 @@ def _rendicion_wizard_handle_message(
                     rut_factura=(data.get("rut_factura") or "").strip() or None,
                     numero_doc=(data.get("numero_doc") or "").strip() or None,
                     observaciones=data.get("observaciones") or "",
-                    numero_transferencia=data.get("numero_transferencia") or "",
                     cargos=Decimal(str(data.get("cargos") or 0)),
                     abonos=Decimal("0.00"),
                     status="pendiente_supervisor",
@@ -3467,14 +3449,14 @@ def _rendicion_wizard_handle_message(
                     f"• <b>Tipo gasto:</b> {_html.escape(tipo.nombre)}\n"
                     f"• <b>Tipo doc:</b> {_html.escape((mov.tipo_doc or '—'))}\n"
                     f"• <b>RUT:</b> {_html.escape((mov.rut_factura or '—'))}\n"
-                    f"• <b>N° doc:</b> {_html.escape((mov.numero_doc or '—'))}\n"
+                    f"• <b>N° comprobante:</b> {_html.escape((mov.numero_doc or '—'))}\n"
                     f"• <b>Monto:</b> <b>{_html.escape(_fmt_clp(mov.cargos))}</b>\n"
                     f"• <b>Estado:</b> <b>Pendiente supervisor</b>\n\n"
                     "Puedes ver el detalle en la web en <b>Mis Rendiciones</b>."
                 )
 
             # ✅ FIX: al editar desde confirm, marcamos que debemos volver a confirm
-            if op in {2, 3, 4, 5, 6, 7, 8, 9}:
+            if op in {2, 3, 4, 5, 6, 7, 8, 9, 10}:
                 state["return_to_confirm"] = True
 
             if op == 2:
@@ -3523,44 +3505,44 @@ def _rendicion_wizard_handle_message(
                 if (data.get("tipo_doc") or "").strip() == "otros":
                     state["step"] = "tipo_doc"
                     _rend_wiz_set(chat_id, state)
-                    return _tipo_doc_prompt("⚠️ Para cambiar Nº doc, primero elige Factura o Boleta.")
+                    return _tipo_doc_prompt("⚠️ Para cambiar Nº comprobante, primero elige Factura o Boleta.")
                 state["step"] = "numero_doc"
                 _rend_wiz_set(chat_id, state)
                 return (
-                    "✏️ <b>Cambiar Nº documento</b>\n\n"
-                    "Paso 5/9: <b>N° de documento</b>\n"
+                    "✏️ <b>Cambiar N° comprobante</b>\n\n"
+                    "Paso 5/9: <b>N° comprobante</b>\n"
                     "Escribe el número (solo números).\n\n"
                     "Escribe <b>cancelar</b> para salir."
                 )
 
             if op == 7:
-                state["step"] = "observaciones"
-                _rend_wiz_set(chat_id, state)
-                return (
-                    "✏️ <b>Cambiar observaciones</b>\n\n"
-                    "Paso 6/9: <b>Observaciones</b>\n"
-                    "Escribe una breve observación.\n\n"
-                    "Escribe <b>cancelar</b> para salir."
-                )
-
-            if op == 8:
-                state["step"] = "num_transferencia"
-                _rend_wiz_set(chat_id, state)
-                return (
-                    "✏️ <b>Cambiar N° transferencia</b>\n\n"
-                    "Paso 7/9: <b>N° transferencia</b>\n"
-                    "Escribe el número de transferencia.\n\n"
-                    "Escribe <b>cancelar</b> para salir."
-                )
-
-            if op == 9:
                 state["step"] = "monto"
                 _rend_wiz_set(chat_id, state)
                 return (
                     "✏️ <b>Cambiar monto</b>\n\n"
-                    "Paso 8/9: <b>Monto</b>\n"
+                    "Paso 6/9: <b>Monto</b>\n"
                     "Escribe el monto (ej: <code>320.240</code> o <code>$320.240</code>)."
                     "\n\nEscribe <b>cancelar</b> para salir."
+                )
+
+            if op == 8:
+                state["step"] = "observaciones"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "✏️ <b>Cambiar observaciones</b>\n\n"
+                    "Paso 7/9: <b>Observaciones</b>\n"
+                    "Escribe observaciones (puede ir vacío si no aplica).\n\n"
+                    "Escribe <b>cancelar</b> para salir."
+                )
+
+            if op == 9:
+                state["step"] = "comprobante"
+                _rend_wiz_set(chat_id, state)
+                return (
+                    "📎 <b>Cambiar comprobante</b>\n\n"
+                    "Paso 8/9: <b>Comprobante</b>\n"
+                    "Envíame el comprobante como <b>PDF</b> o <b>imagen</b> (jpg/png).\n\n"
+                    "Escribe <b>cancelar</b> para salir."
                 )
 
             if op == 10:
