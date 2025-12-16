@@ -14,6 +14,21 @@ from django.utils.text import slugify
 from operaciones.storage_backends import GZWasabiStorage
 from usuarios.models import CustomUser
 
+
+def _yyyy_mm(dt=None) -> str:
+    """
+    Devuelve 'YYYY-MM' (ej: '2025-12') usando hora local.
+    """
+    if dt is None:
+        return timezone.localdate().strftime("%Y-%m")
+
+    # si viene datetime, lo pasamos a localdate
+    try:
+        return timezone.localtime(dt).date().strftime("%Y-%m")
+    except Exception:
+        # si viene date directamente
+        return dt.strftime("%Y-%m")
+    
 # === Storage Wasabi (GZ Services) ===
 _gz_storage = GZWasabiStorage()
 
