@@ -5,172 +5,291 @@
   <meta charset="UTF-8">
   <title>Verificación de dos factores - GZ Services</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
     * { box-sizing: border-box; }
+
     body {
-      margin: 0; padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background-color: #f3f4f6;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at top,
+                  rgba(15,23,42,0.35) 0,
+                  transparent 55%),
+                  linear-gradient(180deg,#052e26,#4a0b16);
+      min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
-    }
-    .twofa-container {
-      background-color: #ffffff;
-      padding: 2rem;
-      border-radius: 16px;
-      box-shadow: 0 10px 30px rgba(15,23,42,0.15);
-      max-width: 420px;
-      width: 100%;
-      text-align: center;
-    }
-    .twofa-container img {
-      max-width: 180px;
-      height: auto;
-      margin-bottom: 1rem;
-    }
-    h2 {
-      margin: 0 0 .5rem;
-      font-size: 1.3rem;
       color: #111827;
-      font-weight: 700;
     }
-    .subtexto {
-      font-size: .85rem;
+
+    .card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 420px;
+      padding: 2.2rem 2rem 1.8rem;
+      border-radius: 22px;
+      box-shadow:
+        0 18px 45px rgba(15,23,42,0.55),
+        0 0 0 1px rgba(15,23,42,0.06);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before,
+    .card::after {
+      content: "";
+      position: absolute;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.35;
+      z-index: -1;
+    }
+    .card::before {
+      background: #facc15;
+      top: -60px;
+      left: -60px;
+    }
+    .card::after {
+      background: rgba(220,38,38,0.9);
+      bottom: -60px;
+      right: -60px;
+    }
+
+    .logo-box {
+      display: inline-block;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.95);
+      border-radius: 12px;
+      border: 2px solid rgba(251,191,36,0.7);
+      box-shadow: 0 6px 14px rgba(15,23,42,0.18);
+      margin-bottom: 0.75rem;
+    }
+
+    .logo-box img {
+      max-width: 165px;
+      height: auto;
+      display: block;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: #111827;
+    }
+
+    .subtitle {
+      margin-top: 0.15rem;
+      font-size: 0.9rem;
       color: #6b7280;
-      margin-bottom: 1.25rem;
     }
-    .description {
-      font-size: .9rem;
-      color: #4b5563;
-      margin-bottom: 1.25rem;
+
+    .info-banner {
+      margin: 1rem 0 1.2rem;
+      padding: 0.7rem 0.9rem;
+      border-radius: 0.75rem;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 0.85rem;
+      text-align: left;
     }
-    form { text-align: left; }
+
+    .info-banner strong {
+      font-weight: 600;
+    }
+
+    .greeting {
+      font-size: 0.92rem;
+      margin-bottom: 1.2rem;
+      color: #374151;
+      text-align: left;
+    }
+
+    .greeting strong {
+      font-weight: 700;
+      color: #111827;
+    }
+
+    form {
+      text-align: left;
+    }
+
     label {
       display: block;
-      font-size: .85rem;
+      font-size: 0.85rem;
       font-weight: 600;
       color: #374151;
-      margin-bottom: .25rem;
+      margin-bottom: 0.35rem;
     }
+
     input[type="text"] {
       width: 100%;
-      padding: .6rem .75rem;
-      border-radius: .5rem;
-      border: 1px solid #d1d5db;
+      padding: 0.75rem 0.8rem;
+      border-radius: 0.75rem;
+      border: 2px solid #d1d5db;
       font-size: 1rem;
+      letter-spacing: 0.22em;
+      text-align: center;
+      font-weight: 600;
+      color: #111827;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
+
     input[type="text"]:focus {
       outline: none;
       border-color: #2563eb;
-      box-shadow: 0 0 0 1px rgba(37,99,235,.35);
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.35);
     }
-    .helper-text {
-      font-size: .8rem;
+
+    .hint {
+      margin-top: 0.35rem;
+      font-size: 0.78rem;
       color: #6b7280;
-      margin-top: .25rem;
     }
+
     .remember-row {
       display: flex;
       align-items: center;
-      gap: .4rem;
-      margin: .75rem 0 1rem;
-      font-size: .8rem;
-      color: #4b5563;
+      gap: 0.45rem;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: #374151;
     }
-    button {
+
+    .remember-row input[type="checkbox"] {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    button[type="submit"] {
+      margin-top: 1.4rem;
       width: 100%;
-      padding: .7rem .75rem;
-      border-radius: .5rem;
+      padding: 0.8rem;
+      border-radius: 999px;
       border: none;
-      background-color: #2563eb;
+      background: linear-gradient(90deg,#1d4ed8,#2563eb);
       color: #ffffff;
-      font-weight: 600;
-      font-size: .95rem;
+      font-weight: 700;
+      font-size: 0.98rem;
       cursor: pointer;
-      transition: background-color .2s, transform .05s, box-shadow .05s;
-      box-shadow: 0 8px 18px rgba(37,99,235,.35);
+      box-shadow: 0 10px 22px rgba(37,99,235,0.45);
+      transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.12s ease;
     }
-    button:hover { background-color: #1d4ed8; }
-    button:active {
-      transform: translateY(1px);
-      box-shadow: 0 4px 10px rgba(37,99,235,.35);
+
+    button[type="submit"]:hover {
+      filter: brightness(1.06);
+      transform: translateY(-1px);
+      box-shadow: 0 14px 26px rgba(37,99,235,0.5);
     }
+
+    button[type="submit"]:active {
+      transform: translateY(0);
+      box-shadow: 0 5px 12px rgba(30,64,175,0.45);
+    }
+
     .messages {
-      margin-bottom: 1rem;
+      margin-bottom: 0.7rem;
     }
-    .message-box {
-      font-size: .8rem;
-      padding: .5rem .75rem;
-      border-radius: .5rem;
-      margin-bottom: .4rem;
+
+    .msg {
+      padding: 0.5rem 0.7rem;
+      border-radius: 0.6rem;
+      font-size: 0.8rem;
+      margin-bottom: 0.4rem;
     }
-    .message-box.error   { background-color: #fee2e2; color: #b91c1c; }
-    .message-box.success { background-color: #dcfce7; color: #166534; }
-    .message-box.info    { background-color: #e0f2fe; color: #0ea5e9; }
-    .message-box.warning { background-color: #fef3c7; color: #92400e; }
+
+    .msg.error   { background:#fee2e2; color:#b91c1c; }
+    .msg.success { background:#ecfdf3; color:#166534; }
+    .msg.info    { background:#eff6ff; color:#1d4ed8; }
+
     .footer {
-      margin-top: .75rem;
-      font-size: .75rem;
+      margin-top: 1.4rem;
+      font-size: 0.72rem;
       color: #9ca3af;
       text-align: center;
+    }
+
+    @media (max-width: 480px) {
+      .card {
+        margin: 0 1rem;
+        padding: 1.8rem 1.4rem 1.4rem;
+      }
     }
   </style>
 </head>
 <body>
 
-  <div class="twofa-container">
-    <img src="{% static 'images/planixb.png' %}" alt="GZ Services">
+  <div class="card">
+    <!-- Logo -->
+    <div class="logo-box">
+      <img src="{% static 'images/planixnavidad.png' %}" alt="GZ Services">
+    </div>
 
-    <h2>Verificación de dos factores</h2>
-    <p class="subtexto">Plataforma GZ Services</p>
+    <!-- Títulos -->
+    <h1>Verificación de dos factores</h1>
+    <div class="subtitle">Plataforma GZ Services</div>
 
+    <!-- Mensajes Django -->
     {% if messages %}
       <div class="messages">
         {% for message in messages %}
-          <div class="message-box {{ message.tags }}">
-            {{ message }}
-          </div>
+          <div class="msg {{ message.tags }}">{{ message }}</div>
         {% endfor %}
       </div>
     {% endif %}
 
-    <p class="description">
-      Hola <strong>{{ user.get_full_name|default:user.username }}</strong>. 
+    <!-- Banner informativo -->
+    <div class="info-banner">
+      <strong>Por seguridad</strong>, debes introducir el código de verificación
+      de tu aplicación de autenticación.
+    </div>
+
+    <!-- Saludo -->
+    <p class="greeting">
+      Hola <strong>{{ user.get_full_name|default:user.username }}</strong>.
       Ingresa el código de tu aplicación de autenticación para continuar.
     </p>
 
+    <!-- Formulario -->
     <form method="post">
       {% csrf_token %}
-      <p>
-        <label for="code">Código de verificación</label>
-        <input type="text"
-               id="code"
-               name="code"
-               autocomplete="one-time-code"
-               placeholder="123 456"
-               required>
-        <span class="helper-text">
-          Es el código de 6 dígitos que ves en tu app (por ejemplo Google Authenticator).
-        </span>
-      </p>
+
+      <label for="id_code">Código de verificación</label>
+      <input
+        type="text"
+        id="id_code"
+        name="code"
+        inputmode="numeric"
+        autocomplete="one-time-code"
+        placeholder="123 456"
+        maxlength="10"
+        required
+      >
+      <div class="hint">
+        Es el código de 6 dígitos que ves en tu app (por ejemplo Google Authenticator).
+      </div>
 
       <div class="remember-row">
-        <input type="checkbox" id="remember_device" name="remember_device">
-        <label for="remember_device">
+        <input type="checkbox" id="id_remember_device" name="remember_device">
+        <label for="id_remember_device" style="margin:0;">
           Recordar este dispositivo durante 90 días
         </label>
       </div>
 
-      <button type="submit">Verificar y continuar</button>
+      <button type="submit">
+        Verificar y continuar
+      </button>
     </form>
 
     <div class="footer">
-      GZ Services &mdash; Seguridad de cuenta
+      GZ Services — Seguridad de cuenta
     </div>
   </div>
 
 </body>
-</html>
+</html> 

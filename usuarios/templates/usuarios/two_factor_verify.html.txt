@@ -1,0 +1,230 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Verificación de dos factores - GZ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .login-container {
+      background-color: white;
+      padding: 2rem;
+      border-radius: 16px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* Logo enmarcado (igual que login) */
+    .logo-box {
+      display: inline-block;
+      padding: 10px;
+      background: #f0f4ff;
+      border: 2px solid #d0d8f0;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+    }
+    .logo-box img {
+      max-width: 160px;
+      height: auto;
+    }
+
+    /* Títulos */
+    .login-container h2 {
+      margin: 0 0 8px 0;
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #1a73e8;
+    }
+
+    .login-container p.subtexto {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 1.2rem;
+    }
+
+    .login-container p.mensaje-usuario {
+      font-size: 0.9rem;
+      color: #444;
+      margin-bottom: 1.5rem;
+    }
+
+    .errorlist {
+      color: red;
+      list-style: none;
+      padding: 0;
+      margin-bottom: 10px;
+      text-align: left;
+    }
+
+    .message-box {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-size: 0.9rem;
+      text-align: left;
+      opacity: 1;
+      transition: opacity 0.5s ease-out;
+    }
+
+    .message-box.error   { background-color: #fdecea; color: #d93025; }
+    .message-box.success { background-color: #e6ffed; color: #188038; }
+    .message-box.info    { background-color: #e8f0fe; color: #1a73e8; }
+
+    form { text-align: left; }
+    form p { margin-bottom: 15px; }
+    form label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    /* Input código */
+    form input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+      box-sizing: border-box;
+    }
+
+    .help-text {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    /* Checkbox recordar dispositivo */
+    .remember-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: #4b5563;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background-color: #1e73be;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      margin-top: 16px;
+    }
+    button:hover { background-color: #155a96; }
+
+    .footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: #999;
+      margin-top: 8px;
+    }
+
+    @media (max-width: 500px) {
+      .login-container { padding: 1.5rem; margin: 0 1rem; }
+      .logo-box img { width: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <!-- Logo enmarcado -->
+    <div class="logo-box">
+      <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+    </div>
+
+    <!-- Títulos -->
+    <h2>Verificación de dos factores</h2>
+    <p class="subtexto">Plataforma GZ Services</p>
+
+    <p class="mensaje-usuario">
+      Hola <strong>{{ user.get_full_name|default:user.username }}</strong>.
+      Ingresa el código de tu aplicación de autenticación para continuar.
+    </p>
+
+    <!-- Mensajes del sistema -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="message-box {{ message.tags }}">
+          {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Errores genéricos (por si usas form) -->
+    {% if form and form.non_field_errors %}
+      <ul class="errorlist">
+        {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <!-- Formulario 2FA -->
+    <form method="post">
+      {% csrf_token %}
+      <p>
+        <label for="id_code">Código de verificación</label>
+        <input type="text"
+               id="id_code"
+               name="code"
+               inputmode="numeric"
+               autocomplete="one-time-code"
+               maxlength="6"
+               placeholder="123 456">
+        <div class="help-text">
+          Es el código de 6 dígitos que ves en tu app (por ejemplo Google Authenticator).
+        </div>
+      </p>
+
+      <div class="remember-row">
+        <input type="checkbox" id="id_remember_device" name="remember_device">
+        <label for="id_remember_device">
+          Recordar este dispositivo durante 90 días
+        </label>
+      </div>
+
+      <button type="submit">Verificar y continuar</button>
+    </form>
+  </div>
+
+  <div class="footer">
+    GZ Services — Seguridad de cuenta
+  </div>
+
+  <!-- JS para ocultar mensajes -->
+  <script>
+    setTimeout(() => {
+      document.querySelectorAll('.message-box').forEach(el => {
+        el.style.opacity = '0';
+        setTimeout(() => el.remove(), 500);
+      });
+    }, 4000);
+  </script>
+
+</body>
+</html>

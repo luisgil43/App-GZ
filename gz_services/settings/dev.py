@@ -23,7 +23,7 @@ DATABASES = {
 }
 
 # 2FA
-TWO_FACTOR_ENFORCE_DATE = date(2025, 12, 16)
+TWO_FACTOR_ENFORCE_DATE = date(2025, 12, 18)
 
 # No forzar HTTPS en desarrollo
 

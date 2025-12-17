@@ -23,13 +23,11 @@
       margin: 0;
       padding: 0;
       font-family: 'Segoe UI', sans-serif;
-      background:
-        radial-gradient(circle at top,
-          rgba(255,255,255,0.16) 0,
-          transparent 55%),
-        linear-gradient(180deg,
-          var(--body-bg-top),
-          var(--body-bg-bottom));
+
+      /* SOLO la imagen de fondo */
+      background: #020617 url("{% static 'images/login_winter_bg.png' %}")
+                   center/cover no-repeat fixed;
+
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -53,7 +51,7 @@
       position: absolute;
       top: -10px;
       color: rgba(255,255,255,0.9);
-      font-size: 8px;
+      font-size: 14px;
       animation-name: snow-fall;
       animation-timing-function: linear;
       animation-iteration-count: infinite;
@@ -75,48 +73,48 @@
       }
     }
 
-   /* ===== Santa lanzando regalos (DERECHA → IZQUIERDA) ===== */
-.santa-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 999; /* por encima de la nieve, debajo de la tarjeta */
-  overflow: hidden;
-}
+    /* ===== Santa lanzando regalos (DERECHA → IZQUIERDA) ===== */
+    .santa-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999; /* por encima de la nieve, debajo de la tarjeta */
+      overflow: hidden;
+    }
 
-.planex-santa {
-  position: absolute;
-  top: 18%;      /* altura del vuelo */
-  right: -30%;   /* sale desde la derecha, fuera de la pantalla */
-  left: auto;
-  width: 180px;
-  animation: santa-gifts 20s linear infinite;
-  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.45));
-}
+    .planex-santa {
+      position: absolute;
+      top: 18%;      /* altura del vuelo */
+      right: -30%;   /* sale desde la derecha, fuera de la pantalla */
+      left: auto;
+      width: 180px;
+      animation: santa-gifts 20s linear infinite;
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.45));
+    }
 
-@keyframes santa-gifts {
-  0% {
-    transform: translate3d(0, 0, 0) rotate(3deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  30% {
-    transform: translate3d(-30vw, -3vh, 0) rotate(1deg);
-  }
-  55% {
-    transform: translate3d(-65vw, 2vh, 0) rotate(-1deg);
-  }
-  80% {
-    transform: translate3d(-105vw, -2vh, 0) rotate(-3deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translate3d(-130vw, 0, 0) rotate(-5deg);
-    opacity: 0;
-  }
-}
+    @keyframes santa-gifts {
+      0% {
+        transform: translate3d(0, 0, 0) rotate(3deg);
+        opacity: 0;
+      }
+      10% {
+        opacity: 1;
+      }
+      30% {
+        transform: translate3d(-30vw, -3vh, 0) rotate(1deg);
+      }
+      55% {
+        transform: translate3d(-65vw, 2vh, 0) rotate(-1deg);
+      }
+      80% {
+        transform: translate3d(-105vw, -2vh, 0) rotate(-3deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate3d(-130vw, 0, 0) rotate(-5deg);
+        opacity: 0;
+      }
+    }
 
     .login-container {
       background-color: var(--card-bg);
@@ -354,7 +352,7 @@
 
     <!-- Mensaje navideño -->
     <div class="xmas-message">
-      🎄 <span>GZ Services</span> Les desea una Feliz Navidad y un próspero Año Nuevo 🎅
+      🎄 <span>MILTEL</span> Les desea una Feliz Navidad y un próspero Año Nuevo 🎅
     </div>
 
     <!-- Mensajes del sistema -->
@@ -389,7 +387,6 @@
     {% endif %}
   </div>
 {% endif %}
-
 
     <!-- Formulario -->
     <form method="post">
@@ -456,7 +453,7 @@
         span.className = 'snowflake';
         span.textContent = '❆';
 
-        const size = 6 + Math.random() * 8;      // tamaño
+        const size = 14 + Math.random() * 10;    // tamaño más grande     // tamaño
         const left = Math.random() * 100;        // posición horizontal
         const duration = 9 + Math.random() * 10; // duración de la caída
         const delay = Math.random() * -duration; // empezar en distintos puntos
