@@ -73,6 +73,18 @@ class CustomUser(AbstractUser):
         help_text="Si está activo, se enviarán correos de notificación a este usuario."
     )
 
+    # --- Segundo factor de autenticación (2FA) ---
+    two_factor_secret = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        help_text="Secreto TOTP para 2FA (no modificar manualmente).",
+    )
+    two_factor_enabled = models.BooleanField(
+        default=False,
+        help_text="Indica si el usuario tiene segundo factor de autenticación activado.",
+    )
+
     # Responsables jerárquicos
     supervisor = models.ForeignKey(
         'self', null=True, blank=True, on_delete=models.SET_NULL, related_name='supervisados')
@@ -98,6 +110,18 @@ class CustomUser(AbstractUser):
         max_digits=6, decimal_places=2, default=0,
         help_text="Días de vacaciones que ya ha consumido fuera del sistema"
     )
+
+
+    def get_or_create_two_factor_secret(self) -> str:
+        """
+        Devuelve el secreto TOTP para 2FA.
+        Si no existe, lo genera, lo guarda y lo retorna.
+        """
+        if not self.two_factor_secret:
+            import pyotp  # import local para evitar problemas si aún no está instalado
+            self.two_factor_secret = pyotp.random_base32()
+            self.save(update_fields=["two_factor_secret"])
+        return self.two_factor_secret
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"
@@ -214,3 +238,30 @@ class Notificacion(models.Model):
 
     class Meta:
         ordering = ['-fecha']
+
+
+class TrustedDevice(models.Model):
+    """
+    Dispositivo de confianza para saltarse el código 2FA
+    durante un período de tiempo.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="trusted_devices",
+        on_delete=models.CASCADE,
+    )
+    token = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField()
+    user_agent = models.CharField(max_length=255, blank=True)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+
+    def is_valid(self) -> bool:
+        """
+        Indica si el dispositivo sigue siendo válido en base a la fecha de expiración.
+        """
+        return self.expires_at > timezone.now()
+
+    def __str__(self) -> str:
+        return f"TrustedDevice({self.user.username}, {self.ip_address})"

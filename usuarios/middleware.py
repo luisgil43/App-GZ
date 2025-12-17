@@ -1,13 +1,16 @@
 # usuarios/middlewares.py
-from zoneinfo import ZoneInfo
-from django.utils import timezone
 import logging
 import time
+from datetime import date
+from zoneinfo import ZoneInfo
+
 from django.conf import settings
-from django.shortcuts import redirect
 from django.contrib import messages
-from django.urls import reverse
 from django.contrib.auth import logout
+from django.shortcuts import redirect
+from django.urls import Resolver404, resolve, reverse
+from django.utils import timezone
+from django.utils.deprecation import MiddlewareMixin
 
 
 class SessionExpiryMiddleware:
@@ -107,3 +110,80 @@ class ChileTimezoneMiddleware:
         resp = self.get_response(request)
         timezone.deactivate()
         return resp
+
+
+
+
+
+def _get_2fa_enforce_date():
+    """
+    Fecha en la que 2FA pasa a ser obligatorio.
+    Debe venir de settings.TWO_FACTOR_ENFORCE_DATE (objeto date).
+    """
+    return getattr(settings, "TWO_FACTOR_ENFORCE_DATE", None)
+
+
+class Enforce2FAMiddleware(MiddlewareMixin):
+    """
+    Si la fecha de obligatoriedad ya pasó y el usuario staff
+    NO tiene 2FA activado, lo fuerza a ir a la pantalla de setup 2FA.
+    """
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        user = getattr(request, "user", None)
+
+        # No autenticado => no aplica
+        if not user or not user.is_authenticated:
+            return None
+
+        # Solo personal administrativo/staff
+        if not user.is_staff:
+            return None
+
+        enforce_date = _get_2fa_enforce_date()
+        if not enforce_date:
+            return None
+
+        today = timezone.localdate()
+        if today < enforce_date:
+            # Aún estamos en período de gracia
+            return None
+
+        # Si ya tiene 2FA activado, nada que hacer
+        if getattr(user, "two_factor_enabled", False):
+            return None
+
+        # Permitir algunas rutas para que pueda activar 2FA o salir
+        try:
+            match = resolve(request.path)
+            full_name = (
+                f"{match.namespace}:{match.url_name}"
+                if match.namespace
+                else match.url_name
+            )
+        except Resolver404:
+            full_name = None
+
+        allowed_names = {
+            "usuarios:two_factor_setup",
+            "usuarios:two_factor_verify",
+            "usuarios:login_unificado",
+            "usuarios:logout",  # si tienes esta vista
+        }
+
+        # Permitir también estáticos / media
+        static_url = getattr(settings, "STATIC_URL", "/static/")
+        media_url = getattr(settings, "MEDIA_URL", "/media/")
+
+        if request.path.startswith(static_url) or request.path.startswith(media_url):
+            return None
+
+        if full_name in allowed_names:
+            return None
+
+        # Bloquea todo lo demás y redirige a setup 2FA
+        messages.warning(
+            request,
+            "Debes configurar el segundo factor de autenticación para continuar usando la plataforma.",
+        )
+        return redirect("usuarios:two_factor_setup")

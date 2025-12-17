@@ -1,5 +1,8 @@
+#setting_base
+
 import mimetypes
 import os
+from datetime import date, timedelta
 from pathlib import Path
 
 from boto3.s3.transfer import TransferConfig
@@ -38,6 +41,7 @@ def is_env_var_set(key: str) -> bool:
 CSRF_TRUSTED_ORIGINS = ["https://app-gz.onrender.com"]
 
 
+
 # ===============================
 # ✅ Cloudinary (cuando está activo)
 # ===============================
@@ -52,6 +56,20 @@ if (
         "API_KEY": os.environ.get("CLOUDINARY_API_KEY"),
         "API_SECRET": os.environ.get("CLOUDINARY_API_SECRET"),
     }
+
+# ==============================
+# 2FA / DISPOSITIVOS DE CONFIANZA
+# ==============================
+TWO_FACTOR_ISSUER_NAME = "GZ Services"
+
+# Cookie para dispositivos de confianza
+TRUSTED_DEVICE_COOKIE_NAME = "gz_trusted_device"
+
+# 2FA
+TRUSTED_DEVICE_DAYS = 90
+TWO_FACTOR_ENFORCE_DATE = None
+
+
 
 # ===============================
 # Configuración básica
@@ -117,13 +135,14 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
 
-    "usuarios.middleware.ChileTimezoneMiddleware",   # singular
+    "usuarios.middleware.ChileTimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "axes.middleware.AxesMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "usuarios.middleware.SessionExpiryMiddleware",   # singular
+    "usuarios.middleware.Enforce2FAMiddleware",
+    "usuarios.middleware.SessionExpiryMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 

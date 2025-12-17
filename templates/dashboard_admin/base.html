@@ -370,6 +370,23 @@
 </li>
 {% endif %}
 
+{% if request.user.is_authenticated and request.user.is_staff %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🔐 Seguridad</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'usuarios:two_factor_setup' %}" class="hover:text-emerald-400">
+        Autenticación en dos pasos & dispositivos
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
 
                 {% if request.user.es_admin_general %}
                 <li class="group">

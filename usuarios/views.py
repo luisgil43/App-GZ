@@ -1,7 +1,11 @@
 import base64
 import logging
+from datetime import timedelta
 from email.utils import formataddr
+from functools import wraps
 
+import pyotp
+from axes.decorators import axes_dispatch
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -30,7 +34,283 @@ from django.views.decorators.http import require_GET, require_http_methods
 from gz_services.utils.email_utils import enviar_correo_manual
 from usuarios.models import FirmaRepresentanteLegal  # 👈 importa el modelo
 
-from .models import Notificacion
+from .models import Notificacion, TrustedDevice
+
+...
+from django.utils import timezone
+
+TRUSTED_DEVICE_COOKIE_NAME = getattr(
+    settings, "TRUSTED_DEVICE_COOKIE_NAME", "gz_trusted_device"
+)
+TRUSTED_DEVICE_DAYS = getattr(settings, "TRUSTED_DEVICE_DAYS", 30)
+
+def _get_2fa_enforce_date():
+    """
+    Fecha en la que 2FA pasa a ser obligatorio (si está configurada).
+    """
+    return getattr(settings, "TWO_FACTOR_ENFORCE_DATE", None)
+
+
+def _get_2fa_days_left():
+    """
+    Días que faltan para que 2FA sea obligatorio.
+    Si no hay fecha configurada, retorna None.
+    """
+    enforce_date = _get_2fa_enforce_date()
+    if not enforce_date:
+        return None
+
+    today = timezone.localdate()
+    return (enforce_date - today).days
+
+def _user_requires_2fa(user) -> bool:
+    """
+    En GZ: el 2FA se exige solo a usuarios administrativos (is_staff=True)
+    y que además tengan el 2FA activado.
+    """
+    # Si el usuario no tiene 2FA activado, no se exige
+    if not getattr(user, "two_factor_enabled", False):
+        return False
+
+    # Solo personal administrativo/staff
+    return bool(user.is_staff)
+
+
+def _has_valid_trusted_device(request, user) -> bool:
+    """
+    Revisa si la cookie de dispositivo confiable corresponde a
+    un TrustedDevice válido para este usuario.
+    """
+    token = request.COOKIES.get(TRUSTED_DEVICE_COOKIE_NAME)
+    if not token:
+        return False
+
+    try:
+        device = TrustedDevice.objects.get(user=user, token=token)
+    except TrustedDevice.DoesNotExist:
+        return False
+
+    if not device.is_valid():
+        return False
+
+    # Actualizamos último uso
+    device.last_used_at = timezone.now()
+    device.save(update_fields=["last_used_at"])
+    return True
+
+
+def _create_trusted_device(request, user) -> TrustedDevice:
+    """
+    Crea un TrustedDevice para el usuario y retorna la instancia.
+    La cookie se setea en la vista two_factor_verify.
+    """
+    import secrets
+    token = secrets.token_urlsafe(32)
+    expires_at = timezone.now() + timedelta(days=TRUSTED_DEVICE_DAYS)
+    device = TrustedDevice.objects.create(
+        user=user,
+        token=token,
+        expires_at=expires_at,
+        user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        ip_address=(request.META.get("REMOTE_ADDR") or None),
+    )
+    return device
+
+
+def _verify_totp_code(user, code: str) -> bool:
+    """
+    Verifica el código TOTP enviado por el usuario.
+    """
+    if not getattr(user, "two_factor_secret", None):
+        return False
+    if not code:
+        return False
+
+    code = code.strip().replace(" ", "")
+    if not code.isdigit():
+        return False
+
+    totp = pyotp.TOTP(user.two_factor_secret)
+    # valid_window=1 acepta un paso hacia atrás/adelante
+    return totp.verify(code, valid_window=1)
+
+
+def _redirect_after_login(request, user):
+    """
+    Misma lógica que ya tenías en login_unificado, pero en helper reutilizable.
+    - Usuarios sin rol o solo rol 'usuario' → dashboard normal.
+    - Otros roles → pantalla de seleccionar rol.
+    """
+    roles_usuario = user.roles.all() if hasattr(user, "roles") else []
+
+    if not roles_usuario or (
+        len(roles_usuario) == 1 and roles_usuario[0].nombre == "usuario"
+    ):
+        # Igual que antes: usar LOGIN_REDIRECT_URL
+        from django.shortcuts import redirect as _redirect
+        return _redirect(settings.LOGIN_REDIRECT_URL)
+
+    from django.shortcuts import redirect as _redirect
+    return _redirect("usuarios:seleccionar_rol")
+
+
+def two_factor_verify(request):
+    """
+    Paso intermedio del login cuando el usuario tiene 2FA activo
+    y el dispositivo no está marcado como confiable.
+    NO usar @login_required aquí, porque todavía no se ha hecho login()
+    definitivo: venimos del login_unificado con un user pendiente en sesión.
+    """
+    pending_user_id = request.session.get("pending_2fa_user_id")
+    if not pending_user_id:
+        messages.error(
+            request,
+            "Tu sesión de verificación ha expirado. Por favor, inicia sesión de nuevo."
+        )
+        return redirect("usuarios:login_unificado")
+
+    # Usar el modelo de usuario configurado (CustomUser)
+    from django.contrib.auth import get_user_model
+    UserModel = get_user_model()
+    user = get_object_or_404(UserModel, pk=pending_user_id)
+
+    if request.method == "POST":
+        code = request.POST.get("code", "")
+        remember_device = request.POST.get("remember_device") == "on"
+
+        if not _verify_totp_code(user, code):
+            messages.error(
+                request,
+                "El código de verificación no es válido. Inténtalo nuevamente."
+            )
+            return render(
+                request,
+                "usuarios/two_factor_verify.html",
+                {"user": user},
+            )
+
+        # Código correcto → recuperamos backend y limpiamos sesión temporal
+        backend_path = request.session.pop("pending_2fa_backend", None)
+        next_url = request.session.pop("pending_2fa_next", None)
+        request.session.pop("pending_2fa_user_id", None)
+
+        if not backend_path:
+            backend_path = settings.AUTHENTICATION_BACKENDS[0]
+
+        # Login definitivo
+        login(request, user, backend=backend_path)
+
+        # Crear dispositivo confiable si corresponde
+        from django.shortcuts import redirect as _redirect
+
+        if remember_device:
+            device = _create_trusted_device(request, user)
+            response = _redirect_after_login(request, user)
+            max_age = TRUSTED_DEVICE_DAYS * 24 * 60 * 60
+            response.set_cookie(
+                TRUSTED_DEVICE_COOKIE_NAME,
+                device.token,
+                max_age=max_age,
+                secure=not settings.DEBUG,
+                httponly=True,
+                samesite="Lax",
+            )
+        else:
+            response = _redirect_after_login(request, user)
+
+        # Si había un next explícito, lo respetamos
+        if next_url:
+            response = _redirect(next_url)
+
+        return response
+
+    # GET → mostramos formulario para ingresar código 2FA
+    return render(
+        request,
+        "usuarios/two_factor_verify.html",
+        {"user": user},
+    )
+
+
+def axes_post_only(view_func):
+    """
+    Aplica Axes (bloqueo por intentos) solo a peticiones POST.
+    Las GET pasan directo para poder mostrar el formulario sin bloquear.
+    """
+    @wraps(view_func)
+    def _wrapped(request, *args, **kwargs):
+        if request.method.upper() == "POST":
+            return axes_dispatch(view_func)(request, *args, **kwargs)
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped
+
+@login_required(login_url="usuarios:login_unificado")
+def two_factor_setup(request):
+    """
+    Pantalla de seguridad:
+      - Configurar y activar 2FA.
+      - Listar dispositivos de confianza del usuario.
+      - Permitir eliminar dispositivos de confianza.
+    """
+    user = request.user
+
+    # Generar o recuperar el secreto TOTP del usuario
+    secret = user.get_or_create_two_factor_secret()
+
+    # Nombre que se muestra en la app de autenticación
+    issuer_name = getattr(settings, "TWO_FACTOR_ISSUER_NAME", "GZ Services")
+
+    # Crear URI para apps tipo Google Authenticator
+    totp = pyotp.TOTP(secret)
+    otp_uri = totp.provisioning_uri(name=user.username, issuer_name=issuer_name)
+
+    # Dispositivos de confianza del usuario
+    devices = user.trusted_devices.order_by("-created_at")
+
+    if request.method == "POST":
+        action = request.POST.get("action", "enable_2fa")
+
+        if action == "enable_2fa":
+            code = request.POST.get("code", "")
+            if _verify_totp_code(user, code):
+                user.two_factor_enabled = True
+                user.save(update_fields=["two_factor_enabled"])
+                messages.success(
+                    request,
+                    "El segundo factor de autenticación se ha activado correctamente en tu cuenta."
+                )
+                return redirect("usuarios:two_factor_setup")
+            else:
+                messages.error(
+                    request,
+                    "El código de verificación no es válido. Revisa tu aplicación de autenticación."
+                )
+
+        elif action == "delete_device":
+            device_id = request.POST.get("device_id")
+            try:
+                device = TrustedDevice.objects.get(id=device_id, user=user)
+                device.delete()
+                messages.success(
+                    request,
+                    "El dispositivo de confianza ha sido eliminado."
+                )
+            except TrustedDevice.DoesNotExist:
+                messages.error(
+                    request,
+                    "No se encontró el dispositivo de confianza seleccionado."
+                )
+            return redirect("usuarios:two_factor_setup")
+
+    context = {
+        "secret": secret,
+        "otp_uri": otp_uri,
+        "two_factor_enabled": getattr(user, "two_factor_enabled", False),
+        "devices": devices,
+    }
+    return render(request, "usuarios/two_factor_setup.html", context)
+
 
 
 @requires_csrf_token
@@ -195,41 +475,79 @@ Si no solicitaste este correo, simplemente ignóralo.
 @sensitive_post_parameters('password')
 @require_http_methods(["GET", "POST", "HEAD"])
 @ratelimit("login", limit=10, window_sec=60)
+@axes_post_only
 def login_unificado(request):
-    form = AuthenticationForm(request, data=request.POST or None)
+    """
+    Login centralizado GZ:
+      1) Valida usuario + password (AuthenticationForm + Axes + ratelimit).
+      2) Si el usuario NO requiere 2FA → login normal + redirect según rol.
+      3) Si requiere 2FA:
+         - Si tiene dispositivo confiable válido → login normal.
+         - Si no → guarda user_id y backend en sesión y redirige a two_factor_verify.
+    """
+    if request.user.is_authenticated:
+        # Usuario ya logueado: lo mandamos a donde corresponda
+        return _redirect_after_login(request, request.user)
 
-    # Audit básico de acceso (GET/POST)
-    logger.info(
-        "LOGIN_UNIFICADO %s path=%s ip=%s ua=%s",
-        request.method, request.path, _client_ip(request),
-        (request.META.get("HTTP_USER_AGENT", "") or "")[:180]
-    )
+    # ¿se pidió captcha? (si luego quieres engancharlo tras 3 intentos fallidos,
+    # aquí puedes añadir la lógica para mostrarlo / validarlo)
 
     if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
-            # Django rota la session key (prevención fixación)
+
+            # ----- 2FA obligatorio para staff con 2FA activado -----
+            if _user_requires_2fa(user) and not _has_valid_trusted_device(request, user):
+                # Guardamos en sesión el usuario pendiente de 2FA
+                request.session["pending_2fa_user_id"] = user.pk
+
+                # Guardar también el backend con el que se autenticó
+                backend_path = getattr(user, "backend", None)
+                if backend_path:
+                    request.session["pending_2fa_backend"] = backend_path
+
+                # Respetar ?next=
+                next_url = request.GET.get("next") or request.POST.get("next")
+                if next_url:
+                    request.session["pending_2fa_next"] = next_url
+
+                messages.info(
+                    request,
+                    "Por seguridad, debes introducir el código de verificación de tu aplicación de autenticación."
+                )
+                return redirect("usuarios:two_factor_verify")
+
+            # ----- SIN 2FA requerido o dispositivo ya confiable -----
             login(request, user)
-            logger.info("LOGIN_OK user=%s ip=%s", getattr(
-                user, "pk", "?"), _client_ip(request))
 
-            # Caso 1: solo tiene rol de usuario
-            try:
-                if user.roles.count() == 1 and user.tiene_rol('usuario'):
-                    return redirect(settings.LOGIN_REDIRECT_URL)
-            except Exception:
-                pass
+            logger.info(
+                f"LOGIN_OK user={user.username}, "
+                f"is_staff={user.is_staff}, is_superuser={user.is_superuser}, "
+                f"roles={[r.nombre for r in user.roles.all()] if hasattr(user, 'roles') else []}"
+            )
 
-            # Caso 2: tiene más de un rol
-            return redirect('usuarios:seleccionar_rol')
+            return _redirect_after_login(request, user)
+        else:
+            logger.warning(
+                "LOGIN_FAIL username=%s, errores=%s",
+                request.POST.get('username'),
+                form.errors
+            )
+            messages.error(request, "Credenciales inválidas.")
+    else:
+        form = AuthenticationForm(request)
 
-        # Fallo de credenciales (Axes también lo registrará)
-        username_try = (request.POST.get('username') or "").strip()
-        logger.warning("LOGIN_FAIL username=%s ip=%s",
-                       username_try, _client_ip(request))
-        messages.error(request, "Credenciales inválidas.")
+    # Info para mostrar aviso de "2FA pronto obligatorio"
+    days_left = _get_2fa_days_left()
+    enforce_date = _get_2fa_enforce_date()
 
-    return render(request, 'usuarios/login.html', {'form': form})
+    context = {
+        "form": form,
+        "two_factor_days_left": days_left,
+        "two_factor_enforce_date": enforce_date,
+    }
+    return render(request, 'usuarios/login.html', context)
 
 
 @login_required

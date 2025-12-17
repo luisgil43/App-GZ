@@ -1,3 +1,5 @@
+#setting_prod
+
 import os
 
 from .base import *  # noqa
@@ -23,6 +25,10 @@ TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = True
+
+
+# 2FA
+TWO_FACTOR_ENFORCE_DATE = date(2025, 1, 5)  # fecha para producción
 
 # HSTS (solo con HTTPS activo)
 SECURE_HSTS_SECONDS = 31536000

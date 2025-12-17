@@ -22,6 +22,9 @@ DATABASES = {
     }
 }
 
+# 2FA
+TWO_FACTOR_ENFORCE_DATE = date(2025, 12, 16)
+
 # No forzar HTTPS en desarrollo
 
 TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")

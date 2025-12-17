@@ -21,7 +21,7 @@ from rrhh.models import Feriado
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
 from usuarios.models import CustomUser as User
-from usuarios.models import Notificacion, Rol
+from usuarios.models import Notificacion, Rol, TrustedDevice
 
 User = get_user_model()
 
@@ -155,6 +155,7 @@ def editar_usuario_view(request, user_id):
         'roles': roles_disponibles,
         'roles_seleccionados': roles_seleccionados,
         'grupo_ids_post': grupo_ids_post,
+        'two_factor_enforce_date': getattr(settings, "TWO_FACTOR_ENFORCE_DATE", None),
     })
 
 
@@ -305,6 +306,7 @@ def crear_usuario_view(request, identidad=None):
         'roles': roles_disponibles,
         'roles_seleccionados': roles_seleccionados,
         'usuarios': usuarios_activos,  # para los selects jerárquicos
+        'two_factor_enforce_date': getattr(settings, "TWO_FACTOR_ENFORCE_DATE", None),
     }
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
 
@@ -315,18 +317,42 @@ User = get_user_model()
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_usuarios(request):
-    # 🔴 Eliminar usuario (POST)
-    if request.method == "POST" and "delete_user" in request.POST:
+    # 🔴 Acciones por POST (eliminar / reset 2FA)
+    if request.method == "POST":
         user_id = request.POST.get("user_id")
-        try:
-            usuario = User.objects.get(id=user_id)
-            username = usuario.username
-            usuario.delete()
-            messages.success(
-                request, f'Usuario "{username}" eliminado correctamente.'
-            )
-        except User.DoesNotExist:
-            messages.error(request, "Usuario no encontrado.")
+
+        # Eliminar usuario
+        if "delete_user" in request.POST:
+            try:
+                usuario = User.objects.get(id=user_id)
+                username = usuario.username
+                usuario.delete()
+                messages.success(
+                    request, f'Usuario "{username}" eliminado correctamente.'
+                )
+            except User.DoesNotExist:
+                messages.error(request, "Usuario no encontrado.")
+
+        # Resetear 2FA
+        elif "reset_2fa" in request.POST:
+            try:
+                usuario = User.objects.get(id=user_id)
+
+                # Desactivar 2FA y borrar secreto
+                usuario.two_factor_enabled = False
+                usuario.two_factor_secret = None
+                usuario.save(update_fields=["two_factor_enabled", "two_factor_secret"])
+
+                # Borrar dispositivos de confianza
+                TrustedDevice.objects.filter(user=usuario).delete()
+
+                messages.success(
+                    request,
+                    f'Se ha reseteado el 2FA del usuario "{usuario.username}".'
+                )
+            except User.DoesNotExist:
+                messages.error(request, "Usuario no encontrado.")
+
         return redirect('dashboard_admin:listar_usuarios')
 
     # 🔍 Filtros GET
@@ -388,7 +414,6 @@ def listar_usuarios(request):
         'filtros': filtros,
         'cantidad': str(cantidad_int),
     })
-
 
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')

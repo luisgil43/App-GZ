@@ -1,11 +1,11 @@
 # usuarios/urls.py
 
 from django.urls import path
-# from .views import UsuarioLoginView, AdminLoginView
-from .views import no_autorizado_view
-from . import views
 from django.views.generic import TemplateView
 
+from . import views
+# from .views import UsuarioLoginView, AdminLoginView
+from .views import no_autorizado_view
 
 app_name = 'usuarios'
 
@@ -25,7 +25,9 @@ urlpatterns = [
     path('notificacion/<int:pk>/leer/',
          views.marcar_notificacion_como_leida, name='leer_notificacion'),
 
-
+         # 2FA
+    path('two-factor/', views.two_factor_verify, name='two_factor_verify'),
+    path('seguridad/', views.two_factor_setup, name='two_factor_setup'),
 
 
 ]
