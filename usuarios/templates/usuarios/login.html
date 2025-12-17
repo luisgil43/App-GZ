@@ -24,9 +24,13 @@
       padding: 0;
       font-family: 'Segoe UI', sans-serif;
 
-      /* SOLO la imagen de fondo */
-      background: #020617 url("{% static 'images/login_winter_bg.png' %}")
-                   center/cover no-repeat fixed;
+      /* SOLO la imagen de fondo, bien centrada */
+      background-color: #020617;
+      background-image: url("{% static 'images/login_winter_bg.png' %}");
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-size: cover;
+      background-attachment: fixed; /* efecto bonito en escritorio */
 
       display: flex;
       flex-direction: column;
@@ -326,6 +330,14 @@
       .login-container { padding: 1.6rem; margin: 0 1rem; }
       .logo-box img { width: 130px; }
     }
+
+    /* En móviles quitamos el fixed para que la imagen cubra bien todo */
+    @media (max-width: 768px) {
+      body {
+        background-attachment: scroll;
+        background-size: cover;
+      }
+    }
   </style>
 </head>
 <body>
@@ -453,7 +465,7 @@
         span.className = 'snowflake';
         span.textContent = '❆';
 
-        const size = 14 + Math.random() * 10;    // tamaño más grande     // tamaño
+        const size = 14 + Math.random() * 10;    // tamaño más grande
         const left = Math.random() * 100;        // posición horizontal
         const duration = 9 + Math.random() * 10; // duración de la caída
         const delay = Math.random() * -duration; // empezar en distintos puntos
