@@ -28,7 +28,7 @@ SECURE_SSL_REDIRECT = True
 
 
 # 2FA
-TWO_FACTOR_ENFORCE_DATE = date(2025, 1, 5)  # fecha para producción
+TWO_FACTOR_ENFORCE_DATE = date(2026, 1, 5)  # fecha para producción
 
 # HSTS (solo con HTTPS activo)
 SECURE_HSTS_SECONDS = 31536000
