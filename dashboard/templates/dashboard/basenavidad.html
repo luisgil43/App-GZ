@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+{% load static %}
+{% load humanize %}
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}Dashboard{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- iOS / Apple Touch Icons -->
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+  <link rel="apple-touch-icon" sizes="120x120" href="{% static 'icons/apple-touch-icon-120x120.png' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'icons/apple-touch-icon-180x180.png' %}">
+
+  <!-- Favicon clásico -->
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32x32.png' %}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{% static 'icons/favicon-16x16.png' %}">
+  <link rel="icon" href="{% static 'icons/favicon.ico' %}" sizes="any">
+
+  <!-- PWA -->
+  <link rel="manifest" href="{% static 'icons/site.webmanifest' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Miltel">
+
+  <!-- TailwindCSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Tu hoja de estilos global (si la usas) -->
+  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+
+  <style>
+    .rotate-90 { transform: rotate(90deg); }
+
+    :root {
+      --gz-red:        #d7263d;
+      --gz-green:      #166534;
+      --body-bg-top:   #052e26;
+      --body-bg-bottom:#4a0b16;
+    }
+
+    /* Header con degradado navideño */
+    header {
+      background:
+        radial-gradient(circle at top left,
+          rgba(255,255,255,0.10) 0,
+          transparent 60%),
+        linear-gradient(90deg, var(--body-bg-top), var(--body-bg-bottom));
+      color: #f9fafb;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+      border-bottom: 3px solid rgba(215,38,61,0.8);
+    }
+
+    /* Textos del header sobre fondo oscuro */
+    header .text-gray-800,
+    header .text-gray-700 {
+      color: #f9fafb !important;
+    }
+    header .text-red-600 {
+      color: #fee2e2 !important;
+    }
+    header .text-red-600:hover {
+      color: #fecaca !important;
+    }
+
+    /* Menú lateral con el mismo degradado verde/rojo */
+    #side-nav {
+      background:
+        radial-gradient(circle at top,
+          rgba(255,255,255,0.10) 0,
+          transparent 55%),
+        linear-gradient(180deg, var(--body-bg-top), var(--body-bg-bottom));
+    }
+
+    .rotate-90 { transform: rotate(90deg); }
+
+    :root {
+      --gz-red:        #d7263d;
+      --gz-green:      #166534;
+      --body-bg-top:   #052e26;
+      --body-bg-bottom:#4a0b16;
+    }
+
+    /* Header con degradado navideño */
+    header {
+      background:
+        radial-gradient(circle at top left,
+          rgba(255,255,255,0.10) 0,
+          transparent 60%),
+        linear-gradient(90deg, var(--body-bg-top), var(--body-bg-bottom));
+      color: #f9fafb;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+      border-bottom: 3px solid rgba(215,38,61,0.8);
+    }
+
+    header .text-gray-800,
+    header .text-gray-700 {
+      color: #f9fafb !important;
+    }
+    header .text-red-600 {
+      color: #fee2e2 !important;
+    }
+    header .text-red-600:hover {
+      color: #fecaca !important;
+    }
+
+    #side-nav {
+      background:
+        radial-gradient(circle at top,
+          rgba(255,255,255,0.10) 0,
+          transparent 55%),
+        linear-gradient(180deg, var(--body-bg-top), var(--body-bg-bottom));
+    }
+
+    /* === COLAPSE MENÚ EN PC (como en Hyperlink) === */
+    @media (min-width: 768px) {
+      /* Cuando hay sidebar, empujamos el contenido 72 (18rem) hacia la derecha */
+      .content-wrapper.with-sidebar #main-content {
+        margin-left: 18rem; /* igual que w-72 */
+      }
+
+      /* Cuando está colapsado, el contenido ocupa todo el ancho */
+      .content-wrapper.no-sidebar #main-content {
+        margin-left: 0;
+      }
+
+      /* Nav colapsado: lo escondemos hacia la izquierda */
+      #side-nav.collapsed {
+        transform: translateX(-100%) !important;
+      }
+    }
+
+  
+  /* ... tus estilos que ya tienes ... */
+
+  /* === Texto oscuro dentro del panel de notificaciones === */
+  #notification-panel,
+  #notification-panel * {
+    color: #111827 !important;     /* gris casi negro */
+  }
+
+  #notification-panel .text-xs {
+    color: #6b7280 !important;     /* gris 500 para la fecha */
+  }
+
+
+  </style>
+</head>
+
+<body class="bg-gray-100 text-gray-900">
+
+<!-- Header fijo -->
+<header class="fixed top-0 left-0 w-full z-50 px-4 py-2">
+  <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+
+    <!-- Campana SIEMPRE ARRIBA A LA DERECHA -->
+    <div class="absolute top-3 right-4 z-50">
+      <button onclick="toggleNotifications()" class="relative text-gray-700">
+        <i data-lucide="bell" class="w-6 h-6"></i>
+        {% if notificaciones_no_leidas > 0 %}
+          <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {{ notificaciones_no_leidas }}
+          </span>
+        {% endif %}
+      </button>
+
+      <!-- Panel de notificaciones -->
+      <div id="notification-panel"
+           class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
+        <div class="p-2 max-h-80 overflow-y-auto">
+          {% for n in notificaciones_recientes %}
+            <div id="notificacion-{{ n.id }}">
+              <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
+                      class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
+                <div class="flex flex-col">
+                  <span>{{ n.mensaje }}</span>
+                  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
+                </div>
+              </button>
+            </div>
+          {% empty %}
+            <p class="text-sm text-gray-200 p-2">Sin historial de notificaciones.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENIDO DEL HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full pr-16 gap-2 sm:gap-0 mt-[-8px]">
+
+      <!-- IZQUIERDA: Logo + texto -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()"class="text-gray-100 text-2xl md:text-xl mr-1">☰</button>
+        <img src="{% static 'images/planixnavidad.png' %}" alt="Logo" class="h-12 bg-white/10 rounded-lg p-1">
+        <strong class="text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
+      </div>
+
+      <!-- DERECHA: Nombre + cerrar sesión -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-4 items-start text-sm md:text-base text-right leading-tight">
+        <span class="font-medium break-words sm:whitespace-nowrap">
+          {{ request.user.get_full_name|default:request.user.username }}
+        </span>
+        <form method="post" action="{% url 'dashboard_admin:logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="font-semibold whitespace-nowrap">
+            Cerrar Sesión
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+
+<!-- Contenedor principal -->
+<div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+
+  <!-- Menú lateral -->
+  <nav id="side-nav"
+       class="text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
+    <h2 class="text-2xl font-bold mb-8">Menú</h2>
+    <ul class="space-y-4 text-base">
+      <li>
+        <a href="{% url 'dashboard:inicio_tecnico' %}" class="font-bold flex items-center hover:text-emerald-300">
+          🏠 Inicio
+        </a>
+      </li>
+
+      <!-- Beneficios -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🎁 Beneficios <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Convenios disponibles</a></li>
+        </ul>
+      </li>
+
+      <!-- Flota -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🚐 Flota <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Mi vehículo asignado</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Devolución de Vehículo</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Mantenimientos</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Reportes</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Documentación del Vehículo</a></li>
+        </ul>
+      </li>
+
+      <!-- Facturación -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          📄 Facturación <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Mis facturas</a></li>
+        </ul>
+      </li>
+
+      <!-- Logística -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          📦 Logística <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Solicitud de materiales</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Devolución de materiales</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Mis equipos asignados</a></li>
+        </ul>
+      </li>
+
+      <!-- Operaciones -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🛠 Operaciones <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="{% url 'operaciones:buscar_mi_sitio' %}" class="hover:text-emerald-300">Buscar Mi Sitio</a></li>
+          <li><a href="{% url 'operaciones:mis_servicios_tecnico' %}" class="hover:text-emerald-300">Mi Asignación</a></li>
+          <li><a href="{% url 'operaciones:produccion_tecnico' %}" class="hover:text-emerald-300">Mi Producción</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Horas extras</a></li>
+          <li><a href="{% url 'operaciones:mis_rendiciones' %}" class="hover:text-emerald-300">Mis Rendiciones</a></li>
+        </ul>
+      </li>
+
+      <!-- Prevención -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🦺 Prevención de Riesgo <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Mis Cursos</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Firma de documentos</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Mis EPP asignados</a></li>
+        </ul>
+      </li>
+
+      <!-- RRHH -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🧑‍💼 RR.HH <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="{% url 'rrhh:mis_vacaciones' %}" class="hover:text-emerald-300">Mis Vacaciones</a></li>
+          <li><a href="{% url 'liquidaciones:listar' %}" class="hover:text-emerald-300">Mis liquidaciones</a></li>
+          <li><a href="{% url 'rrhh:mis_contratos' %}" class="hover:text-emerald-300">Mis contratos de trabajo</a></li>
+          <li><a href="{% url 'rrhh:mis_fichas_ingreso' %}" class="hover:text-emerald-300">Mi Ficha de Ingreso</a></li>
+          <li><a href="{% url 'rrhh:mis_documentos' %}" class="hover:text-emerald-300">Mis Documentos</a></li>
+          <li><a href="{% url 'dashboard:registrar_firma_usuario' %}" class="hover:text-emerald-300">Mi Firma Digital</a></li>
+          <li><a href="{% url 'rrhh:ver_cronograma' %}" class="hover:text-emerald-300">Mi cronograma de pago</a></li>
+          <li><a href="{% url 'rrhh:listar_adelantos_usuario' %}" class="hover:text-emerald-300">Solicitud de adelanto de sueldo</a></li>
+        </ul>
+      </li>
+
+      <!-- Subcontrato -->
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">
+          🤝 Subcontrato <span class="arrow">▶</span>
+        </span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display:none;">
+          <li><a href="#" class="hover:text-emerald-300">Cargar producción</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Cargar factura de producción</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Cargar contrato de los trabajadores</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Cargar F30 y F30-1</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Cargar liquidaciones de sueldo</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Cargar curso de los trabajadores</a></li>
+          <li><a href="#" class="hover:text-emerald-300">Contrato de servicio</a></li>
+        </ul>
+      </li>
+    </ul>
+
+    <!-- Footer menú -->
+    <div class="mt-10 text-center text-gray-200 text-xs">
+      <p class="mb-1">Desarrollado por</p>
+      <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-14 mx-auto max-w-[100px] object-contain">
+    </div>
+  </nav>
+
+  <!-- Contenido principal -->
+  <main id="main-content" class="flex-1 p-6 z-10 bg-gray-100">
+    {% block content %}{% endblock %}
+  </main>
+
+</div> <!-- cierre contenedor principal -->
+
+
+<!-- Scripts menú y notificaciones -->
+  <script>
+    function toggleMenu(el) {
+      const submenu = el.nextElementSibling;
+      const flecha = el.querySelector(".arrow");
+      if (submenu) {
+        const isHidden = submenu.style.display === "none" || submenu.classList.contains("hidden");
+        if (isHidden) {
+          submenu.classList.remove("hidden");
+          submenu.style.display = "block";
+          flecha.classList.add("rotate-90");
+        } else {
+          submenu.classList.add("hidden");
+          submenu.style.display = "none";
+          flecha.classList.remove("rotate-90");
+        }
+      }
+    }
+  // Mostrar/ocultar menú lateral
+  function toggleSidebar() {
+    const nav     = document.getElementById('side-nav');
+    const wrapper = document.querySelector('.content-wrapper');
+    if (!nav || !wrapper) return;
+
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+
+    if (isDesktop) {
+      // En desktop: colapsar/expandir y ajustar margen del contenido
+      const collapsed = nav.classList.toggle('collapsed');
+      wrapper.classList.toggle('no-sidebar', collapsed);
+      wrapper.classList.toggle('with-sidebar', !collapsed);
+    } else {
+      // En móvil: off-canvas clásico
+      nav.classList.toggle('-translate-x-full');
+    }
+  }
+  </script>
+
+{% if messages %}
+<div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
+  {% for message in messages %}
+  <div class="flex items-center justify-between p-4 rounded-md shadow text-white
+              {% if message.tags == 'success' %}bg-green-600
+              {% elif message.tags == 'error' %}bg-red-600
+              {% elif message.tags == 'warning' %}bg-yellow-500
+              {% else %}bg-blue-600{% endif %}">
+    <span>{{ message }}</span>
+    <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
+  </div>
+  {% endfor %}
+</div>
+<script>
+  setTimeout(() => {
+    const mensajes = document.getElementById('mensajes');
+    if (mensajes) mensajes.remove();
+  }, 5000);
+</script>
+{% endif %}
+
+<script>
+  // Marcar notificación como leída y redirigir
+  function leerNotificacion(id, urlDestino) {
+    fetch(`/usuarios/notificacion/${id}/leer/`)
+      .then(response => {
+        if (response.ok) {
+          const item = document.getElementById(`notificacion-${id}`);
+          if (item) item.remove();
+
+          const badge = document.querySelector('.relative .bg-red-500');
+          if (badge) {
+            let count = parseInt(badge.innerText);
+            if (count > 1) {
+              badge.innerText = count - 1;
+            } else {
+              badge.remove();
+            }
+          }
+          window.location.href = urlDestino;
+        }
+      });
+  }
+
+  function toggleNotifications() {
+    const panel = document.getElementById('notification-panel');
+    if (panel) panel.classList.toggle('hidden');
+  }
+</script>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  lucide.createIcons();
+</script>
+
+</body>
+</html>

@@ -3,66 +3,30 @@
 {% block title %}Inicio - Panel Admin{% endblock %}
 
 {% block dashboard_content %}
-<div
-  class="min-h-screen -m-6 md:-m-8 flex items-start justify-center"
-  style="
-    background:
-      radial-gradient(circle at top,
-        rgba(255,255,255,0.16) 0,
-        transparent 55%),
-      linear-gradient(180deg,#052e26,#4a0b16);
-  "
->
-  <div
-    class="w-full max-w-4xl bg-white/95 rounded-2xl shadow-2xl px-8 py-8 mt-8 mb-10
-           border-t-4 border-[#166534] border-b-4 border-[#d7263d]"
-  >
-    <!-- Mensaje de bienvenida -->
-    <h1 class="text-3xl font-bold mb-2 text-[#f97316] text-center tracking-wide">
-      ¡Hola {{ request.user.get_full_name }}!
+<div class="text-center mt-10">
+    <h1 class="text-3xl font-bold text-gray-800 mb-4">
+        ¡Hola {{ request.user.get_full_name }}!
     </h1>
-    <p class="text-lg text-gray-600 mb-3 text-center">
-      ¿Qué deseas gestionar hoy?
+    <p class="text-xl text-gray-600 mb-6">
+        ¿Qué deseas gestionar hoy?
     </p>
 
-    <!-- Mensaje navideño -->
-    <p class="text-sm font-semibold text-[#166534] text-center mb-8 flex items-center justify-center gap-2">
-      🎄 <span class="text-[#d7263d]">GZ Services</span> les desea una
-      <span class="text-[#d7263d]">Feliz Navidad</span> y un próspero Año Nuevo 🎅
-    </p>
+    <div class="flex justify-center gap-6 flex-wrap">
+        <a href="{% url 'liquidaciones:admin_lista' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+            📄 Cargar Liquidaciones
+        </a>
 
-    <!-- Botones principales -->
-    <div class="flex justify-center gap-4 flex-wrap">
+        <a href="#" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+            🏗️ Cargar Producciones
+        </a>
 
-      <a href="{% url 'liquidaciones:admin_lista' %}"
-         class="bg-gradient-to-r from-[#d7263d] to-[#166534] hover:brightness-110
-                text-white font-semibold py-3 px-6 rounded-full shadow-lg
-                transition transform hover:-translate-y-0.5">
-        📄 Cargar Liquidaciones
-      </a>
+        <a href="{% url 'rrhh:contratos_trabajo' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+            📑 Cargar Contratos
+        </a>
 
-      <a href="#"
-         class="bg-gradient-to-r from-[#d7263d] to-[#166534] hover:brightness-110
-                text-white font-semibold py-3 px-6 rounded-full shadow-lg
-                transition transform hover:-translate-y-0.5">
-        🏗️ Cargar Producciones
-      </a>
-
-      <a href="{% url 'rrhh:contratos_trabajo' %}"
-         class="bg-gradient-to-r from-[#d7263d] to-[#166534] hover:brightness-110
-                text-white font-semibold py-3 px-6 rounded-full shadow-lg
-                transition transform hover:-translate-y-0.5">
-        📑 Cargar Contratos
-      </a>
-
-      <a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}"
-         class="bg-gradient-to-r from-[#d7263d] to-[#166534] hover:brightness-110
-                text-white font-semibold py-3 px-6 rounded-full shadow-lg
-                transition transform hover:-translate-y-0.5">
-        🧾 Cargar Fichas de Ingreso
-      </a>
-
+        <a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
+            🧾 Cargar Fichas de Ingreso
+        </a>
     </div>
-  </div>
 </div>
 {% endblock %}

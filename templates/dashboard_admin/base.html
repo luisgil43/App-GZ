@@ -27,82 +27,45 @@
 
 
     <script src="https://cdn.tailwindcss.com"></script>
-        <style>
-        .rotate-90 {
-            transform: rotate(90deg);
-        }
+   <style>
+  .rotate-90 {
+    transform: rotate(90deg);
+  }
 
-        :root {
-          /* Paleta navideña GZ */
-          --gz-red:         #d7263d;   /* rojo vino brillante */
-          --gz-green:       #166534;   /* verde pino */
-          --gz-gold:        #facc15;   /* dorado cálido */
-          --body-bg-top:    #052e26;   /* verde muy oscuro */
-          --body-bg-bottom: #4a0b16;   /* rojo vino oscuro */
-        }
-
-        /* Header con degradado navideño como el login */
-        header {
-          background:
-            radial-gradient(circle at top left,
-              rgba(255,255,255,0.08) 0,
-              transparent 60%),
-            linear-gradient(90deg,
-              var(--body-bg-top),
-              var(--body-bg-bottom));
-          color: #f9fafb;
-          box-shadow: 0 8px 18px rgba(0,0,0,0.4);
-          border-bottom: 3px solid rgba(215,38,61,0.7); /* rojito GZ */
-        }
-
-        /* Asegurar textos claros sobre el header oscuro */
-        header .text-gray-800,
-        header .text-gray-700 {
-          color: #f9fafb !important;
-        }
-        header .text-red-600 {
-          color: #fee2e2 !important;
-        }
-        header .text-red-600:hover {
-          color: #fff5f5 !important;
-        }
-
-        /* Menú lateral con el mismo degradado navideño */
-        #side-nav {
-          background:
-            radial-gradient(circle at top,
-              rgba(255,255,255,0.06) 0,
-              transparent 55%),
-            linear-gradient(180deg,
-              var(--body-bg-top),
-              var(--body-bg-bottom));
-        }
-
-        /* Si en algún sitio usas bg-sidebar, lo volvemos transparente
-           para no romper el degradado del nav */
-        .bg-sidebar {
-          background-color: transparent;
-        }
-
-        /* === COLAPSE MENÚ EN PC (como en Hyperlink) === */
-    @media (min-width: 768px) {
-      /* Cuando hay sidebar, empujamos el contenido 72 (18rem) hacia la derecha */
-      .content-wrapper.with-sidebar #main-content {
-        margin-left: 18rem; /* igual que w-72 */
-      }
-
-      /* Cuando está colapsado, el contenido ocupa todo el ancho */
-      .content-wrapper.no-sidebar #main-content {
-        margin-left: 0;
-      }
-
-      /* Nav colapsado: lo escondemos hacia la izquierda */
-      #side-nav.collapsed {
-        transform: translateX(-100%) !important;
-      }
+  /* === COLAPSAR MENÚ EN PC (>=768px) === */
+  @media (min-width: 768px) {
+    /* Cuando hay sidebar, empujamos el contenido 18rem (w-72) */
+    .content-wrapper.with-sidebar #main-content {
+      margin-left: 18rem;
     }
-   
-  /* ... tus estilos que ya tienes ... */
+
+    /* Cuando se oculta, el contenido ocupa todo el ancho */
+    .content-wrapper.no-sidebar #main-content {
+      margin-left: 0;
+    }
+
+    /* Nav colapsado: lo movemos fuera de pantalla */
+    #side-nav.collapsed {
+      transform: translateX(-100%) !important;
+    }
+  }
+
+  /* Cuando el sidebar está presente */
+.content-wrapper.with-sidebar main {
+  margin-left: 18rem; /* ancho del menú en desktop */
+}
+
+/* Cuando lo colapsas en desktop */
+.content-wrapper.no-sidebar main {
+  margin-left: 0;
+}
+
+/* Sidebar colapsado en desktop */
+#side-nav.collapsed {
+  transform: translateX(-100%);
+}
+
+ /* ... tus estilos que ya tienes ... */
 
   /* === Texto oscuro dentro del panel de notificaciones === */
   #notification-panel,
@@ -113,9 +76,7 @@
   #notification-panel .text-xs {
     color: #6b7280 !important;     /* gris 500 para la fecha */
   }
-
-  
-    </style>
+</style>
 </head>
 
 <body class="bg-gray-100 text-gray-900 min-h-screen">
@@ -162,7 +123,7 @@
       <!-- Izquierda: Logo -->
       <div class="flex items-center gap-3">
         <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
-        <img src="{% static 'images/planixnavidad.png' %}" alt="Logo" class="h-12">
+        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
         <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
       </div>
 
@@ -352,6 +313,7 @@
 </li>
 {% endif %}
 
+
 {% if request.user.es_admin_general %}
 <li class="group">
   <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
@@ -370,6 +332,7 @@
 </li>
 {% endif %}
 
+
 {% if request.user.is_authenticated and request.user.is_staff %}
 <li class="group">
   <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
@@ -386,6 +349,7 @@
   </ul>
 </li>
 {% endif %}
+
 
 
                 {% if request.user.es_admin_general %}
@@ -416,7 +380,7 @@
         </main>
     </div>
     <!-- Scripts -->
-<script>
+   <script>
   // Clave distinta solo para el admin
   const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 
@@ -471,7 +435,6 @@
   document.addEventListener('DOMContentLoaded', applySidebarState);
   window.addEventListener('resize', applySidebarState);
 </script>
-
 
  <!-- Mensajes emergentes -->
     {% if messages %}
@@ -537,6 +500,7 @@ function toggleNotifications() {
 <script>
   lucide.createIcons();
 </script>
+
 <script>
   // Abrir/cerrar submenús del sidebar
   function toggleMenu(el) {
@@ -558,7 +522,6 @@ function toggleNotifications() {
     }
   }
 </script>
-
 
 </body>
 </html>
