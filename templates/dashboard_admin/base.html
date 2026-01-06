@@ -27,12 +27,12 @@
 
 
     <script src="https://cdn.tailwindcss.com"></script>
-   <style>
+<style>
   .rotate-90 {
     transform: rotate(90deg);
   }
 
-  /* === COLAPSAR MENÚ EN PC (>=768px) === */
+  /* ====== DESKTOP (>=768px) ====== */
   @media (min-width: 768px) {
     /* Cuando hay sidebar, empujamos el contenido 18rem (w-72) */
     .content-wrapper.with-sidebar #main-content {
@@ -50,31 +50,22 @@
     }
   }
 
-  /* Cuando el sidebar está presente */
-.content-wrapper.with-sidebar main {
-  margin-left: 18rem; /* ancho del menú en desktop */
-}
-
-/* Cuando lo colapsas en desktop */
-.content-wrapper.no-sidebar main {
-  margin-left: 0;
-}
-
-/* Sidebar colapsado en desktop */
-#side-nav.collapsed {
-  transform: translateX(-100%);
-}
-
- /* ... tus estilos que ya tienes ... */
+  /* ====== MÓVIL (<768px) ======
+     En móvil el sidebar es off-canvas, así que el contenido NO debe quedar corrido. */
+  @media (max-width: 767px) {
+    #main-content {
+      margin-left: 0 !important;
+    }
+  }
 
   /* === Texto oscuro dentro del panel de notificaciones === */
   #notification-panel,
   #notification-panel * {
-    color: #111827 !important;     /* gris casi negro */
+    color: #111827 !important;
   }
 
   #notification-panel .text-xs {
-    color: #6b7280 !important;     /* gris 500 para la fecha */
+    color: #6b7280 !important;
   }
 </style>
 </head>

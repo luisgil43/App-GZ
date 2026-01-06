@@ -3,6 +3,7 @@ import io
 import mimetypes
 import os
 import re
+import time
 import unicodedata
 import uuid
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from tempfile import NamedTemporaryFile
 
 import boto3
 import xlsxwriter
+from botocore.exceptions import ClientError
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -38,6 +40,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
 from usuarios.decoradores import rol_requerido
 
 from .models import \
@@ -47,7 +50,14 @@ from .models import (EvidenciaFoto, RequisitoFoto, ServicioCotizado,
 
 # ========== Helpers ==========
 
-
+def wasabi_client():
+    return boto3.client(
+        "s3",
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
+        region_name=settings.AWS_S3_REGION_NAME,
+    )
 
 
 def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
@@ -704,8 +714,7 @@ def presign_put(request, asig_id: int):
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
 
     filename = request.POST.get("filename") or ""
-    content_type = request.POST.get("content_type") or mimetypes.guess_type(
-        filename)[0] or "application/octet-stream"
+    content_type = request.POST.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
     size_bytes = int(request.POST.get("size_bytes") or 0)
 
     if not content_type.startswith("image/") or content_type.lower() not in ALLOWED_CT:
@@ -713,11 +722,14 @@ def presign_put(request, asig_id: int):
 
     max_bytes = settings.DIRECT_UPLOADS_MAX_MB * 1024 * 1024
     if size_bytes <= 0 or size_bytes > max_bytes:
-        return JsonResponse({"ok": False, "error": f"Tamaño inválido (máximo {settings.DIRECT_UPLOADS_MAX_MB}MB)."}, status=400)
+        return JsonResponse(
+            {"ok": False, "error": f"Tamaño inválido (máximo {settings.DIRECT_UPLOADS_MAX_MB}MB)."},
+            status=400
+        )
 
     key = _safe_key(filename, subdir=f"asig_{a.pk}")
 
-    # Presign PUT (objeto será privado por defecto; no ACL)
+    # ✅ Presign PUT: aquí NO se hace head_object (todavía no existe el objeto)
     s3 = wasabi_client()
     url = s3.generate_presigned_url(
         ClientMethod="put_object",
@@ -728,9 +740,14 @@ def presign_put(request, asig_id: int):
         },
         ExpiresIn=300,  # 5 minutos
     )
-    head = s3.head_object(Bucket=settings.AWS_STORAGE_BUCKET_NAME, Key=key)
 
-    return JsonResponse({"ok": True, "url": url, "key": key, "content_type": content_type, "expires_in": 300})
+    return JsonResponse({
+        "ok": True,
+        "url": url,
+        "key": key,
+        "content_type": content_type,
+        "expires_in": 300
+    })
 
 
 @login_required
