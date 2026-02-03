@@ -78,7 +78,10 @@
           <label class="block text-sm font-medium text-gray-700">Tipo:</label>
           {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
-
+      <div class="col-span-1">
+  <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
+  {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+</div>
       <div class="col-span-1">
         <label class="block text-sm font-medium text-gray-700">RUT Factura:</label>
         {{ form.rut_factura|add_class:"w-full border rounded-xl px-3 py-2" }}
@@ -156,46 +159,50 @@
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="1" checked>
-          <span>Proyecto</span>
+          <span>Fecha Real del Gasto</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="2" checked>
-          <span>Tipo</span>
+          <span>Proyecto</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="3" checked>
-          <span>RUT Factura</span>
+          <span>Tipo</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="4" checked>
-          <span>Tipo de Documento</span>
+          <span>RUT Factura</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="5" checked>
-          <span>Número de Documento</span>
+          <span>Tipo de Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="6" checked>
-          <span>Gastos</span>
+          <span>Número de Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="7" checked>
-          <span>Abonos</span>
+          <span>Gastos</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="8" checked>
-          <span>Observaciones</span>
+          <span>Abonos</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>Comprobante</span>
+          <span>Observaciones</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="10" checked>
-          <span>Status</span>
+          <span>Comprobante</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="11" checked>
+          <span>Status</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="12" checked>
           <span>Acciones</span>
         </label>
       </div>
@@ -212,11 +219,12 @@
       <tr>
         <!--<th class="p-2 border-b border-gray-200">Nombre</th>-->
         <th class="p-2 border-b border-gray-200">Fecha</th>
+        <th class="p-2 border-b border-gray-200">Fecha real del gasto</th>
         <th class="p-2 border-b border-gray-200">Proyecto</th>
         <th class="p-2 border-b border-gray-200">Tipo</th>
-        <th class="p-2 border-b border-gray-200">RUT Factura</th>
-        <th class="p-2 border-b border-gray-200">Tipo de Documento</th>
-        <th class="p-2 border-b border-gray-200">Número de Documento</th>
+        <th class="p-2 border-b border-gray-200">RUT factura</th>
+        <th class="p-2 border-b border-gray-200">Tipo de documento</th>
+        <th class="p-2 border-b border-gray-200">Número de documento</th>
         <th class="p-2 border-b border-gray-200 text-right">Gastos</th>
         <th class="p-2 border-b border-gray-200 text-right">Abonos</th>
         <th class="p-2 border-b border-gray-200">Observaciones</th>
@@ -229,7 +237,14 @@
       {% for mov in pagina %}
       <tr class="align-top">
         <!--<td class="p-2 border-b border-gray-200">{{ mov.usuario.get_full_name }}</td>-->
-        <td class="p-2 border-b border-gray-200">{{ mov.fecha|date:"d/m/Y" }}</td>
+        <td class="p-2 border-b border-gray-200">{{ mov.fecha|date:"d-m-Y" }}</td>
+          <td class="p-2 border-b border-gray-200">
+  {% if mov.fecha_transaccion %}
+    {{ mov.fecha_transaccion|date:"d-m-Y" }}
+  {% else %}
+    {{ mov.fecha|date:"d-m-Y" }}
+  {% endif %}
+</td>
         <td class="p-2 border-b border-gray-200">{{ mov.proyecto }}</td>
         <td class="p-2 border-b border-gray-200">{{ mov.tipo }}</td>
         <td class="p-2 border-b border-gray-200">{{ mov.rut_factura|default:"—" }}</td>
@@ -337,7 +352,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="12" class="p-4 border-b border-gray-200 text-center text-gray-500">
+        <td colspan="13" class="p-4 border-b border-gray-200 text-center text-gray-500">
           No tienes rendiciones registradas.
         </td>
       </tr>

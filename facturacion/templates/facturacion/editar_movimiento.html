@@ -28,6 +28,8 @@
       {% endif %}
     </div>
 
+
+
     <!-- Proyecto -->
     <div class="mb-4">
       <label class="block text-sm font-medium text-gray-700">Proyecto</label>
@@ -36,7 +38,15 @@
         <p class="text-red-600 text-sm mt-1">{{ form.proyecto.errors.0 }}</p>
       {% endif %}
     </div>
-
+   {% if form.fields.fecha_transaccion %}
+  <div class="mb-4">
+    <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
+    {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+    {% if form.fecha_transaccion.errors %}
+      <p class="text-red-600 text-sm mt-1">{{ form.fecha_transaccion.errors.0 }}</p>
+    {% endif %}
+  </div>
+{% endif %}
     <!-- Tipo (si existe en el formulario) -->
     {% if form.fields.tipo %}
     <div class="mb-4">

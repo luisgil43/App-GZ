@@ -7,7 +7,22 @@
 <div class="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
   <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">✏️ Editar Rendición</h2>
 
-  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  {% if form.errors %}
+    <div class="bg-red-100 text-red-700 p-3 rounded mb-4">
+      <ul class="list-disc pl-5">
+        {% for field, errors in form.errors.items %}
+          {% if field != '__all__' %}
+            <li><strong>{{ field }}:</strong> {{ errors|join:", " }}</li>
+          {% endif %}
+        {% endfor %}
+        {% for error in form.non_field_errors %}
+          <li><strong>General:</strong> {{ error }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <form id="form-editar-rendicion" method="post" enctype="multipart/form-data" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {% csrf_token %}
 
     <div>
@@ -21,6 +36,17 @@
     </div>
 
     <div>
+      <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
+      {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700">RUT Factura:</label>
+      {{ form.rut_factura|add_class:"w-full border rounded-xl px-3 py-2" }}
+      <small id="razon_social_edit" class="text-xs text-gray-600 italic"></small>
+    </div>
+
+    <div>
       <label class="block text-sm font-medium text-gray-700">Tipo de Documento:</label>
       {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
@@ -31,7 +57,7 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700">Monto Gasto:</label>
+      <label class="block text-sm font-medium text-gray-700">Monto:</label>
       {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
 
@@ -40,39 +66,179 @@
       {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
 
-    <div>
+    <div class="sm:col-span-2">
       <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
       {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
 
     <div class="sm:col-span-2">
       <label class="block text-sm font-medium text-gray-700">Comprobante:</label>
+
       {% if form.instance.comprobante %}
         <p class="mb-2 text-sm text-gray-600">
-          Archivo actual: 
+          Archivo actual:
           <a href="{{ form.instance.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver comprobante</a>
         </p>
       {% endif %}
+
       <div class="flex gap-2">
-        <!-- Botón cámara -->
         <label class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
           📷 Tomar foto
-          <input type="file" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
+          <input type="file" id="comprobante_foto_edit" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
         </label>
 
-        <!-- Botón archivo -->
         <label class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
           📄 Subir archivo
-          <input type="file" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
+          <input type="file" id="comprobante_archivo_edit" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
         </label>
       </div>
+
+      <span id="nombre_comprobante_edit" class="text-sm text-gray-600 italic mt-1 block"></span>
+      <img id="preview_comprobante_edit" class="mt-2 max-h-40 rounded shadow hidden">
+
       <p class="text-xs text-gray-500 mt-1">Sube un nuevo archivo solo si deseas reemplazar el actual.</p>
     </div>
 
     <div class="sm:col-span-2 flex justify-between gap-2 mt-4">
-      <a href="{% url 'operaciones:mis_rendiciones' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-full">Cancelar</a>
-      <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full">Guardar Cambios</button>
+      <a href="{% url 'operaciones:mis_rendiciones' %}"
+         class="bg-gray-200 hover:bg-gray-300 text-gray-700 px-4 py-2 rounded-full">Cancelar</a>
+
+      <button type="submit"
+              class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full">
+        Guardar Cambios
+      </button>
     </div>
   </form>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // === Preview nombre/imagen comprobante (editar) ===
+  const archivoInput = document.getElementById("comprobante_archivo_edit");
+  const fotoInput = document.getElementById("comprobante_foto_edit");
+  const nombreSpan = document.getElementById("nombre_comprobante_edit");
+  const preview = document.getElementById("preview_comprobante_edit");
+
+  function mostrarArchivo(input) {
+    if (!input || !input.files || input.files.length === 0) return;
+
+    const archivo = input.files[0];
+    nombreSpan.textContent = "Archivo seleccionado: " + archivo.name;
+
+    if (archivo.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        preview.src = e.target.result;
+        preview.classList.remove("hidden");
+      };
+      reader.readAsDataURL(archivo);
+    } else {
+      preview.classList.add("hidden");
+      preview.src = "";
+    }
+  }
+
+  if (archivoInput) archivoInput.addEventListener("change", function () { mostrarArchivo(this); });
+  if (fotoInput) fotoInput.addEventListener("change", function () { mostrarArchivo(this); });
+
+  // === Formateo RUT (editar) ===
+  const rutInput = document.getElementById("id_rut_factura");
+  if (rutInput) {
+    rutInput.addEventListener("input", function () {
+      let v = this.value.replace(/\./g, '').replace(/-/g, '').replace(/\s/g, '');
+      if (v.length > 1) {
+        this.value = v.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + '-' + v.slice(-1);
+      }
+    });
+  }
+
+  // === Validación RUT si es Factura (editar) ===
+  const form = document.getElementById("form-editar-rendicion");
+  const tipoDoc = document.getElementById("id_tipo_doc");
+  const razonSocial = document.getElementById("razon_social_edit");
+  const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+
+  if (!form || !rutInput || !tipoDoc) return;
+
+  let isSubmitting = false;
+
+  function validarRutAjax(rut) {
+    return fetch("{% url 'operaciones:validar_rut_ajax' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ rut: rut })
+    }).then(r => r.json());
+  }
+
+  form.addEventListener("submit", function (e) {
+    if (isSubmitting) {
+      e.preventDefault();
+      return false;
+    }
+
+    const tipo = (tipoDoc.value || "").toLowerCase();
+    const rut = (rutInput.value || "").trim();
+
+    // Bloquear doble submit
+    isSubmitting = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = (tipo === "factura") ? "Validando..." : "Guardando...";
+      submitBtn.classList.add("opacity-60", "cursor-not-allowed");
+    }
+
+    // Si NO es factura, enviar normal
+    if (tipo !== "factura") return true;
+
+    // Si es factura, validar antes
+    e.preventDefault();
+
+    if (razonSocial) {
+      razonSocial.textContent = "Validando RUT...";
+      razonSocial.classList.remove("text-green-600", "text-red-600");
+      razonSocial.classList.add("text-gray-600");
+    }
+
+    validarRutAjax(rut)
+      .then(data => {
+        if (!data.ok) {
+          if (razonSocial) {
+            razonSocial.textContent = data.error || "RUT inválido.";
+            razonSocial.classList.remove("text-green-600", "text-gray-600");
+            razonSocial.classList.add("text-red-600");
+          }
+          isSubmitting = false;
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Guardar Cambios";
+            submitBtn.classList.remove("opacity-60", "cursor-not-allowed");
+          }
+        } else {
+          if (razonSocial) {
+            razonSocial.textContent = "✔ " + (data.mensaje || "RUT válido");
+            razonSocial.classList.remove("text-red-600", "text-gray-600");
+            razonSocial.classList.add("text-green-600");
+          }
+          form.submit();
+        }
+      })
+      .catch(() => {
+        if (razonSocial) {
+          razonSocial.textContent = "Error validando el RUT en el SII.";
+          razonSocial.classList.remove("text-green-600", "text-gray-600");
+          razonSocial.classList.add("text-red-600");
+        }
+        isSubmitting = false;
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Guardar Cambios";
+          submitBtn.classList.remove("opacity-60", "cursor-not-allowed");
+        }
+      });
+  });
+});
+</script>
 {% endblock %}

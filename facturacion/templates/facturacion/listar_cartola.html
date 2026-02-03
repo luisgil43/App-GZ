@@ -30,6 +30,55 @@
     white-space: nowrap;
     min-width: 1200px;
   }
+
+  /* ====== Cabecera tipo Excel (filtros por columna) ====== */
+  .excel-header-btn{
+    width:100%;
+    justify-content:center;
+    font-size:0.875rem;
+  }
+  .excel-header-btn .excel-arrow{
+    font-size:0.65rem;
+    margin-left:2px;
+  }
+  .excel-header-btn:hover .excel-arrow{
+    color:#111827;
+  }
+  .excel-panel{
+    position:fixed;
+    z-index:50;
+    width:260px;
+    background:#fff;
+    border-radius:0.75rem;
+    border:1px solid #d1d5db;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    padding:0.75rem;
+    font-size:0.8rem;
+  }
+  .excel-panel h3{
+    font-weight:600;
+    margin-bottom:0.5rem;
+  }
+  .excel-panel small{
+    font-size:0.7rem;
+    color:#6b7280;
+  }
+  .excel-panel .excel-options{
+    max-height:180px;
+    overflow-y:auto;
+    border:1px solid #e5e7eb;
+    border-radius:0.5rem;
+    padding:0.25rem 0.5rem;
+    margin-top:0.25rem;
+    background:#f9fafb;
+  }
+  .excel-col-filtered .excel-header-btn{
+    background:#e0f2fe;
+    border-radius:999px;
+  }
+  .excel-col-filtered .excel-arrow{
+    color:#2563eb !important;
+  }
 </style>
 
 <!-- Título y botones -->
@@ -52,105 +101,34 @@
        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
       📥 Export to Excel
     </a>
+    <button type="button"
+        id="btnEnviarHistorial"
+        disabled
+        class="bg-gray-300 text-white px-4 py-2 rounded-full text-sm shadow cursor-not-allowed">
+  📦 Enviar a Historial
+</button>
+<a href="{% url 'facturacion:listar_cartola_historial' %}"
+   class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-full text-sm shadow">
+  📚 Ver Historial
+</a>
   </div>
 </div>
 
-<!-- Filtros -->
-<form id="form-filtros"
-      method="get"
-      class="mb-3 text-base">
 
-  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">Usuario</label>
-      <input type="text"
-             name="usuario"
-             value="{{ filtros.usuario }}"
-             placeholder="Filtrar Usuario"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-44">
-      <label class="text-xs text-gray-600">Fecha</label>
-      <input type="text"
-             name="fecha"
-             value="{{ filtros.fecha }}"
-             placeholder="DD-MM-YYYY"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">Proyecto</label>
-      <input type="text"
-             name="proyecto"
-             value="{{ filtros.proyecto }}"
-             placeholder="Filtrar por Proyecto"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">Categoría</label>
-      <input type="text"
-             name="categoria"
-             value="{{ filtros.categoria }}"
-             placeholder="Filtrar por Categoria"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-48">
-      <label class="text-xs text-gray-600">Tipo</label>
-      <input type="text"
-             name="tipo"
-             value="{{ filtros.tipo }}"
-             placeholder="Filtrar por Tipo"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">Estado</label>
-      <select name="estado"
-              class="border rounded-lg px-3 py-2 w-full">
-        <option value="">Todos los estados</option>
-        {% for codigo, nombre in estado_choices %}
-          <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>
-            {{ nombre }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
-      <a href="{% url 'facturacion:listar_cartola' %}"
-         class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-lg shadow whitespace-nowrap">
-        ❌ Limpiar
-      </a>
-    </div>
-
-    <!-- Mantener cantidad actual -->
-    <input type="hidden" name="cantidad" value="{{ cantidad }}">
-  </div>
-</form>
-
-<!-- Selector de columnas -->
+<!-- Selector de columnas (igual) -->
 <div class="flex justify-start mb-2">
   <details class="relative">
     <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-      ⚙️ Columns
+      ⚙️ Columnas
     </summary>
 
     <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
-      <p class="text-xs text-gray-500 mb-2">Show / hide columns</p>
+      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
       <!-- Master checkbox -->
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
         <input type="checkbox" id="col-toggle-all" checked>
-        <span class="font-semibold text-xs">Show all columns</span>
+        <span class="font-semibold text-xs">Mostrar todas</span>
       </label>
 
       <div class="space-y-1 text-sm">
@@ -164,54 +142,58 @@
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="2" checked>
-          <span>Proyecto</span>
+          <span>Fecha real del gasto</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="3" checked>
-          <span>Categoría</span>
+          <span>Proyecto</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="4" checked>
-          <span>Tipo</span>
+          <span>Categoría</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="5" checked>
-          <span>RUT Factura</span>
+          <span>Tipo</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="6" checked>
-          <span>Tipo de Documento</span>
+          <span>RUT Factura</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="7" checked>
-          <span>N° Documento</span>
+          <span>Tipo de Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="8" checked>
-          <span>Observaciones</span>
+          <span>N° Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>N° Transferencia</span>
+          <span>Observaciones</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="10" checked>
-          <span>Comprobante</span>
+          <span>N° Transferencia</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="11" checked>
-          <span>Cargos</span>
+          <span>Comprobante</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="12" checked>
-          <span>Abonos</span>
+          <span>Cargos</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="13" checked>
-          <span>Status</span>
+          <span>Abonos</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="14" checked>
+          <span>Status</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="15" checked>
           <span>Acciones</span>
         </label>
       </div>
@@ -219,28 +201,107 @@
   </details>
 </div>
 
-<div id="cartolaZone">
+<!-- ✅ Botón global de filtros Excel -->
+<div class="flex justify-start mb-2">
+  <button type="button"
+          id="btnExcelClearAll"
+          class="px-3 py-1 text-xs border rounded-full bg-white hover:bg-blue-50">
+    ❌ Limpiar filtros
+  </button>
+</div>
+
+<!-- ✅ Zona tabla con excel_global_json (servidor) -->
+<div id="cartolaZone" data-excel-global='{{ excel_global_json|safe }}'>
   <!-- Tabla responsive -->
   <div class="tabla-responsive overflow-x-auto">
     <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
            style="white-space: nowrap;"
-           data-columns-table="gz-cartola">
+           data-columns-table="gz-cartola"
+           id="tabla-cartola">
       <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
         <tr>
-          <th class="p-2 border">Usuario</th>
-          <th class="p-2 border">Fecha</th>
-          <th class="p-2 border">Proyecto</th>
-          <th class="p-2 border">Categoría</th>
-          <th class="p-2 border">Tipo</th>
-          <th class="p-2 border">RUT Factura</th>
-          <th class="p-2 border">Tipo de Documento</th>
-          <th class="p-2 border">Número de Documento</th>
-          <th class="p-2 border">Observaciones</th>
-          <th class="p-2 border">N° Transferencia</th>
-          <th class="p-2 border">Comprobante</th>
-          <th class="p-2 border">Cargos</th>
-          <th class="p-2 border">Abonos</th>
-          <th class="p-2 border">Status</th>
+          <th class="p-2 border">
+  <input type="checkbox" id="chkAllHistorial">
+</th>
+          
+          <!-- 👉 filtros Excel en TODAS las columnas menos Acciones -->
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Usuario</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Fecha</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Categoría</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>RUT factura</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Tipo de documento</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Número de documento</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>N° Transferencia</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Comprobante</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border text-right" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Cargos</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border text-right" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Abonos</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Status</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <!-- Sin filtro Excel -->
           <th class="p-2 border">Acciones</th>
         </tr>
       </thead>
@@ -248,28 +309,59 @@
       <tbody class="text-center">
         {% for mov in pagina %}
         <tr class="border-t">
+          <td class="p-2 border">
+  <input type="checkbox" class="chkHistorial" value="{{ mov.id }}">
+</td>
           <td class="p-2 border">{{ mov.usuario }}</td>
-          <td class="p-2 border">{{ mov.fecha|date:"d-m-Y" }}</td>
+
+          <!-- Fecha -->
+          <td class="p-2 border" data-excel-value="{{ mov.fecha|date:'d-m-Y' }}">
+            {{ mov.fecha|date:"d-m-Y" }}
+          </td>
+
+          <!-- Fecha real del gasto (si no hay, cae a fecha normal) -->
+          <td class="p-2 border-b border-gray-200"
+              data-excel-value="{% if mov.fecha_transaccion %}{{ mov.fecha_transaccion|date:'d-m-Y' }}{% else %}{{ mov.fecha|date:'d-m-Y' }}{% endif %}">
+            {% if mov.fecha_transaccion %}
+              {{ mov.fecha_transaccion|date:"d-m-Y" }}
+            {% else %}
+              {{ mov.fecha|date:"d-m-Y" }}
+            {% endif %}
+          </td>
+
           <td class="p-2 border">{{ mov.proyecto }}</td>
           <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
           <td class="p-2 border">{{ mov.tipo }}</td>
-          <td class="p-2 border">{{ mov.rut_factura|default:"—" }}</td>
-          <td class="p-2 border">{{ mov.tipo_doc|default:"—" }}</td>
-          <td class="p-2 border">{{ mov.numero_doc|default:"—" }}</td>
+
+          <td class="p-2 border" data-excel-value="{{ mov.rut_factura|default:'—' }}">{{ mov.rut_factura|default:"—" }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.tipo_doc|default:'—' }}">{{ mov.tipo_doc|default:"—" }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.numero_doc|default:'—' }}">{{ mov.numero_doc|default:"—" }}</td>
+
           <td class="p-2 border">{{ mov.observaciones }}</td>
-          <td class="p-2 border">{{ mov.numero_transferencia|default:"—" }}</td>
-          <td class="p-2 border">
+
+          <td class="p-2 border" data-excel-value="{{ mov.numero_transferencia|default:'—' }}">
+            {{ mov.numero_transferencia|default:"—" }}
+          </td>
+
+          <!-- Comprobante -->
+          <td class="p-2 border" data-excel-value="{% if mov.comprobante %}Ver{% else %}—{% endif %}">
             {% if mov.comprobante %}
               <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
             {% else %}
               —
             {% endif %}
           </td>
-          <td class="p-2 border text-right">{{ mov.cargos|default:0|formato_clp }}</td>
-          <td class="p-2 border text-right">{{ mov.abonos|default:0|formato_clp }}</td>
 
-          <!-- Status -->
-          <td class="p-2 text-sm">
+          <td class="p-2 border text-right" data-excel-value="{{ mov.cargos|default:0|formato_clp }}">
+            {{ mov.cargos|default:0|formato_clp }}
+          </td>
+
+          <td class="p-2 border text-right" data-excel-value="{{ mov.abonos|default:0|formato_clp }}">
+            {{ mov.abonos|default:0|formato_clp }}
+          </td>
+
+          <!-- Status (valor limpio para filtro Excel) -->
+          <td class="p-2 text-sm" data-excel-value="{{ mov.get_status_display }}">
             <div class="flex flex-col gap-1 text-left leading-tight">
               {% if mov.status == 'pendiente_supervisor' %}
                 <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
@@ -329,7 +421,7 @@
             </div>
           </td>
 
-          <!-- Acciones -->
+          <!-- Acciones (igual) -->
           <td class="p-2 border">
             {# SUPERUSUARIO #}
             {% if user.is_superuser %}
@@ -403,7 +495,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr>
+        <tr data-empty-row="1">
           <td colspan="15" class="p-4 text-center">No hay movimientos registrados.</td>
         </tr>
         {% endfor %}
@@ -411,45 +503,47 @@
     </table>
   </div>
 
-  
+  <!-- Selector de cantidad (igual) -->
+  <form method="get" class="flex items-center gap-2 mt-4">
+    <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+      <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+    </select>
 
-    <!-- Selector de cantidad -->
-    <form method="get" class="flex items-center gap-2">
-      <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-      <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-        <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-        <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-        <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-        <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
-        <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-      </select>
+    <!-- Preservar filtros actuales (igual) -->
+    <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
+    <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
+    <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
+    <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
+    <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
+    <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
+    <input type="hidden" name="estado"      value="{{ filtros.estado }}">
 
-      <!-- Preservar filtros actuales -->
-      <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
-      <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
-      <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
-      <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
-      <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
-      <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
-      <input type="hidden" name="estado"      value="{{ filtros.estado }}">
-    </form>
+    <!-- ✅ preservar filtros excel si vienen por GET (en recarga normal) -->
+    {% if request.GET.excel_filters %}
+      <input type="hidden" name="excel_filters" value="{{ request.GET.excel_filters }}">
+    {% endif %}
+  </form>
 
-   <!-- Paginación -->
-<div class="mt-4 flex justify-center gap-2 text-sm">
-  {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-  {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-  {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-  {% endif %}
+  <!-- Paginación (igual) -->
+  <div class="mt-4 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+      <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+    <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+  </div>
 </div>
 
-  
-
-<!-- Modal de rechazo -->
+<!-- Modal de rechazo (igual) -->
 <div id="modalRechazo" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
   <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
     <h2 class="text-lg font-bold text-gray-800 mb-4">Motivo del Rechazo</h2>
@@ -474,8 +568,6 @@
     const form  = document.getElementById('formRechazo');
 
     form.action = `/facturacion/cartola/rechazar/${id}/`;
-    // Alternativa con URL nombrada:
-    // form.action = `{% url 'facturacion:rechazar_movimiento' 0 %}`.replace('/0/', `/${id}/`);
 
     const nextInput = form.querySelector('input[name="next"]');
     if (nextInput) {
@@ -494,7 +586,37 @@
   }
 </script>
 
-<!-- Filtros + paginación por AJAX (tipo Hyperlink) -->
+<!-- ✅ Panel flotante tipo Excel -->
+<div id="excelFilterPanel" class="excel-panel hidden">
+  <h3 id="excelPanelTitle">Columna</h3>
+  <small>Filtrar valores</small>
+
+  <div class="mt-2">
+    <input id="excelFilterSearch"
+           type="text"
+           placeholder="Buscar..."
+           class="w-full border border-gray-300 rounded-md px-2 py-1 text-xs">
+  </div>
+
+  <div class="mt-2 excel-options" id="excelFilterOptions">
+    <!-- opciones dinámicas -->
+  </div>
+
+  <div class="mt-3 flex justify-end gap-2">
+    <button type="button"
+            id="excelFilterClearAll"
+            class="px-2 py-1 border rounded-md text-xs">
+      Limpiar
+    </button>
+    <button type="button"
+            id="excelFilterApply"
+            class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs">
+      Aplicar
+    </button>
+  </div>
+</div>
+
+<!-- Filtros + paginación por AJAX (tu script, con ajuste para mantener excel_filters) -->
 <script>
 (function () {
   const form = document.getElementById('form-filtros');
@@ -510,6 +632,20 @@
       const v = (el.value || '').trim();
       if (v === '') params.delete(el.name);
     });
+
+    // ✅ Incluir filtros Excel en querystring
+    if (window.excel && window.excel.activeFilters) {
+      const plain = {};
+      Object.entries(window.excel.activeFilters).forEach(([col, set]) => {
+        if (set && set.size) plain[col] = Array.from(set);
+      });
+      if (Object.keys(plain).length) {
+        params.set('excel_filters', JSON.stringify(plain));
+      } else {
+        params.delete('excel_filters');
+      }
+    }
+
     return params;
   }
 
@@ -534,13 +670,19 @@
     zone = document.getElementById('cartolaZone');
     wirePagination(zone);
 
-    // re-aplicar columnas si está disponible
+    // ✅ re-aplicar columnas si está disponible
     if (window.reApplyCartolaColumns) {
       window.reApplyCartolaColumns();
     }
-    // re-enganchar aprobar si está disponible
+
+    // ✅ re-enganchar aprobar si está disponible
     if (window.engancharAprobarCartola) {
       window.engancharAprobarCartola();
+    }
+
+    // ✅ reiniciar filtros excel
+    if (window.initExcelFiltersGZ) {
+      window.initExcelFiltersGZ();
     }
 
     // restaurar foco/caret
@@ -598,7 +740,7 @@
 })();
 </script>
 
-<!-- Mantener scroll horizontal -->
+<!-- Mantener scroll horizontal (igual) -->
 <script>
 /* ====== Mantener scroll horizontal en Cartola (GZ Services) ====== */
 (function () {
@@ -659,7 +801,7 @@
 })();
 </script>
 
-<!-- Gestión de columnas con localStorage -->
+<!-- Gestión de columnas con localStorage (igual) -->
 <script>
 (function () {
   const panel = document.getElementById('columnToggles');
@@ -779,7 +921,7 @@
 })();
 </script>
 
-<!-- Aprobar por AJAX (igual que Hyperlink) -->
+<!-- Aprobar por AJAX (igual) -->
 <script>
 (function () {
   function engancharAprobarCartola() {
@@ -831,6 +973,12 @@
             row.remove();
           }, 200);
 
+          // ✅ Re-aplicar filtros Excel sobre lo que queda visible en la página
+          if (window.excel && window.excel.table && window.excel.tbody){
+            window.excel.allRows = Array.from(window.excel.tbody.rows);
+            window.excelApplyFiltersGZ && window.excelApplyFiltersGZ();
+          }
+
         } catch (err) {
           console.error(err);
           alert('Error de red al aprobar el movimiento.');
@@ -846,5 +994,535 @@
 })();
 </script>
 
+<!-- ✅ LÓGICA FILTROS TIPO EXCEL (port Hyperlink, adaptado a GZ) -->
+<script>
+(function(){
+  const zona = document.getElementById('cartolaZone');
+  if(!zona) return;
+
+  /* =================== Helpers guardar / cargar filtros Excel =================== */
+
+  function loadExcelFilters(){
+    try{
+      const key = 'gzExcelFilters:' + location.pathname;
+      const raw = sessionStorage.getItem(key);
+      if(!raw) return {};
+      const obj = JSON.parse(raw);
+      const result = {};
+      Object.entries(obj).forEach(([col, arr])=>{
+        result[col] = new Set(arr);
+      });
+      return result;
+    }catch(_){
+      return {};
+    }
+  }
+
+  function saveExcelFilters(active){
+    try{
+      const key = 'gzExcelFilters:' + location.pathname;
+      const plain = {};
+      Object.entries(active).forEach(([col, set])=>{
+        plain[col] = Array.from(set);
+      });
+      sessionStorage.setItem(key, JSON.stringify(plain));
+    }catch(_){}
+  }
+
+  /* =================== Excel globals desde el servidor =================== */
+
+  function loadExcelGlobalFromZona(){
+    try{
+      const raw = zona.dataset.excelGlobal || '{}';
+      return JSON.parse(raw);
+    }catch(_){
+      return {};
+    }
+  }
+
+  let excelGlobalValues = loadExcelGlobalFromZona();
+
+  /* ======== Estado filtros tipo Excel ======== */
+  const excel = {
+    panel: document.getElementById('excelFilterPanel'),
+    titleEl: document.getElementById('excelPanelTitle'),
+    searchInput: document.getElementById('excelFilterSearch'),
+    optsBox: document.getElementById('excelFilterOptions'),
+    btnApply: document.getElementById('excelFilterApply'),
+    btnClearAll: document.getElementById('excelFilterClearAll'),
+    table: null,
+    tbody: null,
+    headers: [],
+    allRows: [],
+    distinctValues: {},
+    activeFilters: loadExcelFilters(),
+    currentColIndex: null,
+    panelEventsBound: false
+  };
+
+  window.excel = excel; // ✅ para que el refreshList pueda serializarlos
+
+  function excelGetCellValue(td){
+    if(!td) return '(Vacías)';
+    let text = '';
+    if (td.dataset && td.dataset.excelValue){
+      text = td.dataset.excelValue;
+    } else {
+      text = (td.textContent || '');
+    }
+    text = text.trim();
+    return text || '(Vacías)';
+  }
+
+  function excelBuildDistinctValues(){
+    excel.distinctValues = {};
+
+    if (excelGlobalValues){
+      Object.entries(excelGlobalValues).forEach(([idx, arr])=>{
+        excel.distinctValues[idx] = new Set(arr);
+      });
+    }
+
+    excel.allRows.forEach(row=>{
+      Array.from(row.cells).forEach((td, idx)=>{
+        if(!excel.distinctValues[idx]) excel.distinctValues[idx] = new Set();
+        excel.distinctValues[idx].add(excelGetCellValue(td));
+      });
+    });
+  }
+
+  function excelUpdateHeaderStates(){
+    if(!excel.headers) return;
+    excel.headers.forEach((th, idx)=>{
+      if(!th.hasAttribute('data-excel-col')) return;
+      const hasFilter = !!(excel.activeFilters[idx] && excel.activeFilters[idx].size > 0);
+      th.classList.toggle('excel-col-filtered', hasFilter);
+    });
+  }
+
+  function excelApplyFilters(){
+    let visibleCount = 0;
+
+    const emptyRow = excel.tbody ? excel.tbody.querySelector('tr[data-empty-row="1"]') : null;
+    if (emptyRow) emptyRow.style.display = 'none';
+
+    excel.allRows.forEach(row => {
+      if (row.dataset && row.dataset.emptyRow === "1") {
+        row.style.display = 'none';
+        return;
+      }
+
+      let visible = true;
+
+      for (const [colIndexStr, values] of Object.entries(excel.activeFilters)) {
+        const idx = parseInt(colIndexStr, 10);
+        if (!values || values.size === 0) continue;
+
+        const cell = row.cells[idx];
+        const text = excelGetCellValue(cell);
+
+        if (!values.has(text)) {
+          visible = false;
+          break;
+        }
+      }
+
+      row.style.display = visible ? '' : 'none';
+      if (visible) visibleCount++;
+    });
+
+    if (emptyRow) {
+      emptyRow.style.display = (visibleCount === 0) ? '' : 'none';
+    }
+
+    excelUpdateHeaderStates();
+    saveExcelFilters(excel.activeFilters);
+  }
+
+  window.excelApplyFiltersGZ = excelApplyFilters;
+
+  function excelClearAll(){
+    excel.activeFilters = {};
+    excelApplyFilters();
+    if(excel.panel) excel.panel.classList.add('hidden');
+  }
+
+  function excelFilterOptionList(query){
+    if(!excel.optsBox) return;
+
+    const q = query.trim().toLowerCase();
+    let visible = 0;
+
+    excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
+      const text = lbl.textContent.toLowerCase();
+      const show = text.includes(q);
+      lbl.style.display = show ? '' : 'none';
+      if(show) visible++;
+    });
+
+    let msg = excel.optsBox.querySelector('[data-no-match="1"]');
+    if(!msg){
+      msg = document.createElement('div');
+      msg.dataset.noMatch = "1";
+      msg.className = "mt-2 text-xs text-gray-500";
+      msg.textContent = "No hay resultados.";
+      excel.optsBox.appendChild(msg);
+    }
+    msg.style.display = (q && visible === 0) ? '' : 'none';
+
+    if(excel.btnApply){
+      excel.btnApply.disabled = (q && visible === 0);
+      excel.btnApply.classList.toggle('opacity-50', excel.btnApply.disabled);
+      excel.btnApply.classList.toggle('cursor-not-allowed', excel.btnApply.disabled);
+    }
+  }
+
+  function excelRenderOptions(colIndex){
+    if(!excel.optsBox) return;
+    excel.optsBox.innerHTML = '';
+
+    const valuesSet = excel.distinctValues[colIndex] || new Set();
+    const values = Array.from(valuesSet).sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+    const selected = excel.activeFilters[colIndex];
+
+    const allLabel = document.createElement('label');
+    allLabel.className = 'flex items-center gap-1 mb-1 text-xs';
+    const allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.dataset.selectAll = '1';
+    allCb.checked = !selected || selected.size === values.length;
+
+    allCb.addEventListener('change', ()=>{
+      const q = (excel.searchInput?.value || '').trim().toLowerCase();
+      const onlyVisible = !!q;
+
+      const optionLabels = excel.optsBox.querySelectorAll('label[data-option-label]');
+      optionLabels.forEach(lbl=>{
+        if (onlyVisible && lbl.style.display === 'none') return;
+        const cb = lbl.querySelector('input[type="checkbox"][data-value]');
+        if(cb) cb.checked = allCb.checked;
+      });
+    });
+
+    allLabel.appendChild(allCb);
+    allLabel.appendChild(document.createTextNode(' (Seleccionar todo)'));
+    excel.optsBox.appendChild(allLabel);
+
+    values.forEach(val=>{
+      const label = document.createElement('label');
+      label.className = 'flex items-center gap-1 text-xs mt-0.5';
+      label.dataset.optionLabel = '1';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.value = val;
+      cb.checked = !selected || selected.has(val);
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + val));
+      excel.optsBox.appendChild(label);
+    });
+  }
+
+  function excelOpenForHeader(th){
+    if(!excel.panel) return;
+
+    excel.currentColIndex = parseInt(th.dataset.excelIndex, 10);
+    excel.titleEl.textContent = th.innerText.trim();
+
+    excelBuildDistinctValues();
+    excelRenderOptions(excel.currentColIndex);
+
+    const rect = th.getBoundingClientRect();
+    const panelWidth  = excel.panel.offsetWidth || 260;
+    const panelHeight = excel.panel.offsetHeight || 220;
+
+    let left = rect.left + (rect.width - panelWidth) / 2;
+    let top  = rect.bottom + 4;
+
+    const minLeft = 8;
+    const maxLeft = window.innerWidth - panelWidth - 8;
+    if (left < minLeft) left = minLeft;
+    if (left > maxLeft) left = maxLeft;
+
+    const maxTop = window.innerHeight - panelHeight - 8;
+    if (top > maxTop) top = maxTop;
+
+    excel.panel.style.left = left + 'px';
+    excel.panel.style.top  = top + 'px';
+
+    excel.panel.classList.remove('hidden');
+    excel.searchInput.value = '';
+    excelFilterOptionList('');
+    excel.searchInput.focus();
+  }
+
+  function excelBindPanelEventsOnce(){
+    if(excel.panelEventsBound || !excel.panel) return;
+
+    excel.searchInput.addEventListener('input', ()=>{
+      excelFilterOptionList(excel.searchInput.value);
+    });
+
+    excel.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (excel.btnApply && !excel.btnApply.disabled) {
+          excel.btnApply.click();
+        }
+      }
+    });
+
+    excel.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        excel.panel.classList.add('hidden');
+      }
+    });
+
+    // ✅ CLEAR: limpia SOLO la columna actual
+    if (excel.btnClearAll) {
+      excel.btnClearAll.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (excel.currentColIndex == null) {
+          excel.panel.classList.add('hidden');
+          return;
+        }
+
+        delete excel.activeFilters[excel.currentColIndex];
+
+        excel.searchInput.value = '';
+        excelBuildDistinctValues();
+        excelRenderOptions(excel.currentColIndex);
+        excelFilterOptionList('');
+
+        excelApplyFilters();
+        excel.panel.classList.add('hidden');
+
+        
+      });
+    }
+
+    // ✅ APPLY: aplica filtro SOLO a la columna actual
+    excel.btnApply.addEventListener('click', ()=>{
+      if(excel.currentColIndex == null){
+        excel.panel.classList.add('hidden');
+        return;
+      }
+
+      const q = (excel.searchInput?.value || '').trim().toLowerCase();
+
+      let chosenCheckboxes = [];
+
+      if(q){
+        const visibleLabels = Array.from(excel.optsBox.querySelectorAll('label[data-option-label]'))
+          .filter(lbl => lbl.style.display !== 'none');
+
+        chosenCheckboxes = visibleLabels
+          .map(lbl => lbl.querySelector('input[type="checkbox"][data-value]'))
+          .filter(Boolean);
+      }else{
+        chosenCheckboxes = Array.from(excel.optsBox.querySelectorAll('input[type="checkbox"][data-value]'));
+      }
+
+      const selected = new Set();
+      chosenCheckboxes.forEach(cb=>{
+        if(cb.checked) selected.add(cb.dataset.value);
+      });
+
+      const fullSet = excel.distinctValues[excel.currentColIndex] || new Set();
+
+      if(!q){
+        if(selected.size === 0 || selected.size === fullSet.size){
+          delete excel.activeFilters[excel.currentColIndex];
+        }else{
+          excel.activeFilters[excel.currentColIndex] = selected;
+        }
+      }else{
+        if(selected.size === 0){
+          delete excel.activeFilters[excel.currentColIndex];
+        }else{
+          if(selected.size === fullSet.size){
+            delete excel.activeFilters[excel.currentColIndex];
+          }else{
+            excel.activeFilters[excel.currentColIndex] = selected;
+          }
+        }
+      }
+
+      excelApplyFilters();
+      excel.panel.classList.add('hidden');
+
+     
+    });
+
+    document.addEventListener('click', (e)=>{
+      if(excel.panel.classList.contains('hidden')) return;
+      if(excel.panel.contains(e.target)) return;
+      if(e.target.closest('.excel-header-btn')) return;
+      excel.panel.classList.add('hidden');
+    });
+
+    excel.panelEventsBound = true;
+  }
+
+  function initExcelFilters(){
+    excelBindPanelEventsOnce();
+
+    const table = zona.querySelector('#tabla-cartola');
+    if(!table) return;
+
+    excel.table   = table;
+    excel.tbody   = table.querySelector('tbody');
+    excel.headers = table.querySelectorAll('thead th');
+    excel.allRows = Array.from(excel.tbody.rows);
+
+    excelGlobalValues = loadExcelGlobalFromZona(); // por si cambió con AJAX
+
+    excelBuildDistinctValues();
+    excelApplyFilters();
+
+    excel.headers.forEach((th, idx)=>{
+      if(th.hasAttribute('data-excel-col')){
+        th.dataset.excelIndex = idx;
+        const btn = th.querySelector('.excel-header-btn');
+        if(btn){
+          btn.addEventListener('click', (ev)=>{
+            ev.stopPropagation();
+            excelOpenForHeader(th);
+          });
+        }
+      }
+    });
+  }
+
+  window.initExcelFiltersGZ = initExcelFilters;
+
+  // Botón global “Limpiar filtros (Excel)”
+  const btnClear = document.getElementById('btnExcelClearAll');
+  if(btnClear){
+    btnClear.addEventListener('click', (e)=>{
+      e.preventDefault();
+      excelClearAll();
+    });
+  }
+
+  // Inicial
+  initExcelFilters();
+})();
+</script> 
+<script>
+(function(){
+  function bindHistorialControls(){
+    const zone = document.getElementById('cartolaZone');
+    if(!zone) return;
+
+    const btn = document.getElementById('btnEnviarHistorial');
+    const all = zone.querySelector('#chkAllHistorial');
+
+    function getRowChecks(){
+      return Array.from(zone.querySelectorAll('.chkHistorial'));
+    }
+
+    function isRowVisible(chk){
+      const tr = chk.closest('tr');
+      if(!tr) return true;
+      return tr.style.display !== 'none';
+    }
+
+    function updateBtn(){
+      if(!btn) return;
+      const any = getRowChecks().some(c => c.checked && isRowVisible(c));
+      btn.disabled = !any;
+      btn.className = any
+        ? 'bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-full text-sm shadow'
+        : 'bg-gray-300 text-white px-4 py-2 rounded-full text-sm shadow cursor-not-allowed';
+    }
+
+    // evitar doble bind si se llama varias veces
+    if(btn && btn.__histBound) return;
+    if(btn) btn.__histBound = true;
+
+    if(all){
+      all.addEventListener('change', ()=>{
+        const checks = getRowChecks();
+        checks.forEach(c => {
+          if(isRowVisible(c)) c.checked = all.checked;
+        });
+        updateBtn();
+      });
+    }
+
+    zone.addEventListener('change', (e)=>{
+      if(e.target && e.target.classList.contains('chkHistorial')){
+        updateBtn();
+
+        // sincroniza "select all" si corresponde (solo visibles)
+        if(all){
+          const visibles = getRowChecks().filter(isRowVisible);
+          const allOn = visibles.length && visibles.every(c => c.checked);
+          all.checked = !!allOn;
+        }
+      }
+    });
+
+    if(btn){
+      btn.addEventListener('click', async ()=>{
+        const ids = getRowChecks()
+          .filter(c => c.checked && isRowVisible(c))
+          .map(c => c.value);
+
+        if(!ids.length) return;
+
+        btn.disabled = true;
+        const original = btn.textContent;
+        btn.textContent = 'Enviando...';
+
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+        ids.forEach(id => fd.append('ids[]', id));
+
+        try{
+          const resp = await fetch("{% url 'facturacion:enviar_a_historial' %}", {
+            method: "POST",
+            body: fd,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+
+          const data = await resp.json().catch(()=> ({}));
+          if(!resp.ok || !data.ok){
+            alert((data && data.error) || "No se pudo enviar a historial.");
+            btn.textContent = original;
+            updateBtn();
+            return;
+          }
+
+          // refresca tabla y vuelve a enganchar handlers al terminar
+          if(window.refreshCartolaList){
+            await window.refreshCartolaList({ page: 1 });
+            setTimeout(bindHistorialControls, 0);
+          }else{
+            location.reload();
+          }
+
+        }catch(err){
+          console.error(err);
+          alert("Error de red al enviar a historial.");
+        }finally{
+          btn.textContent = original;
+          updateBtn();
+        }
+      });
+    }
+
+    updateBtn();
+  }
+
+  document.addEventListener('DOMContentLoaded', bindHistorialControls);
+  window.bindHistorialControls = bindHistorialControls; // por si quieres llamarlo después de AJAX
+})();
+</script>
 </div>
 {% endblock %}

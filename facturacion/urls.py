@@ -1,7 +1,7 @@
 from django.urls import path
+
 from . import views
 from .views_resumen import View_resumen_dato, ViewResumenDatoAPI
-
 
 app_name = 'facturacion'
 
@@ -62,6 +62,9 @@ urlpatterns = [
     path("admin/resumen/api/", ViewResumenDatoAPI.as_view(),
          name="facturacion_resumen_api"),
 
+     path('cartola/historial/', views.listar_cartola_historial, name='listar_cartola_historial'),
+    path('cartola/enviar-historial/', views.enviar_a_historial, name='enviar_a_historial'),
+    path('cartola/historial/devolver/', views.devolver_a_cartola, name='devolver_a_cartola'),
 
 
 ]

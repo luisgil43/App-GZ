@@ -1,19 +1,16 @@
 import re
-from .models import CartolaMovimiento
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from decimal import Decimal
-from operaciones.templatetags.custom_filters import formato_clp  # Usa tu filtro de CLP
-from .models import TipoGasto
-from .models import CartolaMovimiento, TipoGasto, Proyecto
-from .models import FacturaOC
-from django import forms
-from .models import OrdenCompraFacturacion
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from django import forms
+
+from operaciones.templatetags.custom_filters import \
+    formato_clp  # Usa tu filtro de CLP
+
+from .models import (CartolaMovimiento, FacturaOC, OrdenCompraFacturacion,
+                     Proyecto, TipoGasto)
 
 # facturacion/forms.py
 
-from django import forms
-from .models import OrdenCompraFacturacion
 
 
 class OrdenCompraFacturacionForm(forms.ModelForm):

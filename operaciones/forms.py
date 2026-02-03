@@ -114,15 +114,30 @@ class AsignarTrabajadoresForm(forms.Form):
 class MovimientoUsuarioForm(forms.ModelForm):
     cargos = forms.CharField(
         widget=forms.TextInput(
-            attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            attrs={'class': 'w-full border rounded-xl px-3 py-2'}
+        ),
         label="Monto",
         required=True
     )
 
+    # ✅ NUEVO (DateField)
+    fecha_transaccion = forms.DateField(
+        required=True,
+        label="Fecha real del gasto",
+        widget=forms.DateInput(
+            attrs={'type': 'date', 'class': 'w-full border rounded-xl px-3 py-2'},
+            format='%Y-%m-%d'
+        ),
+        input_formats=['%Y-%m-%d']
+    )
+
     class Meta:
         model = CartolaMovimiento
-        fields = ['proyecto', 'tipo', 'tipo_doc', 'rut_factura',
-                  'numero_doc', 'cargos', 'observaciones', 'comprobante']
+        fields = [
+            'fecha_transaccion',  # ✅ nuevo primero
+            'proyecto', 'tipo', 'tipo_doc', 'rut_factura',
+            'numero_doc', 'cargos', 'observaciones', 'comprobante'
+        ]
         widgets = {
             'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
             'tipo': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
@@ -136,8 +151,7 @@ class MovimientoUsuarioForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # 🔑 Nunca dejes que el propio campo FileField dispare "required".
-        # Lo controlamos manualmente en clean().
+        # Nunca dejes que el propio FileField dispare "required".
         self.fields['comprobante'].required = False
 
         # Prellenar monto en edición
@@ -147,24 +161,25 @@ class MovimientoUsuarioForm(forms.ModelForm):
                 .replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
+        # ✅ Prellenar fecha_transaccion en edición (YYYY-MM-DD para input date)
+        if self.instance and self.instance.pk and self.instance.fecha_transaccion:
+            self.initial['fecha_transaccion'] = self.instance.fecha_transaccion.strftime('%Y-%m-%d')
+
     def clean_cargos(self):
         valor = self.cleaned_data.get('cargos', '0')
         valor = str(valor).replace(" ", "").replace(".", "").replace(",", ".")
         try:
             return Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         except InvalidOperation:
-            raise forms.ValidationError(
-                "Ingrese un monto válido en formato 1.234,56")
+            raise forms.ValidationError("Ingrese un monto válido en formato 1.234,56")
 
     def clean(self):
         cleaned = super().clean()
 
         # 1) Detectar si ya existía comprobante (edición)
-        has_old = bool(
-            self.instance and self.instance.pk and self.instance.comprobante)
+        has_old = bool(self.instance and self.instance.pk and self.instance.comprobante)
 
         # 2) Tomar el comprobante que venga por cualquiera de los inputs
-        #    Ajusta estos nombres si en tu template usas otros.
         uploaded = (
             self.files.get('comprobante') or
             self.files.get('comprobante_foto') or
@@ -180,9 +195,11 @@ class MovimientoUsuarioForm(forms.ModelForm):
         if (is_create and not uploaded) or (not is_create and not has_old and not uploaded):
             self.add_error('comprobante', "Este campo es obligatorio.")
 
-        # (Opcional) tus otras validaciones (RUT si es factura, etc.) pueden quedarse
-        return cleaned
+        # ✅ Requerir fecha real del gasto
+        if not cleaned.get('fecha_transaccion'):
+            self.add_error('fecha_transaccion', "Este campo es obligatorio.")
 
+        return cleaned
 
 def validar_rut_chileno(rut):
     """Valida el dígito verificador del RUT chileno."""

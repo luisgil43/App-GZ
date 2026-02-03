@@ -147,12 +147,25 @@ class CartolaMovimiento(models.Model):
     ]
 
     usuario = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE
+    )
+
+    # Fecha/Hora en que se registró en el sistema (declaración)
     fecha = models.DateTimeField(auto_now_add=True, editable=False)
+
+    # ✅ NUEVO: Fecha real del movimiento (cuando ocurrió el gasto/abono)
+    fecha_transaccion = models.DateField(
+        "Fecha real del movimiento",
+        blank=True,
+        null=True
+    )
+
     proyecto = models.ForeignKey(
-        'Proyecto', on_delete=models.SET_NULL, null=True, blank=True)
+        'Proyecto', on_delete=models.SET_NULL, null=True, blank=True
+    )
     tipo = models.ForeignKey(
-        'TipoGasto', on_delete=models.SET_NULL, null=True, blank=True)
+        'TipoGasto', on_delete=models.SET_NULL, null=True, blank=True
+    )
     rut_factura = models.CharField(max_length=12, blank=True, null=True)
     tipo_doc = models.CharField(
         max_length=20, choices=TIPO_DOC_CHOICES, blank=True, null=True, verbose_name="Tipo de Documento"
@@ -162,7 +175,8 @@ class CartolaMovimiento(models.Model):
     )
     observaciones = models.TextField(blank=True, null=True)
     numero_transferencia = models.CharField(
-        max_length=100, blank=True, null=True)
+        max_length=100, blank=True, null=True
+    )
     comprobante = models.FileField(
         upload_to=ruta_comprobante_cartola,
         storage=RawMediaCloudinaryStorage(),
@@ -192,11 +206,68 @@ class CartolaMovimiento(models.Model):
         related_name='rendiciones_aprobadas_finanzas'
     )
 
+    # ✅ NUEVO: timestamp cuando queda aprobado por finanzas (para auto-archivar)
+    aprobado_finanzas_en = models.DateTimeField(null=True, blank=True)
+
+    # ✅ NUEVO: campos de historial/archivo
+    archivado_en = models.DateTimeField(null=True, blank=True)
+    archivado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cartola_archivados'
+    )
+
+    # ✅ (FALTABAN en tu modelo, pero tu código YA los usa)
+    en_historial = models.BooleanField(default=False)
+    historial_enviado_el = models.DateTimeField(null=True, blank=True)
+    historial_enviado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cartola_historial_enviados'
+    )
+
     cargos = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     abonos = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(
-        max_length=50, choices=ESTADOS, default='pendiente_abono_usuario')
+        max_length=50, choices=ESTADOS, default='pendiente_abono_usuario'
+    )
     motivo_rechazo = models.TextField(blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        from django.utils import timezone
+
+        now = timezone.now()
+
+        # Si es nuevo, no hay "previo" para comparar
+        if not self.pk:
+            super().save(*args, **kwargs)
+            return
+
+        prev = (
+            CartolaMovimiento.objects
+            .filter(pk=self.pk)
+            .values("status", "aprobado_finanzas_en", "archivado_en")
+            .first()
+        )
+
+        if prev:
+            prev_status = prev.get("status")
+            prev_aprobado_ts = prev.get("aprobado_finanzas_en")
+            prev_archivado_ts = prev.get("archivado_en")
+
+            # Detectar transición a aprobado_finanzas
+            if prev_status != self.status and self.status == "aprobado_finanzas":
+                # Timestamp de aprobación
+                if not prev_aprobado_ts and not self.aprobado_finanzas_en:
+                    self.aprobado_finanzas_en = now
+
+                # Archivar "al tiro"
+                if not prev_archivado_ts and not self.archivado_en:
+                    self.archivado_en = now
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.usuario} - {self.proyecto} - {self.tipo} - {self.fecha}"

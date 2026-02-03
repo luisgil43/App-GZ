@@ -1228,8 +1228,6 @@ def mis_rendiciones(request):
         if form.is_valid():
             cd = form.cleaned_data
 
-            # === Anti-doble envío: detectar si la última rendición del usuario
-            # === es exactamente igual a la que se está intentando guardar ahora.
             last_mov = (
                 CartolaMovimiento.objects
                 .filter(usuario=user)
@@ -1243,18 +1241,14 @@ def mis_rendiciones(request):
             is_duplicate = False
             if last_mov:
                 is_duplicate = (
-                    # mismo proyecto
                     getattr(last_mov, "proyecto_id", None) == cd["proyecto"].id and
-                    # mismo tipo
                     getattr(last_mov, "tipo_id", None) == cd["tipo"].id and
-                    # mismo número de documento
                     getattr(last_mov, "numero_doc", None) == cd.get("numero_doc") and
-                    # mismo monto
                     getattr(last_mov, "cargos", None) == cd.get("cargos") and
-                    # mismo RUT factura (normalizado)
                     norm(getattr(last_mov, "rut_factura", "")) == norm(cd.get("rut_factura")) and
-                    # mismas observaciones (normalizadas)
-                    norm(getattr(last_mov, "observaciones", "")) == norm(cd.get("observaciones"))
+                    norm(getattr(last_mov, "observaciones", "")) == norm(cd.get("observaciones")) and
+                    # ✅ NUEVO: misma fecha real
+                    getattr(last_mov, "fecha_transaccion", None) == cd.get("fecha_transaccion")
                 )
 
             if is_duplicate:
@@ -1265,13 +1259,16 @@ def mis_rendiciones(request):
                 )
                 return redirect('operaciones:mis_rendiciones')
 
-            # Si no es duplicada, ahora sí la guardamos
             mov = form.save(commit=False)
             mov.usuario = user
+
+            # fecha de registro (declaración)
             mov.fecha = now()
+
             mov.status = 'pendiente_supervisor'
-            mov.comprobante = cd.get("comprobante")  # Usamos el comprobante validado
+            mov.comprobante = cd.get("comprobante")
             mov.save()
+
             messages.success(request, "Rendición registrada correctamente.")
             return redirect('operaciones:mis_rendiciones')
     else:
@@ -1281,7 +1278,6 @@ def mis_rendiciones(request):
     raw_cantidad = request.GET.get('cantidad', '10')
 
     if raw_cantidad == 'todos':
-        # ya no permitimos "todos": lo interpretamos como 100
         per_page = 100
         cantidad = '100'
     else:
@@ -1291,7 +1287,6 @@ def mis_rendiciones(request):
             per_page = 10
             cantidad = '10'
         else:
-            # límite inferior y superior
             if per_page < 1:
                 per_page = 10
                 cantidad = '10'
@@ -1310,7 +1305,6 @@ def mis_rendiciones(request):
     pagina = paginator.get_page(page_number)
 
     # --- Cálculo de saldos ---
-    # Disponible: abonos aprobados - gastos aprobados por finanzas
     saldo_disponible = (
         (movimientos.filter(tipo__categoria="abono", status="aprobado_abono_usuario")
          .aggregate(total=Sum('abonos'))['total'] or 0)
@@ -1320,14 +1314,12 @@ def mis_rendiciones(request):
          .aggregate(total=Sum('cargos'))['total'] or 0)
     )
 
-    # Pendiente: abonos aún no aprobados por el usuario
     saldo_pendiente = (
         movimientos.filter(tipo__categoria="abono")
         .exclude(status="aprobado_abono_usuario")
         .aggregate(total=Sum('abonos'))['total'] or 0
     )
 
-    # Rendido: todo lo que no es abono y no está aprobado por finanzas
     saldo_rendido = (
         movimientos.exclude(tipo__categoria="abono")
         .exclude(status="aprobado_finanzas")
@@ -1336,7 +1328,7 @@ def mis_rendiciones(request):
 
     return render(request, 'operaciones/mis_rendiciones.html', {
         'pagina': pagina,
-        'cantidad': cantidad,  # <- antes usabas request.GET.get(...)
+        'cantidad': cantidad,
         'saldo_disponible': saldo_disponible,
         'saldo_pendiente': saldo_pendiente,
         'saldo_rendido': saldo_rendido,
@@ -1369,32 +1361,44 @@ def rechazar_abono(request, pk):
 
 @login_required
 def editar_rendicion(request, pk):
-    rendicion = get_object_or_404(
-        CartolaMovimiento, pk=pk, usuario=request.user
-    )
+    rendicion = get_object_or_404(CartolaMovimiento, pk=pk, usuario=request.user)
 
     if rendicion.status in ['aprobado_abono_usuario', 'aprobado_finanzas']:
         messages.error(request, "No puedes editar una rendición ya aprobada.")
         return redirect('operaciones:mis_rendiciones')
 
     if request.method == 'POST':
-        form = MovimientoUsuarioForm(
-            request.POST, request.FILES, instance=rendicion)
+        form = MovimientoUsuarioForm(request.POST, request.FILES, instance=rendicion)
 
         if form.is_valid():
             # --- Detectar cambios ---
             campos_editados = []
             for field in form.changed_data:
-                # ignoramos campos automáticos como 'status'
                 if field not in ['status', 'actualizado']:
                     campos_editados.append(field)
 
-            if campos_editados:
-                # Si cambió algo y estaba rechazado, restablecer estado
-                if rendicion.status in ['rechazado_abono_usuario', 'rechazado_supervisor', 'rechazado_pm', 'rechazado_finanzas']:
-                    rendicion.status = 'pendiente_supervisor'  # estado reiniciado
+            # Si cambió algo y estaba rechazado, restablecer estado
+            if campos_editados and rendicion.status in [
+                'rechazado_abono_usuario', 'rechazado_supervisor', 'rechazado_pm', 'rechazado_finanzas'
+            ]:
+                rendicion.status = 'pendiente_supervisor'
 
-            form.save()
+            obj = form.save(commit=False)
+
+            # ✅ Mantener comprobante si no vienen nuevos archivos
+            nuevo_archivo = request.FILES.get("comprobante_archivo")
+            nueva_foto = request.FILES.get("comprobante_foto")
+
+            if nuevo_archivo:
+                obj.comprobante = nuevo_archivo
+            elif nueva_foto:
+                obj.comprobante = nueva_foto
+            # else: NO tocar obj.comprobante (se mantiene el actual)
+
+            # Guardar el status si lo tocamos arriba
+            obj.status = rendicion.status
+
+            obj.save()
             messages.success(request, "Rendición actualizada correctamente.")
             return redirect('operaciones:mis_rendiciones')
     else:
@@ -1419,6 +1423,11 @@ def eliminar_rendicion(request, pk):
         return redirect('operaciones:mis_rendiciones')
 
     return render(request, 'operaciones/eliminar_rendicion.html', {'rendicion': rendicion})
+
+
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Case, IntegerField, Q, Sum, Value, When
 
 
 @login_required
@@ -1454,7 +1463,7 @@ def vista_rendiciones(request):
     # --- Orden:
     # 1) prioridad_rol = 0 si es "pendiente para mí", 1 si no
     # 2) luego pendientes -> rechazados -> aprobados
-    # 3) luego por fecha desc
+    # 3) luego por fecha desc (y opcional: fecha real del gasto desc)
     if role_pending_status:
         prioridad_rol_expr = Case(
             When(status=role_pending_status, then=Value(0)),
@@ -1473,17 +1482,20 @@ def vista_rendiciones(request):
             default=Value(4),
             output_field=IntegerField(),
         ),
-    ).order_by('prioridad_rol', 'orden_status', '-fecha')
+    ).order_by(
+        'prioridad_rol',
+        'orden_status',
+        '-fecha_transaccion',  # ✅ fecha real del gasto (si existe)
+        '-fecha'               # fecha registro como fallback
+    )
 
     # --- Totales
     total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
-    pendientes = movimientos.filter(status__startswith='pendiente').aggregate(
-        total=Sum('cargos'))['total'] or 0
-    rechazados = movimientos.filter(status__startswith='rechazado').aggregate(
-        total=Sum('cargos'))['total'] or 0
+    pendientes = movimientos.filter(status__startswith='pendiente').aggregate(total=Sum('cargos'))['total'] or 0
+    rechazados = movimientos.filter(status__startswith='rechazado').aggregate(total=Sum('cargos'))['total'] or 0
 
     # --- Paginación
-    cantidad_param = request.GET.get('cantidad', '10')  # para el select del template
+    cantidad_param = request.GET.get('cantidad', '10')
     try:
         if cantidad_param == 'todos':
             page_size = 100
@@ -1598,37 +1610,58 @@ def exportar_rendiciones_pm(request):
     header_style = xlwt.easyxf('font: bold on; align: horiz center')
     date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
 
-    # Columnas
-    columns = ["Nombre", "Fecha", "Proyecto",
-               "Monto", "Tipo", "Observaciones", "Estado"]
+    # Columnas (✅ se agrega "Fecha real del gasto")
+    columns = [
+        "Nombre",
+        "Fecha",                 # fecha registro
+        "Fecha real del gasto",  # ✅ nueva
+        "Proyecto",
+        "Monto",
+        "Tipo",
+        "Observaciones",
+        "Estado",
+    ]
     for col_num, column_title in enumerate(columns):
         ws.write(0, col_num, column_title, header_style)
 
     # Filas
     for row_num, mov in enumerate(movimientos, start=1):
+        # --- Fecha registro (mov.fecha)
         fecha_excel = mov.fecha
         if isinstance(fecha_excel, datetime):
             if is_aware(fecha_excel):
                 fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
             fecha_excel = fecha_excel.date()
 
+        # --- Fecha real del gasto (mov.fecha_transaccion)
+        fecha_real_excel = getattr(mov, "fecha_transaccion", None)
+        if isinstance(fecha_real_excel, datetime):
+            if is_aware(fecha_real_excel):
+                fecha_real_excel = fecha_real_excel.astimezone().replace(tzinfo=None)
+            fecha_real_excel = fecha_real_excel.date()
+
         ws.write(row_num, 0, mov.usuario.get_full_name())
         ws.write(row_num, 1, fecha_excel, date_style)
-        ws.write(row_num, 2, str(mov.proyecto))
-        ws.write(row_num, 3, float(mov.cargos or 0))
-        ws.write(row_num, 4, str(mov.tipo or 0))
-        ws.write(row_num, 5, str(mov.observaciones or 0))
-        ws.write(row_num, 6, mov.get_status_display())
+
+        # Si viene vacía, dejamos celda vacía
+        if fecha_real_excel:
+            ws.write(row_num, 2, fecha_real_excel, date_style)
+        else:
+            ws.write(row_num, 2, "")
+
+        ws.write(row_num, 3, str(mov.proyecto))
+        ws.write(row_num, 4, float(mov.cargos or 0))
+        ws.write(row_num, 5, str(mov.tipo or ""))
+        ws.write(row_num, 6, str(mov.observaciones or ""))
+        ws.write(row_num, 7, mov.get_status_display())
 
     wb.save(response)
     return response
 
-
 @login_required
 def exportar_mis_rendiciones(request):
     user = request.user
-    movimientos = CartolaMovimiento.objects.filter(
-        usuario=user).order_by('-fecha')
+    movimientos = CartolaMovimiento.objects.filter(usuario=user).order_by('-fecha')
 
     # Crear archivo Excel
     response = HttpResponse(content_type='application/octet-stream')
@@ -1641,25 +1674,48 @@ def exportar_mis_rendiciones(request):
     header_style = xlwt.easyxf('font: bold on; align: horiz center')
     date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
 
-    # Columnas
-    columns = ["Nombre", "Fecha", "Proyecto", "Monto", "Estado"]
+    # ✅ 8 columnas (manteniendo el set) + agregando fecha real del gasto
+    columns = [
+        "Nombre",
+        "Fecha registro",
+        "Fecha real del gasto",
+        "Proyecto",
+        "Tipo",
+        "RUT Factura",
+        "Monto",
+        "Estado",
+    ]
     for col_num, column_title in enumerate(columns):
         ws.write(0, col_num, column_title, header_style)
 
-    # Filas
     for row_num, mov in enumerate(movimientos, start=1):
-        # Fecha naive
-        fecha_excel = mov.fecha
-        if isinstance(fecha_excel, datetime):
-            if is_aware(fecha_excel):
-                fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
-            fecha_excel = fecha_excel.date()
+        # ---- Fecha registro (mov.fecha) ----
+        fecha_registro = mov.fecha
+        if isinstance(fecha_registro, datetime):
+            if is_aware(fecha_registro):
+                fecha_registro = fecha_registro.astimezone().replace(tzinfo=None)
+            fecha_registro = fecha_registro.date()
+
+        # ---- ✅ Fecha real del gasto (mov.fecha_transaccion) ----
+        fecha_real = getattr(mov, "fecha_transaccion", None)
+        if isinstance(fecha_real, datetime):
+            if is_aware(fecha_real):
+                fecha_real = fecha_real.astimezone().replace(tzinfo=None)
+            fecha_real = fecha_real.date()
 
         ws.write(row_num, 0, mov.usuario.get_full_name())
-        ws.write(row_num, 1, fecha_excel, date_style)
-        ws.write(row_num, 2, str(mov.proyecto))
-        ws.write(row_num, 3, float(mov.cargos or 0))
-        ws.write(row_num, 4, mov.get_status_display())
+        ws.write(row_num, 1, fecha_registro, date_style)
+
+        if fecha_real:
+            ws.write(row_num, 2, fecha_real, date_style)
+        else:
+            ws.write(row_num, 2, "")
+
+        ws.write(row_num, 3, str(getattr(mov, "proyecto", "") or ""))
+        ws.write(row_num, 4, str(getattr(mov, "tipo", "") or ""))
+        ws.write(row_num, 5, str(getattr(mov, "rut_factura", "") or ""))
+        ws.write(row_num, 6, float(getattr(mov, "cargos", 0) or 0))
+        ws.write(row_num, 7, mov.get_status_display())
 
     wb.save(response)
     return response
