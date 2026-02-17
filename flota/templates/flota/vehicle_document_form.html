@@ -1,0 +1,48 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Agregar Documento{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-6 rounded-2xl p-6 max-w-xl">
+  <h2 class="text-2xl font-bold text-gray-800 mb-4">➕ Documento - {{ vehicle }}</h2>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="text-sm font-medium">Tipo</label>
+      {{ form.doc_type }}
+      {{ form.doc_type.errors }}
+    </div>
+    <div>
+      <label class="text-sm font-medium">Nombre</label>
+      {{ form.nombre }}
+      {{ form.nombre.errors }}
+    </div>
+    <div>
+      <label class="text-sm font-medium">Renovado en</label>
+      {{ form.renovado_en }}
+      {{ form.renovado_en.errors }}
+    </div>
+    <div>
+      <label class="text-sm font-medium">Vence en</label>
+      {{ form.vence_en }}
+      {{ form.vence_en.errors }}
+    </div>
+    <div>
+      <label class="text-sm font-medium">Archivo</label>
+      {{ form.archivo }}
+      {{ form.archivo.errors }}
+    </div>
+
+    <div class="flex gap-2">
+      <button class="px-4 py-2 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700">Guardar</button>
+      <a href="{% url 'flota:vehicle_documents' vehicle.id %}" class="px-4 py-2 rounded-full bg-gray-200 text-gray-800 text-sm hover:bg-gray-300">Volver</a>
+    </div>
+  </form>
+
+  <style>
+    input, select { width: 100%; border:1px solid #d1d5db; border-radius:0.75rem; padding:0.5rem 0.75rem; font-size:0.875rem; }
+    .errorlist { color:#b91c1c; font-size:0.75rem; margin-top:0.25rem; }
+  </style>
+</div>
+{% endblock %}

@@ -1,0 +1,211 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Tipos de servicio{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">⚙️ Tipos de servicio</h2>
+    <a href="{% url 'flota:service_list' %}" class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+      ← Volver a servicios
+    </a>
+  </div>
+
+  <div class="bg-gray-50 rounded-2xl p-4 border">
+    <h3 class="font-bold text-gray-800 mb-3">
+      {% if editing_type %}✏️ Editar tipo{% else %}➕ Crear tipo{% endif %}
+    </h3>
+
+    <!-- ✅ Mensaje para el usuario -->
+    <div class="sm:col-span-2 mb-4 p-3 rounded-xl border bg-white text-sm text-gray-700">
+      <div class="font-semibold mb-1">📌 Avisos (importante)</div>
+      <div>
+        Puedes configurar avisos de 2 formas:
+        <ul class="list-disc ml-5 mt-1">
+          <li><b>Un solo aviso</b>: usa “Avisar antes (KM) [uno]” o “Avisar antes (días) [uno]”.</li>
+          <li><b>Varios avisos</b>: usa los campos “múltiples” y escribe valores separados por coma. Ej: <b>1000,500,100</b> o <b>10,7,1</b>.</li>
+        </ul>
+        <div class="mt-2 text-xs text-gray-500">
+          Tip: Para <b>Combustible</b> puedes dejar todo vacío (no requiere frecuencia ni avisos).
+        </div>
+      </div>
+    </div>
+
+    <form method="post" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% csrf_token %}
+
+      {% if form.non_field_errors %}
+        <div class="sm:col-span-2 p-3 rounded-lg bg-red-100 text-red-800 text-sm">
+          {{ form.non_field_errors }}
+        </div>
+      {% endif %}
+
+      {% for field in form %}
+        <div class="{% if field.name == 'name' %}sm:col-span-2{% endif %}">
+          <label class="block text-sm font-semibold text-gray-700 mb-1">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}
+            <div class="text-xs text-gray-500 mt-1">{{ field.help_text }}</div>
+          {% endif %}
+          {% if field.errors %}
+            <div class="text-xs text-red-600 mt-1">{{ field.errors }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+
+      <div class="sm:col-span-2 flex justify-end gap-2 pt-2">
+        {% if editing_type %}
+          <a href="{% url 'flota:service_type_manage' %}"
+             class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+            Cancelar edición
+          </a>
+        {% endif %}
+        <button type="submit" class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+          Guardar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <hr class="my-6">
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2 border">Nombre</th>
+          <th class="p-2 border">Frecuencia</th>
+          <th class="p-2 border">Aviso</th>
+          <th class="p-2 border">Vencido</th>
+          <th class="p-2 border">Activo</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center">
+        {% for t in types %}
+        <tr class="border-t">
+          <td class="p-2 border">{{ t.name }}</td>
+
+          <td class="p-2 border">
+            {% if t.interval_km %}{{ t.interval_km }} km{% else %}—{% endif %}
+            /
+            {% if t.interval_days %}{{ t.interval_days }} días{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border">
+            {# KM #}
+            {% if t.alert_before_km_steps %}
+              {{ t.alert_before_km_steps }} km
+            {% else %}
+              {% if t.alert_before_km %}{{ t.alert_before_km }} km{% else %}—{% endif %}
+            {% endif %}
+            /
+            {# Días #}
+            {% if t.alert_before_days_steps %}
+              {{ t.alert_before_days_steps }} días
+            {% else %}
+              {% if t.alert_before_days %}{{ t.alert_before_days }} días{% else %}—{% endif %}
+            {% endif %}
+          </td>
+
+          <td class="p-2 border">
+            {% if t.notify_on_overdue %}✅{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border">
+            {% if t.is_active %}✅{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border">
+            <div class="flex justify-center gap-2 flex-wrap">
+              <a href="{% url 'flota:service_type_edit' t.id %}"
+                 class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                ✏️ Editar
+              </a>
+
+              <form method="post" action="{% url 'flota:service_type_toggle_active' t.id %}">
+                {% csrf_token %}
+                <button class="px-3 py-1 text-xs rounded-full bg-gray-800 text-white hover:bg-gray-900">
+                  {% if t.is_active %}Desactivar{% else %}Activar{% endif %}
+                </button>
+              </form>
+
+              <button type="button"
+                      class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                      onclick="openDeleteTypeModal('{{ t.id }}', '{{ t.name }}')">
+                🗑️ Eliminar
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="p-6 text-center text-gray-500">No hay tipos de servicio.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ✅ Modal eliminar centrado -->
+<div id="deleteTypeModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Eliminar tipo de servicio</h3>
+
+      <p class="text-sm text-gray-600 mt-2" id="deleteTypeText">
+        ¿Seguro que deseas eliminar este tipo?
+      </p>
+
+      <form method="post" id="deleteTypeForm" class="mt-4">
+        {% csrf_token %}
+        <div class="flex justify-end gap-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeDeleteTypeModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Eliminar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('input, select, textarea').forEach(el=>{
+    el.classList.add('w-full','border','rounded-xl','px-3','py-2','text-sm');
+  });
+
+  function openDeleteTypeModal(id, name){
+    const modal = document.getElementById('deleteTypeModal');
+    const text = document.getElementById('deleteTypeText');
+    const form = document.getElementById('deleteTypeForm');
+
+    text.textContent = `Vas a eliminar el tipo "${name}". ¿Deseas continuar?`;
+    form.action = `{% url 'flota:service_type_delete' 0 %}`.replace('/0/', `/${id}/`);
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeDeleteTypeModal(){
+    document.getElementById('deleteTypeModal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeDeleteTypeModal();
+  });
+
+  document.getElementById('deleteTypeModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'deleteTypeModal') closeDeleteTypeModal();
+  });
+</script>
+
+{% endblock %}

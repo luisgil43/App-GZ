@@ -1,0 +1,336 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+{% block title %}Servicios{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">🧰 Servicios</h2>
+
+    <div class="flex gap-2">
+      <a href="{% url 'flota:service_type_manage' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        ⚙️ Tipos de servicio
+      </a>
+
+      <a href="{% url 'flota:service_create' %}"
+         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+        ➕ Crear servicio
+      </a>
+    </div>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2 border w-12"> </th>
+          <th class="p-2 border">Vehículo</th>
+          <th class="p-2 border">KM actual</th>
+          <th class="p-2 border">Tipos</th>
+          <th class="p-2 border">Último servicio</th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center">
+
+        {% for vid, node in grouped.items %}
+          {% with v=node.vehicle %}
+          <tr class="border-t bg-white hover:bg-gray-50">
+            <td class="p-2 border">
+              <button type="button"
+                      class="toggle-vehicle inline-flex items-center justify-center w-8 h-8 rounded-full border bg-white hover:bg-gray-100"
+                      data-target="veh-{{ v.id }}"
+                      aria-expanded="false">
+                <span class="arrow text-lg leading-none">›</span>
+              </button>
+            </td>
+
+            <td class="p-2 border text-left">
+              <div class="font-semibold text-gray-800">{{ v }}</div>
+              <div class="text-xs text-gray-500">
+                {{ v.marca }} {{ v.modelo }} • Patente: {{ v.patente }}
+              </div>
+            </td>
+
+            <td class="p-2 border">
+              {{ v.kilometraje_actual|miles }}
+            </td>
+
+            <td class="p-2 border">
+              {{ node.types|length }}
+            </td>
+
+            <td class="p-2 border">
+  {{ node.last_service_label|default:"—" }}
+</td>
+          </tr>
+
+          
+          <tr id="veh-{{ v.id }}" class="hidden">
+            <td class="p-0 border" colspan="5">
+
+              <div class="p-3 bg-gray-50">
+                {% if node.types %}
+                  <div class="overflow-x-auto">
+                    <table class="w-full text-sm bg-white rounded-xl overflow-hidden border">
+                      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                        <tr>
+                          <th class="p-2 border w-12"> </th>
+                          <th class="p-2 border text-left">Tipo de servicio</th>
+                          <th class="p-2 border">Cantidad</th>
+                          <th class="p-2 border">Última fecha</th>
+                          <th class="p-2 border">Último KM</th>
+                          <th class="p-2 border">Último monto</th>
+                        </tr>
+                      </thead>
+
+                      <tbody class="text-center">
+                        {% for type_name, items in node.types.items %}
+                          {# items viene ordenado desc por fecha/created_at #}
+                          {% with last=items.0 %}
+                          <tr class="border-t bg-white hover:bg-gray-50">
+                            <td class="p-2 border">
+                              <button type="button"
+                                      class="toggle-type inline-flex items-center justify-center w-8 h-8 rounded-full border bg-white hover:bg-gray-100"
+                                      data-target="type-{{ v.id }}-{{ forloop.counter }}"
+                                      aria-expanded="false">
+                                <span class="arrow text-lg leading-none">›</span>
+                              </button>
+                            </td>
+
+                            <td class="p-2 border text-left font-semibold text-gray-800">
+                              {{ type_name }}
+                            </td>
+
+                            <td class="p-2 border">
+                              {{ items|length }}
+                            </td>
+
+                            <td class="p-2 border">
+                              {{ last.service_date|date:"d-m-Y" }}
+                            </td>
+
+                            <td class="p-2 border">
+                              {% if last.kilometraje_declarado != None %}
+                                {{ last.kilometraje_declarado|miles }}
+                              {% else %}
+                                —
+                              {% endif %}
+                            </td>
+
+                            <td class="p-2 border">
+                              ${{ last.monto|clp_round }}
+                            </td>
+                          </tr>
+
+                         
+                          <tr id="type-{{ v.id }}-{{ forloop.counter }}" class="hidden">
+                            <td class="p-0 border" colspan="6">
+                              <div class="p-3 bg-white">
+
+                                <div class="overflow-x-auto">
+                                  <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                    <thead class="bg-gray-50 text-gray-700 font-semibold text-center">
+                                      <tr>
+                                        <th class="p-2 border">Fecha</th>
+                                        <th class="p-2 border">KM declarado</th>
+                                        <th class="p-2 border">Monto</th>
+                                        <th class="p-2 border">Próx. KM</th>
+                                        <th class="p-2 border">Próx. Fecha</th>
+                                        <th class="p-2 border">Notas</th>
+                                        <th class="p-2 border">Acciones</th>
+                                      </tr>
+                                    </thead>
+
+                                    <tbody class="text-center">
+                                      {% for s in items %}
+                                      <tr class="border-t hover:bg-gray-50">
+                                        <td class="p-2 border">{{ s.service_date|date:"d-m-Y" }}</td>
+
+                                        <td class="p-2 border">
+                                          {% if s.kilometraje_declarado != None %}
+                                            {{ s.kilometraje_declarado|miles }}
+                                          {% else %}
+                                            —
+                                          {% endif %}
+                                        </td>
+
+                                        <td class="p-2 border">
+                                          ${{ s.monto|clp_round }}
+                                        </td>
+
+                                        <td class="p-2 border">
+                                          {% if s.next_due_km %}
+                                            {{ s.next_due_km|miles }}
+                                          {% else %}
+                                            —
+                                          {% endif %}
+                                        </td>
+
+                                        <td class="p-2 border">
+                                          {% if s.next_due_date %}
+                                            {{ s.next_due_date|date:"d-m-Y" }}
+                                          {% else %}
+                                            —
+                                          {% endif %}
+                                        </td>
+
+                                        <td class="p-2 border text-left">
+                                          {% if s.notes %}
+                                            <div class="line-clamp-2 text-gray-700">{{ s.notes }}</div>
+                                          {% else %}
+                                            —
+                                          {% endif %}
+                                        </td>
+
+                                        <td class="p-2 border">
+                                          <div class="flex justify-center gap-2 flex-wrap">
+                                            <a href="{% url 'flota:service_edit' s.id %}"
+                                               class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                                              ✏️ Editar
+                                            </a>
+
+                                            <button type="button"
+                                                    class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                                                    onclick="openDeleteModal('{{ s.id }}', '{{ type_name }}', '{{ v }}')">
+                                              🗑️ Eliminar
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                      {% empty %}
+                                      <tr>
+                                        <td colspan="7" class="p-4 text-gray-500">No hay servicios para este tipo.</td>
+                                      </tr>
+                                      {% endfor %}
+                                    </tbody>
+                                  </table>
+                                </div>
+
+                              </div>
+                            </td>
+                          </tr>
+                          {% endwith %}
+                        {% endfor %}
+                      </tbody>
+                    </table>
+                  </div>
+                {% else %}
+                  <div class="p-4 text-center text-gray-500 bg-white rounded-xl border">
+                    Este vehículo aún no tiene servicios registrados.
+                  </div>
+                {% endif %}
+              </div>
+
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+        <tr>
+          <td colspan="5" class="p-6 text-center text-gray-500">No hay servicios.</td>
+        </tr>
+        {% endfor %}
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ✅ Modal eliminar centrado -->
+<div id="deleteModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Eliminar servicio</h3>
+
+      <p class="text-sm text-gray-600 mt-2" id="deleteText">
+        ¿Seguro que deseas eliminar este servicio?
+      </p>
+
+      <form method="post" id="deleteForm" class="mt-4">
+        {% csrf_token %}
+        <div class="flex justify-end gap-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeDeleteModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Eliminar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Flechas (›) giran cuando se abre
+  function setExpanded(btn, expanded){
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    const arrow = btn.querySelector('.arrow');
+    if(arrow){
+      arrow.style.transform = expanded ? 'rotate(90deg)' : 'rotate(0deg)';
+      arrow.style.transition = 'transform .15s ease';
+      arrow.style.display = 'inline-block';
+    }
+  }
+
+  function toggleRow(btn){
+    const targetId = btn.getAttribute('data-target');
+    const row = document.getElementById(targetId);
+    if(!row) return;
+
+    const isHidden = row.classList.contains('hidden');
+    row.classList.toggle('hidden');
+    setExpanded(btn, isHidden);
+  }
+
+  document.querySelectorAll('.toggle-vehicle').forEach(btn=>{
+    setExpanded(btn, false);
+    btn.addEventListener('click', ()=>toggleRow(btn));
+  });
+
+  document.querySelectorAll('.toggle-type').forEach(btn=>{
+    setExpanded(btn, false);
+    btn.addEventListener('click', ()=>toggleRow(btn));
+  });
+
+  // Modal delete igual que el tuyo
+  function openDeleteModal(id, tipo, vehiculo){
+    const modal = document.getElementById('deleteModal');
+    const text = document.getElementById('deleteText');
+    const form = document.getElementById('deleteForm');
+
+    text.textContent = `Vas a eliminar el servicio "${tipo}" del vehículo "${vehiculo}". ¿Deseas continuar?`;
+    form.action = `{% url 'flota:service_delete' 0 %}`.replace('/0/', `/${id}/`);
+    modal.classList.remove('hidden');
+  }
+
+  function closeDeleteModal(){
+    document.getElementById('deleteModal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeDeleteModal();
+  });
+
+  document.getElementById('deleteModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'deleteModal') closeDeleteModal();
+  });
+</script>
+
+<style>
+  /* clamp simple sin plugin */
+  .line-clamp-2{
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>
+{% endblock %}

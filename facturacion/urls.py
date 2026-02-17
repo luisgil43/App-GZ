@@ -56,6 +56,7 @@ urlpatterns = [
          name='exportar_cartola_finanzas'),
     path('saldos/exportar/', views.exportar_saldos_disponibles,
          name='exportar_saldos_disponibles'),
+    path('cartola/historial/exportar/', views.exportar_cartola_historial, name='exportar_cartola_historial'),
 
     path("admin/resumen/", View_resumen_dato.as_view(),
          name="facturacion_resumen"),

@@ -54,6 +54,7 @@ urlpatterns = [
     # Liquidaciones
     path('liquidaciones/', include(('liquidaciones.urls',
          'liquidaciones'), namespace='liquidaciones')),
+    path("flota/", include("flota.urls")),
 
     # Redirección raíz a dashboard (usuarios normales)
     path('', RedirectView.as_view(url='/dashboard/', permanent=False)),

@@ -1,0 +1,55 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Documentos{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-6 rounded-2xl p-6">
+  <div class="flex items-center justify-between gap-2 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📄 Documentos - {{ vehicle }}</h2>
+    <div class="flex gap-2">
+      <a href="{% url 'flota:vehicle_document_create' vehicle.id %}" class="px-4 py-2 rounded-full bg-blue-600 text-white text-sm hover:bg-blue-700">➕ Agregar documento</a>
+      <a href="{% url 'flota:vehicle_list' %}" class="px-4 py-2 rounded-full bg-gray-200 text-gray-800 text-sm hover:bg-gray-300">Volver</a>
+    </div>
+  </div>
+
+  <table class="w-full text-sm">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <tr>
+        <th class="p-2 border">Tipo</th>
+        <th class="p-2 border">Nombre</th>
+        <th class="p-2 border">Renovado</th>
+        <th class="p-2 border">Vence</th>
+        <th class="p-2 border">Vigente</th>
+        <th class="p-2 border">Archivo</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% for d in docs %}
+      <tr class="border-t">
+        <td class="p-2 border">{{ d.get_doc_type_display }}</td>
+        <td class="p-2 border">{{ d.nombre|default:"—" }}</td>
+        <td class="p-2 border">{{ d.renovado_en|default:"—" }}</td>
+        <td class="p-2 border">{{ d.vence_en|default:"—" }}</td>
+        <td class="p-2 border">
+          {% if d.vigente is None %}
+            —
+          {% elif d.vigente %}
+            <span class="text-xs px-2 py-1 rounded-full bg-green-50 text-green-800 border border-green-200">Sí</span>
+          {% else %}
+            <span class="text-xs px-2 py-1 rounded-full bg-red-50 text-red-800 border border-red-200">No</span>
+          {% endif %}
+        </td>
+        <td class="p-2 border">
+          {% if d.archivo %}
+            <a class="text-blue-600 underline" href="{{ d.archivo.url }}" target="_blank">Ver</a>
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="p-4 text-center">No hay documentos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

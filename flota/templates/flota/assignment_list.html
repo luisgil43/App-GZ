@@ -1,0 +1,152 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Asignaciones{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">👤 Asignaciones</h2>
+    <a href="{% url 'flota:assignment_create' %}"
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      ➕ Nueva asignación
+    </a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2 border">Vehículo</th>
+          <th class="p-2 border">Usuario</th>
+          <th class="p-2 border">Asignado</th>
+          <th class="p-2 border">Estado</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center">
+        {% for a in assignments %}
+        <tr class="border-t">
+          <td class="p-2 border">{{ a.vehicle }}</td>
+          <td class="p-2 border">{{ a.user }}</td>
+          <td class="p-2 border">{{ a.assigned_at|date:"d-m-Y H:i" }}</td>
+          <td class="p-2 border">
+            {% if a.active %}
+              <span class="inline-flex items-center gap-1 text-green-700">
+                ✅ Activa
+              </span>
+            {% else %}
+              <span class="text-gray-600">— Cerrada</span>
+            {% endif %}
+          </td>
+
+          <td class="p-2 border">
+            <div class="flex items-center justify-center gap-2">
+              <a href="{% url 'flota:assignment_edit' a.id %}"
+                 class="px-3 py-1 text-xs rounded-full bg-gray-100 hover:bg-gray-200">
+                ✏️ Editar
+              </a>
+
+              <form method="post" action="{% url 'flota:assignment_toggle_active' a.id %}">
+                {% csrf_token %}
+                {% if a.active %}
+                  <button type="submit"
+                          class="px-3 py-1 text-xs rounded-full bg-gray-800 text-white hover:bg-gray-900">
+                    ⏸ Pausar
+                  </button>
+                {% else %}
+                  <button type="submit"
+                          class="px-3 py-1 text-xs rounded-full bg-green-600 text-white hover:bg-green-700">
+                    ▶ Activar
+                  </button>
+                {% endif %}
+              </form>
+
+              <button type="button"
+                      class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                      onclick="openDeleteModal('{{ a.id }}', '{{ a.vehicle|stringformat:'s'|escapejs }}', '{{ a.user|stringformat:'s'|escapejs }}')">
+                🗑 Eliminar
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="p-6 text-center text-gray-500">No hay asignaciones.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ✅ MODAL ELIMINAR (Tailwind, centrado) -->
+<div id="deleteModal" class="fixed inset-0 hidden z-50">
+  <!-- overlay -->
+  <div class="absolute inset-0 bg-black/50" onclick="closeDeleteModal()"></div>
+
+  <!-- card -->
+  <div class="relative w-full h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
+      <div class="p-6">
+        <h3 class="text-lg font-bold text-gray-900">Eliminar asignación</h3>
+        <p class="text-sm text-gray-600 mt-2">
+          ¿Seguro que deseas eliminar esta asignación?
+        </p>
+
+        <div class="mt-4 text-sm bg-gray-50 border rounded-xl p-3 text-gray-700">
+          <div><span class="font-semibold">Vehículo:</span> <span id="deleteVehiculo">—</span></div>
+          <div class="mt-1"><span class="font-semibold">Usuario:</span> <span id="deleteUsuario">—</span></div>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 bg-gray-50 flex justify-end gap-2">
+        <button type="button"
+                onclick="closeDeleteModal()"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-100">
+          Cancelar
+        </button>
+
+        <form id="deleteForm" method="post">
+          {% csrf_token %}
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Sí, eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openDeleteModal(id, vehiculo, usuario){
+    const modal = document.getElementById("deleteModal");
+    const form  = document.getElementById("deleteForm");
+    const vEl   = document.getElementById("deleteVehiculo");
+    const uEl   = document.getElementById("deleteUsuario");
+
+    vEl.textContent = vehiculo || "—";
+    uEl.textContent = usuario || "—";
+
+    // ✅ tu URL real de delete (ajusta si tu path es distinto)
+    form.action = `/flota/asignaciones/${id}/eliminar/`;
+
+    modal.classList.remove("hidden");
+  }
+
+  function closeDeleteModal(){
+    document.getElementById("deleteModal").classList.add("hidden");
+  }
+
+  // ✅ cerrar con ESC
+  document.addEventListener("keydown", (e)=>{
+    if(e.key === "Escape"){
+      const modal = document.getElementById("deleteModal");
+      if(modal && !modal.classList.contains("hidden")){
+        closeDeleteModal();
+      }
+    }
+  });
+</script>
+
+{% endblock %}

@@ -183,6 +183,38 @@
                     </ul>
                 </li>
                 {% endif %}
+
+
+{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🚗 Flota</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'flota:vehicle_list' %}" class="hover:text-emerald-400">
+        Lista de vehículos
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'flota:assignment_list' %}" class="hover:text-emerald-400">
+        Asignaciones
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'flota:service_list' %}" class="hover:text-emerald-400">
+        Servicios
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
 {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
 <li class="group">
   <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
@@ -446,7 +478,7 @@
   setTimeout(() => {
     const mensajes = document.getElementById('mensajes');
     if (mensajes) mensajes.remove();
-  }, 5000);
+  }, 10000);
 </script>
 {% endif %}
 

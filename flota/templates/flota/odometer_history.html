@@ -1,0 +1,36 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Historial Kilometraje{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-6 rounded-2xl p-6">
+  <div class="flex items-center justify-between gap-2 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📈 Historial KM - {{ vehicle }}</h2>
+    <a href="{% url 'flota:vehicle_list' %}" class="px-4 py-2 rounded-full bg-gray-200 text-gray-800 text-sm hover:bg-gray-300">Volver</a>
+  </div>
+
+  <table class="w-full text-sm">
+    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <tr>
+        <th class="p-2 border">Fecha</th>
+        <th class="p-2 border">Antes</th>
+        <th class="p-2 border">Después</th>
+        <th class="p-2 border">Origen</th>
+        <th class="p-2 border">Referencia</th>
+      </tr>
+    </thead>
+    <tbody class="text-center">
+      {% for e in events %}
+      <tr class="border-t">
+        <td class="p-2 border">{{ e.created_at }}</td>
+        <td class="p-2 border">{{ e.previous_km }}</td>
+        <td class="p-2 border font-semibold">{{ e.new_km }}</td>
+        <td class="p-2 border">{{ e.get_source_display }}</td>
+        <td class="p-2 border">{{ e.reference|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="p-4 text-center">No hay eventos de kilometraje.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

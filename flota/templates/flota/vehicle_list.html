@@ -1,0 +1,907 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Flota{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+<style>
+  /* Horizontal + look excel */
+  .tabla-responsive{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  table{
+    white-space:nowrap;
+    min-width:1500px;
+  }
+
+  /* ===== Excel header filters ===== */
+  .excel-header-btn{
+    width:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:.35rem;
+    font-size:.875rem;
+    font-weight:600;
+  }
+  .excel-header-btn .excel-arrow{
+    font-size:.65rem;
+    opacity:.7;
+  }
+  .excel-col-filtered .excel-header-btn{
+    background:#e0f2fe;
+    border-radius:999px;
+    padding:.15rem .5rem;
+  }
+  .excel-col-filtered .excel-arrow{
+    color:#2563eb !important;
+    opacity:1;
+  }
+
+  .excel-panel{
+    position:fixed;
+    z-index:60;
+    width:270px;
+    background:#fff;
+    border-radius:0.75rem;
+    border:1px solid #d1d5db;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    padding:0.75rem;
+    font-size:0.8rem;
+  }
+  .excel-panel h3{
+    font-weight:700;
+    margin-bottom:.35rem;
+    color:#111827;
+  }
+  .excel-panel small{
+    font-size:.72rem;
+    color:#6b7280;
+  }
+  .excel-panel .excel-options{
+    max-height:190px;
+    overflow-y:auto;
+    border:1px solid #e5e7eb;
+    border-radius:0.5rem;
+    padding:0.35rem 0.5rem;
+    margin-top:0.35rem;
+    background:#f9fafb;
+  }
+</style>
+
+<div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
+  <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🚚 Flota</h2>
+
+  <div class="flex gap-2">
+    <a href="{% url 'flota:vehicle_create' %}"
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      ➕ Registrar vehículo
+    </a>
+
+    <a href="{% url 'flota:status_manage' %}"
+       class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-full text-sm shadow">
+      ⚙️ Crear status
+    </a>
+  </div>
+</div>
+
+<!-- ✅ Selector de columnas -->
+<div class="flex justify-start mb-2">
+  <details class="relative">
+    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+      ⚙️ Columnas
+    </summary>
+
+    <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
+      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+        <input type="checkbox" id="col-toggle-all" checked>
+        <span class="font-semibold text-xs">Mostrar todas</span>
+      </label>
+
+      <div class="space-y-1 text-sm">
+        <!-- OJO: índices según tu tabla -->
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span>Nombre Fantasía</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Marca</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Modelo</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Patente</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Serial</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>KM actual</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Fecha compra</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Tipo compra</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Fecha fin de credito</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>Monto compra</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="10" checked><span>Últ. rev. técnica</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="11" checked><span>Permiso circulación</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="12" checked><span>Asignado a</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="13" checked><span>Último movimiento</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="14" checked><span>Status</span></label>
+        <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="15" checked><span>Acciones</span></label>
+      </div>
+    </div>
+  </details>
+</div>
+
+<!-- ✅ Botón global filtros + selector cantidad (SERVER) -->
+<!-- ✅ Botón global filtros (sin selector arriba) -->
+<div class="flex justify-start mb-2 gap-2 items-center">
+  <button type="button"
+          id="btnExcelClearAll"
+          class="px-3 py-1 text-xs border rounded-full bg-white hover:bg-blue-50">
+    ❌ Limpiar filtros
+  </button>
+</div>
+
+<!-- ✅ Zona tabla (se reemplaza por AJAX, estilo Cartola) -->
+<div id="vehicleZone">
+  <div class="tabla-responsive overflow-x-auto">
+    <table id="tabla-vehiculos" class="w-full text-sm min-w-[1500px]">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <!-- Filtros Excel en TODAS menos Acciones -->
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Nombre Fantasía</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Marca</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Modelo</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Patente</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Serial</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>KM actual</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Fecha compra</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Tipo compra</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Fecha fin de credito</span><span class="excel-arrow">▼</span></button></th>
+
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Monto compra</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Últ. rev. técnica</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Permiso circulación</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Asignado a</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Último movimiento</span><span class="excel-arrow">▼</span></button></th>
+          <th class="p-2 border" data-excel-col><button type="button" class="excel-header-btn"><span>Status</span><span class="excel-arrow">▼</span></button></th>
+
+          <!-- Sin filtro Excel -->
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center" id="vehTbody">
+       {% for v in pagina %}
+        <tr class="border-t">
+          <td class="p-2 border" data-excel-value="{{ v.nombre_fantasia|default:'—' }}">{{ v.nombre_fantasia|default:"—" }}</td>
+          <td class="p-2 border" data-excel-value="{{ v.marca|default:'—' }}">{{ v.marca }}</td>
+          <td class="p-2 border" data-excel-value="{{ v.modelo|default:'—' }}">{{ v.modelo }}</td>
+          <td class="p-2 border font-semibold" data-excel-value="{{ v.patente|default:'—' }}">{{ v.patente }}</td>
+          <td class="p-2 border" data-excel-value="{{ v.serial|default:'—' }}">{{ v.serial }}</td>
+          <td class="p-2 border" data-excel-value="{{ v.kilometraje_actual|miles }}">
+  {{ v.kilometraje_actual|miles }}
+</td>
+          <td class="p-2 border" data-excel-value="{% if v.fecha_compra %}{{ v.fecha_compra|date:'d-m-Y' }}{% else %}—{% endif %}">
+            {% if v.fecha_compra %}{{ v.fecha_compra|date:"d-m-Y" }}{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border" data-excel-value="{{ v.get_tipo_compra_display|default:'—' }}">
+  {{ v.get_tipo_compra_display }}
+</td>
+
+<td class="p-2 border"
+    data-excel-value="{% if v.fecha_fin_credito %}{{ v.fecha_fin_credito|date:'d-m-Y' }}{% else %}—{% endif %}">
+  {% if v.fecha_fin_credito %}{{ v.fecha_fin_credito|date:"d-m-Y" }}{% else %}—{% endif %}
+</td>
+
+          <td class="p-2 border" data-excel-value="${{ v.monto_compra|clp_round }}">
+  ${{ v.monto_compra|clp_round }}
+</td>
+          <td class="p-2 border" data-excel-value="{% if v.fecha_ultima_revision_tecnica %}{{ v.fecha_ultima_revision_tecnica|date:'d-m-Y' }}{% else %}—{% endif %}">
+            {% if v.fecha_ultima_revision_tecnica %}{{ v.fecha_ultima_revision_tecnica|date:"d-m-Y" }}{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border" data-excel-value="{% if v.fecha_permiso_circulacion %}{{ v.fecha_permiso_circulacion|date:'d-m-Y' }}{% else %}—{% endif %}">
+            {% if v.fecha_permiso_circulacion %}{{ v.fecha_permiso_circulacion|date:"d-m-Y" }}{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border" data-excel-value="{{ v.assigned_to_label|default:'—' }}">{{ v.assigned_to_label }}</td>
+          <td class="p-2 border" data-excel-value="{{ v.last_movement_label|default:'—' }}">{{ v.last_movement_label }}</td>
+
+          <!-- Status badge = select -->
+          <td class="p-2 border" data-excel-value="{% if v.status %}{{ v.status.name }}{% else %}—{% endif %}">
+            <form method="post" action="{% url 'flota:vehicle_change_status' v.id %}" class="flex justify-center">
+              {% csrf_token %}
+              <div class="relative inline-flex items-center">
+                <select name="status_id"
+                        onchange="this.form.submit()"
+                        class="appearance-none cursor-pointer px-4 pr-9 py-1 rounded-full text-xs font-semibold text-center
+                          border border-transparent focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-300
+                          {% if v.status and v.status.color == 'green' %}bg-green-100 text-green-800
+                          {% elif v.status and v.status.color == 'red' %}bg-red-100 text-red-800
+                          {% elif v.status and v.status.color == 'yellow' %}bg-yellow-100 text-yellow-800
+                          {% elif v.status and v.status.color == 'gray' %}bg-gray-100 text-gray-800
+                          {% else %}bg-blue-100 text-blue-800{% endif %}">
+                  {% for st in statuses %}
+                    <option value="{{ st.id }}" {% if v.status and v.status.id == st.id %}selected{% endif %}>
+                      {{ st.name }}
+                    </option>
+                  {% endfor %}
+                </select>
+
+                <div class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 opacity-70">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.24a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+            </form>
+          </td>
+
+          <td class="p-2 border">
+            <div class="flex items-center justify-center gap-2">
+              <a href="{% url 'flota:vehicle_edit' v.id %}"
+                 class="px-3 py-1 text-xs rounded-full bg-gray-100 hover:bg-gray-200">
+                ✏️ Editar
+              </a>
+
+              <button type="button"
+                      class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                      onclick="openDeleteModal('{{ v.id }}', '{{ v.patente }}')">
+                🗑 Eliminar
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr data-empty-row="1">
+          <td colspan="16
+        " class="p-6 text-center text-gray-500">No hay vehículos registrados.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ✅ Mostrar (SERVER) abajo a la izquierda -->
+<div class="mt-3 flex items-center justify-between gap-2">
+  <form method="get" class="flex items-center gap-2">
+    <label for="cantidad" class="text-sm text-gray-700">Mostrar:</label>
+
+    <select name="cantidad" id="cantidad" onchange="this.form.submit()"
+            class="border rounded-full px-3 py-1 text-sm bg-white">
+      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+    </select>
+
+    {# ✅ mantener excel_filters si viene por GET #}
+    {% if excel_filters %}
+      <input type="hidden" name="excel_filters" value="{{ excel_filters }}">
+    {% endif %}
+  </form>
+</div>
+
+
+
+  <!-- ✅ Paginación SERVER (Django) -->
+  <div class="mt-4 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+      <a href="?page=1&cantidad={{ cantidad }}{% if excel_filters %}&excel_filters={{ excel_filters|urlencode }}{% endif %}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+
+      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}{% if excel_filters %}&excel_filters={{ excel_filters|urlencode }}{% endif %}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+
+    <span class="px-3 py-1">
+      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+    </span>
+
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}{% if excel_filters %}&excel_filters={{ excel_filters|urlencode }}{% endif %}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+
+      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}{% if excel_filters %}&excel_filters={{ excel_filters|urlencode }}{% endif %}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ✅ Modal eliminar vehículo -->
+<div id="deleteModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/50" onclick="closeDeleteModal()"></div>
+
+  <div class="relative bg-white w-[92%] max-w-md mx-auto mt-28 rounded-2xl shadow-xl p-6">
+    <h3 class="text-lg font-bold text-gray-800 mb-2">Eliminar vehículo</h3>
+    <p class="text-sm text-gray-600 mb-4">
+      ¿Seguro que deseas eliminar el vehículo <span id="deleteLabel" class="font-semibold"></span>?
+      Esta acción no se puede deshacer.
+    </p>
+
+    <form id="deleteForm" method="post">
+      {% csrf_token %}
+      <div class="flex justify-end gap-2">
+        <button type="button"
+                onclick="closeDeleteModal()"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+          Cancelar
+        </button>
+        <button type="submit"
+                class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+          Sí, eliminar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ✅ Panel flotante tipo Excel -->
+<div id="excelFilterPanel" class="excel-panel hidden">
+  <h3 id="excelPanelTitle">Columna</h3>
+  <small>Filtrar valores</small>
+
+  <div class="mt-2">
+    <input id="excelFilterSearch"
+           type="text"
+           placeholder="Buscar..."
+           class="w-full border border-gray-300 rounded-md px-2 py-1 text-xs">
+  </div>
+
+  <div class="mt-2 excel-options" id="excelFilterOptions"></div>
+
+  <div class="mt-3 flex justify-end gap-2">
+    <button type="button" id="excelFilterClearCol" class="px-2 py-1 border rounded-md text-xs">
+      Limpiar
+    </button>
+    <button type="button" id="excelFilterApply" class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs">
+      Aplicar
+    </button>
+  </div>
+</div>
+
+<script>
+  function openDeleteModal(id, patente){
+    const modal = document.getElementById("deleteModal");
+    const label = document.getElementById("deleteLabel");
+    const form  = document.getElementById("deleteForm");
+
+    label.textContent = patente;
+    form.action = `/flota/vehiculos/${id}/eliminar/`;
+    modal.classList.remove("hidden");
+  }
+  function closeDeleteModal(){
+    document.getElementById("deleteModal").classList.add("hidden");
+  }
+</script>
+
+<script>
+/* =========================
+   1) Columnas (localStorage) - REAPLICABLE post-AJAX
+   ========================= */
+(function () {
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  const STORAGE_KEY = 'cols:flota:vehicle_list';
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(_) { return {}; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(_) {}
+  }
+
+  function getTable(){
+    return document.getElementById('tabla-vehiculos');
+  }
+
+  function applyVisibility() {
+    const table = getTable();
+    if(!table) return;
+
+    const state = loadState();
+
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false;
+      th.style.display = visible ? '' : 'none';
+    });
+
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach(cb => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) master.checked = allOn;
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    checks.forEach(cb => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+        checks.forEach(cb => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  bindToggles();
+  bindOutsideClickToClose();
+  applyVisibility();
+
+  // ✅ expuesto para post-AJAX
+  window.reApplyVehicleColumns = applyVisibility;
+})();
+</script>
+
+<script>
+/* =========================
+   2) Excel Filters (SIN paginación client-side)
+   ========================= */
+(function(){
+  function loadFilters(){
+    try{
+      const raw = sessionStorage.getItem('flotaExcelFilters:' + location.pathname);
+      if(!raw) return {};
+      const obj = JSON.parse(raw);
+      const out = {};
+      Object.entries(obj).forEach(([k, arr]) => out[k] = new Set(arr));
+      return out;
+    }catch(_){ return {}; }
+  }
+  function saveFilters(active){
+    try{
+      const plain = {};
+      Object.entries(active).forEach(([k, set]) => plain[k] = Array.from(set));
+      sessionStorage.setItem('flotaExcelFilters:' + location.pathname, JSON.stringify(plain));
+    }catch(_){}
+  }
+
+  const excel = {
+    panel: document.getElementById('excelFilterPanel'),
+    titleEl: document.getElementById('excelPanelTitle'),
+    searchInput: document.getElementById('excelFilterSearch'),
+    optsBox: document.getElementById('excelFilterOptions'),
+    btnApply: document.getElementById('excelFilterApply'),
+    btnClearCol: document.getElementById('excelFilterClearCol'),
+    btnClearAllTop: document.getElementById('btnExcelClearAll'),
+
+    table: null,
+    tbody: null,
+    headers: [],
+    allRows: [],
+    distinctValues: {},
+    activeFilters: loadFilters(),
+    currentColIndex: null,
+    bound: false,
+  };
+
+  window.vehicleExcel = excel; // ✅ para serializar excel_filters en AJAX
+
+  function getCellValue(td){
+    if(!td) return '(Vacías)';
+
+    // prioridad: data-excel-value
+    if(td.dataset && td.dataset.excelValue){
+      const t = (td.dataset.excelValue || '').trim();
+      return t || '(Vacías)';
+    }
+
+    // status <select>
+    const sel = td.querySelector && td.querySelector('select');
+    if(sel){
+      const opt = sel.options[sel.selectedIndex];
+      return (opt ? opt.textContent : '').trim() || '(Vacías)';
+    }
+
+    const text = (td.textContent || '').trim();
+    return text || '(Vacías)';
+  }
+
+  function buildDistinctValues(){
+    excel.distinctValues = {};
+    excel.allRows.forEach(row=>{
+      Array.from(row.cells).forEach((td, idx)=>{
+        if(!excel.distinctValues[idx]) excel.distinctValues[idx] = new Set();
+        excel.distinctValues[idx].add(getCellValue(td));
+      });
+    });
+  }
+
+  function updateHeaderStates(){
+    excel.headers.forEach((th, idx)=>{
+      if(!th.hasAttribute('data-excel-col')) return;
+      const has = !!(excel.activeFilters[idx] && excel.activeFilters[idx].size > 0);
+      th.classList.toggle('excel-col-filtered', has);
+    });
+  }
+
+  function applyFilters(){
+    let visibleCount = 0;
+
+    const emptyRow = excel.tbody ? excel.tbody.querySelector('tr[data-empty-row="1"]') : null;
+    if (emptyRow) emptyRow.style.display = 'none';
+
+    excel.allRows.forEach(row=>{
+      if(row.dataset && row.dataset.emptyRow === "1"){
+        row.style.display = 'none';
+        return;
+      }
+
+      let ok = true;
+      for(const [colStr, values] of Object.entries(excel.activeFilters)){
+        const idx = parseInt(colStr, 10);
+        if(!values || values.size === 0) continue;
+
+        const td = row.cells[idx];
+        const val = getCellValue(td);
+        if(!values.has(val)){ ok = false; break; }
+      }
+
+      row.style.display = ok ? '' : 'none';
+      if(ok) visibleCount++;
+    });
+
+    if(emptyRow){
+      emptyRow.style.display = (visibleCount === 0) ? '' : 'none';
+    }
+
+    updateHeaderStates();
+    saveFilters(excel.activeFilters);
+  }
+
+  function filterOptionList(query){
+    const q = query.trim().toLowerCase();
+    let visible = 0;
+
+    excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
+      const text = lbl.textContent.toLowerCase();
+      const show = text.includes(q);
+      lbl.style.display = show ? '' : 'none';
+      if(show) visible++;
+    });
+
+    let msg = excel.optsBox.querySelector('[data-no-match="1"]');
+    if(!msg){
+      msg = document.createElement('div');
+      msg.dataset.noMatch = "1";
+      msg.className = "mt-2 text-xs text-gray-500";
+      msg.textContent = "No hay resultados.";
+      excel.optsBox.appendChild(msg);
+    }
+    msg.style.display = (q && visible === 0) ? '' : 'none';
+
+    excel.btnApply.disabled = (q && visible === 0);
+    excel.btnApply.classList.toggle('opacity-50', excel.btnApply.disabled);
+    excel.btnApply.classList.toggle('cursor-not-allowed', excel.btnApply.disabled);
+  }
+
+  function renderOptions(colIndex){
+    excel.optsBox.innerHTML = '';
+
+    const set = excel.distinctValues[colIndex] || new Set();
+    const values = Array.from(set).sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
+    const selected = excel.activeFilters[colIndex];
+
+    const allLabel = document.createElement('label');
+    allLabel.className = 'flex items-center gap-1 mb-1 text-xs';
+    const allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.dataset.selectAll = '1';
+    allCb.checked = !selected || selected.size === values.length;
+
+    allCb.addEventListener('change', ()=>{
+      const q = (excel.searchInput.value || '').trim().toLowerCase();
+      const onlyVisible = !!q;
+      const optionLabels = excel.optsBox.querySelectorAll('label[data-option-label]');
+      optionLabels.forEach(lbl=>{
+        if(onlyVisible && lbl.style.display === 'none') return;
+        const cb = lbl.querySelector('input[type="checkbox"][data-value]');
+        if(cb) cb.checked = allCb.checked;
+      });
+    });
+
+    allLabel.appendChild(allCb);
+    allLabel.appendChild(document.createTextNode(' (Seleccionar todo)'));
+    excel.optsBox.appendChild(allLabel);
+
+    values.forEach(val=>{
+      const label = document.createElement('label');
+      label.className = 'flex items-center gap-1 text-xs mt-0.5';
+      label.dataset.optionLabel = '1';
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.value = val;
+      cb.checked = !selected || selected.has(val);
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + val));
+      excel.optsBox.appendChild(label);
+    });
+  }
+
+  function openPanelForHeader(th){
+    excel.currentColIndex = parseInt(th.dataset.excelIndex, 10);
+    excel.titleEl.textContent = th.innerText.trim();
+
+    buildDistinctValues();
+    renderOptions(excel.currentColIndex);
+
+    const rect = th.getBoundingClientRect();
+    const panelWidth  = excel.panel.offsetWidth || 270;
+    const panelHeight = excel.panel.offsetHeight || 240;
+
+    let left = rect.left + (rect.width - panelWidth) / 2;
+    let top  = rect.bottom + 6;
+
+    const minLeft = 8;
+    const maxLeft = window.innerWidth - panelWidth - 8;
+    if(left < minLeft) left = minLeft;
+    if(left > maxLeft) left = maxLeft;
+
+    const maxTop = window.innerHeight - panelHeight - 8;
+    if(top > maxTop) top = maxTop;
+
+    excel.panel.style.left = left + 'px';
+    excel.panel.style.top  = top + 'px';
+
+    excel.panel.classList.remove('hidden');
+    excel.searchInput.value = '';
+    filterOptionList('');
+    excel.searchInput.focus();
+  }
+
+  function bindOnce(){
+    if(excel.bound) return;
+
+    excel.searchInput.addEventListener('input', ()=> filterOptionList(excel.searchInput.value));
+    excel.searchInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){ e.preventDefault(); excel.panel.classList.add('hidden'); }
+      if(e.key === 'Enter'){ e.preventDefault(); if(!excel.btnApply.disabled) excel.btnApply.click(); }
+    });
+
+    excel.btnClearCol.addEventListener('click', (e)=>{
+      e.preventDefault();
+      if(excel.currentColIndex == null){ excel.panel.classList.add('hidden'); return; }
+      delete excel.activeFilters[excel.currentColIndex];
+      excel.panel.classList.add('hidden');
+      applyFilters();
+    });
+
+    excel.btnApply.addEventListener('click', ()=>{
+      if(excel.currentColIndex == null){ excel.panel.classList.add('hidden'); return; }
+
+      const q = (excel.searchInput.value || '').trim().toLowerCase();
+      let chosen = [];
+
+      if(q){
+        chosen = Array.from(excel.optsBox.querySelectorAll('label[data-option-label]'))
+          .filter(lbl => lbl.style.display !== 'none')
+          .map(lbl => lbl.querySelector('input[type="checkbox"][data-value]'))
+          .filter(Boolean);
+      }else{
+        chosen = Array.from(excel.optsBox.querySelectorAll('input[type="checkbox"][data-value]'));
+      }
+
+      const selected = new Set();
+      chosen.forEach(cb=>{ if(cb.checked) selected.add(cb.dataset.value); });
+
+      const fullSet = excel.distinctValues[excel.currentColIndex] || new Set();
+
+      if(!q){
+        if(selected.size === 0 || selected.size === fullSet.size){
+          delete excel.activeFilters[excel.currentColIndex];
+        }else{
+          excel.activeFilters[excel.currentColIndex] = selected;
+        }
+      }else{
+        if(selected.size === 0){
+          delete excel.activeFilters[excel.currentColIndex];
+        }else{
+          if(selected.size === fullSet.size){
+            delete excel.activeFilters[excel.currentColIndex];
+          }else{
+            excel.activeFilters[excel.currentColIndex] = selected;
+          }
+        }
+      }
+
+      excel.panel.classList.add('hidden');
+      applyFilters();
+    });
+
+    document.addEventListener('click', (e)=>{
+      if(excel.panel.classList.contains('hidden')) return;
+      if(excel.panel.contains(e.target)) return;
+      if(e.target.closest('.excel-header-btn')) return;
+      excel.panel.classList.add('hidden');
+    });
+
+    // global clear (top)
+    if(excel.btnClearAllTop){
+      excel.btnClearAllTop.addEventListener('click', (e)=>{
+        e.preventDefault();
+        excel.activeFilters = {};
+        excel.panel.classList.add('hidden');
+        applyFilters();
+      });
+    }
+
+    excel.bound = true;
+  }
+
+  function initExcel(){
+    bindOnce();
+
+    const table = document.getElementById('tabla-vehiculos');
+    if(!table) return;
+
+    excel.table = table;
+    excel.tbody = document.getElementById('vehTbody') || table.querySelector('tbody');
+    excel.headers = Array.from(table.querySelectorAll('thead th'));
+    excel.allRows = Array.from(excel.tbody.querySelectorAll('tr'));
+
+    buildDistinctValues();
+    applyFilters();
+
+    excel.headers.forEach((th, idx)=>{
+      if(th.hasAttribute('data-excel-col')){
+        th.dataset.excelIndex = idx;
+        const btn = th.querySelector('.excel-header-btn');
+        if(btn){
+          btn.addEventListener('click', (ev)=>{
+            ev.stopPropagation();
+            openPanelForHeader(th);
+          });
+        }
+      }
+    });
+  }
+
+  window.initExcelFiltersFlota = initExcel;
+  initExcel();
+})();
+</script>
+
+<script>
+/* =========================
+   3) AJAX paginación (igual a Cartola)
+   - reemplaza #vehicleZone
+   - reengancha paginación
+   - re-aplica columnas
+   - re-init excel filters
+   - conserva excel_filters en URL
+   ========================= */
+(function () {
+  let zone = document.getElementById('vehicleZone');
+  if (!zone) return;
+
+  function serializeExcelFiltersToGET(){
+    try{
+      const excel = window.vehicleExcel;
+      if(!excel || !excel.activeFilters) return '';
+
+      const plain = {};
+      Object.entries(excel.activeFilters).forEach(([col, set])=>{
+        if(set && set.size) plain[col] = Array.from(set);
+      });
+
+      if(!Object.keys(plain).length) return '';
+      return JSON.stringify(plain);
+    }catch(_){
+      return '';
+    }
+  }
+
+  async function refreshList(extraParams = {}) {
+    const params = new URLSearchParams(location.search);
+
+    // aplicar extras (page etc)
+    Object.entries(extraParams).forEach(([k, v]) => {
+      if(v === null || v === undefined || v === ''){
+        params.delete(k);
+      }else{
+        params.set(k, v);
+      }
+    });
+
+    // ✅ set excel_filters desde sessionStorage/estado actual
+    const ef = serializeExcelFiltersToGET();
+    if(ef) params.set('excel_filters', ef);
+    else params.delete('excel_filters');
+
+    const url = `${location.pathname}?${params.toString()}`;
+
+    const res = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+    const html = await res.text();
+
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const newZone = doc.querySelector('#vehicleZone');
+
+    if (!newZone) {
+      location.href = url;
+      return;
+    }
+
+    zone.replaceWith(newZone);
+    zone = document.getElementById('vehicleZone');
+
+    wirePagination(zone);
+
+    // ✅ re-aplicar columnas
+    if (window.reApplyVehicleColumns) {
+      window.reApplyVehicleColumns();
+    }
+
+    // ✅ re-init excel filters
+    if (window.initExcelFiltersFlota) {
+      window.initExcelFiltersFlota();
+    }
+
+    // actualizar URL
+    history.replaceState(null, '', url);
+  }
+
+  function wirePagination(scope) {
+    (scope || document).querySelectorAll('a[href*="page="]').forEach(a => {
+      if(a.__vehPageBound) return;
+      a.__vehPageBound = true;
+
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const u = new URL(a.href, location.href);
+        const page = u.searchParams.get('page') || '1';
+        refreshList({ page });
+      });
+    });
+  }
+
+  wirePagination(zone);
+
+  window.refreshVehicleList = refreshList;
+})();
+</script>
+
+{% endblock %}

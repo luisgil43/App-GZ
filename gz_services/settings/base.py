@@ -113,6 +113,7 @@ INSTALLED_APPS = [
     "operaciones",
     "prevencion",
     "rrhh",
+    "flota",
     "logistica",
     "subcontrato",
     "facturacion",

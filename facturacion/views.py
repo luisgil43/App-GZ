@@ -1755,12 +1755,17 @@ def exportar_saldos_disponibles(request):
     return response
 
 
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.utils import timezone
+
+
 @login_required
 @rol_requerido('facturacion', 'admin')
 def enviar_a_historial(request):
     """
     Recibe ids[] por POST y marca esos movimientos como en_historial=True.
-    Recomendación: solo permitir mover aprobados_finanzas (para limpiar la vista).
+    Solo permite mover movimientos con status='aprobado_finanzas' y en_historial=False.
     """
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Método no permitido."}, status=405)
@@ -1782,7 +1787,8 @@ def enviar_a_historial(request):
     if moved_count == 0:
         return JsonResponse({
             "ok": False,
-            "error": "No hay registros válidos para enviar a historial (solo 'aprobado_finanzas' y no enviados)."
+            "code": "NO_APROBADO_FINANZAS",
+            "error": "No se puede enviar al historial porque el/los movimiento(s) seleccionado(s) aún no están Aprobados por Finanzas."
         }, status=400)
 
     qs.update(
@@ -1791,7 +1797,10 @@ def enviar_a_historial(request):
         historial_enviado_por=request.user
     )
 
-    return JsonResponse({"ok": True, "moved": moved_count})
+    return JsonResponse({
+        "ok": True,
+        "moved": moved_count
+    }, status=200)
 
 
 @login_required
@@ -2066,3 +2075,256 @@ def devolver_a_cartola(request):
     )
 
     return JsonResponse({"ok": True, "restored": count})
+
+@login_required
+@rol_requerido('facturacion', 'admin')
+def exportar_cartola_historial(request):
+    import json
+    import re
+    from datetime import datetime
+
+    import xlwt
+    from django.db.models import CharField, Q
+    from django.db.models.functions import Cast
+    from django.http import HttpResponse
+    from django.utils.timezone import is_aware
+
+    from .models import CartolaMovimiento
+
+    # ---------- Params (copiamos GET, pero sin page) ----------
+    params = request.GET.copy()
+    params.pop('page', None)
+
+    # Excel filters (JSON)
+    excel_filters_raw = (params.get('excel_filters') or '').strip()
+    try:
+        excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
+    except json.JSONDecodeError:
+        excel_filters = {}
+
+    # --- Filtros (string trimming)
+    usuario = (params.get('usuario') or '').strip()
+    fecha_txt = (params.get('fecha') or '').strip()
+    proyecto = (params.get('proyecto') or '').strip()
+    categoria = (params.get('categoria') or '').strip()
+    tipo = (params.get('tipo') or '').strip()
+    rut_factura = (params.get('rut_factura') or '').strip()
+    estado = (params.get('estado') or '').strip()
+
+    # ============================================================
+    # Base queryset: SOLO HISTORIAL
+    # ============================================================
+    movimientos = CartolaMovimiento.objects.filter(en_historial=True)
+
+    movimientos = movimientos.annotate(
+        fecha_iso=Cast('fecha', CharField())
+    )
+
+    if usuario:
+        movimientos = movimientos.filter(
+            Q(usuario__username__icontains=usuario) |
+            Q(usuario__first_name__icontains=usuario) |
+            Q(usuario__last_name__icontains=usuario)
+        )
+
+    if fecha_txt:
+        fecha_normalizada = fecha_txt.replace('/', '-').strip()
+        m = re.match(r'^(\d{1,2})(?:-(\d{1,2}))?(?:-(\d{1,4}))?$', fecha_normalizada)
+        if m:
+            dia_str = m.group(1)
+            mes_str = m.group(2)
+            anio_str = m.group(3)
+
+            try:
+                q_fecha = Q()
+                dia = int(dia_str)
+                q_fecha &= Q(fecha__day=dia)
+
+                if mes_str:
+                    mes = int(mes_str)
+                    q_fecha &= Q(fecha__month=mes)
+
+                if anio_str and len(anio_str) == 4:
+                    anio = int(anio_str)
+                    q_fecha &= Q(fecha__year=anio)
+
+                movimientos = movimientos.filter(q_fecha)
+
+            except ValueError:
+                pass  # export: no interrumpimos por warning
+        else:
+            pass  # export: no interrumpimos por warning
+
+    if proyecto:
+        movimientos = movimientos.filter(proyecto__nombre__icontains=proyecto)
+    if categoria:
+        movimientos = movimientos.filter(tipo__categoria__icontains=categoria)
+    if tipo:
+        movimientos = movimientos.filter(tipo__nombre__icontains=tipo)
+    if rut_factura:
+        movimientos = movimientos.filter(rut_factura__icontains=rut_factura)
+    if estado:
+        movimientos = movimientos.filter(status=estado)
+
+    # Orden (igual al historial)
+    movimientos = movimientos.order_by('-fecha')
+
+    movimientos_list = list(movimientos)
+
+    # ============================================================
+    # Excel filters (python) — MISMA LÓGICA que tu historial
+    # ============================================================
+    def format_clp(n):
+        try:
+            n = 0 if n is None else n
+            n_int = int(n)
+            return f"${n_int:,}".replace(",", ".")
+        except Exception:
+            return "$0"
+
+    if excel_filters:
+        def matches_excel_filters(mov):
+            for col, values in excel_filters.items():
+                if not values:
+                    continue
+                values_set = set(values)
+
+                # Índices tabla historial (CON checkbox):
+                # 0 Checkbox (no)
+                # 1 Usuario
+                # 2 Fecha
+                # 3 Fecha real del gasto
+                # 4 Proyecto
+                # 5 Categoría
+                # 6 Tipo
+                # 7 RUT factura
+                # 8 Tipo de documento
+                # 9 N° Documento
+                # 10 Observaciones
+                # 11 N° Transferencia
+                # 12 Comprobante
+                # 13 Cargos
+                # 14 Abonos
+                # 15 Status
+
+                if col == "1":
+                    label = str(mov.usuario) if mov.usuario else ""
+                elif col == "2":
+                    d = getattr(mov, "fecha", None)
+                    label = d.strftime("%d-%m-%Y") if d else ""
+                elif col == "3":
+                    d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
+                    label = d.strftime("%d-%m-%Y") if d else ""
+                elif col == "4":
+                    label = str(mov.proyecto) if mov.proyecto else ""
+                elif col == "5":
+                    if mov.tipo and getattr(mov.tipo, "categoria", None):
+                        label = (mov.tipo.categoria or "").title()
+                    else:
+                        label = ""
+                elif col == "6":
+                    label = str(mov.tipo) if mov.tipo else ""
+                elif col == "7":
+                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
+                elif col == "8":
+                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
+                elif col == "9":
+                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
+                elif col == "10":
+                    label = (getattr(mov, "observaciones", None) or "").strip()
+                elif col == "11":
+                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+                elif col == "12":
+                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+                elif col == "13":
+                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+                elif col == "14":
+                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+                elif col == "15":
+                    label = mov.get_status_display() if getattr(mov, "status", None) else ""
+                else:
+                    continue
+
+                if label not in values_set:
+                    return False
+
+            return True
+
+        movimientos_list = [m for m in movimientos_list if matches_excel_filters(m)]
+
+    # ============================================================
+    # Excel (xlwt)
+    # ============================================================
+    response = HttpResponse(content_type='application/octet-stream')
+    response['Content-Disposition'] = 'attachment; filename="historial_cartola.xls"'
+    response['X-Content-Type-Options'] = 'nosniff'
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Historial Cartola')
+
+    header_style = xlwt.easyxf('font: bold on; align: horiz center')
+    date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
+    currency_style = xlwt.easyxf(num_format_str='#,##0')
+
+    columns = [
+        "Usuario",
+        "Fecha",
+        "Fecha real del gasto",
+        "Proyecto",
+        "Categoría",
+        "Tipo",
+        "RUT Factura",
+        "Tipo de Documento",
+        "Número de Documento",
+        "Observaciones",
+        "N° Transferencia",
+        "Comprobante",
+        "Cargos",
+        "Abonos",
+        "Status",
+    ]
+
+    for col_num, title in enumerate(columns):
+        ws.write(0, col_num, title, header_style)
+
+    for row_num, mov in enumerate(movimientos_list, start=1):
+
+        # Fecha registro (mov.fecha) -> date
+        fecha_excel = getattr(mov, "fecha", None)
+        if isinstance(fecha_excel, datetime):
+            if is_aware(fecha_excel):
+                fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
+            fecha_excel = fecha_excel.date()
+
+        # Fecha real del gasto (fecha_transaccion) -> date
+        fecha_real = getattr(mov, "fecha_transaccion", None)
+
+        # Comprobante: ponemos URL si existe
+        comp = getattr(mov, "comprobante", None)
+        comp_val = comp.url if comp else "—"
+
+        ws.write(row_num, 0, mov.usuario.get_full_name() if mov.usuario else "")
+        ws.write(row_num, 1, fecha_excel if fecha_excel else "", date_style)
+        ws.write(row_num, 2, fecha_real if fecha_real else "", date_style)
+
+        ws.write(row_num, 3, str(getattr(mov, "proyecto", "") or ""))
+        ws.write(row_num, 4, getattr(getattr(mov, "tipo", None), "categoria", "") or "")
+        ws.write(row_num, 5, str(getattr(mov, "tipo", "") or ""))
+        ws.write(row_num, 6, (getattr(mov, "rut_factura", "") or "—"))
+        ws.write(row_num, 7, (getattr(mov, "tipo_doc", "") or "—"))
+        ws.write(row_num, 8, (getattr(mov, "numero_doc", "") or "—"))
+        ws.write(row_num, 9, (getattr(mov, "observaciones", "") or ""))
+        ws.write(row_num, 10, (getattr(mov, "numero_transferencia", "") or "—"))
+        ws.write(row_num, 11, comp_val)
+
+        ws.write(row_num, 12, float(getattr(mov, "cargos", 0) or 0), currency_style)
+        ws.write(row_num, 13, float(getattr(mov, "abonos", 0) or 0), currency_style)
+
+        ws.write(
+            row_num,
+            14,
+            mov.get_status_display() if hasattr(mov, "get_status_display") else str(getattr(mov, "status", "") or "")
+        )
+
+    wb.save(response)
+    return response

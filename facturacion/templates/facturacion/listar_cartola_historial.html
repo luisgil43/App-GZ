@@ -40,7 +40,6 @@
        class="bg-gray-700 hover:bg-gray-800 text-white px-4 py-2 rounded-full text-sm shadow">
       ⬅️ Volver a Cartola
     </a>
-
     <button type="button"
             id="btnDevolverCartola"
             disabled
@@ -53,6 +52,10 @@
             class="px-3 py-2 text-sm border rounded-full bg-white hover:bg-blue-50 shadow">
       ❌ Limpiar filtros
     </button>
+  <a href="{% url 'facturacion:exportar_cartola_historial' %}?{{ full_qs }}"
+   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+  📥 Export to Excel
+</a>
   </div>
 </div>
 

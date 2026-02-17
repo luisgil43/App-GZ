@@ -562,6 +562,49 @@
   </div>
 </div>
 
+
+<!-- ✅ Modal bonito (reutilizable) -->
+<div id="modalNice" class="fixed inset-0 hidden items-center justify-center z-[60]">
+  <!-- overlay -->
+  <div class="absolute inset-0 bg-black/50"></div>
+
+  <!-- card -->
+  <div class="relative bg-white w-full max-w-md mx-4 rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+    <div id="modalNiceBar" class="h-1.5 bg-blue-600"></div>
+
+    <div class="p-6">
+      <div class="flex items-start gap-3">
+        <div id="modalNiceIcon"
+             class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-blue-50 text-blue-700">
+          <!-- icon -->
+          <span id="modalNiceIconChar" class="text-lg">ℹ️</span>
+        </div>
+
+        <div class="flex-1">
+          <h3 id="modalNiceTitle" class="text-lg font-bold text-gray-900">Mensaje</h3>
+          <p id="modalNiceMsg" class="mt-1 text-sm text-gray-700 leading-relaxed"></p>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-2">
+        <button type="button"
+                onclick="closeNiceModal()"
+                class="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-semibold">
+          Cerrar
+        </button>
+        <button type="button"
+                id="modalNiceOk"
+                onclick="closeNiceModal()"
+                class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+          Aceptar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
 <script>
   function abrirModalRechazo(id) {
     const modal = document.getElementById('modalRechazo');
@@ -685,6 +728,11 @@
       window.initExcelFiltersGZ();
     }
 
+    // ✅ RE-ENGANCHAR HISTORIAL (ESTO FALTABA)
+    if (window.bindHistorialControls) {
+      window.bindHistorialControls();
+    }
+
     // restaurar foco/caret
     if (activeName) {
       const again = form.querySelector(`[name="${activeName}"]`);
@@ -739,7 +787,6 @@
   window.refreshCartolaList = refreshList;
 })();
 </script>
-
 <!-- Mantener scroll horizontal (igual) -->
 <script>
 /* ====== Mantener scroll horizontal en Cartola (GZ Services) ====== */
@@ -961,7 +1008,11 @@
 
           if (!resp.ok || !data.ok) {
             const msg = (data && data.error) || 'No se pudo aprobar el movimiento.';
-            alert(msg);
+            openNiceModal({
+  title: "No se pudo aprobar",
+  message: msg,
+  type: "error"
+});
             btn.textContent     = originalText;
             btn.dataset.loading = '';
             return;
@@ -981,7 +1032,11 @@
 
         } catch (err) {
           console.error(err);
-          alert('Error de red al aprobar el movimiento.');
+     openNiceModal({
+  title: "Error de red",
+  message: "No se pudo aprobar el movimiento. Revisa tu conexión e inténtalo nuevamente.",
+  type: "error"
+});
           btn.textContent     = originalText;
           btn.dataset.loading = '';
         }
@@ -1441,9 +1496,12 @@
         : 'bg-gray-300 text-white px-4 py-2 rounded-full text-sm shadow cursor-not-allowed';
     }
 
-    // evitar doble bind si se llama varias veces
-    if(btn && btn.__histBound) return;
-    if(btn) btn.__histBound = true;
+    // ✅ evitar doble bind PERO POR ZONE (no por btn)
+    if(zone.__histBound) {
+      updateBtn();
+      return;
+    }
+    zone.__histBound = true;
 
     if(all){
       all.addEventListener('change', ()=>{
@@ -1468,7 +1526,9 @@
       }
     });
 
-    if(btn){
+    if(btn && !btn.__histClickBound){
+      btn.__histClickBound = true;
+
       btn.addEventListener('click', async ()=>{
         const ids = getRowChecks()
           .filter(c => c.checked && isRowVisible(c))
@@ -1492,26 +1552,49 @@
           });
 
           const data = await resp.json().catch(()=> ({}));
-          if(!resp.ok || !data.ok){
-            alert((data && data.error) || "No se pudo enviar a historial.");
+
+          if (!resp.ok || !data.ok) {
+            const code = (data && data.code) ? String(data.code) : "";
+            const raw = (data && (data.error || data.detail)) ? String(data.error || data.detail) : "";
+
+            if (code === "NO_APROBADO_FINANZAS") {
+              openNiceModal({
+                title: "No se puede enviar al historial",
+                message: "No se puede enviar al historial porque el/los movimiento(s) seleccionado(s) aún no están Aprobados por Finanzas.",
+                type: "warning"
+              });
+              btn.textContent = original;
+              updateBtn();
+              return;
+            }
+
+            openNiceModal({
+              title: "No se pudo enviar",
+              message: raw || "No se pudo enviar al historial. Inténtalo nuevamente.",
+              type: "error"
+            });
+
             btn.textContent = original;
             updateBtn();
             return;
           }
 
-          // refresca tabla y vuelve a enganchar handlers al terminar
+          // refresca tabla
           if(window.refreshCartolaList){
             await window.refreshCartolaList({ page: 1 });
-            setTimeout(bindHistorialControls, 0);
           }else{
             location.reload();
           }
 
         }catch(err){
           console.error(err);
-          alert("Error de red al enviar a historial.");
+          openNiceModal({
+            title: "Error de red",
+            message: "No se pudo enviar a historial. Revisa tu conexión e inténtalo de nuevo.",
+            type: "error"
+          });
         }finally{
-          btn.textContent = original;
+          btn.textContent = btn.textContent === 'Enviando...' ? '📦 Enviar a Historial' : btn.textContent;
           updateBtn();
         }
       });
@@ -1521,8 +1604,59 @@
   }
 
   document.addEventListener('DOMContentLoaded', bindHistorialControls);
-  window.bindHistorialControls = bindHistorialControls; // por si quieres llamarlo después de AJAX
+  window.bindHistorialControls = bindHistorialControls;
 })();
+</script>
+
+<script>
+  function openNiceModal({ title="Mensaje", message="", type="info" } = {}) {
+    const modal = document.getElementById('modalNice');
+    const titleEl = document.getElementById('modalNiceTitle');
+    const msgEl = document.getElementById('modalNiceMsg');
+    const bar = document.getElementById('modalNiceBar');
+    const iconWrap = document.getElementById('modalNiceIcon');
+    const iconChar = document.getElementById('modalNiceIconChar');
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+
+    // estilos por tipo
+    const map = {
+      info:   { bar:'bg-blue-600',  wrap:'bg-blue-50 text-blue-700',  icon:'ℹ️' },
+      success:{ bar:'bg-green-600', wrap:'bg-green-50 text-green-700', icon:'✅' },
+      warning:{ bar:'bg-yellow-500',wrap:'bg-yellow-50 text-yellow-800',icon:'⚠️' },
+      error:  { bar:'bg-red-600',   wrap:'bg-red-50 text-red-700',    icon:'❌' },
+    };
+    const s = map[type] || map.info;
+
+    bar.className = 'h-1.5 ' + s.bar;
+    iconWrap.className = 'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ' + s.wrap;
+    iconChar.textContent = s.icon;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    // cerrar con ESC
+    modal.__escHandler = (e) => {
+      if (e.key === 'Escape') closeNiceModal();
+    };
+    document.addEventListener('keydown', modal.__escHandler);
+
+    // cerrar al click afuera
+    modal.__clickHandler = (e) => {
+      if (e.target === modal || e.target.classList.contains('bg-black/50')) closeNiceModal();
+    };
+  }
+
+  function closeNiceModal() {
+    const modal = document.getElementById('modalNice');
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+
+    if (modal.__escHandler) document.removeEventListener('keydown', modal.__escHandler);
+    modal.__escHandler = null;
+  }
 </script>
 </div>
 {% endblock %}
