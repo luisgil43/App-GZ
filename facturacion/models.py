@@ -103,16 +103,31 @@ class Proyecto(models.Model):
 
 
 class TipoGasto(models.Model):
-    nombre = models.CharField(max_length=255)
-    categoria = models.CharField(max_length=50, choices=[
+    CATEGORIAS = [
         ('costo', 'Costo'),
         ('inversion', 'Inversión'),
         ('gasto', 'Gasto'),
         ('abono', 'Abono'),
-    ])
+    ]
+
+    nombre = models.CharField(max_length=255)
+    categoria = models.CharField(max_length=50, choices=CATEGORIAS)
+
+    # ✅ Controla si el tipo está disponible para declarar rendiciones
+    disponible = models.BooleanField(default=True, verbose_name="Disponible")
+
+    class Meta:
+        verbose_name = "Tipo de Gasto"
+        verbose_name_plural = "Tipos de Gasto"
+        ordering = ['nombre']
 
     def __str__(self):
         return f"{self.nombre}"
+
+    # ✅ Compatibilidad con templates viejos/nuevos
+    @property
+    def disponible_para_declarar(self):
+        return self.disponible
 
 
 def ruta_comprobante_cartola(instance, filename):
@@ -153,7 +168,7 @@ class CartolaMovimiento(models.Model):
     # Fecha/Hora en que se registró en el sistema (declaración)
     fecha = models.DateTimeField(auto_now_add=True, editable=False)
 
-    # ✅ NUEVO: Fecha real del movimiento (cuando ocurrió el gasto/abono)
+    # ✅ Fecha real del movimiento (cuando ocurrió el gasto/abono)
     fecha_transaccion = models.DateField(
         "Fecha real del movimiento",
         blank=True,
@@ -166,6 +181,63 @@ class CartolaMovimiento(models.Model):
     tipo = models.ForeignKey(
         'TipoGasto', on_delete=models.SET_NULL, null=True, blank=True
     )
+
+    # =========================
+    # ✅ Integración con FLOTA
+    # =========================
+    # Vehículo seleccionado en la rendición (si aplica)
+    vehiculo_flota = models.ForeignKey(
+        'flota.Vehicle',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rendiciones_cartola',
+        verbose_name='Vehículo (Flota)'
+    )
+
+    # Tipo de servicio configurable (Flota)
+    tipo_servicio_flota = models.ForeignKey(
+        'flota.VehicleServiceType',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rendiciones_cartola',
+        verbose_name='Tipo de servicio (Flota)'
+    )
+
+    # Servicio real creado en flota a partir de esta rendición
+    servicio_flota = models.ForeignKey(
+        'flota.VehicleService',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='rendiciones_origen',
+        verbose_name='Servicio creado en Flota'
+    )
+
+    # Snapshot / datos declarados al momento de rendir (útil para auditoría)
+    fecha_servicio_flota = models.DateField(
+        "Fecha servicio flota",
+        null=True,
+        blank=True
+    )
+    hora_servicio_flota = models.TimeField(
+        "Hora servicio flota",
+        null=True,
+        blank=True
+    )
+    kilometraje_servicio_flota = models.PositiveIntegerField(
+        "Kilometraje servicio flota",
+        null=True,
+        blank=True
+    )
+    tipo_servicio_flota_snapshot = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        verbose_name="Nombre tipo servicio (snapshot)"
+    )
+
     rut_factura = models.CharField(max_length=12, blank=True, null=True)
     tipo_doc = models.CharField(
         max_length=20, choices=TIPO_DOC_CHOICES, blank=True, null=True, verbose_name="Tipo de Documento"
@@ -206,10 +278,10 @@ class CartolaMovimiento(models.Model):
         related_name='rendiciones_aprobadas_finanzas'
     )
 
-    # ✅ NUEVO: timestamp cuando queda aprobado por finanzas (para auto-archivar)
+    # ✅ timestamp cuando queda aprobado por finanzas (para auto-archivar)
     aprobado_finanzas_en = models.DateTimeField(null=True, blank=True)
 
-    # ✅ NUEVO: campos de historial/archivo
+    # ✅ campos de historial/archivo
     archivado_en = models.DateTimeField(null=True, blank=True)
     archivado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -218,7 +290,7 @@ class CartolaMovimiento(models.Model):
         related_name='cartola_archivados'
     )
 
-    # ✅ (FALTABAN en tu modelo, pero tu código YA los usa)
+    # ✅ (tu código ya los usa)
     en_historial = models.BooleanField(default=False)
     historial_enviado_el = models.DateTimeField(null=True, blank=True)
     historial_enviado_por = models.ForeignKey(
@@ -235,12 +307,52 @@ class CartolaMovimiento(models.Model):
     )
     motivo_rechazo = models.TextField(blank=True, null=True)
 
+    class Meta:
+        verbose_name = "Cartola Movimiento"
+        verbose_name_plural = "Cartola Movimientos"
+        ordering = ['-fecha']
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['fecha']),
+            models.Index(fields=['fecha_transaccion']),
+            models.Index(fields=['usuario', 'status']),
+            models.Index(fields=['vehiculo_flota']),
+            models.Index(fields=['servicio_flota']),
+        ]
+
     def save(self, *args, **kwargs):
         from django.utils import timezone
 
         now = timezone.now()
 
-        # Si es nuevo, no hay "previo" para comparar
+        # Snapshot automático del tipo servicio flota (si no lo enviaron manualmente)
+        if self.tipo_servicio_flota and not self.tipo_servicio_flota_snapshot:
+            self.tipo_servicio_flota_snapshot = self.tipo_servicio_flota.name
+
+        # Si ya hay servicio flota asociado y faltan snapshots, los rellenamos
+        if self.servicio_flota:
+            if not self.vehiculo_flota_id and self.servicio_flota.vehicle_id:
+                self.vehiculo_flota_id = self.servicio_flota.vehicle_id
+
+            if not self.tipo_servicio_flota_id and self.servicio_flota.service_type_obj_id:
+                self.tipo_servicio_flota_id = self.servicio_flota.service_type_obj_id
+
+            if not self.fecha_servicio_flota:
+                self.fecha_servicio_flota = self.servicio_flota.service_date
+
+            if not self.hora_servicio_flota:
+                self.hora_servicio_flota = self.servicio_flota.service_time
+
+            if self.kilometraje_servicio_flota is None:
+                self.kilometraje_servicio_flota = self.servicio_flota.kilometraje_declarado
+
+            if not self.tipo_servicio_flota_snapshot:
+                if self.servicio_flota.service_type_obj:
+                    self.tipo_servicio_flota_snapshot = self.servicio_flota.service_type_obj.name
+                else:
+                    self.tipo_servicio_flota_snapshot = self.servicio_flota.get_service_type_display()
+
+        # Si es nuevo, no hay "previo" para comparar transición de status
         if not self.pk:
             super().save(*args, **kwargs)
             return
@@ -271,3 +383,19 @@ class CartolaMovimiento(models.Model):
 
     def __str__(self):
         return f"{self.usuario} - {self.proyecto} - {self.tipo} - {self.fecha}"
+
+    @property
+    def es_rendicion_flota(self):
+        return bool(self.vehiculo_flota_id or self.servicio_flota_id or self.tipo_servicio_flota_id)
+
+    @property
+    def tipo_servicio_flota_nombre(self):
+        if self.tipo_servicio_flota_snapshot:
+            return self.tipo_servicio_flota_snapshot
+        if self.tipo_servicio_flota:
+            return self.tipo_servicio_flota.name
+        if self.servicio_flota:
+            if self.servicio_flota.service_type_obj:
+                return self.servicio_flota.service_type_obj.name
+            return self.servicio_flota.get_service_type_display()
+        return None

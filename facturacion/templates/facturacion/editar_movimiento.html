@@ -8,141 +8,430 @@
 {% block dashboard_content %}
 <div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
   <h2 class="text-2xl font-bold text-gray-800 mb-6">✏️ Editar Movimiento</h2>
-  <form method="post" enctype="multipart/form-data">
+
+  <form method="post" enctype="multipart/form-data" id="form-rendicion">
     {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+
+    {# hidden fields del form #}
+    {% for hidden in form.hidden_fields %}
+      {{ hidden }}
+    {% endfor %}
 
     {% if form.non_field_errors %}
-      <div class="bg-red-100 text-red-700 p-2 rounded mb-4">
+      <div class="bg-red-100 text-red-700 p-3 rounded mb-4">
         {% for error in form.non_field_errors %}
           <p>{{ error }}</p>
         {% endfor %}
       </div>
     {% endif %}
 
+    {# ✅ DEBUG útil: muestra cualquier error de cualquier campo #}
+    {% if form.errors %}
+      <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4">
+        <p class="font-semibold mb-2">Revisa estos errores:</p>
+        <ul class="list-disc pl-5 text-sm space-y-1">
+          {% for field in form %}
+            {% for error in field.errors %}
+              <li><strong>{{ field.label|default:field.name }}:</strong> {{ error }}</li>
+            {% endfor %}
+          {% endfor %}
+          {% for error in form.non_field_errors %}
+            <li><strong>Error general:</strong> {{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
     <!-- Usuario -->
     <div class="mb-4">
       <label class="block text-sm font-medium text-gray-700">Usuario</label>
-      {{ form.usuario|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% if form.usuario.errors %}
+        {{ form.usuario|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
         <p class="text-red-600 text-sm mt-1">{{ form.usuario.errors.0 }}</p>
+      {% else %}
+        {{ form.usuario|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% endif %}
     </div>
-
-
 
     <!-- Proyecto -->
     <div class="mb-4">
       <label class="block text-sm font-medium text-gray-700">Proyecto</label>
-      {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% if form.proyecto.errors %}
+        {{ form.proyecto|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
         <p class="text-red-600 text-sm mt-1">{{ form.proyecto.errors.0 }}</p>
+      {% else %}
+        {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% endif %}
     </div>
-   {% if form.fields.fecha_transaccion %}
-  <div class="mb-4">
-    <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
-    {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
-    {% if form.fecha_transaccion.errors %}
-      <p class="text-red-600 text-sm mt-1">{{ form.fecha_transaccion.errors.0 }}</p>
+
+    <!-- Fecha real del gasto -->
+    {% if form.fields.fecha_transaccion %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Fecha real del gasto</label>
+        {% if form.fecha_transaccion.errors %}
+          {{ form.fecha_transaccion|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.fecha_transaccion.errors.0 }}</p>
+        {% else %}
+          {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
-  </div>
-{% endif %}
-    <!-- Tipo (si existe en el formulario) -->
+
+    <!-- Tipo -->
     {% if form.fields.tipo %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Tipo</label>
-      {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.tipo.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.tipo.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Tipo</label>
+        {% if form.tipo.errors %}
+          {{ form.tipo|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.tipo.errors.0 }}</p>
+        {% else %}
+          {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
-    <!-- Tipo Documento (si existe en el formulario) -->
+    <!-- Datos de Servicio / Flota -->
+    {% if form.fields.vehiculo_flota or form.fields.tipo_servicio_flota or form.fields.hora_servicio_flota or form.fields.kilometraje_servicio_flota %}
+      <div class="mb-4 mt-6">
+        <h3 class="text-sm font-semibold text-gray-800 border-b pb-2">🚗 Datos de Servicio / Flota</h3>
+      </div>
+
+      {% if form.fields.vehiculo_flota %}
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Vehículo</label>
+          {% if form.vehiculo_flota.errors %}
+            {{ form.vehiculo_flota|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+            <p class="text-red-600 text-sm mt-1">{{ form.vehiculo_flota.errors.0 }}</p>
+          {% else %}
+            {{ form.vehiculo_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {# ✅ CAMPO NUEVO: Tipo de servicio (Flota) #}
+      {% if form.fields.tipo_servicio_flota %}
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Tipo de servicio (Flota)</label>
+          {% if form.tipo_servicio_flota.errors %}
+            {{ form.tipo_servicio_flota|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+            <p class="text-red-600 text-sm mt-1">{{ form.tipo_servicio_flota.errors.0 }}</p>
+          {% else %}
+            {{ form.tipo_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if form.fields.hora_servicio_flota %}
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700">Hora del servicio</label>
+          {% if form.hora_servicio_flota.errors %}
+            {{ form.hora_servicio_flota|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+            <p class="text-red-600 text-sm mt-1">{{ form.hora_servicio_flota.errors.0 }}</p>
+          {% else %}
+            {{ form.hora_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if form.fields.kilometraje_servicio_flota %}
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">Kilometraje del servicio</label>
+          {% if form.kilometraje_servicio_flota.errors %}
+            {{ form.kilometraje_servicio_flota|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+            <p class="text-red-600 text-sm mt-1">{{ form.kilometraje_servicio_flota.errors.0 }}</p>
+          {% else %}
+            {{ form.kilometraje_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+          {% endif %}
+        </div>
+
+        <div id="km-servicio-live-msg" class="hidden text-xs mt-1"></div>
+      {% endif %}
+    {% endif %}
+
+    <!-- RUT Factura -->
+    {% if form.fields.rut_factura %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">RUT Factura</label>
+        {% if form.rut_factura.errors %}
+          {{ form.rut_factura|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.rut_factura.errors.0 }}</p>
+        {% else %}
+          {{ form.rut_factura|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <!-- Tipo Documento -->
     {% if form.fields.tipo_doc %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Tipo de Documento</label>
-      {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.tipo_doc.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.tipo_doc.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Tipo de Documento</label>
+        {% if form.tipo_doc.errors %}
+          {{ form.tipo_doc|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.tipo_doc.errors.0 }}</p>
+        {% else %}
+          {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
-    <!-- Número Documento (si existe en el formulario) -->
+    <!-- Número Documento -->
     {% if form.fields.numero_doc %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Número de Documento</label>
-      {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.numero_doc.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.numero_doc.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Número de Documento</label>
+        {% if form.numero_doc.errors %}
+          {{ form.numero_doc|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.numero_doc.errors.0 }}</p>
+        {% else %}
+          {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
     <!-- Observaciones -->
     <div class="mb-4">
       <label class="block text-sm font-medium text-gray-700">Observaciones</label>
-      {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% if form.observaciones.errors %}
+        {{ form.observaciones|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
         <p class="text-red-600 text-sm mt-1">{{ form.observaciones.errors.0 }}</p>
+      {% else %}
+        {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
       {% endif %}
     </div>
 
     <!-- N° Transferencia -->
     {% if form.fields.numero_transferencia %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">N° Transferencia</label>
-      {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.numero_transferencia.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.numero_transferencia.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">N° Transferencia</label>
+        {% if form.numero_transferencia.errors %}
+          {{ form.numero_transferencia|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.numero_transferencia.errors.0 }}</p>
+        {% else %}
+          {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
     <!-- Comprobante -->
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Comprobante</label>
-      {{ form.comprobante|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.comprobante.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.comprobante.errors.0 }}</p>
-      {% endif %}
-      {% if movimiento.comprobante %}
-        <p class="text-xs mt-1">
-          Archivo actual: 
-          <a href="{{ movimiento.comprobante.url }}" target="_blank" class="text-blue-600 underline">
-            Ver Comprobante
-          </a>
-        </p>
-      {% endif %}
-    </div>
+    {% if form.fields.comprobante %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Comprobante</label>
+        {% if form.comprobante.errors %}
+          {{ form.comprobante|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.comprobante.errors.0 }}</p>
+        {% else %}
+          {{ form.comprobante|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
 
-    <!-- Cargos (solo si existe en el formulario) -->
+        {% if movimiento.comprobante %}
+          <p class="text-xs mt-1">
+            Archivo actual:
+            <a href="{{ movimiento.comprobante.url }}" target="_blank" class="text-blue-600 underline">
+              Ver Comprobante
+            </a>
+          </p>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <!-- Cargos -->
     {% if form.fields.cargos %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Cargos</label>
-      {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.cargos.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.cargos.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Cargos</label>
+        {% if form.cargos.errors %}
+          {{ form.cargos|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.cargos.errors.0 }}</p>
+        {% else %}
+          {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
-    <!-- Abonos (solo si existe en el formulario) -->
+    <!-- Abonos -->
     {% if form.fields.abonos %}
-    <div class="mb-4">
-      <label class="block text-sm font-medium text-gray-700">Abonos</label>
-      {{ form.abonos|add_class:"w-full border rounded-xl px-3 py-2" }}
-      {% if form.abonos.errors %}
-        <p class="text-red-600 text-sm mt-1">{{ form.abonos.errors.0 }}</p>
-      {% endif %}
-    </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700">Abonos</label>
+        {% if form.abonos.errors %}
+          {{ form.abonos|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+          <p class="text-red-600 text-sm mt-1">{{ form.abonos.errors.0 }}</p>
+        {% else %}
+          {{ form.abonos|add_class:"w-full border rounded-xl px-3 py-2" }}
+        {% endif %}
+      </div>
     {% endif %}
 
-    <div class="flex justify-end gap-3 mt-4">
-      <a href="{% url 'facturacion:listar_cartola' %}" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">Cancelar</a>
+    <div class="flex justify-end gap-3 mt-6">
+      <a href="{{ next }}" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">Cancelar</a>
       <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl">Guardar</button>
     </div>
   </form>
 </div>
+
+{% if form.fields.vehiculo_flota and form.fields.hora_servicio_flota and form.fields.kilometraje_servicio_flota and form.fields.tipo and form.fields.fecha_transaccion %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("form-rendicion");
+  if (!form) return;
+
+  const tipoSelect = document.getElementById("id_tipo");
+  const vehiculoInput = document.getElementById("id_vehiculo_flota");
+  const fechaInput = document.getElementById("id_fecha_transaccion");
+  const horaInput = document.getElementById("id_hora_servicio_flota");
+  const kmInput = document.getElementById("id_kilometraje_servicio_flota");
+  const msgEl = document.getElementById("km-servicio-live-msg");
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  if (!vehiculoInput || !fechaInput || !horaInput || !kmInput || !msgEl || !tipoSelect) return;
+
+  let kmFlotaValido = true;
+  let timer = null;
+  let reqSeq = 0;
+
+  function esServicios() {
+    const txt = (tipoSelect.options[tipoSelect.selectedIndex]?.text || "").toLowerCase().trim();
+    const val = (tipoSelect.value || "").toLowerCase().trim();
+    return txt.includes("servicio") || val.includes("servicio");
+  }
+
+  function setMsg(text, type, allowHtml = false) {
+    msgEl.classList.remove("hidden", "text-red-600", "text-green-600", "text-gray-600", "text-amber-700");
+
+    if (!text) {
+      msgEl.classList.add("hidden");
+      msgEl.innerHTML = "";
+      return;
+    }
+
+    if (allowHtml) msgEl.innerHTML = text;
+    else msgEl.textContent = text;
+
+    msgEl.classList.add(
+      type === "error" ? "text-red-600" :
+      type === "ok" ? "text-green-600" :
+      type === "warn" ? "text-amber-700" : "text-gray-600"
+    );
+  }
+
+  function setKmInputState(ok) {
+    kmFlotaValido = !!ok;
+    kmInput.classList.remove("border-red-500", "ring-1", "ring-red-300", "border-green-500", "ring-green-300");
+
+    if (kmInput.value.trim() === "") {
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+
+    if (ok) {
+      kmInput.classList.add("border-green-500");
+      if (submitBtn) submitBtn.disabled = false;
+    } else {
+      kmInput.classList.add("border-red-500", "ring-1", "ring-red-300");
+      if (submitBtn) submitBtn.disabled = true;
+    }
+  }
+
+  function validarKmFlotaLive() {
+    if (!esServicios()) {
+      setMsg("", "");
+      setKmInputState(true);
+      return;
+    }
+
+    const vehiculoId = (vehiculoInput.value || "").trim();
+    const fecha = (fechaInput.value || "").trim();
+    const hora = (horaInput.value || "").trim();
+    const km = (kmInput.value || "").trim();
+
+    if (!vehiculoId) {
+      setMsg("", "");
+      setKmInputState(true);
+      return;
+    }
+
+    const params = new URLSearchParams({
+      vehiculo_id: vehiculoId,
+      fecha: fecha,
+      hora: hora,
+      km: km,
+      mov_id: "{{ movimiento.id }}"
+    });
+
+    const currentReq = ++reqSeq;
+
+    fetch("{% url 'operaciones:validar_km_servicio_flota_ajax' %}?" + params.toString(), {
+      method: "GET",
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (currentReq !== reqSeq) return;
+
+      if (!data.ok) {
+        const movAnteriorId = data?.ultimo?.mov_id || data?.ultimo?.id || null;
+        const editAnteriorUrl = movAnteriorId ? `/operaciones/mis-rendiciones/editar/${movAnteriorId}/` : null;
+
+        let htmlMsg = `
+          ${data.msg || "Error validando kilometraje."}<br>
+          <span class="font-medium">
+            Verifica los datos ingresados (fecha, hora y kilometraje). Revisa si la hora está correcta o edita la rendición anterior.
+          </span>
+        `;
+
+        if (editAnteriorUrl) {
+          htmlMsg += `<br><a href="${editAnteriorUrl}" class="underline">Presiona aquí para editar la rendición anterior</a>.`;
+        }
+
+        setMsg(htmlMsg, "error", true);
+        setKmInputState(false);
+        return;
+      }
+
+      let refTxt = "";
+      if (data.ultimo) {
+        refTxt = `Último registrado: ${Number(data.ultimo.km).toLocaleString('es-CL')} km · ${data.ultimo.fecha} ${data.ultimo.hora}`;
+      }
+
+      if (data.skip) {
+        setMsg(refTxt || "Completa vehículo, fecha, hora y km para validar.", refTxt ? "ok" : "gray");
+        setKmInputState(true);
+        return;
+      }
+
+      setMsg(data.msg ? ((refTxt ? refTxt + " · " : "") + data.msg) : (refTxt || "Kilometraje válido."), "ok");
+      setKmInputState(true);
+    })
+    .catch(() => {
+      if (currentReq !== reqSeq) return;
+      setMsg("No se pudo validar el kilometraje en este momento.", "warn");
+      setKmInputState(true);
+    });
+  }
+
+  function scheduleValidate() {
+    clearTimeout(timer);
+    timer = setTimeout(validarKmFlotaLive, 250);
+  }
+
+  kmInput.addEventListener("input", scheduleValidate);
+  vehiculoInput.addEventListener("change", scheduleValidate);
+  fechaInput.addEventListener("change", scheduleValidate);
+  horaInput.addEventListener("change", scheduleValidate);
+  tipoSelect.addEventListener("change", scheduleValidate);
+
+  form.addEventListener("submit", function (e) {
+    if (!esServicios()) return true;
+
+    if (!kmFlotaValido) {
+      e.preventDefault();
+      setMsg("Corrige el kilometraje antes de guardar.", "error");
+      kmInput.focus();
+      return false;
+    }
+    return true;
+  });
+
+  scheduleValidate();
+});
+</script>
+{% endif %}
 {% endblock %}

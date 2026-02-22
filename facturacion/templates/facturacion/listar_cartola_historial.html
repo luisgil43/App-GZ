@@ -9,7 +9,7 @@
 
 <style>
   .tabla-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  table { white-space: nowrap; min-width: 1200px; }
+  table { white-space: nowrap; min-width: 1800px; }
 
   .excel-header-btn{ width:100%; justify-content:center; font-size:0.875rem; }
   .excel-header-btn .excel-arrow{ font-size:0.65rem; margin-left:2px; }
@@ -52,10 +52,11 @@
             class="px-3 py-2 text-sm border rounded-full bg-white hover:bg-blue-50 shadow">
       ❌ Limpiar filtros
     </button>
-  <a href="{% url 'facturacion:exportar_cartola_historial' %}?{{ full_qs }}"
-   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-  📥 Export to Excel
-</a>
+
+    <a href="{% url 'facturacion:exportar_cartola_historial' %}?{{ full_qs }}"
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      📥 Export to Excel
+    </a>
   </div>
 </div>
 
@@ -87,6 +88,26 @@
               <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
+
+          <!-- ✅ NUEVAS columnas flota -->
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Vehículo</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Hora servicio</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2 border text-right" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Kilometraje servicio</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
           <th class="p-2 border" data-excel-col>
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
@@ -102,6 +123,13 @@
               <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
+
+          <th class="p-2 border" data-excel-col>
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Tipo servicio (Flota)</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
           <th class="p-2 border" data-excel-col>
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>RUT factura</span><span class="excel-arrow text-gray-500">▼</span>
@@ -174,15 +202,42 @@
             {% endif %}
           </td>
 
+          <!-- ✅ Flota -->
+          <td class="p-2 border"
+              data-excel-value="{% if mov.vehiculo_flota %}{{ mov.vehiculo_flota }}{% else %}—{% endif %}">
+            {% if mov.vehiculo_flota %}{{ mov.vehiculo_flota }}{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border"
+              data-excel-value="{% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:'H:i' }}{% else %}—{% endif %}">
+            {% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:"H:i" }}{% else %}—{% endif %}
+          </td>
+
+          <td class="p-2 border text-right"
+              data-excel-value="{% if mov.kilometraje_servicio_flota %}{{ mov.kilometraje_servicio_flota|miles }} KM{% else %}—{% endif %}">
+            {% if mov.kilometraje_servicio_flota %}
+              {{ mov.kilometraje_servicio_flota|miles }} KM
+            {% else %}
+              —
+            {% endif %}
+          </td>
+
+          <!-- ✅ Resto en orden correcto -->
           <td class="p-2 border">{{ mov.proyecto }}</td>
           <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
           <td class="p-2 border">{{ mov.tipo }}</td>
+
+          <td class="p-2 border" data-excel-value="{{ mov.tipo_servicio_flota|default:'—' }}">
+            {{ mov.tipo_servicio_flota|default:"—" }}
+          </td>
 
           <td class="p-2 border" data-excel-value="{{ mov.rut_factura|default:'—' }}">{{ mov.rut_factura|default:"—" }}</td>
           <td class="p-2 border" data-excel-value="{{ mov.tipo_doc|default:'—' }}">{{ mov.tipo_doc|default:"—" }}</td>
           <td class="p-2 border" data-excel-value="{{ mov.numero_doc|default:'—' }}">{{ mov.numero_doc|default:"—" }}</td>
 
-          <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'(Vacías)' }}">{{ mov.observaciones }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'(Vacías)' }}">
+            {{ mov.observaciones|default:"(Vacías)" }}
+          </td>
 
           <td class="p-2 border" data-excel-value="{{ mov.numero_transferencia|default:'—' }}">{{ mov.numero_transferencia|default:"—" }}</td>
 
@@ -208,7 +263,7 @@
         </tr>
         {% empty %}
         <tr data-empty-row="1">
-          <td colspan="16" class="p-4 text-center">No hay registros en historial.</td>
+          <td colspan="20" class="p-4 text-center">No hay registros en historial.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -231,7 +286,7 @@
     {% endif %}
   </form>
 
-  <!-- ✅ Paginación (preserva cantidad + excel_filters) -->
+  <!-- ✅ Paginación -->
   <div class="mt-4 flex justify-center gap-2 text-sm flex-wrap">
     {% if pagina.has_previous %}
       <a href="?page=1&cantidad={{ cantidad }}{% if request.GET.excel_filters %}&excel_filters={{ request.GET.excel_filters|urlencode }}{% endif %}"
@@ -269,7 +324,7 @@
   </div>
 </div>
 
-<!-- ✅ Devolver a Cartola (tu lógica, intacta) -->
+<!-- ✅ Devolver a Cartola -->
 <script>
 (function () {
   const btn = document.getElementById('btnDevolverCartola');
@@ -352,13 +407,11 @@
 })();
 </script>
 
-<!-- ✅ FILTROS EXCEL (MISMA LÓGICA QUE CARTOLA, ADAPTADA A HISTORIAL) -->
+<!-- ✅ FILTROS EXCEL -->
 <script>
 (function(){
   const zona = document.getElementById('cartolaZone');
   if(!zona) return;
-
-  /* =================== Helpers guardar / cargar filtros Excel =================== */
 
   function getStorageKey(){
     return 'gzExcelFilters:historial:' + location.pathname;
@@ -405,8 +458,6 @@
     }
   }
 
-  /* =================== Excel globals desde el servidor =================== */
-
   function loadExcelGlobalFromZona(){
     try{
       const raw = zona.dataset.excelGlobal || '{}';
@@ -418,7 +469,6 @@
 
   let excelGlobalValues = loadExcelGlobalFromZona();
 
-  /* ======== Estado filtros tipo Excel ======== */
   const excel = {
     panel: document.getElementById('excelFilterPanel'),
     titleEl: document.getElementById('excelPanelTitle'),
@@ -432,13 +482,11 @@
     headers: [],
     allRows: [],
     distinctValues: {},
-    // ✅ prioridad: URL -> storage
     activeFilters: (parseExcelFiltersFromUrl() || loadExcelFiltersFromStorage()),
     currentColIndex: null,
     panelEventsBound: false
   };
 
-  // expuesto por si quieres serializar o debug
   window.excel_historial = excel;
 
   function excelGetCellValue(td){
@@ -456,14 +504,12 @@
   function excelBuildDistinctValues(){
     excel.distinctValues = {};
 
-    // 1) valores globales del servidor (para no depender solo de la página actual)
     if (excelGlobalValues){
       Object.entries(excelGlobalValues).forEach(([idx, arr])=>{
         excel.distinctValues[idx] = new Set(arr);
       });
     }
 
-    // 2) valores de la página actual (por si faltan en global)
     excel.allRows.forEach(row=>{
       Array.from(row.cells).forEach((td, idx)=>{
         if(!excel.distinctValues[idx]) excel.distinctValues[idx] = new Set();
@@ -523,7 +569,6 @@
     excel.activeFilters = {};
     excelApplyFilters();
     if(excel.panel) excel.panel.classList.add('hidden');
-    // ✅ limpiar url param para que no quede “pegado”
     try{
       const u = new URL(location.href);
       u.searchParams.delete('excel_filters');
@@ -531,37 +576,37 @@
     }catch(_){}
   }
 
-function excelFilterOptionList(query){
-  if(!excel.optsBox) return;
+  function excelFilterOptionList(query){
+    if(!excel.optsBox) return;
 
-  const q = (query || '').trim().toLowerCase();
-  let visible = 0;
+    const q = (query || '').trim().toLowerCase();
+    let visible = 0;
 
-  excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
-    const cb = lbl.querySelector('input[type="checkbox"][data-value]');
-    const val = ((cb && cb.dataset && cb.dataset.value) ? cb.dataset.value : (lbl.textContent || '')).toLowerCase();
+    excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
+      const cb = lbl.querySelector('input[type="checkbox"][data-value]');
+      const val = ((cb && cb.dataset && cb.dataset.value) ? cb.dataset.value : (lbl.textContent || '')).toLowerCase();
 
-    const show = !q || val.includes(q);
-    lbl.style.display = show ? '' : 'none';
-    if(show) visible++;
-  });
+      const show = !q || val.includes(q);
+      lbl.style.display = show ? '' : 'none';
+      if(show) visible++;
+    });
 
-  let msg = excel.optsBox.querySelector('[data-no-match="1"]');
-  if(!msg){
-    msg = document.createElement('div');
-    msg.dataset.noMatch = "1";
-    msg.className = "mt-2 text-xs text-gray-500";
-    msg.textContent = "No hay resultados.";
-    excel.optsBox.appendChild(msg);
+    let msg = excel.optsBox.querySelector('[data-no-match="1"]');
+    if(!msg){
+      msg = document.createElement('div');
+      msg.dataset.noMatch = "1";
+      msg.className = "mt-2 text-xs text-gray-500";
+      msg.textContent = "No hay resultados.";
+      excel.optsBox.appendChild(msg);
+    }
+    msg.style.display = (q && visible === 0) ? '' : 'none';
+
+    if(excel.btnApply){
+      excel.btnApply.disabled = (q && visible === 0);
+      excel.btnApply.classList.toggle('opacity-50', excel.btnApply.disabled);
+      excel.btnApply.classList.toggle('cursor-not-allowed', excel.btnApply.disabled);
+    }
   }
-  msg.style.display = (q && visible === 0) ? '' : 'none';
-
-  if(excel.btnApply){
-    excel.btnApply.disabled = (q && visible === 0);
-    excel.btnApply.classList.toggle('opacity-50', excel.btnApply.disabled);
-    excel.btnApply.classList.toggle('cursor-not-allowed', excel.btnApply.disabled);
-  }
-}
 
   function excelRenderOptions(colIndex){
     if(!excel.optsBox) return;
@@ -571,7 +616,6 @@ function excelFilterOptionList(query){
     const values = Array.from(valuesSet).sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'}));
     const selected = excel.activeFilters[colIndex];
 
-    // select all
     const allLabel = document.createElement('label');
     allLabel.className = 'flex items-center gap-1 mb-1 text-xs';
     const allCb = document.createElement('input');
@@ -645,122 +689,110 @@ function excelFilterOptionList(query){
   }
 
   function excelBindPanelEventsOnce(){
-  if(excel.panelEventsBound || !excel.panel) return;
+    if(excel.panelEventsBound || !excel.panel) return;
 
-  excel.searchInput.addEventListener('input', ()=>{
-    excelFilterOptionList(excel.searchInput.value);
-  });
+    excel.searchInput.addEventListener('input', ()=>{
+      excelFilterOptionList(excel.searchInput.value);
+    });
 
-  excel.searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (excel.btnApply && !excel.btnApply.disabled) excel.btnApply.click();
+    excel.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (excel.btnApply && !excel.btnApply.disabled) excel.btnApply.click();
+      }
+    });
+
+    excel.searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        excel.panel.classList.add('hidden');
+      }
+    });
+
+    if (excel.btnClearCol) {
+      excel.btnClearCol.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (excel.currentColIndex == null) {
+          excel.panel.classList.add('hidden');
+          return;
+        }
+
+        delete excel.activeFilters[excel.currentColIndex];
+
+        excel.searchInput.value = '';
+        excelBuildDistinctValues();
+        excelRenderOptions(excel.currentColIndex);
+        excelFilterOptionList('');
+
+        excelApplyFilters();
+        excel.panel.classList.add('hidden');
+
+        updateUrlWithExcelFilters();
+      });
     }
-  });
 
-  excel.searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      excel.panel.classList.add('hidden');
-    }
-  });
-
-  // ✅ limpiar SOLO columna actual
-  if (excel.btnClearCol) {
-    excel.btnClearCol.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      if (excel.currentColIndex == null) {
+    excel.btnApply.addEventListener('click', ()=>{
+      if(excel.currentColIndex == null){
         excel.panel.classList.add('hidden');
         return;
       }
 
-      delete excel.activeFilters[excel.currentColIndex];
+      const q = (excel.searchInput?.value || '').trim().toLowerCase();
 
-      excel.searchInput.value = '';
-      excelBuildDistinctValues();
-      excelRenderOptions(excel.currentColIndex);
-      excelFilterOptionList('');
+      let chosenCheckboxes = [];
+
+      if(q){
+        const visibleLabels = Array.from(excel.optsBox.querySelectorAll('label[data-option-label]'))
+          .filter(lbl => lbl.style.display !== 'none');
+
+        chosenCheckboxes = visibleLabels
+          .map(lbl => lbl.querySelector('input[type="checkbox"][data-value]'))
+          .filter(Boolean);
+      } else {
+        chosenCheckboxes = Array.from(excel.optsBox.querySelectorAll('input[type="checkbox"][data-value]'));
+      }
+
+      const selected = new Set();
+      chosenCheckboxes.forEach(cb=>{
+        if(cb.checked) selected.add(cb.dataset.value);
+      });
+
+      const fullSet = excel.distinctValues[excel.currentColIndex] || new Set();
+      const visibleUniverse = q
+        ? new Set(chosenCheckboxes.map(cb => cb.dataset.value))
+        : null;
+
+      if(selected.size === 0){
+        delete excel.activeFilters[excel.currentColIndex];
+      } else if(!q && selected.size === fullSet.size){
+        delete excel.activeFilters[excel.currentColIndex];
+      } else if(q && visibleUniverse && selected.size === visibleUniverse.size){
+        excel.activeFilters[excel.currentColIndex] = selected;
+      } else {
+        excel.activeFilters[excel.currentColIndex] = selected;
+      }
 
       excelApplyFilters();
       excel.panel.classList.add('hidden');
-
       updateUrlWithExcelFilters();
     });
-  }
 
-  // ✅ aplicar columna actual
-  excel.btnApply.addEventListener('click', ()=>{
-    if(excel.currentColIndex == null){
+    document.addEventListener('click', (e)=>{
+      if(excel.panel.classList.contains('hidden')) return;
+      if(excel.panel.contains(e.target)) return;
+      if(e.target.closest('.excel-header-btn')) return;
       excel.panel.classList.add('hidden');
-      return;
-    }
-
-    const q = (excel.searchInput?.value || '').trim().toLowerCase();
-
-    // checkboxes visibles (si hay q) o todos (si no hay q)
-    let chosenCheckboxes = [];
-
-    if(q){
-      const visibleLabels = Array.from(excel.optsBox.querySelectorAll('label[data-option-label]'))
-        .filter(lbl => lbl.style.display !== 'none');
-
-      chosenCheckboxes = visibleLabels
-        .map(lbl => lbl.querySelector('input[type="checkbox"][data-value]'))
-        .filter(Boolean);
-    } else {
-      chosenCheckboxes = Array.from(excel.optsBox.querySelectorAll('input[type="checkbox"][data-value]'));
-    }
-
-    // valores seleccionados (en el universo elegido)
-    const selected = new Set();
-    chosenCheckboxes.forEach(cb=>{
-      if(cb.checked) selected.add(cb.dataset.value);
     });
 
-    // universo completo de la columna (toda la data)
-    const fullSet = excel.distinctValues[excel.currentColIndex] || new Set();
+    excel.panelEventsBound = true;
+  }
 
-    // ✅ universo visible cuando hay búsqueda (lo que estás viendo en el panel)
-    const visibleUniverse = q
-      ? new Set(chosenCheckboxes.map(cb => cb.dataset.value))
-      : null;
-
-    // Lógica:
-    // - si no eliges nada -> sin filtro
-    // - si NO hay búsqueda y eliges todo el fullSet -> sin filtro (comportamiento excel)
-    // - si HAY búsqueda y eliges todo lo visible -> SÍ debe quedar filtro (porque estás filtrando por búsqueda)
-    if(selected.size === 0){
-      delete excel.activeFilters[excel.currentColIndex];
-    } else if(!q && selected.size === fullSet.size){
-      delete excel.activeFilters[excel.currentColIndex];
-    } else if(q && visibleUniverse && selected.size === visibleUniverse.size){
-      // ✅ aplica filtro aunque sea "todo lo visible"
-      excel.activeFilters[excel.currentColIndex] = selected;
-    } else {
-      excel.activeFilters[excel.currentColIndex] = selected;
-    }
-
-    excelApplyFilters();
-    excel.panel.classList.add('hidden');
-    updateUrlWithExcelFilters();
-  });
-
-  document.addEventListener('click', (e)=>{
-    if(excel.panel.classList.contains('hidden')) return;
-    if(excel.panel.contains(e.target)) return;
-    if(e.target.closest('.excel-header-btn')) return;
-    excel.panel.classList.add('hidden');
-  });
-
-  excel.panelEventsBound = true;
-}
   function updateUrlWithExcelFilters(){
     try{
       const u = new URL(location.href);
 
-      // serializar filtros activos
       const plain = {};
       Object.entries(excel.activeFilters).forEach(([col, set])=>{
         if(set && set.size) plain[col] = Array.from(set);
@@ -772,8 +804,6 @@ function excelFilterOptionList(query){
         u.searchParams.delete('excel_filters');
       }
 
-      // importante: si estás en page>1 y cambias filtros, te conviene resetear a 1
-      // pero en historial normalmente filtras sobre la página actual, así que no tocamos page aquí
       history.replaceState(null,'',u.toString());
     }catch(_){}
   }
@@ -808,11 +838,9 @@ function excelFilterOptionList(query){
       }
     });
 
-    // al iniciar, dejar URL alineada a lo que haya en storage/url
     updateUrlWithExcelFilters();
   }
 
-  // botón global “Limpiar filtros”
   if(excel.btnClearAllTop){
     excel.btnClearAllTop.addEventListener('click', (e)=>{
       e.preventDefault();
@@ -822,13 +850,11 @@ function excelFilterOptionList(query){
 
   initExcelFilters();
 
-  // ✅ Antes de navegar por paginación, inyectar excel_filters actual al href (para que no se pierdan)
   document.addEventListener('click', (e)=>{
     const a = e.target.closest('a[href]');
     if(!a) return;
     if(!a.getAttribute('href').includes('page=')) return;
 
-    // solo afecta links internos con page=
     try{
       const u = new URL(a.href, location.href);
 
@@ -843,7 +869,6 @@ function excelFilterOptionList(query){
         u.searchParams.delete('excel_filters');
       }
 
-      // preservar cantidad si existe en la URL actual
       const cur = new URL(location.href);
       const cantidad = cur.searchParams.get('cantidad');
       if(cantidad && !u.searchParams.get('cantidad')){

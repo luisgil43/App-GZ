@@ -7,277 +7,366 @@
 {% block dashboard_content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-
     <!-- Encabezado -->
-   <div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
-    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
-    {% if user.es_pm %}
-    <a href="{% url 'operaciones:exportar_rendiciones_pm' %}" 
-       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-        📥 Export to Excel
-    </a>
-    {% endif %}
-</div>
-
-
-<div class="flex justify-start mb-2">
-  <details class="relative">
-    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-      ⚙️ Columnas
-    </summary>
-
-    <!-- IMPORTANTE: mismo id que usa el script -->
-    <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
-      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
-
-      <!-- Master checkbox -->
-      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
-        <input type="checkbox" id="col-toggle-all" checked>
-        <span class="font-semibold text-xs">Mostrar todas</span>
-      </label>
-
-      <!-- Una línea por columna (0-based, mismo orden que el thead) -->
-      <div class="space-y-1 text-sm">
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="0" checked>
-          <span>Nombre</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="1" checked>
-          <span>Fecha</span>
-        </label>
-          <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="2" checked>
-          <span>Fecha real del gasto</span>
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="3" checked>
-          <span>Proyecto</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="4" checked>
-          <span>Monto</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="5" checked>
-          <span>Tipo</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="6" checked>
-          <span>Observaciones</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="7" checked>
-          <span>Comprobante</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="8" checked>
-          <span>Estado</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>Acciones</span>
-        </label>
-      </div>
+    <div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
+        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
+        {% if user.es_pm %}
+        <a href="{% url 'operaciones:exportar_rendiciones_pm' %}" 
+           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+            📥 Export to Excel
+        </a>
+        {% endif %}
     </div>
-  </details>
-</div>
+
+    <div class="flex justify-start mb-2">
+      <details class="relative">
+        <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+          ⚙️ Columnas
+        </summary>
+
+        <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
+          <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+          <!-- Master checkbox -->
+          <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+            <input type="checkbox" id="col-toggle-all" checked>
+            <span class="font-semibold text-xs">Mostrar todas</span>
+          </label>
+
+          <!-- 0-based, mismo orden que thead -->
+          <div class="space-y-1 text-sm">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="0" checked>
+              <span>Nombre</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="1" checked>
+              <span>Fecha</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="2" checked>
+              <span>Fecha real del gasto</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="3" checked>
+              <span>Proyecto</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="4" checked>
+              <span>Monto</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="5" checked>
+              <span>Tipo</span>
+            </label>
+
+            <!-- ✅ NUEVAS columnas flota -->
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="6" checked>
+              <span>Vehículo (Flota)</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="7" checked>
+              <span>Tipo Servicio (Flota)</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="8" checked>
+              <span>Fecha/Hora Servicio</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="9" checked>
+              <span>KM Servicio</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="10" checked>
+              <span>Servicio Flota</span>
+            </label>
+
+            <!-- Resto -->
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="11" checked>
+              <span>Observaciones</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="12" checked>
+              <span>Comprobante</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="13" checked>
+              <span>Estado</span>
+            </label>
+
+            <label class="flex items-center gap-2">
+              <input type="checkbox" class="col-toggle" data-col="14" checked>
+              <span>Acciones</span>
+            </label>
+          </div>
+        </div>
+      </details>
+    </div>
 
     <!-- Tabla responsive -->
-     <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
-            <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-                <tr>
-                    <th class="p-2 border">Nombre</th>
-                    <th class="p-2 border">Fecha</th>
-                    <th class="p-2 border">Fecha real del gasto</th>
-                    <th class="p-2 border">Proyecto</th>
-                    <th class="p-2 border text-right">Monto</th>
-		    <th class="p-2 border">Tipo</th>
-		    <th class="p-2 border">Observaciones</th>
-                    <th class="p-2 border">Comprobante</th>
-                    <th class="p-2 border">Estado</th>
-                    <th class="p-2 border">Acciones</th>
-                </tr>
-            </thead>
-            <tbody class="text-center">
-                {% for mov in pagina %}
-                <tr class="border-t">
-                    <td class="p-2 border">{{ mov.usuario.get_full_name }}</td>
-                    <td class="p-2 border">{{ mov.fecha|date:"d-m-Y" }}</td>
-                        <td class="p-2 border-b border-gray-200">
-  {% if mov.fecha_transaccion %}
-    {{ mov.fecha_transaccion|date:"d-m-Y" }}
-  {% else %}
-    {{ mov.fecha|date:"d-m-Y" }}
-  {% endif %}
-</td>
-                    <td class="p-2 border">{{ mov.proyecto }}</td>
-                    <td class="p-2 border text-right">${{ mov.cargos|default:0|floatformat:0|formato_clp }}</td>
-		    <td class="p-2 border">{{ mov.tipo }}</td>
-    
-	            <td class="p-2 border">{{ mov.observaciones }}</td>
-                    <td class="p-2 border">
-                        {% if mov.comprobante %}
-                            <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
-                        {% else %} — {% endif %}
-                    </td>
+    <div class="overflow-x-auto">
+      <table class="table-auto w-full text-sm min-w-full sm:min-w-[1400px]"
+             style="white-space: nowrap;"
+             data-columns-table="rendiciones">
+        <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+          <tr>
+            <th class="p-2 border">Nombre</th>
+            <th class="p-2 border">Fecha</th>
+            <th class="p-2 border">Fecha real del gasto</th>
+            <th class="p-2 border">Proyecto</th>
+            <th class="p-2 border text-right">Monto</th>
+            <th class="p-2 border">Tipo</th>
 
-                    <!-- Estado con flujo completo -->
-                  <td class="p-2 text-sm">
-    <div class="flex flex-col gap-1 text-left leading-tight">
-        {% if mov.status == 'pendiente_supervisor' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Supervisor
-            </span>
-        {% elif mov.status == 'aprobado_supervisor' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ⏳ Pendiente aprobación del PM
-            </span>
-        {% elif mov.status == 'rechazado_supervisor' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Supervisor
-            </span>
-        {% elif mov.status == 'aprobado_pm' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ⏳ Pendiente aprobación de Finanzas
-            </span>
-        {% elif mov.status == 'rechazado_pm' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por PM
-            </span>
-        {% elif mov.status == 'aprobado_finanzas' %}
-            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
-            </span>
-        {% elif mov.status == 'rechazado_finanzas' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Finanzas
-            </span>
-        {% elif mov.status == 'pendiente_abono_usuario' %}
-            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Usuario
-            </span>
-        {% elif mov.status == 'aprobado_abono_usuario' %}
-            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Abono aprobado por Usuario
-            </span>
-        {% elif mov.status == 'rechazado_abono_usuario' %}
-            <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Abono rechazado por Usuario
-            </span>
-        {% else %}
-            {{ mov.get_status_display }}
-        {% endif %}
+            <!-- ✅ NUEVAS columnas flota -->
+            <th class="p-2 border">Vehículo (Flota)</th>
+            <th class="p-2 border">Tipo Servicio (Flota)</th>
+            <th class="p-2 border">Fecha/Hora Servicio</th>
+            <th class="p-2 border text-right">KM Servicio</th>
+            <th class="p-2 border">Servicio Flota</th>
 
-        {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
-                 style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
-                <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
-            </div>
-        {% endif %}
-    </div>
-</td>
+            <th class="p-2 border">Observaciones</th>
+            <th class="p-2 border">Comprobante</th>
+            <th class="p-2 border">Estado</th>
+            <th class="p-2 border">Acciones</th>
+          </tr>
+        </thead>
 
+        <tbody class="text-center">
+          {% for mov in pagina %}
+          <tr class="border-t align-top">
+            <td class="p-2 border">{{ mov.usuario.get_full_name }}</td>
+            <td class="p-2 border">{{ mov.fecha|date:"d-m-Y" }}</td>
 
-<!-- Acciones -->
-<td class="p-2 border text-center">
-    {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
-        {# Supervisor: solo si pendiente_supervisor #}
-       {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
-<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-    ✅ Aprobar
-  </button>
-</form>
-<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-  ❌ Rechazar
-</button>
-{% endif %}
+            <td class="p-2 border">
+              {% if mov.fecha_transaccion %}
+                {{ mov.fecha_transaccion|date:"d-m-Y" }}
+              {% else %}
+                {{ mov.fecha|date:"d-m-Y" }}
+              {% endif %}
+            </td>
 
-{# PM #}
-{% if user.es_pm and mov.status == "aprobado_supervisor" %}
-<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-    ✅ Aprobar
-  </button>
-</form>
-<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-  ❌ Rechazar
-</button>
-{% endif %}
+            <td class="p-2 border">{{ mov.proyecto }}</td>
+            <td class="p-2 border text-right">${{ mov.cargos|default:0|floatformat:0|formato_clp }}</td>
+            <td class="p-2 border">{{ mov.tipo }}</td>
 
-{# Finanzas #}
-{% if user.es_facturacion and mov.status == "aprobado_pm" %}
-<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-  {% csrf_token %}
- <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-    ✅ Aprobar
-  </button>
-</form>
-<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-  ❌ Rechazar
-</button>
-{% endif %}
+            <!-- ✅ Flota -->
+            <td class="p-2 border">
+              {% if mov.vehiculo_flota %}
+                {{ mov.vehiculo_flota.patente }}{% if mov.vehiculo_flota.marca %} · {{ mov.vehiculo_flota.marca }} {{ mov.vehiculo_flota.modelo }}{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
 
-{# Abono aprobado por el usuario #}
-{% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
-<form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-    ✅ Aprobar
-  </button>
-</form>
-<button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-  ❌ Rechazar
-</button>
-{% endif %}
-{% endif %}
-</td>
+            <td class="p-2 border">
+              {{ mov.tipo_servicio_flota_nombre|default:"—" }}
+            </td>
 
+            <td class="p-2 border">
+              {% if mov.fecha_servicio_flota %}
+                {{ mov.fecha_servicio_flota|date:"d-m-Y" }}
+                {% if mov.hora_servicio_flota %}
+                  <br><span class="text-xs text-gray-500">{{ mov.hora_servicio_flota|time:"h:i a" }}</span>
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
 
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="10" class="p-4 text-center text-gray-500">No hay rendiciones disponibles.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            <td class="p-2 border text-right">
+              {% if mov.kilometraje_servicio_flota %}
+                {{ mov.kilometraje_servicio_flota|miles }} KM
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2 border">
+              {% if mov.servicio_flota %}
+                #{{ mov.servicio_flota.service_code|default:mov.servicio_flota.id }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2 border">{{ mov.observaciones|default:"—" }}</td>
+
+            <td class="p-2 border">
+              {% if mov.comprobante %}
+                <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <!-- Estado con flujo completo -->
+            <td class="p-2 text-sm">
+              <div class="flex flex-col gap-1 text-left leading-tight">
+                {% if mov.status == 'pendiente_supervisor' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ⏳ Pendiente aprobación del Supervisor
+                  </span>
+
+                {% elif mov.status == 'aprobado_supervisor' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ⏳ Pendiente aprobación del PM
+                  </span>
+
+                {% elif mov.status == 'rechazado_supervisor' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por Supervisor
+                  </span>
+
+                {% elif mov.status == 'aprobado_pm' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                    ⏳ Pendiente aprobación de Finanzas
+                  </span>
+
+                {% elif mov.status == 'rechazado_pm' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por PM
+                  </span>
+
+                {% elif mov.status == 'aprobado_finanzas' %}
+                  <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                    ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
+                  </span>
+
+                {% elif mov.status == 'rechazado_finanzas' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por Finanzas
+                  </span>
+
+                {% elif mov.status == 'pendiente_abono_usuario' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ⏳ Pendiente aprobación del Usuario
+                  </span>
+
+                {% elif mov.status == 'aprobado_abono_usuario' %}
+                  <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Abono aprobado por Usuario
+                  </span>
+
+                {% elif mov.status == 'rechazado_abono_usuario' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Abono rechazado por Usuario
+                  </span>
+
+                {% else %}
+                  {{ mov.get_status_display }}
+                {% endif %}
+
+                {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
+                  <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
+                       style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+                    <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+                  </div>
+                {% endif %}
+              </div>
+            </td>
+
+            <!-- Acciones -->
+            <td class="p-2 border text-center">
+              {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
+                {# Supervisor #}
+                {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
+                  <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                      ✅ Aprobar
+                    </button>
+                  </form>
+                  <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    ❌ Rechazar
+                  </button>
+                {% endif %}
+
+                {# PM #}
+                {% if user.es_pm and mov.status == "aprobado_supervisor" %}
+                  <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                      ✅ Aprobar
+                    </button>
+                  </form>
+                  <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    ❌ Rechazar
+                  </button>
+                {% endif %}
+
+                {# Finanzas #}
+                {% if user.es_facturacion and mov.status == "aprobado_pm" %}
+                  <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                      ✅ Aprobar
+                    </button>
+                  </form>
+                  <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    ❌ Rechazar
+                  </button>
+                {% endif %}
+
+                {# Abono aprobado por usuario #}
+                {% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
+                  <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                      ✅ Aprobar
+                    </button>
+                  </form>
+                  <button onclick="abrirModalRechazo({{ mov.id }})" class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    ❌ Rechazar
+                  </button>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="15" class="p-4 text-center text-gray-500">No hay rendiciones disponibles.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
 
     <!-- Modal Rechazo -->
     <div id="modalRechazo" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
-        <div class="bg-white p-6 rounded-lg shadow-lg w-96">
-            <h2 class="text-lg font-bold mb-4">Rechazar Rendición</h2>
-            <form id="formRechazo" method="post">
-                {% csrf_token %}
-               <textarea name="motivo_rechazo" rows="3" class="w-full border rounded-lg p-2" placeholder="Ingrese el motivo del rechazo"></textarea>
+      <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+        <h2 class="text-lg font-bold mb-4">Rechazar Rendición</h2>
+        <form id="formRechazo" method="post">
+          {% csrf_token %}
+          <textarea name="motivo_rechazo" rows="3" class="w-full border rounded-lg p-2" placeholder="Ingrese el motivo del rechazo"></textarea>
 
-                <div class="mt-4 flex justify-end gap-2">
-                    <button type="button" onclick="cerrarModalRechazo()" class="px-3 py-1 bg-gray-200 rounded">Cancelar</button>
-                    <button type="submit" class="px-3 py-1 bg-red-600 text-white rounded">Rechazar</button>
-                </div>
-            </form>
-        </div>
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" onclick="cerrarModalRechazo()" class="px-3 py-1 bg-gray-200 rounded">Cancelar</button>
+            <button type="submit" class="px-3 py-1 bg-red-600 text-white rounded">Rechazar</button>
+          </div>
+        </form>
+      </div>
     </div>
 
 <script>
@@ -292,38 +381,37 @@
   }
 </script>
 
-
     <!-- Paginación -->
     <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
-        <form method="get" class="flex items-center gap-2">
-            <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-            <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-                <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
-    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-            </select>
-        </form>
+      <form method="get" class="flex items-center gap-2">
+        <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+        <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+          <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+          <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+          <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+          <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+          <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+        </select>
+      </form>
     </div>
 
     <div class="mt-2 flex justify-center text-sm">
-        {% if cantidad == 'todos' %}
-            <span>Página 1 de 1</span>
-        {% else %}
-            <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-        {% endif %}
+      {% if cantidad == 'todos' %}
+        <span>Página 1 de 1</span>
+      {% else %}
+        <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+      {% endif %}
     </div>
 
     <div class="mt-2 flex justify-center gap-2 text-sm">
-        {% if pagina.has_previous %}
-            <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-            <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-        {% endif %}
-        {% if pagina.has_next %}
-            <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-            <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-        {% endif %}
+      {% if pagina.has_previous %}
+        <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+      {% endif %}
+      {% if pagina.has_next %}
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+      {% endif %}
     </div>
 
 </div>
@@ -334,7 +422,6 @@
   const KEY = 'rendiciones-scroll:' + location.pathname;
 
   function zone() {
-    // contenedor con overflow-x de la tabla
     return document.querySelector('.overflow-x-auto');
   }
 
@@ -367,17 +454,14 @@
   window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
   window.addEventListener('beforeunload', saveScroll);
 
-  // Guardar al enviar cualquier formulario (aprobar/rechazar, selector "Mostrar", etc.)
   document.addEventListener('submit', (e) => {
     if (e.target && e.target.matches('form')) saveScroll();
   });
 
-  // Guardar al cambiar el selector de cantidad
   document.addEventListener('change', (e) => {
     if (e.target && e.target.matches('select#cantidad')) saveScroll();
   });
 
-  // Guardar al navegar por paginación
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href*="page="]');
     if (a) saveScroll();
@@ -387,17 +471,14 @@
 
 <script>
 (function () {
-  // Panel de columnas
   const panel = document.getElementById('columnToggles');
   if (!panel) return;
 
-  // Tabla asociada: usa la que tenga data-columns-table
   const table =
     document.querySelector('[data-columns-table]') ||
     document.querySelector('table');
   if (!table) return;
 
-  // Clave para recordar las columnas por vista/tabla
   const tableId = table.dataset.columnsTable || location.pathname;
   const STORAGE_KEY = 'cols:' + tableId;
 
@@ -419,16 +500,14 @@
   }
 
   function applyVisibility() {
-    const state = loadState(); // {0: true, 1: false, ...}
+    const state = loadState();
 
-    // Encabezados
     const theadCells = table.querySelectorAll('thead tr th');
     theadCells.forEach((th, idx) => {
-      const visible = state[idx] !== false; // por defecto visible
+      const visible = state[idx] !== false;
       th.style.display = visible ? '' : 'none';
     });
 
-    // Celdas
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const tds = tr.querySelectorAll('td');
       tds.forEach((td, idx) => {
@@ -437,7 +516,6 @@
       });
     });
 
-    // Sincronizar checkboxes + master
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
     let allOn = true;
@@ -449,16 +527,13 @@
       if (!visible) allOn = false;
     });
 
-    if (master) {
-      master.checked = allOn;
-    }
+    if (master) master.checked = allOn;
   }
 
   function bindToggles() {
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
 
-    // Individuales
     checks.forEach((cb) => {
       cb.addEventListener('change', () => {
         const idx = parseInt(cb.dataset.col || '0', 10);
@@ -469,7 +544,6 @@
       });
     });
 
-    // Master "Show all columns"
     if (master) {
       master.addEventListener('change', () => {
         const val = master.checked;
@@ -487,7 +561,6 @@
     }
   }
 
-  // Cerrar el <details> al hacer clic fuera
   function bindOutsideClickToClose() {
     const details = panel.closest('details');
     if (!details) return;
@@ -499,7 +572,6 @@
     });
   }
 
-  // Inicializar
   bindToggles();
   applyVisibility();
   bindOutsideClickToClose();

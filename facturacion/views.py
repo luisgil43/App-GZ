@@ -1099,18 +1099,25 @@ def listar_cartola(request):
     # --- Filtros (string trimming)
     usuario = (request.GET.get('usuario') or '').strip()
     fecha_txt = (request.GET.get('fecha') or '').strip()
+    fecha_real_txt = (request.GET.get('fecha_real') or '').strip()  # ✅ nuevo
     proyecto = (request.GET.get('proyecto') or '').strip()
     categoria = (request.GET.get('categoria') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
     rut_factura = (request.GET.get('rut_factura') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
 
+    # ✅ nuevos filtros opcionales (si luego agregas inputs al form-filtros)
+    hora_servicio = (request.GET.get('hora_servicio') or '').strip()
+    kilometraje_servicio = (request.GET.get('kilometraje_servicio') or '').strip()
+
     # --- Base queryset
     movimientos = CartolaMovimiento.objects.all()
 
-    # Anotar fecha como texto ISO (YYYY-MM-DD...) para poder usar icontains
+    # Anotar fechas / km como texto si quieres usar icontains en algunos casos
     movimientos = movimientos.annotate(
-        fecha_iso=Cast('fecha', CharField())
+        fecha_iso=Cast('fecha', CharField()),
+        fecha_transaccion_iso=Cast('fecha_transaccion', CharField()),
+        km_servicio_iso=Cast('kilometraje_servicio_flota', CharField()),
     )
 
     # --- Filtro usuario: username / nombres / apellidos
@@ -1121,73 +1128,84 @@ def listar_cartola(request):
             Q(usuario__last_name__icontains=usuario)
         )
 
-    # --- Filtro fecha (permite parcial: DD, DD-MM, DD-MM-YYYY)
-    if fecha_txt:
-        # Permitimos 08-12-2025, 08/12/2025, 8-12, 29, etc.
-        fecha_normalizada = fecha_txt.replace('/', '-').strip()
+    # --- Helper para filtrar fechas parciales (DD, DD-MM, DD-MM-YYYY)
+    def aplicar_filtro_fecha_parcial(qs, field_name, valor, warning_label):
+        if not valor:
+            return qs
 
-        # Patrones permitidos: "D", "DD", "DD-MM", "DD-M", "DD-MM-YYYY"
+        fecha_normalizada = valor.replace('/', '-').strip()
         m = re.match(r'^(\d{1,2})(?:-(\d{1,2}))?(?:-(\d{1,4}))?$', fecha_normalizada)
-        if m:
-            dia_str = m.group(1)
-            mes_str = m.group(2)
-            anio_str = m.group(3)
 
-            try:
-                q_fecha = Q()
-
-                # Siempre filtramos por día
-                dia = int(dia_str)
-                q_fecha &= Q(fecha__day=dia)
-
-                # Si hay mes, también filtramos por mes
-                if mes_str:
-                    mes = int(mes_str)
-                    q_fecha &= Q(fecha__month=mes)
-
-                # Si hay año completo (4 dígitos), filtramos por año
-                if anio_str and len(anio_str) == 4:
-                    anio = int(anio_str)
-                    q_fecha &= Q(fecha__year=anio)
-
-                movimientos = movimientos.filter(q_fecha)
-
-            except ValueError:
-                # Si algo raro pasa al convertir, avisamos
-                messages.warning(
-                    request,
-                    "Formato de fecha inválido. Use DD, DD-MM o DD-MM-YYYY."
-                )
-        else:
-            # Cualquier cosa que no encaje en el patrón permitido
+        if not m:
             messages.warning(
                 request,
-                "Formato de fecha inválido. Use DD, DD-MM o DD-MM-YYYY."
+                f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY."
             )
+            return qs
+
+        dia_str = m.group(1)
+        mes_str = m.group(2)
+        anio_str = m.group(3)
+
+        try:
+            q_fecha = Q(**{f"{field_name}__day": int(dia_str)})
+
+            if mes_str:
+                q_fecha &= Q(**{f"{field_name}__month": int(mes_str)})
+
+            if anio_str and len(anio_str) == 4:
+                q_fecha &= Q(**{f"{field_name}__year": int(anio_str)})
+
+            return qs.filter(q_fecha)
+
+        except ValueError:
+            messages.warning(
+                request,
+                f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY."
+            )
+            return qs
+
+    # --- Filtro fecha (fecha del registro)
+    movimientos = aplicar_filtro_fecha_parcial(movimientos, 'fecha', fecha_txt, 'fecha')
+
+    # ✅ Filtro fecha real del gasto (fecha_transaccion)
+    if fecha_real_txt:
+        movimientos = movimientos.filter(fecha_transaccion__isnull=False)
+        movimientos = aplicar_filtro_fecha_parcial(
+            movimientos, 'fecha_transaccion', fecha_real_txt, 'fecha real del gasto'
+        )
 
     # --- Otros filtros
     if proyecto:
         movimientos = movimientos.filter(proyecto__nombre__icontains=proyecto)
+
     if categoria:
         movimientos = movimientos.filter(tipo__categoria__icontains=categoria)
+
     if tipo:
         movimientos = movimientos.filter(tipo__nombre__icontains=tipo)
+
     if rut_factura:
         movimientos = movimientos.filter(rut_factura__icontains=rut_factura)
+
     if estado:
         movimientos = movimientos.filter(status=estado)
 
+    # ✅ Hora servicio flota (si viene por GET)
+    if hora_servicio:
+        movimientos = movimientos.filter(hora_servicio_flota__icontains=hora_servicio)
+
+    # ✅ Kilometraje servicio flota (si viene por GET)
+    if kilometraje_servicio:
+        movimientos = movimientos.filter(km_servicio_iso__icontains=kilometraje_servicio)
+
     # ✅ SOLO MOSTRAR: pendientes por finanzas + aprobados por finanzas
     movimientos = movimientos.filter(
-    status__in=['aprobado_pm', 'aprobado_finanzas'],
-    en_historial=False
-)
+        status__in=['aprobado_pm', 'aprobado_finanzas'],
+        en_historial=False
+    )
 
-    # --- ORDEN personalizado:
-    # 0 = 'aprobado_pm' (pendiente finanzas)  -> ARRIBA
-    # 1 = todos los 'pendiente_*'
-    # 2 = todos los 'rechazado_*'
-    # 3 = todos los 'aprobado_*' (incluye aprobado_finanzas) -> ABAJO
+    # --- ORDEN personalizado
     movimientos = movimientos.annotate(
         prioridad=Case(
             When(status='aprobado_pm', then=Value(0)),
@@ -1209,11 +1227,14 @@ def listar_cartola(request):
     filtros = {
         'usuario': usuario,
         'fecha': fecha_txt,
+        'fecha_real': fecha_real_txt,           # ✅ nuevo
         'proyecto': proyecto,
         'categoria': categoria,
         'tipo': tipo,
         'rut_factura': rut_factura,
         'estado': estado,
+        'hora_servicio': hora_servicio,         # ✅ nuevo
+        'kilometraje_servicio': kilometraje_servicio,  # ✅ nuevo
     }
 
     return render(
@@ -1221,12 +1242,11 @@ def listar_cartola(request):
         'facturacion/listar_cartola.html',
         {
             'pagina': pagina,
-            'cantidad': cantidad_param,  # muestra el seleccionado en el selector
+            'cantidad': cantidad_param,
             'estado_choices': estado_choices,
             'filtros': filtros,
         }
     )
-
 
 
 @login_required
@@ -1263,12 +1283,16 @@ def crear_tipo(request):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 tipos = TipoGasto.objects.all().order_by('-id')
                 html = render_to_string(
-                    'facturacion/partials/tipo_gasto_table.html', {'tipos': tipos})
+                    'facturacion/partials/tipo_gasto_table.html',
+                    {'tipos': tipos},
+                    request=request
+                )
                 return JsonResponse({'success': True, 'html': html})
             messages.success(request, "Tipo de gasto creado correctamente.")
             return redirect('facturacion:crear_tipo')
     else:
         form = TipoGastoForm()
+
     tipos = TipoGasto.objects.all().order_by('-id')
     return render(request, 'facturacion/crear_tipo.html', {'form': form, 'tipos': tipos})
 
@@ -1277,6 +1301,7 @@ def crear_tipo(request):
 @rol_requerido('admin')
 def editar_tipo(request, pk):
     tipo = get_object_or_404(TipoGasto, pk=pk)
+
     if request.method == 'POST':
         form = TipoGastoForm(request.POST, instance=tipo)
         if form.is_valid():
@@ -1284,15 +1309,17 @@ def editar_tipo(request, pk):
             if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                 tipos = TipoGasto.objects.all().order_by('-id')
                 html = render_to_string(
-                    'facturacion/partials/tipo_gasto_table.html', {'tipos': tipos})
+                    'facturacion/partials/tipo_gasto_table.html',
+                    {'tipos': tipos},
+                    request=request
+                )
                 return JsonResponse({'success': True, 'html': html})
-            messages.success(
-                request, "Tipo de gasto actualizado correctamente.")
+            messages.success(request, "Tipo de gasto actualizado correctamente.")
             return redirect('facturacion:crear_tipo')
     else:
         form = TipoGastoForm(instance=tipo)
+
     tipos = TipoGasto.objects.all().order_by('-id')
-    # Usamos el mismo template que crear
     return render(request, 'facturacion/crear_tipo.html', {'form': form, 'tipos': tipos, 'editando': True})
 
 
@@ -1301,12 +1328,49 @@ def editar_tipo(request, pk):
 def eliminar_tipo(request, pk):
     tipo = get_object_or_404(TipoGasto, pk=pk)
     tipo.delete()
+
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         tipos = TipoGasto.objects.all().order_by('-id')
         html = render_to_string(
-            'facturacion/partials/tipo_gasto_table.html', {'tipos': tipos})
+            'facturacion/partials/tipo_gasto_table.html',
+            {'tipos': tipos},
+            request=request
+        )
         return JsonResponse({'success': True, 'html': html})
+
     messages.success(request, "Tipo de gasto eliminado correctamente.")
+    return redirect('facturacion:crear_tipo')
+
+
+# ✅ NUEVA VISTA: activar/desactivar tipo de gasto
+@login_required
+@rol_requerido('admin')
+def toggle_disponible_tipo(request, pk):
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método no permitido'}, status=405)
+
+    tipo = get_object_or_404(TipoGasto, pk=pk)
+    tipo.disponible = not tipo.disponible
+    tipo.save(update_fields=['disponible'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        tipos = TipoGasto.objects.all().order_by('-id')
+        html = render_to_string(
+            'facturacion/partials/tipo_gasto_table.html',
+            {'tipos': tipos},
+            request=request
+        )
+        return JsonResponse({
+            'success': True,
+            'html': html,
+            'disponible': tipo.disponible,
+            'msg': f'Tipo "{tipo.nombre}" {"activado" if tipo.disponible else "desactivado"} correctamente.'
+        })
+
+    messages.success(
+        request,
+        f'Tipo "{tipo.nombre}" {"activado" if tipo.disponible else "desactivado"} correctamente.'
+    )
     return redirect('facturacion:crear_tipo')
 
 
@@ -1377,6 +1441,38 @@ def aprobar_movimiento(request, pk):
     # 👇 da poder a admin (staff) además del superusuario
     es_admin = getattr(request.user, 'es_admin', False) or request.user.is_staff
 
+    # Helper interno: confirma lectura de km en flota cuando FINANZAS aprueba
+    def _confirmar_lectura_flota_si_corresponde(movimiento):
+        """
+        Marca como aprobada la lectura pendiente creada al momento de la declaración.
+        Ajusta nombres según tu app/modelo de flota.
+        """
+        try:
+            # ✅ Cambia este import por el real de tu módulo de flota
+            from flota.models import LecturaKilometraje
+
+            # Buscamos la lectura creada desde cartola para este movimiento
+            lectura = (
+                LecturaKilometraje.objects
+                .filter(cartola_movimiento=movimiento)
+                .order_by('-id')
+                .first()
+            )
+
+            if lectura:
+                # Confirmar aprobación financiera
+                lectura.aprobado = True
+                lectura.aprobado_en = timezone.now()
+                lectura.aprobado_por = request.user
+                lectura.estado = 'aprobado'  # si manejas estado string
+                lectura.save(update_fields=[
+                    'aprobado', 'aprobado_en', 'aprobado_por', 'estado'
+                ])
+        except Exception:
+            # No rompemos la aprobación contable por un error de flota
+            # (pero idealmente loguear)
+            traceback.print_exc()
+
     if mov.tipo and mov.tipo.categoria != "abono":
         # superuser o admin pueden avanzar en cualquier etapa
         if request.user.is_superuser or es_admin:
@@ -1384,15 +1480,17 @@ def aprobar_movimiento(request, pk):
                 mov.status = 'aprobado_supervisor'
                 mov.aprobado_por_supervisor = request.user
                 changed = True
+
             elif mov.status == 'aprobado_supervisor':
                 mov.status = 'aprobado_pm'
                 mov.aprobado_por_pm = request.user
                 changed = True
+
             elif mov.status == 'aprobado_pm':
                 mov.status = 'aprobado_finanzas'
                 mov.aprobado_por_finanzas = request.user
 
-                # ✅ NUEVO: al aprobar finanzas, pasa a historial automáticamente
+                # ✅ Al aprobar finanzas: pasa a historial
                 now = timezone.now()
                 mov.aprobado_finanzas_en = now
                 mov.en_historial = True
@@ -1406,15 +1504,17 @@ def aprobar_movimiento(request, pk):
             mov.status = 'aprobado_supervisor'
             mov.aprobado_por_supervisor = request.user
             changed = True
+
         elif getattr(request.user, 'es_pm', False) and mov.status == 'aprobado_supervisor':
             mov.status = 'aprobado_pm'
             mov.aprobado_por_pm = request.user
             changed = True
+
         elif getattr(request.user, 'es_facturacion', False) and mov.status == 'aprobado_pm':
             mov.status = 'aprobado_finanzas'
             mov.aprobado_por_finanzas = request.user
 
-            # ✅ NUEVO: al aprobar finanzas, pasa a historial automáticamente
+            # ✅ Al aprobar finanzas: pasa a historial
             now = timezone.now()
             mov.aprobado_finanzas_en = now
             mov.en_historial = True
@@ -1429,8 +1529,10 @@ def aprobar_movimiento(request, pk):
 
             if mov.status == 'aprobado_supervisor':
                 update_fields.append('aprobado_por_supervisor')
+
             elif mov.status == 'aprobado_pm':
                 update_fields.append('aprobado_por_pm')
+
             elif mov.status == 'aprobado_finanzas':
                 update_fields.extend([
                     'aprobado_por_finanzas',
@@ -1442,12 +1544,21 @@ def aprobar_movimiento(request, pk):
 
             mov.save(update_fields=update_fields)
 
+            # ✅ Punto 3: confirmar lectura en flota SOLO cuando finanzas aprueba
+            if mov.status == 'aprobado_finanzas':
+                _confirmar_lectura_flota_si_corresponde(mov)
+
             if _is_ajax(request):
                 return JsonResponse({"ok": True, "id": mov.pk, "new_status": mov.status})
+
             messages.success(request, "Gasto aprobado correctamente.")
+
         else:
             if _is_ajax(request):
-                return JsonResponse({"ok": False, "error": "No autorizado o estado inválido."}, status=403)
+                return JsonResponse(
+                    {"ok": False, "error": "No autorizado o estado inválido."},
+                    status=403
+                )
             messages.warning(request, "No puedes aprobar este movimiento en su estado actual.")
     else:
         if _is_ajax(request):
@@ -1461,6 +1572,7 @@ def aprobar_movimiento(request, pk):
         or reverse('facturacion:listar_cartola')
     )
     return redirect(next_url)
+
 
 @login_required
 @rol_requerido('facturacion', 'supervisor', 'pm', 'admin')
@@ -1550,11 +1662,13 @@ def editar_movimiento(request, pk):
 
     if request.method == 'POST':
         form = FormClass(request.POST, request.FILES, instance=movimiento)
+
         if form.is_valid():
             campos_editados = form.changed_data
             if campos_editados:
                 movimiento.status = estado_restaurado
                 movimiento.motivo_rechazo = ""
+
             form.save()
             messages.success(request, "Movimiento actualizado correctamente.")
 
@@ -1565,21 +1679,32 @@ def editar_movimiento(request, pk):
                 or reverse('facturacion:listar_cartola')
             )
             return redirect(next_url)
+
+        # ✅ IMPORTANTE: mostrar error general si falla validación
+        messages.error(request, "No se pudo guardar. Revisa los campos marcados en rojo.")
+
+        # ✅ DEBUG temporal (puedes dejarlo mientras pruebas)
+        # print("ERRORES FORM:", form.errors)
+        # print("ERRORES NON FIELD:", form.non_field_errors())
+
     else:
         form = FormClass(instance=movimiento)
 
-    # para el botón "Cancelar", también usamos GET next / Referer
     next_url = (
         request.GET.get('next')
         or request.META.get('HTTP_REFERER')
         or reverse('facturacion:listar_cartola')
     )
+
     return render(
         request,
         'facturacion/editar_movimiento.html',
-        {'form': form, 'movimiento': movimiento, 'next': next_url}
+        {
+            'form': form,
+            'movimiento': movimiento,
+            'next': next_url,
+        }
     )
-
 
 @login_required
 @rol_requerido('admin')
@@ -1653,14 +1778,18 @@ def exportar_cartola_finanzas(request):
     header_style = xlwt.easyxf('font: bold on; align: horiz center')
     date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
 
-    # ✅ Agregamos "Fecha real del gasto"
+    # ✅ Agregamos campos flota + "Fecha real del gasto"
     columns = [
         "Usuario",
         "Fecha",                 # fecha registro (mov.fecha)
-        "Fecha real del gasto",  # ✅ mov.fecha_transaccion
+        "Fecha real del gasto",  # mov.fecha_transaccion
+        "Vehículo",              # ✅ nuevo
+        "Hora servicio",         # ✅ nuevo
+        "Kilometraje servicio",  # ✅ nuevo
         "Proyecto",
         "Categoría",
         "Tipo",
+        "Tipo servicio (Flota)", # ✅ nuevo
         "RUT Factura",
         "Tipo de Documento",
         "Número de Documento",
@@ -1681,36 +1810,46 @@ def exportar_cartola_finanzas(request):
                 fecha_excel = fecha_excel.astimezone().replace(tzinfo=None)
             fecha_excel = fecha_excel.date()
 
-        # ---- ✅ Fecha real del gasto (mov.fecha_transaccion) ----
+        # ---- Fecha real del gasto (mov.fecha_transaccion) ----
         fecha_real_excel = getattr(mov, "fecha_transaccion", None)
         if isinstance(fecha_real_excel, datetime):
             if is_aware(fecha_real_excel):
                 fecha_real_excel = fecha_real_excel.astimezone().replace(tzinfo=None)
             fecha_real_excel = fecha_real_excel.date()
 
+        # ---- Hora servicio flota ----
+        hora_servicio = getattr(mov, "hora_servicio_flota", None)
+        hora_servicio_txt = hora_servicio.strftime("%H:%M") if hora_servicio else ""
+
         ws.write(row_num, 0, mov.usuario.get_full_name() if mov.usuario else "")
         ws.write(row_num, 1, fecha_excel, date_style)
 
-        # Si viene vacía, dejamos celda vacía (o si prefieres, pon fecha_excel como fallback)
         if fecha_real_excel:
             ws.write(row_num, 2, fecha_real_excel, date_style)
         else:
             ws.write(row_num, 2, "")
 
-        ws.write(row_num, 3, str(getattr(mov, "proyecto", "") or ""))
-        ws.write(row_num, 4, getattr(getattr(mov, "tipo", None), "categoria", "") or "")
-        ws.write(row_num, 5, str(getattr(mov, "tipo", "") or ""))
-        ws.write(row_num, 6, getattr(mov, "rut_factura", "") or "")
-        ws.write(row_num, 7, getattr(mov, "tipo_doc", "") or "")
-        ws.write(row_num, 8, getattr(mov, "numero_doc", "") or "")
-        ws.write(row_num, 9, getattr(mov, "observaciones", "") or "")
-        ws.write(row_num, 10, getattr(mov, "numero_transferencia", "") or "")
-        ws.write(row_num, 11, float(getattr(mov, "cargos", 0) or 0))
-        ws.write(row_num, 12, float(getattr(mov, "abonos", 0) or 0))
-        ws.write(row_num, 13, mov.get_status_display() if hasattr(mov, "get_status_display") else str(getattr(mov, "status", "") or ""))
+        ws.write(row_num, 3, str(getattr(mov, "vehiculo_flota", "") or ""))
+        ws.write(row_num, 4, hora_servicio_txt)
+        ws.write(row_num, 5, float(getattr(mov, "kilometraje_servicio_flota", 0) or 0))
+
+        ws.write(row_num, 6, str(getattr(mov, "proyecto", "") or ""))
+        ws.write(row_num, 7, getattr(getattr(mov, "tipo", None), "categoria", "") or "")
+        ws.write(row_num, 8, str(getattr(mov, "tipo", "") or ""))
+        ws.write(row_num, 9, str(getattr(mov, "tipo_servicio_flota", "") or ""))
+
+        ws.write(row_num, 10, getattr(mov, "rut_factura", "") or "")
+        ws.write(row_num, 11, getattr(mov, "tipo_doc", "") or "")
+        ws.write(row_num, 12, getattr(mov, "numero_doc", "") or "")
+        ws.write(row_num, 13, getattr(mov, "observaciones", "") or "")
+        ws.write(row_num, 14, getattr(mov, "numero_transferencia", "") or "")
+        ws.write(row_num, 15, float(getattr(mov, "cargos", 0) or 0))
+        ws.write(row_num, 16, float(getattr(mov, "abonos", 0) or 0))
+        ws.write(row_num, 17, mov.get_status_display() if hasattr(mov, "get_status_display") else str(getattr(mov, "status", "") or ""))
 
     wb.save(response)
     return response
+
 
 
 @login_required
@@ -1809,6 +1948,14 @@ def listar_cartola_historial(request):
     """
     Vista de historial (idéntica en look), pero muestra SOLO lo que ya está en_historial=True.
     """
+    import json
+    import re
+
+    from django.contrib import messages
+    from django.core.paginator import Paginator
+    from django.db.models import CharField, Q
+    from django.db.models.functions import Cast
+
     # --- Cantidad/paginación (mantén string para la UI)
     cantidad_param = request.GET.get('cantidad', '10')
 
@@ -1829,7 +1976,7 @@ def listar_cartola_historial(request):
     except json.JSONDecodeError:
         excel_filters = {}
 
-    # --- Filtros (string trimming)
+    # --- Filtros clásicos (si los usas)
     usuario = (request.GET.get('usuario') or '').strip()
     fecha_txt = (request.GET.get('fecha') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
@@ -1907,6 +2054,15 @@ def listar_cartola_historial(request):
         except Exception:
             return "$0"
 
+    def format_km(n):
+        try:
+            if n is None or n == "":
+                return "—"
+            n_int = int(float(n))
+            return f"{n_int:,}".replace(",", ".") + " KM"
+        except Exception:
+            return "—"
+
     if excel_filters:
         def matches_excel_filters(mov):
             for col, values in excel_filters.items():
@@ -1914,58 +2070,91 @@ def listar_cartola_historial(request):
                     continue
                 values_set = set(values)
 
-                # Índices tabla historial (CON columna checkbox al inicio):
-                # 0 Checkbox (no se filtra)
-                # 1 Usuario
-                # 2 Fecha
-                # 3 Fecha real del gasto
-                # 4 Proyecto
-                # 5 Categoría
-                # 6 Tipo
-                # 7 RUT factura
-                # 8 Tipo de documento
-                # 9 N° Documento
-                # 10 Observaciones
-                # 11 N° Transferencia
-                # 12 Comprobante
-                # 13 Cargos
-                # 14 Abonos
-                # 15 Status
+                # Índices tabla historial (CON checkbox):
+                # 0  Checkbox
+                # 1  Usuario
+                # 2  Fecha
+                # 3  Fecha real del gasto
+                # 4  Vehículo
+                # 5  Hora servicio
+                # 6  Kilometraje servicio
+                # 7  Proyecto
+                # 8  Categoría
+                # 9  Tipo
+                # 10 Tipo servicio (Flota)
+                # 11 RUT factura
+                # 12 Tipo de documento
+                # 13 N° Documento
+                # 14 Observaciones
+                # 15 N° Transferencia
+                # 16 Comprobante
+                # 17 Cargos
+                # 18 Abonos
+                # 19 Status
+
                 if col == "1":
                     label = str(mov.usuario) if mov.usuario else ""
+
                 elif col == "2":
                     d = getattr(mov, "fecha", None)
                     label = d.strftime("%d-%m-%Y") if d else ""
+
                 elif col == "3":
                     d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
                     label = d.strftime("%d-%m-%Y") if d else ""
+
                 elif col == "4":
-                    label = str(mov.proyecto) if mov.proyecto else ""
+                    label = str(getattr(mov, "vehiculo_flota", None) or "—").strip() or "—"
+
                 elif col == "5":
+                    h = getattr(mov, "hora_servicio_flota", None)
+                    label = h.strftime("%H:%M") if h else "—"
+
+                elif col == "6":
+                    label = format_km(getattr(mov, "kilometraje_servicio_flota", None))
+
+                elif col == "7":
+                    label = str(mov.proyecto) if mov.proyecto else ""
+
+                elif col == "8":
                     if mov.tipo and getattr(mov.tipo, "categoria", None):
                         label = (mov.tipo.categoria or "").title()
                     else:
                         label = ""
-                elif col == "6":
-                    label = str(mov.tipo) if mov.tipo else ""
-                elif col == "7":
-                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
-                elif col == "8":
-                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
+
                 elif col == "9":
-                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
+                    label = str(mov.tipo) if mov.tipo else ""
+
                 elif col == "10":
-                    label = (getattr(mov, "observaciones", None) or "").strip()
+                    label = str(getattr(mov, "tipo_servicio_flota", None) or "—").strip() or "—"
+
                 elif col == "11":
-                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
+
                 elif col == "12":
-                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
+
                 elif col == "13":
-                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
+
                 elif col == "14":
-                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+                    label = (getattr(mov, "observaciones", None) or "").strip() or "(Vacías)"
+
                 elif col == "15":
+                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+
+                elif col == "16":
+                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+
+                elif col == "17":
+                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+
+                elif col == "18":
+                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+
+                elif col == "19":
                     label = mov.get_status_display() if getattr(mov, "status", None) else ""
+
                 else:
                     continue
 
@@ -1980,33 +2169,95 @@ def listar_cartola_historial(request):
     # excel_global_json (solo historial)
     # ==========================
     excel_global = {}
-    # Nota: 0 es checkbox (no se usa)
+
+    # 0 checkbox (no se usa)
     excel_global[1] = sorted({str(m.usuario) for m in movimientos_list if m.usuario})
-    excel_global[2] = sorted({m.fecha.strftime("%d-%m-%Y") for m in movimientos_list if getattr(m, "fecha", None)})
+
+    excel_global[2] = sorted({
+        m.fecha.strftime("%d-%m-%Y")
+        for m in movimientos_list
+        if getattr(m, "fecha", None)
+    })
+
     excel_global[3] = sorted({
         (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None)).strftime("%d-%m-%Y")
         for m in movimientos_list
         if (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
     })
-    excel_global[4] = sorted({str(m.proyecto) for m in movimientos_list if m.proyecto})
+
+    excel_global[4] = sorted({
+        (str(getattr(m, "vehiculo_flota", None) or "—").strip() or "—")
+        for m in movimientos_list
+    })
+
     excel_global[5] = sorted({
+        (m.hora_servicio_flota.strftime("%H:%M") if getattr(m, "hora_servicio_flota", None) else "—")
+        for m in movimientos_list
+    })
+
+    excel_global[6] = sorted({
+        format_km(getattr(m, "kilometraje_servicio_flota", None))
+        for m in movimientos_list
+    })
+
+    excel_global[7] = sorted({str(m.proyecto) for m in movimientos_list if m.proyecto})
+
+    excel_global[8] = sorted({
         (m.tipo.categoria or "").title()
         for m in movimientos_list
         if m.tipo and getattr(m.tipo, "categoria", None)
     })
-    excel_global[6] = sorted({str(m.tipo) for m in movimientos_list if m.tipo})
-    excel_global[7] = sorted({(getattr(m, "rut_factura", None) or "—").strip() or "—" for m in movimientos_list})
-    excel_global[8] = sorted({(getattr(m, "tipo_doc", None) or "—").strip() or "—" for m in movimientos_list})
-    excel_global[9] = sorted({(getattr(m, "numero_doc", None) or "—").strip() or "—" for m in movimientos_list})
-    excel_global[10] = sorted({(getattr(m, "observaciones", None) or "").strip() for m in movimientos_list})
-    excel_global[11] = sorted({(getattr(m, "numero_transferencia", None) or "—").strip() or "—" for m in movimientos_list})
-    excel_global[12] = sorted({"Ver" if getattr(m, "comprobante", None) else "—" for m in movimientos_list})
-    excel_global[13] = sorted({format_clp(getattr(m, "cargos", 0) or 0) for m in movimientos_list})
-    excel_global[14] = sorted({format_clp(getattr(m, "abonos", 0) or 0) for m in movimientos_list})
+
+    excel_global[9] = sorted({str(m.tipo) for m in movimientos_list if m.tipo})
+
+    excel_global[10] = sorted({
+        (str(getattr(m, "tipo_servicio_flota", None) or "—").strip() or "—")
+        for m in movimientos_list
+    })
+
+    excel_global[11] = sorted({
+        (getattr(m, "rut_factura", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[12] = sorted({
+        (getattr(m, "tipo_doc", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[13] = sorted({
+        (getattr(m, "numero_doc", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[14] = sorted({
+        (getattr(m, "observaciones", None) or "").strip() or "(Vacías)"
+        for m in movimientos_list
+    })
+
+    excel_global[15] = sorted({
+        (getattr(m, "numero_transferencia", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[16] = sorted({
+        "Ver" if getattr(m, "comprobante", None) else "—"
+        for m in movimientos_list
+    })
+
+    excel_global[17] = sorted({
+        format_clp(getattr(m, "cargos", 0) or 0)
+        for m in movimientos_list
+    })
+
+    excel_global[18] = sorted({
+        format_clp(getattr(m, "abonos", 0) or 0)
+        for m in movimientos_list
+    })
 
     estado_map = dict(CartolaMovimiento.ESTADOS)
     status_codes = {m.status for m in movimientos_list if getattr(m, "status", None)}
-    excel_global[15] = sorted(estado_map.get(c, c) for c in status_codes)
+    excel_global[19] = sorted(estado_map.get(c, c) for c in status_codes)
 
     excel_global_json = json.dumps(excel_global)
 
@@ -2151,9 +2402,9 @@ def exportar_cartola_historial(request):
                 movimientos = movimientos.filter(q_fecha)
 
             except ValueError:
-                pass  # export: no interrumpimos por warning
+                pass
         else:
-            pass  # export: no interrumpimos por warning
+            pass
 
     if proyecto:
         movimientos = movimientos.filter(proyecto__nombre__icontains=proyecto)
@@ -2172,7 +2423,7 @@ def exportar_cartola_historial(request):
     movimientos_list = list(movimientos)
 
     # ============================================================
-    # Excel filters (python) — MISMA LÓGICA que tu historial
+    # Excel filters (python) — actualizado con nuevos campos
     # ============================================================
     def format_clp(n):
         try:
@@ -2182,6 +2433,15 @@ def exportar_cartola_historial(request):
         except Exception:
             return "$0"
 
+    def format_km(n):
+        try:
+            if n is None or n == "":
+                return "—"
+            n_int = int(float(n))
+            return f"{n_int:,}".replace(",", ".") + " KM"
+        except Exception:
+            return "—"
+
     if excel_filters:
         def matches_excel_filters(mov):
             for col, values in excel_filters.items():
@@ -2190,22 +2450,26 @@ def exportar_cartola_historial(request):
                 values_set = set(values)
 
                 # Índices tabla historial (CON checkbox):
-                # 0 Checkbox (no)
-                # 1 Usuario
-                # 2 Fecha
-                # 3 Fecha real del gasto
-                # 4 Proyecto
-                # 5 Categoría
-                # 6 Tipo
-                # 7 RUT factura
-                # 8 Tipo de documento
-                # 9 N° Documento
-                # 10 Observaciones
-                # 11 N° Transferencia
-                # 12 Comprobante
-                # 13 Cargos
-                # 14 Abonos
-                # 15 Status
+                # 0  Checkbox (no)
+                # 1  Usuario
+                # 2  Fecha
+                # 3  Fecha real del gasto
+                # 4  Vehículo
+                # 5  Hora servicio
+                # 6  Kilometraje servicio
+                # 7  Proyecto
+                # 8  Categoría
+                # 9  Tipo
+                # 10 Tipo servicio (Flota)
+                # 11 RUT factura
+                # 12 Tipo de documento
+                # 13 N° Documento
+                # 14 Observaciones
+                # 15 N° Transferencia
+                # 16 Comprobante
+                # 17 Cargos
+                # 18 Abonos
+                # 19 Status
 
                 if col == "1":
                     label = str(mov.usuario) if mov.usuario else ""
@@ -2216,31 +2480,40 @@ def exportar_cartola_historial(request):
                     d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
                     label = d.strftime("%d-%m-%Y") if d else ""
                 elif col == "4":
-                    label = str(mov.proyecto) if mov.proyecto else ""
+                    label = str(getattr(mov, "vehiculo_flota", None) or "—").strip() or "—"
                 elif col == "5":
+                    h = getattr(mov, "hora_servicio_flota", None)
+                    label = h.strftime("%H:%M") if h else "—"
+                elif col == "6":
+                    label = format_km(getattr(mov, "kilometraje_servicio_flota", None))
+                elif col == "7":
+                    label = str(mov.proyecto) if mov.proyecto else ""
+                elif col == "8":
                     if mov.tipo and getattr(mov.tipo, "categoria", None):
                         label = (mov.tipo.categoria or "").title()
                     else:
                         label = ""
-                elif col == "6":
-                    label = str(mov.tipo) if mov.tipo else ""
-                elif col == "7":
-                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
-                elif col == "8":
-                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
                 elif col == "9":
-                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
+                    label = str(mov.tipo) if mov.tipo else ""
                 elif col == "10":
-                    label = (getattr(mov, "observaciones", None) or "").strip()
+                    label = str(getattr(mov, "tipo_servicio_flota", None) or "—").strip() or "—"
                 elif col == "11":
-                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
                 elif col == "12":
-                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
                 elif col == "13":
-                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
                 elif col == "14":
-                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+                    label = (getattr(mov, "observaciones", None) or "").strip() or "(Vacías)"
                 elif col == "15":
+                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+                elif col == "16":
+                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+                elif col == "17":
+                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+                elif col == "18":
+                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+                elif col == "19":
                     label = mov.get_status_display() if getattr(mov, "status", None) else ""
                 else:
                     continue
@@ -2270,9 +2543,13 @@ def exportar_cartola_historial(request):
         "Usuario",
         "Fecha",
         "Fecha real del gasto",
+        "Vehículo",               # ✅ nuevo
+        "Hora servicio",          # ✅ nuevo
+        "Kilometraje servicio",   # ✅ nuevo
         "Proyecto",
         "Categoría",
         "Tipo",
+        "Tipo servicio (Flota)",  # ✅ nuevo
         "RUT Factura",
         "Tipo de Documento",
         "Número de Documento",
@@ -2288,7 +2565,6 @@ def exportar_cartola_historial(request):
         ws.write(0, col_num, title, header_style)
 
     for row_num, mov in enumerate(movimientos_list, start=1):
-
         # Fecha registro (mov.fecha) -> date
         fecha_excel = getattr(mov, "fecha", None)
         if isinstance(fecha_excel, datetime):
@@ -2298,33 +2574,49 @@ def exportar_cartola_historial(request):
 
         # Fecha real del gasto (fecha_transaccion) -> date
         fecha_real = getattr(mov, "fecha_transaccion", None)
+        if isinstance(fecha_real, datetime):
+            if is_aware(fecha_real):
+                fecha_real = fecha_real.astimezone().replace(tzinfo=None)
+            fecha_real = fecha_real.date()
 
-        # Comprobante: ponemos URL si existe
+        # Comprobante
         comp = getattr(mov, "comprobante", None)
         comp_val = comp.url if comp else "—"
+
+        # Hora servicio
+        hora_servicio = getattr(mov, "hora_servicio_flota", None)
+        hora_servicio_txt = hora_servicio.strftime("%H:%M") if hora_servicio else "—"
 
         ws.write(row_num, 0, mov.usuario.get_full_name() if mov.usuario else "")
         ws.write(row_num, 1, fecha_excel if fecha_excel else "", date_style)
         ws.write(row_num, 2, fecha_real if fecha_real else "", date_style)
 
-        ws.write(row_num, 3, str(getattr(mov, "proyecto", "") or ""))
-        ws.write(row_num, 4, getattr(getattr(mov, "tipo", None), "categoria", "") or "")
-        ws.write(row_num, 5, str(getattr(mov, "tipo", "") or ""))
-        ws.write(row_num, 6, (getattr(mov, "rut_factura", "") or "—"))
-        ws.write(row_num, 7, (getattr(mov, "tipo_doc", "") or "—"))
-        ws.write(row_num, 8, (getattr(mov, "numero_doc", "") or "—"))
-        ws.write(row_num, 9, (getattr(mov, "observaciones", "") or ""))
-        ws.write(row_num, 10, (getattr(mov, "numero_transferencia", "") or "—"))
-        ws.write(row_num, 11, comp_val)
+        ws.write(row_num, 3, str(getattr(mov, "vehiculo_flota", "") or "—"))
+        ws.write(row_num, 4, hora_servicio_txt)
+        ws.write(row_num, 5, float(getattr(mov, "kilometraje_servicio_flota", 0) or 0))
 
-        ws.write(row_num, 12, float(getattr(mov, "cargos", 0) or 0), currency_style)
-        ws.write(row_num, 13, float(getattr(mov, "abonos", 0) or 0), currency_style)
+        ws.write(row_num, 6, str(getattr(mov, "proyecto", "") or ""))
+        ws.write(row_num, 7, getattr(getattr(mov, "tipo", None), "categoria", "") or "")
+        ws.write(row_num, 8, str(getattr(mov, "tipo", "") or ""))
+        ws.write(row_num, 9, str(getattr(mov, "tipo_servicio_flota", "") or "—"))
+
+        ws.write(row_num, 10, (getattr(mov, "rut_factura", "") or "—"))
+        ws.write(row_num, 11, (getattr(mov, "tipo_doc", "") or "—"))
+        ws.write(row_num, 12, (getattr(mov, "numero_doc", "") or "—"))
+        ws.write(row_num, 13, (getattr(mov, "observaciones", "") or ""))
+        ws.write(row_num, 14, (getattr(mov, "numero_transferencia", "") or "—"))
+        ws.write(row_num, 15, comp_val)
+
+        ws.write(row_num, 16, float(getattr(mov, "cargos", 0) or 0), currency_style)
+        ws.write(row_num, 17, float(getattr(mov, "abonos", 0) or 0), currency_style)
 
         ws.write(
             row_num,
-            14,
+            18,
             mov.get_status_display() if hasattr(mov, "get_status_display") else str(getattr(mov, "status", "") or "")
         )
 
     wb.save(response)
     return response
+
+

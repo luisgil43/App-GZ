@@ -66,6 +66,7 @@ urlpatterns = [
      path('cartola/historial/', views.listar_cartola_historial, name='listar_cartola_historial'),
     path('cartola/enviar-historial/', views.enviar_a_historial, name='enviar_a_historial'),
     path('cartola/historial/devolver/', views.devolver_a_cartola, name='devolver_a_cartola'),
+     path('tipos/<int:pk>/toggle-disponible/', views.toggle_disponible_tipo, name='toggle_disponible_tipo'),
 
 
 ]

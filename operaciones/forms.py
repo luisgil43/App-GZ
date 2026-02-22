@@ -1,6 +1,3 @@
-# servicios/forms.py
-
-
 import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -9,8 +6,9 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.forms import ModelMultipleChoiceField
+from django.utils import timezone
 
-from facturacion.models import CartolaMovimiento
+from facturacion.models import CartolaMovimiento, TipoGasto
 
 from .models import ServicioCotizado, SitioMovil
 
@@ -97,18 +95,20 @@ class AsignarTrabajadoresForm(forms.Form):
         queryset=User.objects.filter(roles__nombre='usuario', is_active=True),
         widget=forms.CheckboxSelectMultiple,
         required=True,
-        label="Selecciona uno o más trabajadores",          # 🔹 antes: "uno o dos"
-        help_text="Debes seleccionar al menos un trabajador.",  # 🔹 opcional
+        label="Selecciona uno o más trabajadores",
+        help_text="Debes seleccionar al menos un trabajador.",
     )
 
     def clean_trabajadores(self):
         trabajadores = self.cleaned_data.get('trabajadores')
-        # 🔹 Solo exigimos mínimo 1, sin límite máximo
         if not trabajadores or trabajadores.count() == 0:
             raise forms.ValidationError(
                 "Debes seleccionar al menos un trabajador."
             )
         return trabajadores
+
+
+
 
 
 class MovimientoUsuarioForm(forms.ModelForm):
@@ -120,7 +120,7 @@ class MovimientoUsuarioForm(forms.ModelForm):
         required=True
     )
 
-    # ✅ NUEVO (DateField)
+    # ✅ Fecha real del gasto
     fecha_transaccion = forms.DateField(
         required=True,
         label="Fecha real del gasto",
@@ -131,12 +131,31 @@ class MovimientoUsuarioForm(forms.ModelForm):
         input_formats=['%Y-%m-%d']
     )
 
+    # ✅ Hora servicio flota (HH:MM)
+    hora_servicio_flota = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(
+            attrs={'type': 'time', 'class': 'w-full border rounded-xl px-3 py-2'},
+            format='%H:%M'
+        ),
+        input_formats=['%H:%M', '%H:%M:%S']
+    )
+
     class Meta:
         model = CartolaMovimiento
         fields = [
-            'fecha_transaccion',  # ✅ nuevo primero
+            'fecha_transaccion',
+
+            # Datos normales de rendición
             'proyecto', 'tipo', 'tipo_doc', 'rut_factura',
-            'numero_doc', 'cargos', 'observaciones', 'comprobante'
+            'numero_doc', 'cargos', 'observaciones', 'comprobante',
+
+            # ✅ Integración flota
+            'vehiculo_flota',
+            'tipo_servicio_flota',
+            'fecha_servicio_flota',
+            'hora_servicio_flota',
+            'kilometraje_servicio_flota',
         ]
         widgets = {
             'proyecto': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
@@ -146,13 +165,107 @@ class MovimientoUsuarioForm(forms.ModelForm):
             'rut_factura': forms.TextInput(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'placeholder': 'Ej: 12.345.678-5'}),
             'observaciones': forms.Textarea(attrs={'class': 'w-full border rounded-xl px-3 py-2', 'rows': 3}),
             'comprobante': forms.ClearableFileInput(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+
+            # ✅ Flota
+            'vehiculo_flota': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'tipo_servicio_flota': forms.Select(attrs={'class': 'w-full border rounded-xl px-3 py-2'}),
+            'fecha_servicio_flota': forms.DateInput(
+                attrs={'type': 'date', 'class': 'w-full border rounded-xl px-3 py-2'},
+                format='%Y-%m-%d'
+            ),
+            'kilometraje_servicio_flota': forms.NumberInput(
+                attrs={'class': 'w-full border rounded-xl px-3 py-2', 'min': '0', 'placeholder': 'Ej: 125000'}
+            ),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Nunca dejes que el propio FileField dispare "required".
-        self.fields['comprobante'].required = False
+        # ✅ Mostrar solo tipos disponibles para declarar
+        # (y excluir abonos del formulario de rendición)
+        if 'tipo' in self.fields:
+            self.fields['tipo'].queryset = (
+                TipoGasto.objects
+                .filter(disponible=True)
+                .exclude(categoria='abono')
+                .order_by('nombre')
+            )
+
+        # Nunca dejar que el propio FileField marque required automáticamente
+        if 'comprobante' in self.fields:
+            self.fields['comprobante'].required = False  # se valida manualmente por foto/archivo
+
+        # ✅ Campos visibles normales (obligatorios)
+        self.fields['proyecto'].required = True
+        self.fields['tipo'].required = True
+        self.fields['fecha_transaccion'].required = True
+        self.fields['rut_factura'].required = True
+        self.fields['tipo_doc'].required = True
+        self.fields['numero_doc'].required = True
+        self.fields['cargos'].required = True
+
+        # ✅ Observaciones NO obligatoria
+        self.fields['observaciones'].required = False
+
+        # --- Campos flota opcionales a nivel field (se exigen en clean si tipo=Servicios) ---
+        if 'vehiculo_flota' in self.fields:
+            self.fields['vehiculo_flota'].required = False
+        if 'tipo_servicio_flota' in self.fields:
+            self.fields['tipo_servicio_flota'].required = False
+        if 'fecha_servicio_flota' in self.fields:
+            self.fields['fecha_servicio_flota'].required = False  # se autocompleta desde fecha_transaccion
+        if 'hora_servicio_flota' in self.fields:
+            self.fields['hora_servicio_flota'].required = False
+        if 'kilometraje_servicio_flota' in self.fields:
+            self.fields['kilometraje_servicio_flota'].required = False
+
+        # ✅ Filtrar vehículos activos según status del modelo Flota (NO is_active)
+        try:
+            self.fields['vehiculo_flota'].queryset = (
+                self.fields['vehiculo_flota'].queryset
+                .select_related('status')
+                .filter(status__name__iexact='Activo')
+                .order_by('patente')
+            )
+        except Exception:
+            pass
+
+        # Ordenar tipos de servicio
+        try:
+            self.fields['tipo_servicio_flota'].queryset = (
+                self.fields['tipo_servicio_flota'].queryset
+                .filter(is_active=True)
+                .order_by('name')
+            )
+        except Exception:
+            try:
+                self.fields['tipo_servicio_flota'].queryset = (
+                    self.fields['tipo_servicio_flota'].queryset.order_by('name')
+                )
+            except Exception:
+                pass
+
+        # ✅ Defaults al crear: hoy + hora actual (solo si no está bound y no es edición)
+        if not self.is_bound and not (self.instance and self.instance.pk):
+            now_local = timezone.localtime()
+            fecha_str = now_local.strftime('%Y-%m-%d')
+            hora_str = now_local.strftime('%H:%M')
+
+            self.initial.setdefault('fecha_transaccion', fecha_str)
+            self.initial.setdefault('hora_servicio_flota', hora_str)
+
+            # Forzar value del input para que el navegador lo muestre
+            self.fields['fecha_transaccion'].widget.attrs['value'] = fecha_str
+            self.fields['hora_servicio_flota'].widget.attrs['value'] = hora_str
+
+        # ✅ Si viene POST (bound), mantener valores ingresados visibles en date/time
+        if self.is_bound:
+            fecha_post = self.data.get(self.add_prefix('fecha_transaccion'))
+            hora_post = self.data.get(self.add_prefix('hora_servicio_flota'))
+            if fecha_post:
+                self.fields['fecha_transaccion'].widget.attrs['value'] = fecha_post
+            if hora_post:
+                self.fields['hora_servicio_flota'].widget.attrs['value'] = hora_post
 
         # Prellenar monto en edición
         if self.instance and self.instance.pk and self.instance.cargos is not None:
@@ -161,15 +274,29 @@ class MovimientoUsuarioForm(forms.ModelForm):
                 .replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-        # ✅ Prellenar fecha_transaccion en edición (YYYY-MM-DD para input date)
+        # Prellenar fecha_transaccion en edición (YYYY-MM-DD para input date)
         if self.instance and self.instance.pk and self.instance.fecha_transaccion:
-            self.initial['fecha_transaccion'] = self.instance.fecha_transaccion.strftime('%Y-%m-%d')
+            fecha_edit = self.instance.fecha_transaccion.strftime('%Y-%m-%d')
+            self.initial['fecha_transaccion'] = fecha_edit
+            self.fields['fecha_transaccion'].widget.attrs['value'] = fecha_edit
+
+        # ✅ Prellenar fecha/hora flota (edición)
+        if self.instance and self.instance.pk:
+            if getattr(self.instance, 'fecha_servicio_flota', None):
+                self.initial['fecha_servicio_flota'] = self.instance.fecha_servicio_flota.strftime('%Y-%m-%d')
+            if getattr(self.instance, 'hora_servicio_flota', None):
+                hora_edit = self.instance.hora_servicio_flota.strftime('%H:%M')
+                self.initial['hora_servicio_flota'] = hora_edit
+                self.fields['hora_servicio_flota'].widget.attrs['value'] = hora_edit
 
     def clean_cargos(self):
         valor = self.cleaned_data.get('cargos', '0')
         valor = str(valor).replace(" ", "").replace(".", "").replace(",", ".")
         try:
-            return Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            value = Decimal(valor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if value <= 0:
+                raise forms.ValidationError("El monto debe ser mayor que 0.")
+            return value
         except InvalidOperation:
             raise forms.ValidationError("Ingrese un monto válido en formato 1.234,56")
 
@@ -177,7 +304,7 @@ class MovimientoUsuarioForm(forms.ModelForm):
         cleaned = super().clean()
 
         # 1) Detectar si ya existía comprobante (edición)
-        has_old = bool(self.instance and self.instance.pk and self.instance.comprobante)
+        has_old = bool(self.instance and self.instance.pk and getattr(self.instance, 'comprobante', None))
 
         # 2) Tomar el comprobante que venga por cualquiera de los inputs
         uploaded = (
@@ -190,17 +317,77 @@ class MovimientoUsuarioForm(forms.ModelForm):
         if uploaded:
             cleaned['comprobante'] = uploaded
 
-        # 4) Reglas de obligatoriedad
+        # 4) Reglas de obligatoriedad del comprobante (✅ obligatorio siempre)
         is_create = not (self.instance and self.instance.pk)
         if (is_create and not uploaded) or (not is_create and not has_old and not uploaded):
             self.add_error('comprobante', "Este campo es obligatorio.")
 
-        # ✅ Requerir fecha real del gasto
-        if not cleaned.get('fecha_transaccion'):
-            self.add_error('fecha_transaccion', "Este campo es obligatorio.")
+        # ==========================================================
+        # ✅ Validaciones de Flota (solo si tipo de rendición = Servicios)
+        # - fecha_servicio_flota NO se pide en UI
+        # - se copia automáticamente desde fecha_transaccion
+        # ==========================================================
+        tipo = cleaned.get('tipo')
+        vehiculo = cleaned.get('vehiculo_flota')
+        tipo_servicio = cleaned.get('tipo_servicio_flota')
+        hora_serv = cleaned.get('hora_servicio_flota')
+        km_serv = cleaned.get('kilometraje_servicio_flota')
+
+        # Detectar "Servicios" por nombre del tipo (robusto)
+        tipo_text = ""
+        try:
+            tipo_text = (
+                getattr(tipo, 'nombre', None)
+                or getattr(tipo, 'name', None)
+                or str(tipo)
+                or ''
+            ).strip().lower()
+        except Exception:
+            tipo_text = str(tipo).strip().lower() if tipo else ""
+
+        # Categoría solo como respaldo (en tu modelo puede ser "costo", "gasto", etc.)
+        categoria_text = ""
+        try:
+            categoria_text = (getattr(tipo, 'categoria', '') or '').strip().lower()
+        except Exception:
+            categoria_text = ""
+
+        # ✅ Regla principal: nombre contiene "servicio"
+        es_servicios = ('servicio' in tipo_text)
+
+        if es_servicios:
+            if not vehiculo:
+                self.add_error('vehiculo_flota', "Selecciona un vehículo.")
+            if not tipo_servicio:
+                self.add_error('tipo_servicio_flota', "Selecciona un tipo de servicio.")
+            if not hora_serv:
+                self.add_error('hora_servicio_flota', "Ingresa la hora del servicio.")
+
+            if km_serv in (None, ''):
+                self.add_error('kilometraje_servicio_flota', "Ingresa el kilometraje del servicio.")
+            else:
+                try:
+                    km_int = int(km_serv)
+                    if km_int < 0:
+                        self.add_error('kilometraje_servicio_flota', "El kilometraje no puede ser negativo.")
+                    else:
+                        cleaned['kilometraje_servicio_flota'] = km_int
+                except Exception:
+                    self.add_error('kilometraje_servicio_flota', "Ingresa un kilometraje válido.")
+
+            # ✅ Tomar fecha del servicio desde fecha real del gasto
+            if cleaned.get('fecha_transaccion'):
+                cleaned['fecha_servicio_flota'] = cleaned.get('fecha_transaccion')
+        else:
+            # Si NO es servicio, limpiar flota para evitar datos basura
+            cleaned['vehiculo_flota'] = None
+            cleaned['tipo_servicio_flota'] = None
+            cleaned['fecha_servicio_flota'] = None
+            cleaned['hora_servicio_flota'] = None
+            cleaned['kilometraje_servicio_flota'] = None
 
         return cleaned
-
+    
 def validar_rut_chileno(rut):
     """Valida el dígito verificador del RUT chileno."""
     if not rut:

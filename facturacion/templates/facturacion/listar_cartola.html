@@ -145,55 +145,68 @@
           <span>Fecha real del gasto</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="3" checked>
+  <input type="checkbox" class="col-toggle" data-col="3" checked>
+  <span>Vehículo</span>
+</label>
+<label class="flex items-center gap-2">
+  <input type="checkbox" class="col-toggle" data-col="4" checked>
+  <span>Hora servicio</span>
+</label>
+<label class="flex items-center gap-2">
+  <input type="checkbox" class="col-toggle" data-col="5" checked>
+  <span>Kilometraje servicio</span>
+</label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="6" checked>
           <span>Proyecto</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <input type="checkbox" class="col-toggle" data-col="7" checked>
           <span>Categoría</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <input type="checkbox" class="col-toggle" data-col="8" checked>
           <span>Tipo</span>
         </label>
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <input type="checkbox" class="col-toggle" data-col="9" checked>
           <span>RUT Factura</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <input type="checkbox" class="col-toggle" data-col="10" checked>
           <span>Tipo de Documento</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="8" checked>
+          <input type="checkbox" class="col-toggle" data-col="11" checked>
           <span>N° Documento</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="9" checked>
+          <input type="checkbox" class="col-toggle" data-col="12" checked>
           <span>Observaciones</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="10" checked>
+          <input type="checkbox" class="col-toggle" data-col="13" checked>
           <span>N° Transferencia</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="11" checked>
+          <input type="checkbox" class="col-toggle" data-col="14" checked>
           <span>Comprobante</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="12" checked>
+          <input type="checkbox" class="col-toggle" data-col="15" checked>
           <span>Cargos</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="13" checked>
+          <input type="checkbox" class="col-toggle" data-col="16" checked>
           <span>Abonos</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="14" checked>
+          <input type="checkbox" class="col-toggle" data-col="17" checked>
           <span>Status</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="15" checked>
+          <input type="checkbox" class="col-toggle" data-col="18" checked>
           <span>Acciones</span>
         </label>
       </div>
@@ -218,93 +231,124 @@
            style="white-space: nowrap;"
            data-columns-table="gz-cartola"
            id="tabla-cartola">
-      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-        <tr>
-          <th class="p-2 border">
-  <input type="checkbox" id="chkAllHistorial">
-</th>
-          
-          <!-- 👉 filtros Excel en TODAS las columnas menos Acciones -->
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Usuario</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Fecha</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Categoría</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>RUT factura</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Tipo de documento</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Número de documento</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>N° Transferencia</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Comprobante</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border text-right" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Cargos</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border text-right" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Abonos</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-          <th class="p-2 border" data-excel-col>
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>Status</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+   <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+  <tr>
+    <th class="p-2 border">
+      <input type="checkbox" id="chkAllHistorial">
+    </th>
 
-          <!-- Sin filtro Excel -->
-          <th class="p-2 border">Acciones</th>
-        </tr>
-      </thead>
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Usuario</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Fecha</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <!-- ✅ NUEVAS -->
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Vehículo</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Hora servicio</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border text-right" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Kilometraje servicio</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Categoría</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>RUT factura</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Tipo de documento</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Número de documento</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>N° Transferencia</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Comprobante</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border text-right" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Cargos</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border text-right" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Abonos</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border" data-excel-col>
+      <button type="button" class="excel-header-btn flex items-center gap-1">
+        <span>Status</span><span class="excel-arrow text-gray-500">▼</span>
+      </button>
+    </th>
+
+    <th class="p-2 border">Acciones</th>
+  </tr>
+</thead>
 
       <tbody class="text-center">
         {% for mov in pagina %}
@@ -328,7 +372,24 @@
               {{ mov.fecha|date:"d-m-Y" }}
             {% endif %}
           </td>
+          <!-- ✅ NUEVOS CAMPOS FLOTA -->
+<td class="p-2 border"
+    data-excel-value="{% if mov.vehiculo_flota %}{{ mov.vehiculo_flota }}{% else %}—{% endif %}">
+  {% if mov.vehiculo_flota %}{{ mov.vehiculo_flota }}{% else %}—{% endif %}
+</td>
 
+<td class="p-2 border"
+    data-excel-value="{% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:'H:i' }}{% else %}—{% endif %}">
+  {% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:"H:i" }}{% else %}—{% endif %}
+</td>
+
+<td class="p-2 border-b border-gray-200 text-right">
+  {% if mov.kilometraje_servicio_flota %}
+    {{ mov.kilometraje_servicio_flota|miles }} KM
+  {% else %}
+    —
+  {% endif %}
+</td>
           <td class="p-2 border">{{ mov.proyecto }}</td>
           <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
           <td class="p-2 border">{{ mov.tipo }}</td>
@@ -496,7 +557,7 @@
         </tr>
         {% empty %}
         <tr data-empty-row="1">
-          <td colspan="15" class="p-4 text-center">No hay movimientos registrados.</td>
+          <td colspan="19" class="p-4 text-center">No hay movimientos registrados.</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -213,20 +213,7 @@
     </ul>
     {% endif %}
 
-{% if two_factor_enforce_date %}
-  <div class="mb-3 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm">
-    {% if two_factor_days_left is not None and two_factor_days_left > 0 %}
-      🔐 <strong>Atención:</strong>
-      A partir del <strong>{{ two_factor_enforce_date|date:"d-m-Y" }}</strong>
-      el segundo factor de autenticación será obligatorio para el personal administrativo.
-      Te quedan <strong>{{ two_factor_days_left }}</strong> días para activarlo.
-    {% else %}
-      🔐 <strong>Importante:</strong>
-      El segundo factor de autenticación ya es obligatorio para el personal administrativo.
-      Si aún no lo has activado, configura tu 2FA en la sección de seguridad.
-    {% endif %}
-  </div>
-{% endif %}
+
 
     <!-- Formulario -->
     <form method="post">

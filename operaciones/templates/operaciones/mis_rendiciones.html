@@ -1,157 +1,228 @@
 {% extends "dashboard/base.html" %}
 {% load humanize %}
 {% load widget_tweaks %}
-
 {% load custom_filters %}
+
 
 {% block title %}Mis Rendiciones{% endblock %}
 
 {% block content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-    <!-- Encabezado -->
- <!-- Encabezado -->
-<div class="flex flex-wrap items-center justify-between mb-4 gap-3">
-  <div class="flex items-center gap-3">
-    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
-      🧾 Mis Rendiciones
-    </h2>
-    <a href="{% url 'operaciones:exportar_mis_rendiciones' %}" 
-       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-      📥 Exportar Excel
-    </a>
+  <!-- Encabezado -->
+  <div class="flex flex-wrap items-center justify-between mb-4 gap-3">
+    <div class="flex items-center gap-3">
+      <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+        🧾 Mis Rendiciones
+      </h2>
+      <a href="{% url 'operaciones:exportar_mis_rendiciones' %}"
+         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+        📥 Exportar Excel
+      </a>
+    </div>
   </div>
-</div>
 
   <!-- Tarjetas de saldos -->
-<div class="mb-6 max-w-6xl mr-auto">
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="mb-6 max-w-6xl mr-auto">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="bg-green-50 p-4 rounded-lg shadow">
-          <h3 class="text-gray-600 text-sm font-medium">Saldo Disponible</h3>
-          <p class="text-2xl font-bold text-green-700">
-              ${{ saldo_disponible|floatformat:0|formato_clp }}
-          </p>
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Disponible</h3>
+        <p class="text-2xl font-bold text-green-700">
+          ${{ saldo_disponible|floatformat:0|formato_clp }}
+        </p>
       </div>
       <div class="bg-yellow-50 p-4 rounded-lg shadow">
-          <h3 class="text-gray-600 text-sm font-medium">Saldo Pendiente de Aprobación</h3>
-          <p class="text-2xl font-bold text-yellow-700">
-              ${{ saldo_pendiente|floatformat:0|formato_clp }}
-          </p>
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Pendiente de Aprobación</h3>
+        <p class="text-2xl font-bold text-yellow-700">
+          ${{ saldo_pendiente|floatformat:0|formato_clp }}
+        </p>
       </div>
       <div class="bg-orange-50 p-4 rounded-lg shadow">
-          <h3 class="text-gray-600 text-sm font-medium">Saldo Rendido</h3>
-          <p class="text-2xl font-bold text-orange-700">
-              ${{ saldo_rendido|floatformat:0|formato_clp }}
-          </p>
+        <h3 class="text-gray-600 text-sm font-medium">Saldo Rendido</h3>
+        <p class="text-2xl font-bold text-orange-700">
+          ${{ saldo_rendido|floatformat:0|formato_clp }}
+        </p>
       </div>
+    </div>
   </div>
-</div>
-
 
   <!-- Formulario nueva rendición -->
-<div class="mb-6 max-w-6xl mr-auto">
-  <h3 class="text-lg font-semibold mb-2">➕ Registrar nueva rendición</h3>
+  <div class="mb-6 max-w-6xl mr-auto">
+    <h3 class="text-lg font-semibold mb-2">➕ Registrar nueva rendición</h3>
 
-  {% if form.errors %}
-  <div class="bg-red-100 text-red-700 p-3 rounded mb-3">
-    <ul>
-      {% for field, errors in form.errors.items %}
-        {% if field != '__all__' %}
-          <li><strong>{{ form|field_label:field }}:</strong> {{ errors|join:", " }}</li>
-        {% endif %}
-      {% endfor %}
-      {% for error in form.non_field_errors %}
-        <li><strong>General:</strong> {{ error }}</li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
+    {% if form.errors %}
+      <div class="bg-red-100 text-red-700 p-3 rounded mb-3">
+        <ul>
+          {% for field, errors in form.errors.items %}
+            {% if field != '__all__' %}
+              <li><strong>{{ form|field_label:field }}:</strong> {{ errors|join:", " }}</li>
+            {% endif %}
+          {% endfor %}
+          {% for error in form.non_field_errors %}
+            <li><strong>General:</strong> {{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
 
-  <form id="form-rendicion" method="post" enctype="multipart/form-data"
-        class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <form id="form-rendicion" method="post" enctype="multipart/form-data"
+          class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {% csrf_token %}
+
+      <!-- 1) Proyecto -->
       <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Proyecto:</label>
-          {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
+        <label class="block text-sm font-medium text-gray-700">Proyecto:</label>
+        {{ form.proyecto|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
+
+      <!-- 2) Tipo rendición -->
       <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Tipo:</label>
-          {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+        <label class="block text-sm font-medium text-gray-700">Tipo rendición:</label>
+        {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
-      <div class="col-span-1">
-  <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
-  {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+
+      <!-- 3) Vehículo asignado -->
+      {% if form.vehiculo_flota %}
+      <div id="wrap-vehiculo-flota" class="col-span-1 hidden">
+        <label class="block text-sm font-medium text-gray-700">Vehículo asignado:</label>
+        {{ form.vehiculo_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+      {% endif %}
+
+      <!-- 4) Tipo de servicio -->
+      {% if form.tipo_servicio_flota %}
+      <div id="wrap-tipo-servicio-flota" class="col-span-1 hidden">
+        <label class="block text-sm font-medium text-gray-700">Tipo de servicio:</label>
+        {{ form.tipo_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+      {% endif %}
+
+      <!-- 5) Hora del servicio -->
+      {% if form.hora_servicio_flota %}
+      <div id="wrap-hora-servicio-flota" class="col-span-1 hidden">
+        <label class="block text-sm font-medium text-gray-700">Hora del servicio:</label>
+        {{ form.hora_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+      {% endif %}
+
+      <!-- 6) Kilometraje -->
+{% if form.kilometraje_servicio_flota %}
+<div id="wrap-km-servicio-flota" class="col-span-1 hidden">
+  <label class="block text-sm font-medium text-gray-700">Kilometraje del servicio:</label>
+  {{ form.kilometraje_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+
+  <small class="text-xs text-gray-500 italic block mt-1">
+    Se valida considerando la fecha real del gasto (permite declaraciones en desfase con nota).
+  </small>
+
+  <small id="km-servicio-live-msg" class="text-xs block mt-1 hidden"></small>
 </div>
+{% endif %}
+
+      <!-- (No se muestra fecha_servicio_flota: se tomará de fecha_transaccion) -->
+      {% if form.fecha_servicio_flota %}
+        <div id="wrap-fecha-servicio-flota" class="hidden">
+          {{ form.fecha_servicio_flota }}
+        </div>
+      {% endif %}
+
+      <!-- 7) Fecha real del gasto -->
+      <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Fecha real del gasto:</label>
+        {{ form.fecha_transaccion|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+
+      <!-- 8) RUT Factura -->
       <div class="col-span-1">
         <label class="block text-sm font-medium text-gray-700">RUT Factura:</label>
         {{ form.rut_factura|add_class:"w-full border rounded-xl px-3 py-2" }}
         <small id="razon_social" class="text-xs text-gray-600 italic"></small>
       </div>
 
+      <!-- 9) Tipo de Documento -->
       <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Tipo de Documento:</label>
-          {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-      <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Número de Documento:</label>
-          {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
+        <label class="block text-sm font-medium text-gray-700">Tipo de Documento:</label>
+        {{ form.tipo_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
 
+      <!-- 10) Número de Documento -->
       <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Monto:</label>
-          {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
-      </div>
-      <div class="col-span-1">
-          <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
-          {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
+        <label class="block text-sm font-medium text-gray-700">Número de Documento:</label>
+        {{ form.numero_doc|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
 
-      <div>
-          <label class="block text-sm font-medium text-gray-700">Comprobante:</label>
-          <div class="flex gap-2">
-              <!-- Botón cámara -->
-              <label class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
-                  📷 Tomar foto
-                  <input type="file" id="comprobante_foto" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
-              </label>
+      <!-- 11) Monto -->
+      <div class="col-span-1">
+        <label class="block text-sm font-medium text-gray-700">Monto:</label>
+        {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
 
-              <!-- Botón archivo -->
-              <label class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
-                  📄 Subir archivo
-                  <input type="file" id="comprobante_archivo" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
-              </label>
-          </div>
-          <!-- Nombre del archivo -->
-          <span id="nombre_comprobante" class="text-sm text-gray-600 italic mt-1 block"></span>
-          <!-- Vista previa (solo imágenes) -->
-          <img id="preview_comprobante" class="mt-2 max-h-40 rounded shadow hidden">
+      {# Nota de diferencia: si aún no existe en el form/modelo, puedes dejarla temporal en observaciones #}
+      <div id="wrap-nota-diferencia" class="col-span-1 sm:col-span-2 hidden">
+        <label class="block text-sm font-medium text-amber-700">Nota de diferencia (si aplica):</label>
+        <textarea id="nota_diferencia_tmp" name="nota_diferencia_tmp"
+                  class="w-full border rounded-xl px-3 py-2"
+                  rows="2"
+                  placeholder="Ej: Declaración en desfase. El cambio de aceite se realizó después, pero corresponde a kilometraje menor por orden cronológico del día."></textarea>
+        <small class="text-xs text-amber-700 italic">
+          Mostrar solo cuando exista diferencia de kilometraje por desfase.
+        </small>
+      </div>
+
+      <!-- 12) Observaciones -->
+      <div class="col-span-1 sm:col-span-2">
+        <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
+        {{ form.observaciones|add_class:"w-full border rounded-xl px-3 py-2" }}
       </div>
 
       <div class="col-span-1 sm:col-span-2">
-          <button type="submit" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow">
-              Guardar Rendición
-          </button>
-      </div>
-  </form>
-</div>
+        <label class="block text-sm font-medium text-gray-700">Comprobante:</label>
+        <div class="flex flex-wrap gap-2">
+          <!-- Botón cámara -->
+          <label class="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+            📷 Tomar foto
+            <input type="file" id="comprobante_foto" name="comprobante_foto" accept="image/*" capture="environment" class="hidden" />
+          </label>
 
-<div class="flex justify-start mb-2">
+          <!-- Botón archivo -->
+          <label class="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full shadow cursor-pointer">
+            📄 Subir archivo
+            <input type="file" id="comprobante_archivo" name="comprobante_archivo" accept="application/pdf,image/*" class="hidden" />
+          </label>
+        </div>
+
+        <span id="nombre_comprobante" class="text-sm text-gray-600 italic mt-1 block"></span>
+        <img id="preview_comprobante" class="mt-2 max-h-40 rounded shadow hidden">
+      </div>
+
+      <div class="col-span-1 sm:col-span-2">
+  <button
+    id="btn-guardar-rendicion"
+    type="submit"
+    class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full shadow disabled:opacity-60 disabled:cursor-not-allowed"
+    data-default-text="Guardar Rendición"
+    data-loading-text="⏳ Guardando rendición..."
+  >
+    Guardar Rendición
+  </button>
+</div>
+    </form>
+  </div>
+
+  <div class="flex justify-start mb-2">
   <details class="relative">
     <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
       ⚙️ Columnas
     </summary>
 
-    <!-- IMPORTANTE: mismo id que usa el script -->
-    <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
+    <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
       <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
-      <!-- Master checkbox -->
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
         <input type="checkbox" id="col-toggle-all" checked>
         <span class="font-semibold text-xs">Mostrar todas</span>
       </label>
 
-      <!-- Una línea por columna (0-based) -->
       <div class="space-y-1 text-sm">
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="0" checked>
@@ -169,40 +240,64 @@
           <input type="checkbox" class="col-toggle" data-col="3" checked>
           <span>Tipo</span>
         </label>
+
+        <!-- ✅ NUEVAS de flota -->
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="4" checked>
-          <span>RUT Factura</span>
+          <span>Vehículo (Flota)</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="5" checked>
-          <span>Tipo de Documento</span>
+          <span>Tipo Servicio (Flota)</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="6" checked>
-          <span>Número de Documento</span>
+          <span>Fecha/Hora Servicio</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="7" checked>
-          <span>Gastos</span>
+          <span>KM Servicio</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="8" checked>
-          <span>Abonos</span>
+          <span>Servicio Flota</span>
         </label>
+
+        <!-- Resto -->
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>Observaciones</span>
+          <span>RUT Factura</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="10" checked>
-          <span>Comprobante</span>
+          <span>Tipo de Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="11" checked>
-          <span>Status</span>
+          <span>Número de Documento</span>
         </label>
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="12" checked>
+          <span>Gastos</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="13" checked>
+          <span>Abonos</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="14" checked>
+          <span>Observaciones</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="15" checked>
+          <span>Comprobante</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="16" checked>
+          <span>Status</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="17" checked>
           <span>Acciones</span>
         </label>
       </div>
@@ -211,431 +306,701 @@
 </div>
 
 
-<!-- Tabla responsive con scroll horizontal -->
-<!-- Tabla responsive con scroll horizontal -->
-<div class="overflow-x-auto">
-  <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
-    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-      <tr>
-        <!--<th class="p-2 border-b border-gray-200">Nombre</th>-->
-        <th class="p-2 border-b border-gray-200">Fecha</th>
-        <th class="p-2 border-b border-gray-200">Fecha real del gasto</th>
-        <th class="p-2 border-b border-gray-200">Proyecto</th>
-        <th class="p-2 border-b border-gray-200">Tipo</th>
-        <th class="p-2 border-b border-gray-200">RUT factura</th>
-        <th class="p-2 border-b border-gray-200">Tipo de documento</th>
-        <th class="p-2 border-b border-gray-200">Número de documento</th>
-        <th class="p-2 border-b border-gray-200 text-right">Gastos</th>
-        <th class="p-2 border-b border-gray-200 text-right">Abonos</th>
-        <th class="p-2 border-b border-gray-200">Observaciones</th>
-        <th class="p-2 border-b border-gray-200">Comprobante</th>
-        <th class="p-2 border-b border-gray-200">Status</th>
-        <th class="p-2 border-b border-gray-200">Acciones</th>
-      </tr>
-    </thead>
-    <tbody class="text-center">
-      {% for mov in pagina %}
-      <tr class="align-top">
-        <!--<td class="p-2 border-b border-gray-200">{{ mov.usuario.get_full_name }}</td>-->
-        <td class="p-2 border-b border-gray-200">{{ mov.fecha|date:"d-m-Y" }}</td>
-          <td class="p-2 border-b border-gray-200">
-  {% if mov.fecha_transaccion %}
-    {{ mov.fecha_transaccion|date:"d-m-Y" }}
+
+  <!-- Tabla responsive -->
+  <div class="overflow-x-auto">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;" data-columns-table="mis-rendiciones">
+     <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+  <tr>
+    <th class="p-2 border-b border-gray-200">Fecha</th>
+    <th class="p-2 border-b border-gray-200">Fecha real del gasto</th>
+    <th class="p-2 border-b border-gray-200">Proyecto</th>
+    <th class="p-2 border-b border-gray-200">Tipo</th>
+
+    <!-- ✅ NUEVAS columnas flota -->
+    <th class="p-2 border-b border-gray-200">Vehículo (Flota)</th>
+    <th class="p-2 border-b border-gray-200">Tipo Servicio (Flota)</th>
+    <th class="p-2 border-b border-gray-200">Fecha/Hora Servicio</th>
+    <th class="p-2 border-b border-gray-200 text-right">KM Servicio</th>
+    <th class="p-2 border-b border-gray-200">Servicio Flota</th>
+
+    <th class="p-2 border-b border-gray-200">RUT factura</th>
+    <th class="p-2 border-b border-gray-200">Tipo de documento</th>
+    <th class="p-2 border-b border-gray-200">Número de documento</th>
+    <th class="p-2 border-b border-gray-200 text-right">Gastos</th>
+    <th class="p-2 border-b border-gray-200 text-right">Abonos</th>
+
+    <th class="p-2 border-b border-gray-200">Observaciones</th>
+    <th class="p-2 border-b border-gray-200">Comprobante</th>
+    <th class="p-2 border-b border-gray-200">Status</th>
+    <th class="p-2 border-b border-gray-200">Acciones</th>
+  </tr>
+</thead>
+
+      <tbody class="text-center">
+        {% for mov in pagina %}
+          <tr class="align-top">
+            <td class="p-2 border-b border-gray-200">{{ mov.fecha|date:"d-m-Y" }}</td>
+
+            <td class="p-2 border-b border-gray-200">
+              {% if mov.fecha_transaccion %}
+                {{ mov.fecha_transaccion|date:"d-m-Y" }}
+              {% else %}
+                {{ mov.fecha|date:"d-m-Y" }}
+              {% endif %}
+            </td>
+
+            <td class="p-2 border-b border-gray-200">{{ mov.proyecto }}</td>
+            <td class="p-2 border-b border-gray-200">{{ mov.tipo }}</td>
+            <td class="p-2 border-b border-gray-200">
+  {% if mov.vehiculo_flota %}
+    {{ mov.vehiculo_flota.patente }}{% if mov.vehiculo_flota.marca %} · {{ mov.vehiculo_flota.marca }} {{ mov.vehiculo_flota.modelo }}{% endif %}
   {% else %}
-    {{ mov.fecha|date:"d-m-Y" }}
+    —
   {% endif %}
 </td>
-        <td class="p-2 border-b border-gray-200">{{ mov.proyecto }}</td>
-        <td class="p-2 border-b border-gray-200">{{ mov.tipo }}</td>
-        <td class="p-2 border-b border-gray-200">{{ mov.rut_factura|default:"—" }}</td>
-        <td class="p-2 border-b border-gray-200">{{ mov.tipo_doc|default:"—" }}</td>
-        <td class="p-2 border-b border-gray-200">{{ mov.numero_doc|default:"—" }}</td>
-        <td class="p-2 border-b border-gray-200 text-right">
-          ${{ mov.cargos|default:0|floatformat:0|formato_clp }}
-        </td>
-        <td class="p-2 border-b border-gray-200 text-right">
-          ${{ mov.abonos|default:0|floatformat:0|formato_clp }}
-        </td>
-        <td class="p-2 border-b border-gray-200">{{ mov.observaciones }}</td>
-        <td class="p-2 border-b border-gray-200">
-          {% if mov.comprobante %}
-            <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
-          {% else %} — {% endif %}
-        </td>
 
-        <td class="p-2 border-b border-gray-200 text-sm">
-          <div class="flex flex-col gap-1 text-left leading-tight">
-            {% if mov.status == 'pendiente_supervisor' %}
-              <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Supervisor
-              </span>
-            {% elif mov.status == 'aprobado_supervisor' %}
-              <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ⏳ Pendiente aprobación del PM
-              </span>
-            {% elif mov.status == 'rechazado_supervisor' %}
-              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Supervisor
-              </span>
-            {% elif mov.status == 'aprobado_pm' %}
-              <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ⏳ Pendiente aprobación de Finanzas
-              </span>
-            {% elif mov.status == 'rechazado_pm' %}
-              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por PM
-              </span>
-            {% elif mov.status == 'aprobado_finanzas' %}
-              <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
-                ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
-                ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
-              </span>
-            {% elif mov.status == 'rechazado_finanzas' %}
-              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Rechazado por Finanzas
-              </span>
-            {% elif mov.status == 'pendiente_abono_usuario' %}
-              <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
-                ⏳ Pendiente aprobación del Usuario
-              </span>
-            {% elif mov.status == 'aprobado_abono_usuario' %}
-              <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                ✅ Abono aprobado por Usuario
-              </span>
-            {% elif mov.status == 'rechazado_abono_usuario' %}
-              <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
-                ❌ Abono rechazado por Usuario
-              </span>
-            {% else %}
-              {{ mov.get_status_display }}
-            {% endif %}
+<td class="p-2 border-b border-gray-200">
+  {{ mov.tipo_servicio_flota_nombre|default:"—" }}
+</td>
 
-            {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
-              <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
-                   style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
-                <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+<td class="p-2 border-b border-gray-200">
+  {% if mov.fecha_servicio_flota %}
+    {{ mov.fecha_servicio_flota|date:"d-m-Y" }}
+   {% if mov.hora_servicio_flota %}
+  <br><span class="text-xs text-gray-500">{{ mov.hora_servicio_flota|time:"h:i a" }}</span>
+{% endif %}
+  {% else %}
+    —
+  {% endif %}
+</td>
+
+<td class="p-2 border-b border-gray-200 text-right">
+  {% if mov.kilometraje_servicio_flota %}
+    {{ mov.kilometraje_servicio_flota|miles }} KM
+  {% else %}
+    —
+  {% endif %}
+</td>
+
+<td class="p-2 border-b border-gray-200">
+  {% if mov.servicio_flota %}
+    #{{ mov.servicio_flota.service_code|default:mov.servicio_flota.id }}
+  {% else %}
+    —
+  {% endif %}
+</td>
+            <td class="p-2 border-b border-gray-200">{{ mov.rut_factura|default:"—" }}</td>
+            <td class="p-2 border-b border-gray-200">{{ mov.tipo_doc|default:"—" }}</td>
+            <td class="p-2 border-b border-gray-200">{{ mov.numero_doc|default:"—" }}</td>
+
+            <td class="p-2 border-b border-gray-200 text-right">
+              ${{ mov.cargos|default:0|floatformat:0|formato_clp }}
+            </td>
+            <td class="p-2 border-b border-gray-200 text-right">
+              ${{ mov.abonos|default:0|floatformat:0|formato_clp }}
+            </td>
+
+            <td class="p-2 border-b border-gray-200">{{ mov.observaciones|default:"—" }}</td>
+
+            <td class="p-2 border-b border-gray-200">
+              {% if mov.comprobante %}
+                <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2 border-b border-gray-200 text-sm">
+              <div class="flex flex-col gap-1 text-left leading-tight">
+                {% if mov.status == 'pendiente_supervisor' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ⏳ Pendiente aprobación del Supervisor
+                  </span>
+
+                  {% if mov.kilometraje is not None %}
+                  <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium text-xs">
+                    🚗 KM registrado (pendiente de aprobación financiera)
+                  </span>
+                  {% endif %}
+
+                {% elif mov.status == 'aprobado_supervisor' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ⏳ Pendiente aprobación del PM
+                  </span>
+
+                {% elif mov.status == 'rechazado_supervisor' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por Supervisor
+                  </span>
+
+                {% elif mov.status == 'aprobado_pm' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                    ⏳ Pendiente aprobación de Finanzas
+                  </span>
+
+                {% elif mov.status == 'rechazado_pm' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por PM
+                  </span>
+
+                {% elif mov.status == 'aprobado_finanzas' %}
+                  <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Supervisor: {{ mov.aprobado_por_supervisor.get_full_name }} <br>
+                    ✅ PM: {{ mov.aprobado_por_pm.get_full_name }} <br>
+                    ✅ Finanzas: {{ mov.aprobado_por_finanzas.get_full_name }}
+                  </span>
+
+                  {% if mov.kilometraje is not None %}
+                  <span class="inline-block bg-green-50 text-green-800 px-2 py-1 rounded-full font-medium text-xs">
+                    🚗 KM confirmado
+                  </span>
+                  {% endif %}
+
+                {% elif mov.status == 'rechazado_finanzas' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Rechazado por Finanzas
+                  </span>
+
+                {% elif mov.status == 'pendiente_abono_usuario' %}
+                  <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
+                    ⏳ Pendiente aprobación del Usuario
+                  </span>
+
+                {% elif mov.status == 'aprobado_abono_usuario' %}
+                  <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
+                    ✅ Abono aprobado por Usuario
+                  </span>
+
+                {% elif mov.status == 'rechazado_abono_usuario' %}
+                  <span class="inline-block bg-red-100 text-red-800 px-2 py-1 rounded-full font-medium">
+                    ❌ Abono rechazado por Usuario
+                  </span>
+
+                {% else %}
+                  {{ mov.get_status_display }}
+                {% endif %}
+
+                {% if 'rechazado' in mov.status and mov.motivo_rechazo %}
+                  <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo"
+                       style="word-wrap: break-word; overflow-wrap: break-word; white-space: pre-wrap; max-width: 100%;">
+                    <strong>Motivo:</strong> <span class="motivo-text">{{ mov.motivo_rechazo }}</span>
+                  </div>
+                {% endif %}
               </div>
-            {% endif %}
-          </div>
-        </td>
+            </td>
 
-        <!-- Acciones -->
-        <td class="p-2 border-b border-gray-200 text-center">
-          {% if mov.tipo.categoria == "abono" %}
-            {% if mov.status == "pendiente_abono_usuario" %}
-              <a href="{% url 'operaciones:aprobar_abono' mov.id %}"
-                 class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
-                ✅ Aprobar
-              </a>
-              <button onclick="abrirModalRechazo({{ mov.id }})"
-                      class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                ❌ Rechazar
-              </button>
-            {% endif %}
-          {% else %}
-            {% if mov.status == 'pendiente_supervisor' or mov.status == 'rechazado_supervisor' or mov.status == 'rechazado_pm' or mov.status == 'rechazado_finanzas' %}
-              <a href="{% url 'operaciones:editar_rendicion' mov.id %}"
-                 class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200">
-                ✏️ Editar
-              </a>
-              <a href="{% url 'operaciones:eliminar_rendicion' mov.id %}"
-                 class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
-                🗑️ Eliminar
-              </a>
-            {% endif %}
-          {% endif %}
-        </td>
-      </tr>
-      {% empty %}
-      <tr>
-        <td colspan="13" class="p-4 border-b border-gray-200 text-center text-gray-500">
-          No tienes rendiciones registradas.
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+            <!-- Acciones -->
+            <td class="p-2 border-b border-gray-200 text-center">
+              {% if mov.tipo.categoria == "abono" %}
+                {% if mov.status == "pendiente_abono_usuario" %}
+                  <a href="{% url 'operaciones:aprobar_abono' mov.id %}"
+                     class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-green-200">
+                    ✅ Aprobar
+                  </a>
+                  <button onclick="abrirModalRechazo({{ mov.id }})"
+                          class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    ❌ Rechazar
+                  </button>
+                {% endif %}
+              {% else %}
+                {% if mov.status == 'pendiente_supervisor' or mov.status == 'rechazado_supervisor' or mov.status == 'rechazado_pm' or mov.status == 'rechazado_finanzas' %}
+                  <a href="{% url 'operaciones:editar_rendicion' mov.id %}"
+                     class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-200">
+                    ✏️ Editar
+                  </a>
+                  <a href="{% url 'operaciones:eliminar_rendicion' mov.id %}"
+                     class="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-red-200">
+                    🗑️ Eliminar
+                  </a>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="18" class="p-4 border-b border-gray-200 text-center text-gray-500">
+              No tienes rendiciones registradas.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-    <!-- Modal -->
-    <div id="modalRechazo" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
-      <div class="bg-white p-6 rounded-lg shadow-lg w-96">
-        <h2 class="text-lg font-bold mb-4">Rechazar Abono</h2>
-        <form id="formRechazo" method="post">
-          {% csrf_token %}
-          <textarea name="motivo" rows="3" class="w-full border rounded-lg p-2" placeholder="Ingrese el motivo del rechazo"></textarea>
-          <div class="mt-4 flex justify-end gap-2">
-            <button type="button" onclick="cerrarModalRechazo()" class="px-3 py-1 bg-gray-200 rounded">Cancelar</button>
-            <button type="submit" class="px-3 py-1 bg-red-600 text-white rounded">Rechazar</button>
-          </div>
-        </form>
-      </div>
+  <!-- Modal rechazo abono -->
+  <div id="modalRechazo" class="hidden fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-96">
+      <h2 class="text-lg font-bold mb-4">Rechazar Abono</h2>
+      <form id="formRechazo" method="post">
+        {% csrf_token %}
+        <textarea name="motivo" rows="3" class="w-full border rounded-lg p-2" placeholder="Ingrese el motivo del rechazo"></textarea>
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button" onclick="cerrarModalRechazo()" class="px-3 py-1 bg-gray-200 rounded">Cancelar</button>
+          <button type="submit" class="px-3 py-1 bg-red-600 text-white rounded">Rechazar</button>
+        </div>
+      </form>
     </div>
+  </div>
+
+  <!-- Paginación -->
+  <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
+    <form method="get" class="flex items-center gap-2">
+      <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+      <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+        <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+        <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+        <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
+        <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
+        <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+      </select>
+    </form>
+  </div>
+
+  <div class="mt-2 flex justify-center text-sm">
+    <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+  </div>
+
+  <div class="mt-2 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+      <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    {% endif %}
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    {% endif %}
+  </div>
+</div>
 
 <script>
 function abrirModalRechazo(id) {
-    document.getElementById('formRechazo').action = `/operaciones/rechazar_abono/${id}/`;
-    document.getElementById('modalRechazo').classList.remove('hidden');
+  document.getElementById('formRechazo').action = `/operaciones/rechazar_abono/${id}/`;
+  document.getElementById('modalRechazo').classList.remove('hidden');
 }
 function cerrarModalRechazo() {
-    document.getElementById('modalRechazo').classList.add('hidden');
+  document.getElementById('modalRechazo').classList.add('hidden');
 }
 </script>
 
-    <!-- Paginación -->
-    <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
-        <form method="get" class="flex items-center gap-2">
-            <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-            <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
-    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-</select>
-        </form>
-    </div>
-
-   <div class="mt-2 flex justify-center text-sm">
-    <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-</div>
-
-    <div class="mt-2 flex justify-center gap-2 text-sm">
-        {% if pagina.has_previous %}
-            <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-            <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-        {% endif %}
-        {% if pagina.has_next %}
-            <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-            <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-        {% endif %}
-    </div>
-</div>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const archivoInput = document.getElementById("comprobante_archivo");
-    const fotoInput = document.getElementById("comprobante_foto");
-    const nombreSpan = document.getElementById("nombre_comprobante");
-    const preview = document.getElementById("preview_comprobante");
+  const archivoInput = document.getElementById("comprobante_archivo");
+  const fotoInput = document.getElementById("comprobante_foto");
+  const nombreSpan = document.getElementById("nombre_comprobante");
+  const preview = document.getElementById("preview_comprobante");
 
-    function mostrarArchivo(input) {
-        if (input.files.length > 0) {
-            const archivo = input.files[0];
-            nombreSpan.textContent = "Archivo seleccionado: " + archivo.name;
+  function mostrarArchivo(input) {
+    if (input.files.length > 0) {
+      const archivo = input.files[0];
+      nombreSpan.textContent = "Archivo seleccionado: " + archivo.name;
 
-            if (archivo.type.startsWith("image/")) {
-                const reader = new FileReader();
-                reader.onload = function (e) {
-                    preview.src = e.target.result;
-                    preview.classList.remove("hidden");
-                };
-                reader.readAsDataURL(archivo);
-            } else {
-                preview.classList.add("hidden");
-                preview.src = "";
-            }
-        } else {
-            nombreSpan.textContent = "";
-            preview.classList.add("hidden");
-            preview.src = "";
-        }
+      if (archivo.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          preview.src = e.target.result;
+          preview.classList.remove("hidden");
+        };
+        reader.readAsDataURL(archivo);
+      } else {
+        preview.classList.add("hidden");
+        preview.src = "";
+      }
+    } else {
+      nombreSpan.textContent = "";
+      preview.classList.add("hidden");
+      preview.src = "";
     }
+  }
 
+  if (archivoInput) {
     archivoInput.addEventListener("change", function () {
-        mostrarArchivo(this);
+      mostrarArchivo(this);
     });
+  }
 
+  if (fotoInput) {
     fotoInput.addEventListener("change", function () {
-        mostrarArchivo(this);
+      mostrarArchivo(this);
     });
+  }
 });
 </script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const rutInput = document.getElementById("id_rut_factura");
-    if (rutInput) {
-        rutInput.addEventListener("input", function () {
-            let v = this.value.replace(/\./g, '').replace(/-/g, '').replace(/\s/g, '');
-            if (v.length > 1) {
-                this.value = v.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + '-' + v.slice(-1);
-            }
-        });
-    }
-});
-</script>
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    const form = document.getElementById("form-rendicion");  // formulario de nueva rendición
-    if (!form) return;
-
-    const tipoDoc = document.getElementById("id_tipo_doc");
-    const rutInput = document.getElementById("id_rut_factura");
-    const razonSocial = document.getElementById("razon_social");
-    const submitBtn = form.querySelector('button[type="submit"]');
-
-    // Flag global para este formulario
-    let isSubmitting = false;
-
-    // Cerrar el grifo ya desde el click del botón
-    if (submitBtn) {
-        submitBtn.addEventListener("click", function (e) {
-            if (isSubmitting) {
-                e.preventDefault();
-                e.stopPropagation();
-                return false;
-            }
-        });
-    }
-
-    form.addEventListener("submit", function (e) {
-        // Si ya estamos enviando, bloqueamos cualquier submit extra
-        if (isSubmitting) {
-            e.preventDefault();
-            return false;
-        }
-
-        const tipo = (tipoDoc?.value || "").toLowerCase();
-        const rut = (rutInput?.value || "").trim();
-
-        // Marcamos inmediatamente como enviando y bloqueamos el botón
-        isSubmitting = true;
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.textContent = (tipo === "factura") ? "Validando..." : "Guardando...";
-            submitBtn.classList.add("opacity-60", "cursor-not-allowed");
-        }
-
-        // ---- CASO 1: NO ES FACTURA -> envío normal (solo se desactiva el botón) ----
-        if (tipo !== "factura") {
-            // No hacemos preventDefault: dejamos que el navegador envíe el form.
-            // El botón ya queda desactivado mientras sube el comprobante.
-            return true;
-        }
-
-        // ---- CASO 2: ES FACTURA -> validamos RUT por AJAX antes de enviar ----
-        e.preventDefault();
-
-        if (razonSocial) {
-            razonSocial.textContent = "Validando RUT...";
-            razonSocial.classList.remove("text-green-600", "text-red-600");
-            razonSocial.classList.add("text-gray-600");
-        }
-
-        fetch("{% url 'operaciones:validar_rut_ajax' %}", {
-            method: "POST",
-            headers: {
-                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
-                "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: new URLSearchParams({rut: rut})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (!data.ok) {
-                if (razonSocial) {
-                    razonSocial.textContent = data.error;
-                    razonSocial.classList.remove("text-green-600");
-                    razonSocial.classList.add("text-red-600");
-                }
-
-                // Rehabilitar porque hubo error en validación
-                isSubmitting = false;
-                if (submitBtn) {
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = "Guardar Rendición";
-                    submitBtn.classList.remove("opacity-60", "cursor-not-allowed");
-                }
-            } else {
-                if (razonSocial) {
-                    const msg = data.razon_social || data.mensaje || "";
-                    razonSocial.textContent = "✔ " + msg;
-                    razonSocial.classList.remove("text-red-600", "text-gray-600");
-                    razonSocial.classList.add("text-green-600");
-                }
-                // Envío definitivo (no dispara de nuevo el listener)
-                form.submit();
-            }
-        })
-        .catch(err => {
-            console.error(err);
-            if (razonSocial) {
-                razonSocial.textContent = "Error validando el RUT en el SII.";
-                razonSocial.classList.remove("text-green-600");
-                razonSocial.classList.add("text-red-600");
-            }
-            // Rehabilitar en caso de error de red
-            isSubmitting = false;
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = "Guardar Rendición";
-                submitBtn.classList.remove("opacity-60", "cursor-not-allowed");
-            }
-        });
+  const rutInput = document.getElementById("id_rut_factura");
+  if (rutInput) {
+    rutInput.addEventListener("input", function () {
+      let v = this.value.replace(/\./g, '').replace(/-/g, '').replace(/\s/g, '');
+      if (v.length > 1) {
+        this.value = v.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, ".") + '-' + v.slice(-1);
+      }
     });
+  }
 });
 </script>
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const rutInput = document.getElementById("id_rut_factura");
-    const tipoDoc = document.getElementById("id_tipo_doc");
-    const razonSocial = document.getElementById("razon_social");
+  const form = document.getElementById("form-rendicion");
+  if (!form) return;
 
-    function validarRutLive() {
-        const tipo = tipoDoc.value;
-        const rut = rutInput.value.trim();
+  const tipoSelect = document.getElementById("id_tipo");
+  const vehiculoInput = document.getElementById("id_vehiculo_flota");
+  const fechaInput = document.getElementById("id_fecha_transaccion"); // fecha real del gasto = fecha servicio
+  const horaInput = document.getElementById("id_hora_servicio_flota");
+  const kmInput = document.getElementById("id_kilometraje_servicio_flota");
+  const msgEl = document.getElementById("km-servicio-live-msg");
+  const submitBtn = form.querySelector('button[type="submit"]');
 
-        if (tipo.toLowerCase() !== "factura" || rut.length < 7) {
-            razonSocial.textContent = "";
-            return;
-        }
+  if (!vehiculoInput || !fechaInput || !horaInput || !kmInput || !msgEl) return;
 
-        razonSocial.textContent = "Validando RUT...";
-        razonSocial.classList.remove("text-green-600", "text-red-600");
-        razonSocial.classList.add("text-gray-600");
+  let kmFlotaValido = true;
+  let timer = null;
+  let reqSeq = 0;
 
-        fetch("{% url 'operaciones:validar_rut_ajax' %}", {
-            method: "POST",
-            headers: {
-                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
-                "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: new URLSearchParams({rut: rut})
-        })
-        .then(response => response.json())
-.then(data => {
-    if (!data.ok) {
+  function esServicios() {
+    if (!tipoSelect) return false;
+    const txt = (tipoSelect.options[tipoSelect.selectedIndex]?.text || "").toLowerCase().trim();
+    const val = (tipoSelect.value || "").toLowerCase().trim();
+    return txt.includes("servicio") || val.includes("servicio");
+  }
+
+  function setMsg(text, type, allowHtml = false) {
+  msgEl.classList.remove("hidden", "text-red-600", "text-green-600", "text-gray-600", "text-amber-700");
+
+  if (!text) {
+    msgEl.classList.add("hidden");
+    msgEl.innerHTML = "";
+    return;
+  }
+
+  if (allowHtml) {
+    msgEl.innerHTML = text;
+  } else {
+    msgEl.textContent = text;
+  }
+
+  msgEl.classList.add(
+    type === "error" ? "text-red-600" :
+    type === "ok" ? "text-green-600" :
+    type === "warn" ? "text-amber-700" : "text-gray-600"
+  );
+}
+
+  function setKmInputState(ok) {
+    kmFlotaValido = !!ok;
+    kmInput.classList.remove("border-red-500", "ring-1", "ring-red-300", "border-green-500", "ring-green-300");
+
+    if (kmInput.value.trim() === "") {
+      if (submitBtn) submitBtn.disabled = false;
+      return;
+    }
+
+    if (ok) {
+      kmInput.classList.add("border-green-500");
+      if (submitBtn) submitBtn.disabled = false;
+    } else {
+      kmInput.classList.add("border-red-500", "ring-1", "ring-red-300");
+      if (submitBtn) submitBtn.disabled = true;
+    }
+  }
+
+  function validarKmFlotaLive() {
+    if (!esServicios()) {
+      setMsg("", "");
+      setKmInputState(true);
+      return;
+    }
+
+    const vehiculoId = (vehiculoInput.value || "").trim();
+    const fecha = (fechaInput.value || "").trim();
+    const hora = (horaInput.value || "").trim();
+    const km = (kmInput.value || "").trim();
+
+    // Si faltan datos, no bloquear aún
+    if (!vehiculoId) {
+      setMsg("", "");
+      setKmInputState(true);
+      return;
+    }
+
+    // Mostrar referencia del último incluso si faltan fecha/hora/km
+    const params = new URLSearchParams({
+      vehiculo_id: vehiculoId,
+      fecha: fecha,
+      hora: hora,
+      km: km
+    });
+
+    const currentReq = ++reqSeq;
+
+    fetch("{% url 'operaciones:validar_km_servicio_flota_ajax' %}?" + params.toString(), {
+      method: "GET",
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+    .then(r => r.json())
+    .then(data => {
+      // Evitar respuestas viejas
+      if (currentReq !== reqSeq) return;
+if (!data.ok) {
+  // Intentar construir link a la rendición anterior (si backend envía el id)
+  const movAnteriorId = data?.ultimo?.mov_id || data?.ultimo?.id || null;
+
+  // Ajusta esta ruta si tu URL real de editar es distinta
+const editAnteriorUrl = movAnteriorId
+  ? `/operaciones/mis-rendiciones/editar/${movAnteriorId}/`
+  : null;
+
+  let htmlMsg = `
+    ${data.msg || "Error validando kilometraje."}<br>
+    <span class="font-medium">
+      Verifica los datos ingresados (fecha, hora y kilometraje). Revisa si la hora está correcta o edita la rendición anterior.
+    </span>
+  `;
+
+  if (editAnteriorUrl) {
+    htmlMsg += `<br><a href="${editAnteriorUrl}" class="underline">Presiona aquí para editar la rendición anterior</a>.`;
+  }
+
+  setMsg(htmlMsg, "error", true);
+  setKmInputState(false);
+  return;
+}
+
+      // Mensaje de referencia del último registro
+      let refTxt = "";
+      if (data.ultimo) {
+        refTxt = `Último registrado: ${Number(data.ultimo.km).toLocaleString('es-CL')} km · ${data.ultimo.fecha} ${data.ultimo.hora}`;
+      }
+
+  if (data.skip) {
+  if (refTxt) {
+    setMsg(refTxt, "ok"); // ✅ verde siempre
+  } else {
+    setMsg("Completa vehículo, fecha, hora y km para validar.", "gray");
+  }
+  setKmInputState(true);
+  return;
+}
+
+      if (data.ok && data.msg) {
+        // Caso backend devuelve ok=true con msg informativo (no usado ahora)
+        setMsg((refTxt ? refTxt + " · " : "") + data.msg, "ok");
+        setKmInputState(true);
+        return;
+      }
+
+      // ok real
+      setMsg(refTxt || "Kilometraje válido.", "ok");
+      setKmInputState(true);
+    })
+    .catch(() => {
+      if (currentReq !== reqSeq) return;
+      setMsg("No se pudo validar el kilometraje en este momento.", "warn");
+      // no bloqueamos por error de red
+      setKmInputState(true);
+    });
+  }
+
+  function scheduleValidate() {
+    clearTimeout(timer);
+    timer = setTimeout(validarKmFlotaLive, 250);
+  }
+
+  // Validar mientras escribe
+  kmInput.addEventListener("input", scheduleValidate);
+
+  // Revalidar si cambia contexto
+  vehiculoInput.addEventListener("change", scheduleValidate);
+  fechaInput.addEventListener("change", scheduleValidate);
+  horaInput.addEventListener("change", scheduleValidate);
+  if (tipoSelect) tipoSelect.addEventListener("change", scheduleValidate);
+
+  // Bloqueo extra al enviar
+  form.addEventListener("submit", function (e) {
+    if (!esServicios()) return true;
+
+    if (!kmFlotaValido) {
+      e.preventDefault();
+      setMsg("Corrige el kilometraje antes de guardar.", "error");
+      kmInput.focus();
+      return false;
+    }
+
+    // Si hay km pero faltó validar por timing, forzamos una validación rápida visual (backend igual protege)
+    return true;
+  });
+
+  // Primera corrida (por si vuelve con errores)
+  scheduleValidate();
+});
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const rutInput = document.getElementById("id_rut_factura");
+  const tipoDoc = document.getElementById("id_tipo_doc");
+  const razonSocial = document.getElementById("razon_social");
+
+  if (!rutInput || !tipoDoc || !razonSocial) return;
+
+  function validarRutLive() {
+    const tipo = tipoDoc.value;
+    const rut = rutInput.value.trim();
+
+    if (tipo.toLowerCase() !== "factura" || rut.length < 7) {
+      razonSocial.textContent = "";
+      return;
+    }
+
+    razonSocial.textContent = "Validando RUT...";
+    razonSocial.classList.remove("text-green-600", "text-red-600");
+    razonSocial.classList.add("text-gray-600");
+
+    fetch("{% url 'operaciones:validar_rut_ajax' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ rut: rut })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (!data.ok) {
         razonSocial.textContent = data.error;
         razonSocial.classList.remove("text-green-600");
         razonSocial.classList.add("text-red-600");
-    } else {
-        razonSocial.textContent = "✔ " + data.mensaje;  // ← AQUÍ CAMBIA
+      } else {
+        razonSocial.textContent = "✔ " + data.mensaje;
         razonSocial.classList.remove("text-red-600");
         razonSocial.classList.add("text-green-600");
-    }
-})
-        .catch(() => {
-            razonSocial.textContent = "Error validando el RUT.";
-            razonSocial.classList.remove("text-green-600");
-            razonSocial.classList.add("text-red-600");
-        });
-    }
+      }
+    })
+    .catch(() => {
+      razonSocial.textContent = "Error validando el RUT.";
+      razonSocial.classList.remove("text-green-600");
+      razonSocial.classList.add("text-red-600");
+    });
+  }
 
-    // Validar automáticamente al dejar el campo o cambiar tipo de documento
-    rutInput.addEventListener("blur", validarRutLive);
-    tipoDoc.addEventListener("change", validarRutLive);
+  rutInput.addEventListener("blur", validarRutLive);
+  tipoDoc.addEventListener("change", validarRutLive);
 });
 </script>
+
+<!-- ✅ Mostrar/ocultar campos de flota según Tipo=Servicios -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const tipoSelect = document.getElementById("id_tipo");
+  if (!tipoSelect) return;
+
+  const wraps = {
+    vehiculo: document.getElementById("wrap-vehiculo-flota"),
+    tipoServicio: document.getElementById("wrap-tipo-servicio-flota"),
+    hora: document.getElementById("wrap-hora-servicio-flota"),
+    km: document.getElementById("wrap-km-servicio-flota"),
+    nota: document.getElementById("wrap-nota-diferencia"),
+  };
+
+  const inputs = {
+    vehiculo: document.getElementById("id_vehiculo_flota"),
+    tipoServicio: document.getElementById("id_tipo_servicio_flota"),
+    fecha: document.getElementById("id_fecha_servicio_flota"), // oculto, se llena por backend
+    hora: document.getElementById("id_hora_servicio_flota"),
+    km: document.getElementById("id_kilometraje_servicio_flota"),
+    nota: document.getElementById("nota_diferencia_tmp"),
+  };
+
+  function esServicios() {
+    const txt = (tipoSelect.options[tipoSelect.selectedIndex]?.text || "").toLowerCase().trim();
+    const val = (tipoSelect.value || "").toLowerCase().trim();
+    return txt.includes("servicio") || val.includes("servicio");
+  }
+
+  function setRequired(el, required) {
+    if (!el) return;
+    if (required) el.setAttribute("required", "required");
+    else el.removeAttribute("required");
+  }
+
+  function clearField(el) {
+    if (!el) return;
+    if (el.tagName === "SELECT") {
+      el.selectedIndex = 0;
+      return;
+    }
+    el.value = "";
+  }
+
+  function setHoraActualSiVacia() {
+    if (!inputs.hora) return;
+    if ((inputs.hora.value || "").trim()) return; // no pisar si ya tiene valor
+
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    inputs.hora.value = `${hh}:${mm}`;
+  }
+
+  function toggleCamposServicios() {
+    const show = esServicios();
+
+    [wraps.vehiculo, wraps.tipoServicio, wraps.hora, wraps.km].forEach(w => {
+      if (w) w.classList.toggle("hidden", !show);
+    });
+
+    if (wraps.nota) wraps.nota.classList.add("hidden");
+
+    // En Servicios: exigir campos visibles de flota
+    setRequired(inputs.vehiculo, show);
+    setRequired(inputs.tipoServicio, show);
+    setRequired(inputs.hora, show);
+    setRequired(inputs.km, show);
+
+    // Fecha de servicio NO se pide en UI (se toma de fecha_transaccion)
+    setRequired(inputs.fecha, false);
+
+    if (show) {
+      // ✅ Precargar hora al mostrar el bloque
+      setHoraActualSiVacia();
+    } else {
+      clearField(inputs.vehiculo);
+      clearField(inputs.tipoServicio);
+      clearField(inputs.hora);
+      clearField(inputs.km);
+      clearField(inputs.nota);
+    }
+  }
+
+  window.mostrarNotaDiferencia = function () {
+    if (wraps.nota) wraps.nota.classList.remove("hidden");
+    if (inputs.nota) inputs.nota.setAttribute("required", "required");
+  };
+
+  window.ocultarNotaDiferencia = function () {
+    if (wraps.nota) wraps.nota.classList.add("hidden");
+    if (inputs.nota) inputs.nota.removeAttribute("required");
+  };
+
+  tipoSelect.addEventListener("change", toggleCamposServicios);
+
+  // Primera carga
+  toggleCamposServicios();
+});
+</script>
+
 <script>
 /* === Conservar scroll en "Mis Rendiciones" === */
 (function () {
   const KEY = 'mis-rendiciones-scroll:' + location.pathname;
 
   function zone() {
-    // primer contenedor horizontal de la tabla
     return document.querySelector('.overflow-x-auto');
   }
 
@@ -668,17 +1033,14 @@ document.addEventListener("DOMContentLoaded", function () {
   window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
   window.addEventListener('beforeunload', saveScroll);
 
-  // Guardar al enviar formularios (incluye filtros y crear/editar)
   document.addEventListener('submit', (e) => {
     if (e.target && e.target.matches('form')) saveScroll();
   });
 
-  // Guardar al cambiar el selector de cantidad
   document.addEventListener('change', (e) => {
     if (e.target && e.target.matches('select#cantidad')) saveScroll();
   });
 
-  // Guardar al navegar por paginación
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href*="page="]');
     if (a) saveScroll();
@@ -688,17 +1050,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
 <script>
 (function () {
-  // Panel de columnas
   const panel = document.getElementById('columnToggles');
   if (!panel) return;
 
-  // Tabla asociada: usa la que tenga data-columns-table
   const table =
     document.querySelector('[data-columns-table]') ||
     document.querySelector('table');
   if (!table) return;
 
-  // Clave para recordar las columnas por vista/tabla
   const tableId = table.dataset.columnsTable || location.pathname;
   const STORAGE_KEY = 'cols:' + tableId;
 
@@ -720,16 +1079,14 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function applyVisibility() {
-    const state = loadState(); // {0: true, 1: false, ...}
+    const state = loadState();
 
-    // Encabezados
     const theadCells = table.querySelectorAll('thead tr th');
     theadCells.forEach((th, idx) => {
-      const visible = state[idx] !== false; // por defecto visible
+      const visible = state[idx] !== false;
       th.style.display = visible ? '' : 'none';
     });
 
-    // Celdas
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const tds = tr.querySelectorAll('td');
       tds.forEach((td, idx) => {
@@ -738,7 +1095,6 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
 
-    // Sincronizar checkboxes + master
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
     let allOn = true;
@@ -750,16 +1106,13 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!visible) allOn = false;
     });
 
-    if (master) {
-      master.checked = allOn;
-    }
+    if (master) master.checked = allOn;
   }
 
   function bindToggles() {
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
 
-    // Individuales
     checks.forEach((cb) => {
       cb.addEventListener('change', () => {
         const idx = parseInt(cb.dataset.col || '0', 10);
@@ -770,7 +1123,6 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
 
-    // Master "Show all columns"
     if (master) {
       master.addEventListener('change', () => {
         const val = master.checked;
@@ -788,7 +1140,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Cerrar el <details> al hacer clic fuera
   function bindOutsideClickToClose() {
     const details = panel.closest('details');
     if (!details) return;
@@ -800,11 +1151,73 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Inicializar
   bindToggles();
   applyVisibility();
   bindOutsideClickToClose();
 })();
 </script>
 
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const horaInput = document.getElementById("id_hora_servicio_flota");
+  if (!horaInput) return;
+
+  // Si viene vacío, precargar con hora actual local HH:MM
+  if (!horaInput.value) {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    horaInput.value = `${hh}:${mm}`;
+  }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("form-rendicion");
+  if (!form) return;
+
+  const submitBtn =
+    document.getElementById("btn-guardar-rendicion") ||
+    form.querySelector('button[type="submit"]');
+
+  if (!submitBtn) return;
+
+  let submitting = false;
+  window.__rendicionSubmitting = false;
+
+  function bloquearBotonEnGuardado() {
+    if (submitting) return false; // evita doble submit
+    submitting = true;
+    window.__rendicionSubmitting = true;
+
+    submitBtn.disabled = true;
+    submitBtn.classList.add("opacity-60", "cursor-not-allowed");
+    submitBtn.textContent = submitBtn.dataset.loadingText || "⏳ Guardando rendición...";
+
+    // ✅ NO deshabilitar inputs/select/textarea
+    // porque disabled => el navegador NO los envía en el POST
+    return true;
+  }
+
+  form.addEventListener("submit", function (e) {
+    if (e.defaultPrevented) return;
+
+    if (!bloquearBotonEnGuardado()) {
+      e.preventDefault();
+      return false;
+    }
+  });
+
+  window.addEventListener("pageshow", function (event) {
+    if (event.persisted) {
+      submitting = false;
+      window.__rendicionSubmitting = false;
+
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("opacity-60", "cursor-not-allowed");
+      submitBtn.textContent = submitBtn.dataset.defaultText || "Guardar Rendición";
+    }
+  });
+});
+</script>
 {% endblock %}

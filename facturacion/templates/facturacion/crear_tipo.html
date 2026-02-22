@@ -4,63 +4,136 @@
 {% block title %}Crear Tipo de Gasto{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-3xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
   <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-    ➕ Crear Tipo de Gasto
+    ➕ {% if editando %}Editar Tipo de Gasto{% else %}Crear Tipo de Gasto{% endif %}
   </h2>
 
-  <!-- Formulario de creación -->
-  <form id="createForm" method="post" class="space-y-4 mb-6">
+  <!-- Formulario -->
+  <form id="createForm" method="post" class="space-y-4 mb-8">
     {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm">
+        {% for err in form.non_field_errors %}
+          <div>{{ err }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
     <div>
-      <label class="block text-sm font-medium text-gray-700">Nombre</label>
-      {{ form.nombre|add_class:"w-full border rounded-xl px-3 py-2" }}
+      <label class="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+      {% if form.nombre.errors %}
+        {{ form.nombre|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+        <p class="text-red-600 text-sm mt-1">{{ form.nombre.errors.0 }}</p>
+      {% else %}
+        {{ form.nombre|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% endif %}
     </div>
+
     <div>
-      <label class="block text-sm font-medium text-gray-700">Categoría</label>
-      {{ form.categoria|add_class:"w-full border rounded-xl px-3 py-2" }}
+      <label class="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
+      {% if form.categoria.errors %}
+        {{ form.categoria|add_class:"w-full border border-red-500 rounded-xl px-3 py-2" }}
+        <p class="text-red-600 text-sm mt-1">{{ form.categoria.errors.0 }}</p>
+      {% else %}
+        {{ form.categoria|add_class:"w-full border rounded-xl px-3 py-2" }}
+      {% endif %}
     </div>
-    <div class="flex justify-end gap-3 pt-4">
-      <a href="{% url 'facturacion:listar_cartola' %}" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-xl">
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{% url 'facturacion:listar_cartola' %}"
+         class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-xl">
         Cancelar
       </a>
+
+      {% if editando %}
+        <a href="{% url 'facturacion:crear_tipo' %}"
+           class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-xl">
+          Nuevo
+        </a>
+      {% endif %}
+
       <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl">
-        Guardar
+        {% if editando %}Actualizar{% else %}Guardar{% endif %}
       </button>
     </div>
   </form>
 
   <!-- Tabla de tipos creados -->
-  <h3 class="text-lg font-bold text-gray-700 mb-3">Tipos de Gasto Creados</h3>
+  <h3 class="text-xl font-bold text-gray-700 mb-3">Tipos de Gasto Creados</h3>
+
   <div class="overflow-x-auto">
     <table class="min-w-full table-auto border border-gray-300 rounded-xl text-sm">
       <thead class="bg-gray-100 text-gray-700">
         <tr>
-          <th class="p-2 border">ID</th>
-          <th class="p-2 border">Nombre</th>
-          <th class="p-2 border">Categoría</th>
-          <th class="p-2 border">Acciones</th>
+          <th class="p-2 border text-center">ID</th>
+          <th class="p-2 border text-center">Nombre</th>
+          <th class="p-2 border text-center">Categoría</th>
+          <th class="p-2 border text-center">Disponible</th>
+          <th class="p-2 border text-center">Acciones</th>
         </tr>
       </thead>
+
       <tbody id="tiposBody">
         {% for tipo in tipos %}
         <tr class="border-t">
           <td class="p-2 border text-center">{{ tipo.id }}</td>
-<td class="p-2 border text-center">{{ tipo.nombre }}</td>
-<td class="p-2 border text-center">{{ tipo.get_categoria_display }}</td>
-<td class="p-2 border text-center">
-  <a href="{% url 'facturacion:editar_tipo' tipo.id %}" class="text-blue-600 hover:underline">✏️ Editar</a> |
-  <button type="button" 
-          class="text-red-600 hover:underline delete-btn" 
-          data-url="{% url 'facturacion:eliminar_tipo' tipo.id %}" 
-          data-nombre="{{ tipo.nombre }}">
-      🗑️Eliminar
-  </button>
-</td>
+
+          <td class="p-2 border text-center">{{ tipo.nombre }}</td>
+
+          <td class="p-2 border text-center">{{ tipo.get_categoria_display }}</td>
+
+          <td class="p-2 border text-center">
+            {% if tipo.disponible %}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                ✅ Disponible
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
+                ⛔ No disponible
+              </span>
+            {% endif %}
+          </td>
+
+          <td class="p-2 border text-center">
+            <div class="flex items-center justify-center gap-2 flex-wrap">
+              <a href="{% url 'facturacion:editar_tipo' tipo.id %}"
+                 class="text-blue-600 hover:underline">
+                ✏️ Editar
+              </a>
+
+              <span class="text-gray-400">|</span>
+
+              <!-- Botón activar/desactivar -->
+              <form method="post"
+                    action="{% url 'facturacion:toggle_disponible_tipo' tipo.id %}"
+                    class="inline">
+                {% csrf_token %}
+                <button type="submit"
+                        class="{% if tipo.disponible %}text-amber-600{% else %}text-green-600{% endif %} hover:underline">
+                  {% if tipo.disponible %}
+                    🔒 Desactivar
+                  {% else %}
+                    🔓 Activar
+                  {% endif %}
+                </button>
+              </form>
+
+              <span class="text-gray-400">|</span>
+
+              <button type="button"
+                      class="text-red-600 hover:underline delete-btn"
+                      data-url="{% url 'facturacion:eliminar_tipo' tipo.id %}"
+                      data-nombre="{{ tipo.nombre }}">
+                🗑️ Eliminar
+              </button>
+            </div>
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="4" class="p-4 text-center text-gray-500">No hay tipos creados.</td>
+          <td colspan="5" class="p-4 text-center text-gray-500">No hay tipos creados.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -72,12 +145,23 @@
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
   <div class="bg-white rounded-xl p-6 max-w-md w-full shadow-lg">
     <h3 class="text-xl font-bold mb-4">Eliminar Tipo</h3>
-    <p class="mb-4 text-gray-700">¿Estás seguro que deseas eliminar el tipo <span id="deleteNombre" class="font-semibold"></span>?</p>
+    <p class="mb-4 text-gray-700">
+      ¿Estás seguro que deseas eliminar el tipo
+      <span id="deleteNombre" class="font-semibold"></span>?
+    </p>
+
     <div class="flex justify-end gap-3">
-      <button type="button" id="cancelDelete" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">Cancelar</button>
+      <button type="button" id="cancelDelete"
+              class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded-xl">
+        Cancelar
+      </button>
+
       <form id="deleteForm" method="post">
         {% csrf_token %}
-        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl">Eliminar</button>
+        <button type="submit"
+                class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl">
+          Eliminar
+        </button>
       </form>
     </div>
   </div>
@@ -94,18 +178,23 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => {
       const url = btn.getAttribute("data-url");
       const nombre = btn.getAttribute("data-nombre");
+
       deleteForm.setAttribute("action", url);
       deleteNombre.textContent = nombre;
+
       deleteModal.classList.remove("hidden");
       deleteModal.classList.add("flex");
     });
   });
 
-  // Cerrar modal
-  document.getElementById("cancelDelete").addEventListener("click", () => {
-    deleteModal.classList.add("hidden");
-    deleteModal.classList.remove("flex");
-  });
+  // Cerrar modal con botón cancelar
+  const cancelBtn = document.getElementById("cancelDelete");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      deleteModal.classList.add("hidden");
+      deleteModal.classList.remove("flex");
+    });
+  }
 
   // Cerrar modal al hacer clic fuera
   deleteModal.addEventListener("click", (e) => {

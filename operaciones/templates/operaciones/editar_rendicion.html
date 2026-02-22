@@ -31,8 +31,35 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700">Tipo:</label>
+      <label class="block text-sm font-medium text-gray-700">Tipo rendición:</label>
       {{ form.tipo|add_class:"w-full border rounded-xl px-3 py-2" }}
+    </div>
+
+    {# ====== BLOQUE FLOTA (nuevo) ====== #}
+    <div id="bloque-flota-editar" class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Vehículo asignado:</label>
+        {{ form.vehiculo_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Tipo de servicio:</label>
+        {{ form.tipo_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Hora del servicio:</label>
+        {{ form.hora_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Kilometraje del servicio:</label>
+        {{ form.kilometraje_servicio_flota|add_class:"w-full border rounded-xl px-3 py-2" }}
+        <p class="text-xs text-gray-500 mt-1 italic">
+          Se valida considerando la fecha real del gasto.
+        </p>
+        <p id="kmFlotaHelpEdit" class="text-sm mt-1 hidden"></p>
+      </div>
     </div>
 
     <div>
@@ -61,10 +88,13 @@
       {{ form.cargos|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
 
+    {# Si el form no tiene este campo, puedes quitar este bloque #}
+    {% if form.numero_transferencia %}
     <div>
       <label class="block text-sm font-medium text-gray-700">N° Transferencia:</label>
       {{ form.numero_transferencia|add_class:"w-full border rounded-xl px-3 py-2" }}
     </div>
+    {% endif %}
 
     <div class="sm:col-span-2">
       <label class="block text-sm font-medium text-gray-700">Observaciones:</label>
@@ -152,6 +182,133 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  // === Mostrar/Ocultar bloque flota según tipo ===
+  const tipoRendicion = document.getElementById("id_tipo");
+  const bloqueFlota = document.getElementById("bloque-flota-editar");
+
+  function esTipoServicios() {
+    if (!tipoRendicion) return false;
+    const txt = (tipoRendicion.options[tipoRendicion.selectedIndex]?.text || "").toLowerCase();
+    return txt.includes("servicio");
+  }
+
+  function toggleBloqueFlota() {
+    if (!bloqueFlota) return;
+    if (esTipoServicios()) {
+      bloqueFlota.classList.remove("hidden");
+    } else {
+      bloqueFlota.classList.add("hidden");
+    }
+  }
+
+  if (tipoRendicion) {
+    tipoRendicion.addEventListener("change", toggleBloqueFlota);
+    toggleBloqueFlota();
+  }
+
+  // === Validación KM flota en vivo (editar) ===
+  const vehiculoInput = document.getElementById("id_vehiculo_flota");
+  const fechaInput = document.getElementById("id_fecha_transaccion"); // <- fecha real del gasto
+  const horaInput = document.getElementById("id_hora_servicio_flota");
+  const kmInput = document.getElementById("id_kilometraje_servicio_flota");
+  const kmHelp = document.getElementById("kmFlotaHelpEdit");
+
+  function resetKmUI() {
+    if (!kmInput || !kmHelp) return;
+    kmInput.classList.remove("border-red-500", "border-green-500");
+    kmHelp.classList.add("hidden");
+    kmHelp.classList.remove("text-red-600", "text-green-600");
+    kmHelp.innerHTML = "";
+  }
+
+  async function validarKmFlotaEdit() {
+    if (!vehiculoInput || !fechaInput || !horaInput || !kmInput || !kmHelp) return;
+    if (!esTipoServicios()) { resetKmUI(); return; }
+
+    const vehiculo = vehiculoInput.value;
+    const fecha = fechaInput.value;
+    const hora = horaInput.value;
+    const km = kmInput.value;
+
+    if (!vehiculo) { resetKmUI(); return; }
+
+    const params = new URLSearchParams({
+      vehiculo_id: vehiculo,
+      fecha: fecha || "",
+      hora: hora || "",
+      km: km || ""
+    });
+
+    try {
+      const resp = await fetch(`{% url 'operaciones:validar_km_servicio_flota_ajax' %}?${params.toString()}`, {
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        kmInput.classList.add("border-red-500");
+        kmHelp.classList.remove("hidden");
+        kmHelp.classList.add("text-red-600");
+        kmHelp.innerHTML = data.msg || "No se pudo validar el kilometraje.";
+        return;
+      }
+
+      // Falta info para validar todavía
+      if (data.skip) {
+        resetKmUI();
+
+        if (data.ultimo && (fecha || hora || km)) {
+          kmHelp.classList.remove("hidden");
+          kmHelp.classList.add("text-gray-500");
+          kmHelp.innerHTML = `Último registrado: <strong>${data.ultimo.km}</strong> (${data.ultimo.fecha} ${data.ultimo.hora})`;
+        }
+        return;
+      }
+
+      if (data.ok) {
+        kmInput.classList.remove("border-red-500");
+        kmInput.classList.add("border-green-500");
+
+        kmHelp.classList.remove("hidden");
+        kmHelp.classList.remove("text-red-600");
+        kmHelp.classList.add("text-green-600");
+
+        let extra = "";
+        if (data.ultimo) {
+          extra = ` <span class="text-gray-500">(Último: ${data.ultimo.km} - ${data.ultimo.fecha} ${data.ultimo.hora})</span>`;
+        }
+
+        kmHelp.innerHTML = `Kilometraje válido.${extra}`;
+      } else {
+        kmInput.classList.remove("border-green-500");
+        kmInput.classList.add("border-red-500");
+
+        kmHelp.classList.remove("hidden");
+        kmHelp.classList.remove("text-green-600");
+        kmHelp.classList.add("text-red-600");
+
+        // Mensaje orientado a acción (como pediste)
+        const editUrl = "{% url 'operaciones:editar_rendicion' rendicion.pk %}";
+        kmHelp.innerHTML = `
+          ${data.msg || "Kilometraje inválido."}
+          <br>
+          <span class="font-medium">Edita el anterior o modifica la hora del servicio.</span>
+          <a href="${editUrl}" class="underline ml-1">Presiona aquí para editar</a>.
+        `;
+      }
+    } catch (e) {
+      kmInput.classList.add("border-red-500");
+      kmHelp.classList.remove("hidden");
+      kmHelp.classList.add("text-red-600");
+      kmHelp.innerHTML = "Error validando el kilometraje.";
+    }
+  }
+
+  [vehiculoInput, fechaInput, horaInput, kmInput].forEach(el => {
+    if (el) el.addEventListener("input", validarKmFlotaEdit);
+    if (el && el.tagName === "SELECT") el.addEventListener("change", validarKmFlotaEdit);
+  });
+
   // === Validación RUT si es Factura (editar) ===
   const form = document.getElementById("form-editar-rendicion");
   const tipoDoc = document.getElementById("id_tipo_doc");
@@ -182,7 +339,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const tipo = (tipoDoc.value || "").toLowerCase();
     const rut = (rutInput.value || "").trim();
 
-    // Bloquear doble submit
     isSubmitting = true;
     if (submitBtn) {
       submitBtn.disabled = true;
@@ -190,10 +346,8 @@ document.addEventListener("DOMContentLoaded", function () {
       submitBtn.classList.add("opacity-60", "cursor-not-allowed");
     }
 
-    // Si NO es factura, enviar normal
     if (tipo !== "factura") return true;
 
-    // Si es factura, validar antes
     e.preventDefault();
 
     if (razonSocial) {

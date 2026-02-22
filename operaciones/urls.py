@@ -1,12 +1,12 @@
 # operaciones/urls.py
 
 from django.urls import path
+
 from . import views
 from . import views_fotos
 from . import views_fotos as fotos
 from . import views_produccion as produc
-from . import views_resumen 
-
+from . import views_resumen
 
 app_name = 'operaciones'  # <--- ESTA LÍNEA ES OBLIGATORIA PARA USAR NAMESPACES
 
@@ -159,6 +159,7 @@ urlpatterns = [
      path("resumen-operativo/", views_resumen.resumen_operativo, name="resumen_operativo"),
      path("resumen-operativo/export/", views_resumen.export_resumen_operativo_xlsx, name="resumen_operativo_export"),
      path("comparativas/", views_resumen.comparativas_productividad, name="comparativas_productividad"),
+     path('validar-km-servicio-flota-ajax/', views.validar_km_servicio_flota_ajax, name='validar_km_servicio_flota_ajax'),
 
 
 
