@@ -207,10 +207,8 @@ class VehicleServiceTypeForm(forms.ModelForm):
             "is_active": "Activo",
             "interval_km": "Frecuencia (KM)",
             "interval_days": "Frecuencia (días)",
-
             "alert_before_km": "Avisar antes (KM) [uno]",
             "alert_before_days": "Avisar antes (días) [uno]",
-
             "alert_before_km_steps": "Avisar antes (KM) [múltiples]",
             "alert_before_days_steps": "Avisar antes (días) [múltiples]",
             "notify_on_overdue": "Avisar cuando esté vencido",
@@ -218,12 +216,8 @@ class VehicleServiceTypeForm(forms.ModelForm):
         help_texts = {
             "interval_km": "Ej: 5000 (cambio de aceite).",
             "interval_days": "Ej: 180 (cada 6 meses).",
-
-            # ✅ legacy
             "alert_before_km": "Ej: 100 (un aviso único cuando falten 100km).",
             "alert_before_days": "Ej: 7 (un aviso único cuando falten 7 días).",
-
-            # ✅ múltiples
             "alert_before_km_steps": "Opcional. Varios valores separados por coma. Ej: 1000,500,100",
             "alert_before_days_steps": "Opcional. Varios valores separados por coma. Ej: 10,7,1",
             "notify_on_overdue": "Si está activo, también avisará cuando ya esté vencido.",
@@ -264,6 +258,7 @@ class VehicleServiceTypeForm(forms.ModelForm):
 
         parts = [p.strip() for p in raw.split(",") if p.strip()]
         vals: list[int] = []
+
         for p in parts:
             if not p.isdigit():
                 raise ValidationError({
@@ -279,28 +274,60 @@ class VehicleServiceTypeForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
 
+        # Si ya hay errores base (ej. conversión inválida), no seguimos forzando int(...)
+        if self.errors:
+            return cleaned
+
         name = (cleaned.get("name") or "").strip().lower()
 
-        km = cleaned.get("interval_km") or 0
-        days = cleaned.get("interval_days") or 0
-
+        # ✅ Normalizar vacíos a 0 para campos numéricos opcionales
+        # (evita IntegrityError por NOT NULL en Postgres)
+        km = cleaned.get("interval_km")
+        days = cleaned.get("interval_days")
         alert_km = cleaned.get("alert_before_km")
         alert_days = cleaned.get("alert_before_days")
 
-        km_steps_raw = cleaned.get("alert_before_km_steps") or ""
-        days_steps_raw = cleaned.get("alert_before_days_steps") or ""
+        cleaned["interval_km"] = 0 if km in (None, "") else int(km)
+        cleaned["interval_days"] = 0 if days in (None, "") else int(days)
+        cleaned["alert_before_km"] = 0 if alert_km in (None, "") else int(alert_km)
+        cleaned["alert_before_days"] = 0 if alert_days in (None, "") else int(alert_days)
 
+        km = cleaned["interval_km"]
+        days = cleaned["interval_days"]
+        alert_km = cleaned["alert_before_km"]
+        alert_days = cleaned["alert_before_days"]
+
+        km_steps_raw = (cleaned.get("alert_before_km_steps") or "").strip()
+        days_steps_raw = (cleaned.get("alert_before_days_steps") or "").strip()
+
+        # ✅ Combustible: no exige frecuencia, pero sí debe guardar enteros (no null)
         if name == "combustible":
+            # Si no ingresan alertas, quedan en 0 para evitar null en DB
+            cleaned["alert_before_km"] = alert_km if alert_km is not None else 0
+            cleaned["alert_before_days"] = alert_days if alert_days is not None else 0
+            cleaned["interval_km"] = km
+            cleaned["interval_days"] = days
             return cleaned
 
+        # Para otros tipos: debe tener frecuencia por KM o por días
         if km == 0 and days == 0:
             raise ValidationError(
                 "Para este tipo de servicio debes indicar una frecuencia por KM y/o por días. "
                 "Si es Combustible, no requiere frecuencia."
             )
 
-        km_steps = self._parse_csv(km_steps_raw, "alert_before_km_steps") if km_steps_raw.strip() else []
-        days_steps = self._parse_csv(days_steps_raw, "alert_before_days_steps") if days_steps_raw.strip() else []
+        km_steps = self._parse_csv(km_steps_raw, "alert_before_km_steps") if km_steps_raw else []
+        days_steps = self._parse_csv(days_steps_raw, "alert_before_days_steps") if days_steps_raw else []
+
+        # Validaciones de negativos por seguridad
+        if km < 0:
+            self.add_error("interval_km", "La frecuencia (KM) no puede ser negativa.")
+        if days < 0:
+            self.add_error("interval_days", "La frecuencia (días) no puede ser negativa.")
+        if alert_km < 0:
+            self.add_error("alert_before_km", "El aviso (KM) no puede ser negativo.")
+        if alert_days < 0:
+            self.add_error("alert_before_days", "El aviso (días) no puede ser negativo.")
 
         if km > 0:
             for v in km_steps:
@@ -308,7 +335,7 @@ class VehicleServiceTypeForm(forms.ModelForm):
                     self.add_error("alert_before_km_steps", "Los avisos (KM) deben ser menores que la frecuencia (KM).")
                     break
 
-            if alert_km is not None and alert_km >= km:
+            if alert_km >= km and alert_km != 0:
                 self.add_error("alert_before_km", "El aviso (KM) debe ser menor que la frecuencia (KM).")
 
         if days > 0:
@@ -317,17 +344,17 @@ class VehicleServiceTypeForm(forms.ModelForm):
                     self.add_error("alert_before_days_steps", "Los avisos (días) deben ser menores que la frecuencia (días).")
                     break
 
-            if alert_days is not None and alert_days >= days:
+            if alert_days >= days and alert_days != 0:
                 self.add_error("alert_before_days", "El aviso (días) debe ser menor que la frecuencia (días).")
 
-        # Compat: si llenó múltiples y legacy viene vacío => setear el menor
-        if km_steps and (alert_km is None):
+        # ✅ Compat: si llenó múltiples y legacy viene en 0 => setear el menor
+        if km_steps and cleaned["alert_before_km"] == 0:
             cleaned["alert_before_km"] = min(km_steps)
-        if days_steps and (alert_days is None):
+
+        if days_steps and cleaned["alert_before_days"] == 0:
             cleaned["alert_before_days"] = min(days_steps)
 
         return cleaned
-
 
 # ---------------------------
 # SERVICE (INTELIGENTE)
