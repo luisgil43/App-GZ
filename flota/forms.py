@@ -183,11 +183,24 @@ class VehicleServiceTypeForm(forms.ModelForm):
 
     color = forms.ChoiceField(choices=COLOR_CHOICES, label="Color", widget=forms.Select())
 
+    # ✅ Nuevo: checkbox de control (solo formulario)
+    requires_frequency = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Este tipo de servicio requiere frecuencia",
+        help_text="Márcalo si este servicio debe llevar control por KM y/o días (ej: aceite, revisión). "
+                  "Desmárcalo para servicios eventuales (ej: reparación puntual).",
+    )
+
     class Meta:
         model = VehicleServiceType
         fields = [
             "name",
             "is_active",
+
+            # ✅ form-only (NO está en el modelo, pero sí se renderiza)
+            "requires_frequency",
+
             "interval_km",
             "interval_days",
 
@@ -245,6 +258,16 @@ class VehicleServiceTypeForm(forms.ModelForm):
             if f in self.fields:
                 self.fields[f].widget.attrs.update({"min": "0", "step": "1"})
 
+        # ✅ Heurística para edición:
+        # Si el tipo ya existe y NO tiene frecuencias, asumimos que no requiere frecuencia
+        inst = getattr(self, "instance", None)
+        if inst and inst.pk:
+            has_freq = bool((inst.interval_km or 0) > 0 or (inst.interval_days or 0) > 0)
+            self.fields["requires_frequency"].initial = has_freq
+        else:
+            # En creación lo dejamos marcado por defecto
+            self.fields["requires_frequency"].initial = True
+
     def clean_name(self):
         name = (self.cleaned_data.get("name") or "").strip()
         if not name:
@@ -278,7 +301,8 @@ class VehicleServiceTypeForm(forms.ModelForm):
         if self.errors:
             return cleaned
 
-        name = (cleaned.get("name") or "").strip().lower()
+        # ✅ Checkbox del form
+        requires_frequency = bool(cleaned.get("requires_frequency"))
 
         # ✅ Normalizar vacíos a 0 para campos numéricos opcionales
         # (evita IntegrityError por NOT NULL en Postgres)
@@ -300,26 +324,10 @@ class VehicleServiceTypeForm(forms.ModelForm):
         km_steps_raw = (cleaned.get("alert_before_km_steps") or "").strip()
         days_steps_raw = (cleaned.get("alert_before_days_steps") or "").strip()
 
-        # ✅ Combustible: no exige frecuencia, pero sí debe guardar enteros (no null)
-        if name == "combustible":
-            # Si no ingresan alertas, quedan en 0 para evitar null en DB
-            cleaned["alert_before_km"] = alert_km if alert_km is not None else 0
-            cleaned["alert_before_days"] = alert_days if alert_days is not None else 0
-            cleaned["interval_km"] = km
-            cleaned["interval_days"] = days
-            return cleaned
-
-        # Para otros tipos: debe tener frecuencia por KM o por días
-        if km == 0 and days == 0:
-            raise ValidationError(
-                "Para este tipo de servicio debes indicar una frecuencia por KM y/o por días. "
-                "Si es Combustible, no requiere frecuencia."
-            )
-
         km_steps = self._parse_csv(km_steps_raw, "alert_before_km_steps") if km_steps_raw else []
         days_steps = self._parse_csv(days_steps_raw, "alert_before_days_steps") if days_steps_raw else []
 
-        # Validaciones de negativos por seguridad
+        # ✅ Validaciones de negativos por seguridad
         if km < 0:
             self.add_error("interval_km", "La frecuencia (KM) no puede ser negativa.")
         if days < 0:
@@ -329,6 +337,51 @@ class VehicleServiceTypeForm(forms.ModelForm):
         if alert_days < 0:
             self.add_error("alert_before_days", "El aviso (días) no puede ser negativo.")
 
+        # Si ya hay errores numéricos, cortar aquí
+        if self.errors:
+            return cleaned
+
+        # ------------------------------------------------------------
+        # ✅ Regla principal con checkbox:
+        # Si requiere frecuencia, debe tener KM y/o días > 0
+        # ------------------------------------------------------------
+        if requires_frequency and km == 0 and days == 0:
+            raise ValidationError(
+                "Marcaste que este tipo requiere frecuencia. Debes indicar una frecuencia por KM y/o por días."
+            )
+
+        # ------------------------------------------------------------
+        # ✅ Avisos requieren frecuencia correspondiente
+        # ------------------------------------------------------------
+        # Avisos por KM requieren frecuencia KM
+        if km == 0:
+            if alert_km > 0:
+                self.add_error(
+                    "alert_before_km",
+                    "Para usar aviso por KM, primero debes indicar una frecuencia (KM)."
+                )
+            if km_steps:
+                self.add_error(
+                    "alert_before_km_steps",
+                    "Para usar avisos múltiples por KM, primero debes indicar una frecuencia (KM)."
+                )
+
+        # Avisos por días requieren frecuencia días
+        if days == 0:
+            if alert_days > 0:
+                self.add_error(
+                    "alert_before_days",
+                    "Para usar aviso por días, primero debes indicar una frecuencia (días)."
+                )
+            if days_steps:
+                self.add_error(
+                    "alert_before_days_steps",
+                    "Para usar avisos múltiples por días, primero debes indicar una frecuencia (días)."
+                )
+
+        # ------------------------------------------------------------
+        # ✅ Si sí hay frecuencia, los avisos deben ser menores
+        # ------------------------------------------------------------
         if km > 0:
             for v in km_steps:
                 if v >= km:
@@ -347,7 +400,9 @@ class VehicleServiceTypeForm(forms.ModelForm):
             if alert_days >= days and alert_days != 0:
                 self.add_error("alert_before_days", "El aviso (días) debe ser menor que la frecuencia (días).")
 
+        # ------------------------------------------------------------
         # ✅ Compat: si llenó múltiples y legacy viene en 0 => setear el menor
+        # ------------------------------------------------------------
         if km_steps and cleaned["alert_before_km"] == 0:
             cleaned["alert_before_km"] = min(km_steps)
 
