@@ -179,6 +179,7 @@ class MovimientoUsuarioForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        self.request_user = kwargs.pop("user", None)  # ✅ recibimos usuario desde la vista
         super().__init__(*args, **kwargs)
 
         # ✅ Mostrar solo tipos disponibles para declarar
@@ -219,16 +220,45 @@ class MovimientoUsuarioForm(forms.ModelForm):
         if 'kilometraje_servicio_flota' in self.fields:
             self.fields['kilometraje_servicio_flota'].required = False
 
-        # ✅ Filtrar vehículos activos según status del modelo Flota (NO is_active)
+        # ==========================================================
+        # ✅ FILTRO CORRECTO DE VEHÍCULOS FLOTA
+        # Solo vehículos ACTIVOS por status + ASIGNADOS ACTIVAMENTE al usuario
+        # (SIN excepción para staff/superuser)
+        # ==========================================================
         try:
-            self.fields['vehiculo_flota'].queryset = (
+            qs_veh = (
                 self.fields['vehiculo_flota'].queryset
                 .select_related('status')
-                .filter(status__name__iexact='Activo')
-                .order_by('patente')
+                .filter(
+                    status__isnull=False,
+                    status__is_active=True,
+                    status__name__iexact='Activo',
+                )
             )
+
+            user = self.request_user
+            if user and getattr(user, "is_authenticated", False):
+                # ✅ SIEMPRE filtrar por asignación activa del usuario
+                qs_veh = qs_veh.filter(
+                    assignments__user=user,
+                    assignments__active=True
+                ).distinct().order_by('patente')
+            else:
+                # Por seguridad, si no viene user, no mostrar nada
+                qs_veh = qs_veh.none()
+
+            self.fields['vehiculo_flota'].queryset = qs_veh
+
+            if not qs_veh.exists():
+                self.fields['vehiculo_flota'].help_text = (
+                    "No tienes vehículos asignados actualmente. "
+                    "Si necesitas rendir un servicio de flota, solicita una asignación activa."
+                )
         except Exception:
-            pass
+            try:
+                self.fields['vehiculo_flota'].queryset = self.fields['vehiculo_flota'].queryset.none()
+            except Exception:
+                pass
 
         # Ordenar tipos de servicio
         try:
@@ -345,13 +375,6 @@ class MovimientoUsuarioForm(forms.ModelForm):
         except Exception:
             tipo_text = str(tipo).strip().lower() if tipo else ""
 
-        # Categoría solo como respaldo (en tu modelo puede ser "costo", "gasto", etc.)
-        categoria_text = ""
-        try:
-            categoria_text = (getattr(tipo, 'categoria', '') or '').strip().lower()
-        except Exception:
-            categoria_text = ""
-
         # ✅ Regla principal: nombre contiene "servicio"
         es_servicios = ('servicio' in tipo_text)
 
@@ -378,6 +401,17 @@ class MovimientoUsuarioForm(forms.ModelForm):
             # ✅ Tomar fecha del servicio desde fecha real del gasto
             if cleaned.get('fecha_transaccion'):
                 cleaned['fecha_servicio_flota'] = cleaned.get('fecha_transaccion')
+
+            # ✅ Seguridad backend:
+            # si por POST manipulado meten un vehículo no asignado, bloquearlo.
+            user = self.request_user
+            if user and getattr(user, "is_authenticated", False) and vehiculo:
+                asignado = vehiculo.assignments.filter(user=user, active=True).exists()
+                if not asignado:
+                    self.add_error(
+                        'vehiculo_flota',
+                        "Ese vehículo no está asignado a tu usuario."
+                    )
         else:
             # Si NO es servicio, limpiar flota para evitar datos basura
             cleaned['vehiculo_flota'] = None

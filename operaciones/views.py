@@ -1395,7 +1395,6 @@ def mis_rendiciones(request):
 
         n = (getattr(tipo_servicio_obj, "name", "") or "").strip().lower()
 
-        # Mapeos comunes
         if "combustible" in n:
             return "combustible"
         if "aceite" in n:
@@ -1412,14 +1411,12 @@ def mis_rendiciones(request):
     def _es_tipo_servicios(tipo_obj):
         """
         Verifica si el tipo de movimiento corresponde a 'Servicios'
-        usando SOLO el nombre del TipoGasto (en este sistema 'Servicios' está en categoría 'costo').
+        usando SOLO el nombre del TipoGasto.
         """
         if not tipo_obj:
             return False
 
         nombre = (getattr(tipo_obj, "nombre", None) or getattr(tipo_obj, "name", None) or "").strip().lower()
-
-        # Coincidencia flexible por nombre
         return "servicio" in nombre
 
     def _validar_no_futuro(fecha_tx, hora_servicio=None, es_servicio=False):
@@ -1435,11 +1432,9 @@ def mis_rendiciones(request):
         now_local = timezone.localtime(timezone.now())
         hoy_local = now_local.date()
 
-        # 1) Fecha futura (cualquier rendición)
         if fecha_tx > hoy_local:
             return False, "No puedes registrar una rendición con fecha futura."
 
-        # 2) Fecha/Hora futura (solo servicios flota)
         if es_servicio and hora_servicio:
             try:
                 dt_servicio = datetime.combine(fecha_tx, hora_servicio)
@@ -1449,7 +1444,6 @@ def mis_rendiciones(request):
                 if dt_servicio > now_local:
                     return False, "No puedes registrar una rendición con una hora de servicio futura."
             except Exception:
-                # Si falla combine/aware, dejamos que el form maneje formato
                 pass
 
         return True, None
@@ -1500,7 +1494,8 @@ def mis_rendiciones(request):
 
     # --- Crear nueva rendición ---
     if request.method == 'POST':
-        form = MovimientoUsuarioForm(request.POST, request.FILES)
+        # ✅ IMPORTANTE: pasar POST + FILES + user
+        form = MovimientoUsuarioForm(request.POST, request.FILES, user=request.user)
 
         if form.is_valid():
             cd = form.cleaned_data
@@ -1538,7 +1533,7 @@ def mis_rendiciones(request):
                 with transaction.atomic():
                     mov = form.save(commit=False)
                     mov.usuario = user
-                    mov.fecha = timezone.now()  # fecha de registro (declaración)
+                    mov.fecha = timezone.now()
                     mov.status = 'pendiente_supervisor'
                     mov.comprobante = cd.get("comprobante")
 
@@ -1583,11 +1578,7 @@ def mis_rendiciones(request):
                     # ✅ Guardar rendición primero (para tener PK)
                     mov.save()
 
-                    # ==========================================================
-                    # ✅ Crear servicio en FLOTA automáticamente SOLO si:
-                    #   - el tipo de rendición corresponde a Servicios
-                    #   - y trae todos los datos de flota
-                    # ==========================================================
+                    # ✅ Crear servicio en FLOTA automáticamente
                     if es_rendicion_flota:
                         vehiculo = cd.get("vehiculo_flota")
                         tipo_servicio_flota = cd.get("tipo_servicio_flota")
@@ -1596,7 +1587,6 @@ def mis_rendiciones(request):
                         km_servicio = cd.get("kilometraje_servicio_flota")
                         monto_servicio = cd.get("cargos") or 0
 
-                        # ✅ Validación cronológica KM de FLOTA (backend, obligatoria)
                         ok_flota_km, msg_flota_km, ultimo_ref, servicio_conflicto = _validar_km_servicio_flota_vs_ultimo(
                             vehicle_id=vehiculo.id,
                             fecha_servicio=fecha_servicio,
@@ -1605,7 +1595,6 @@ def mis_rendiciones(request):
                         )
 
                         if not ok_flota_km:
-                            # Mensaje especial si la rendición anterior está aprobada y ya no se puede editar
                             try:
                                 rendicion_conflicto = (
                                     CartolaMovimiento.objects
@@ -1637,13 +1626,12 @@ def mis_rendiciones(request):
 
                             raise ValidationError("Kilometraje de flota inválido.")
 
-                        # service_type legacy obligatorio + type configurable
                         legacy_type = _map_legacy_service_type(tipo_servicio_flota)
 
                         servicio = VehicleService.objects.create(
                             vehicle=vehiculo,
-                            service_type=legacy_type,  # campo legacy obligatorio
-                            service_type_obj=tipo_servicio_flota,  # nuevo configurable
+                            service_type=legacy_type,
+                            service_type_obj=tipo_servicio_flota,
                             title=f"Rendición #{mov.pk}",
                             service_date=fecha_servicio,
                             service_time=hora_servicio,
@@ -1655,7 +1643,6 @@ def mis_rendiciones(request):
                             ).strip(),
                         )
 
-                        # Vincular la rendición al servicio creado + snapshots por auditoría
                         mov.servicio_flota = servicio
                         mov.vehiculo_flota = vehiculo
                         mov.tipo_servicio_flota = tipo_servicio_flota
@@ -1674,21 +1661,18 @@ def mis_rendiciones(request):
                             "tipo_servicio_flota_snapshot",
                         ])
 
-                    # ✅ Mantener tu lógica existente (si la usas para km antiguo)
                     _registrar_km_en_flota_pendiente(mov, request_user=request.user)
 
                 messages.success(request, "Rendición registrada correctamente.")
                 return redirect('operaciones:mis_rendiciones')
 
             except ValidationError as e:
-                # errores de modelos (flota o cartola)
                 try:
                     if hasattr(e, "message_dict"):
                         for field, errs in e.message_dict.items():
                             for err in errs:
                                 form.add_error(field if field in form.fields else None, str(err))
                     else:
-                        # Si ya agregamos error al form, no duplicar
                         if not form.non_field_errors() and not any(form.errors.values()):
                             form.add_error(None, str(e))
                 except Exception:
@@ -1697,7 +1681,8 @@ def mis_rendiciones(request):
                 return _render_con_error(form)
 
     else:
-        form = MovimientoUsuarioForm()
+        # ✅ IMPORTANTE: pasar user también en GET para filtrar vehículos asignados
+        form = MovimientoUsuarioForm(user=request.user)
 
     # --- Filtros y Paginación ---
     raw_cantidad = request.GET.get('cantidad', '10')
@@ -1735,7 +1720,6 @@ def mis_rendiciones(request):
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
-    # --- Cálculo de saldos ---
     saldo_disponible = (
         (movimientos.filter(tipo__categoria="abono", status="aprobado_abono_usuario")
          .aggregate(total=Sum('abonos'))['total'] or 0)

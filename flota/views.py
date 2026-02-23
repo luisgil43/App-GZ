@@ -183,31 +183,121 @@ def assignment_list(request):
 
 @login_required
 def assignment_create(request):
+    from django.db import IntegrityError, transaction
+
     if request.method == "POST":
         form = VehicleAssignmentForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Asignación creada.")
-            return redirect("flota:assignment_list")
+            try:
+                with transaction.atomic():
+                    # Bloqueamos posibles asignaciones activas del mismo vehículo antes de guardar
+                    vehicle = form.cleaned_data.get("vehicle")
+
+                    if vehicle:
+                        conflict = (
+                            VehicleAssignment.objects
+                            .select_for_update()
+                            .filter(vehicle=vehicle, active=True)
+                            .first()
+                        )
+                        if conflict:
+                            conflict_user = (
+                                conflict.user.get_full_name()
+                                if hasattr(conflict.user, "get_full_name") and conflict.user.get_full_name()
+                                else conflict.user.username
+                            )
+                            form.add_error(
+                                "vehicle",
+                                (
+                                    f"Este vehículo ya tiene una asignación activa con {conflict_user}. "
+                                    f"Primero pausa/cierra esa asignación."
+                                )
+                            )
+                            raise ValidationError("Conflicto de asignación activa.")
+
+                    form.save()
+
+                messages.success(request, "Asignación creada.")
+                return redirect("flota:assignment_list")
+
+            except ValidationError:
+                # Ya agregamos errores al form
+                pass
+            except IntegrityError:
+                # Fallback por concurrencia (doble click o 2 usuarios a la vez)
+                form.add_error(
+                    "vehicle",
+                    "No se pudo crear la asignación porque ese vehículo ya tiene una asignación activa."
+                )
     else:
         form = VehicleAssignmentForm()
+
     return render(request, "flota/assignment_form.html", {"form": form, "mode": "create"})
 
 
 @login_required
 def assignment_edit(request, pk):
+    from django.db import IntegrityError, transaction
+
     a = get_object_or_404(VehicleAssignment, pk=pk)
 
     if request.method == "POST":
         form = VehicleAssignmentForm(request.POST, instance=a)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Asignación actualizada.")
-            return redirect("flota:assignment_list")
+            try:
+                with transaction.atomic():
+                    # Bloqueamos la asignación actual
+                    a_locked = (
+                        VehicleAssignment.objects
+                        .select_for_update()
+                        .select_related("vehicle", "user")
+                        .get(pk=a.pk)
+                    )
+
+                    vehicle = form.cleaned_data.get("vehicle")
+
+                    # Si por edición cambia el vehículo, validar que no exista otra activa
+                    if vehicle:
+                        conflict = (
+                            VehicleAssignment.objects
+                            .select_for_update()
+                            .filter(vehicle=vehicle, active=True)
+                            .exclude(pk=a_locked.pk)
+                            .first()
+                        )
+                        if conflict:
+                            conflict_user = (
+                                conflict.user.get_full_name()
+                                if hasattr(conflict.user, "get_full_name") and conflict.user.get_full_name()
+                                else conflict.user.username
+                            )
+                            form.add_error(
+                                "vehicle",
+                                (
+                                    f"Este vehículo ya tiene una asignación activa con {conflict_user}. "
+                                    f"Primero pausa/cierra esa asignación."
+                                )
+                            )
+                            raise ValidationError("Conflicto de asignación activa.")
+
+                    form.save()
+
+                messages.success(request, "Asignación actualizada.")
+                return redirect("flota:assignment_list")
+
+            except ValidationError:
+                # Errores ya cargados al form
+                pass
+            except IntegrityError:
+                form.add_error(
+                    "vehicle",
+                    "No se pudo actualizar porque ese vehículo ya tiene otra asignación activa."
+                )
     else:
         form = VehicleAssignmentForm(instance=a)
 
     return render(request, "flota/assignment_form.html", {"form": form, "mode": "edit", "assignment": a})
+
 
 
 @login_required
@@ -224,21 +314,67 @@ def assignment_close(request, pk):
 @login_required
 @require_POST
 def assignment_toggle_active(request, pk):
-    a = get_object_or_404(VehicleAssignment, pk=pk)
+    from django.db import IntegrityError, transaction
 
-    if a.active:
-        a.active = False
-        a.unassigned_at = a.unassigned_at or timezone.now()
-        a.save(update_fields=["active", "unassigned_at"])
-        messages.success(request, "Asignación pausada (cerrada).")
-    else:
-        a.active = True
-        a.unassigned_at = None
-        a.save(update_fields=["active", "unassigned_at"])
-        messages.success(request, "Asignación reactivada.")
+    try:
+        with transaction.atomic():
+            # Bloqueamos esta asignación
+            a = (
+                VehicleAssignment.objects
+                .select_for_update()
+                .select_related("vehicle", "user")
+                .get(pk=pk)
+            )
+
+            if a.active:
+                # Pausar / cerrar
+                a.active = False
+                a.unassigned_at = a.unassigned_at or timezone.now()
+                a.save(update_fields=["active", "unassigned_at"])
+                messages.success(request, "Asignación pausada (cerrada).")
+                return redirect("flota:assignment_list")
+
+            # Reactivar: validar que no exista otra activa del mismo vehículo
+            conflict = (
+                VehicleAssignment.objects
+                .select_for_update()
+                .filter(vehicle=a.vehicle, active=True)
+                .exclude(pk=a.pk)
+                .select_related("user")
+                .first()
+            )
+
+            if conflict:
+                conflict_user = (
+                    conflict.user.get_full_name()
+                    if hasattr(conflict.user, "get_full_name") and conflict.user.get_full_name()
+                    else conflict.user.username
+                )
+                messages.error(
+                    request,
+                    (
+                        f"No se puede reactivar esta asignación porque el vehículo "
+                        f"{a.vehicle} ya tiene una asignación activa con {conflict_user}. "
+                        f"Primero pausa/cierra esa asignación."
+                    )
+                )
+                return redirect("flota:assignment_list")
+
+            # Reactivar
+            a.active = True
+            a.unassigned_at = None
+            a.save(update_fields=["active", "unassigned_at"])
+            messages.success(request, "Asignación reactivada.")
+
+    except VehicleAssignment.DoesNotExist:
+        messages.error(request, "La asignación no existe.")
+    except IntegrityError:
+        messages.error(
+            request,
+            "No se pudo reactivar la asignación porque ya existe otra asignación activa para ese vehículo."
+        )
 
     return redirect("flota:assignment_list")
-
 
 @login_required
 @require_POST
