@@ -2149,13 +2149,40 @@ def eliminar_rendicion(request, pk):
 
 
 
-
-
 @login_required
 def vista_rendiciones(request):
     user = request.user
 
-    # Base queryset con relaciones para evitar N+1 al pintar la tabla
+    # =========================================================
+    # 1) DETECCIÓN DE ROLES (robusta)
+    # =========================================================
+    # Usa tus flags actuales, pero también intenta leer grupos/roles por nombre
+    # por si las props es_pm/es_supervisor/es_facturacion no reflejan multirol.
+    user_groups = set()
+    try:
+        user_groups = set(user.groups.values_list('name', flat=True))
+    except Exception:
+        user_groups = set()
+
+    # Flags por propiedades (si existen)
+    prop_es_supervisor = bool(getattr(user, 'es_supervisor', False))
+    prop_es_pm = bool(getattr(user, 'es_pm', False))
+    prop_es_facturacion = bool(getattr(user, 'es_facturacion', False))
+
+    # Fallback por grupos (ajusta nombres si en tu sistema se llaman distinto)
+    grp_es_supervisor = any(g.lower() in {'supervisor'} for g in user_groups)
+    grp_es_pm = any(g.lower() in {'pm'} for g in user_groups)
+    grp_es_facturacion = any(g.lower() in {'facturacion', 'finanzas'} for g in user_groups)
+
+    # Resultado final (OR de ambos mecanismos)
+    es_superuser = user.is_superuser
+    es_supervisor = prop_es_supervisor or grp_es_supervisor
+    es_pm = prop_es_pm or grp_es_pm
+    es_facturacion = prop_es_facturacion or grp_es_facturacion
+
+    # =========================================================
+    # 2) BASE QUERYSET
+    # =========================================================
     base_qs = CartolaMovimiento.objects.select_related(
         'usuario',
         'proyecto',
@@ -2168,42 +2195,58 @@ def vista_rendiciones(request):
         'aprobado_por_finanzas',
     )
 
-    # --- Qué ve cada rol
-    if user.is_superuser:
-        movimientos_qs = base_qs.all()
-    elif getattr(user, 'es_supervisor', False):
-        movimientos_qs = (
-            base_qs
-            .filter(Q(status__startswith='pendiente') | Q(status__startswith='rechazado'))
-            .exclude(tipo__categoria='abono')
-        )
-    elif getattr(user, 'es_pm', False):
-        movimientos_qs = base_qs.all()
-    elif getattr(user, 'es_facturacion', False):
-        movimientos_qs = base_qs.all()
+    # =========================================================
+    # 3) FILTRO POR ROLES (EXPLÍCITO POR ESTADOS)
+    #    Esto evita comportamientos raros con Q() vacío.
+    # =========================================================
+    if es_superuser:
+        movimientos = base_qs.all()
     else:
-        movimientos_qs = base_qs.none()
+        q_roles = Q()
 
-    # --- Qué estado es "pendiente para mí"
-    if getattr(user, 'es_supervisor', False):
-        role_pending_status = 'pendiente_supervisor'
-    elif getattr(user, 'es_pm', False):
-        role_pending_status = 'aprobado_supervisor'
-    elif getattr(user, 'es_facturacion', False):
-        role_pending_status = 'aprobado_pm'
-    else:
-        role_pending_status = None
+        # Supervisor: ve pendientes/rechazados de su etapa (excepto abonos)
+        if es_supervisor:
+            q_roles |= (
+                Q(status__in=['pendiente_supervisor', 'rechazado_supervisor']) &
+                ~Q(tipo__categoria='abono')
+            )
 
-    if role_pending_status:
+        # PM: ve su bandeja (pendiente PM + rechazado PM + aprobado PM + etc. si quieres)
+        # Si quieres que PM vea TODO, reemplaza este bloque por q_roles |= Q(pk__isnull=False)
+        if es_pm:
+            q_roles |= Q(status__in=['aprobado_supervisor', 'rechazado_pm', 'aprobado_pm', 'aprobado_finanzas'])
+
+        # Finanzas: ve su bandeja
+        if es_facturacion:
+            q_roles |= Q(status__in=['aprobado_pm', 'rechazado_finanzas', 'aprobado_finanzas'])
+
+        # Abonos del usuario (si aplica)
+        q_roles |= Q(status__in=['pendiente_abono_usuario', 'aprobado_abono_usuario', 'rechazado_abono_usuario'], usuario=user)
+
+        movimientos = base_qs.filter(q_roles).distinct() if q_roles else base_qs.none()
+
+    # =========================================================
+    # 4) PRIORIDAD DE ORDEN SEGÚN ROL (multirol)
+    # =========================================================
+    # Cambia el orden si quieres priorizar PM primero.
+    pending_statuses = []
+    if es_supervisor:
+        pending_statuses.append('pendiente_supervisor')
+    if es_pm:
+        pending_statuses.append('aprobado_supervisor')  # pendiente PM
+    if es_facturacion:
+        pending_statuses.append('aprobado_pm')          # pendiente Finanzas
+
+    if pending_statuses:
         prioridad_rol_expr = Case(
-            When(status=role_pending_status, then=Value(0)),
-            default=Value(1),
+            *[When(status=s, then=Value(i)) for i, s in enumerate(pending_statuses)],
+            default=Value(99),
             output_field=IntegerField(),
         )
     else:
-        prioridad_rol_expr = Value(1, output_field=IntegerField())
+        prioridad_rol_expr = Value(99, output_field=IntegerField())
 
-    movimientos_qs = movimientos_qs.annotate(
+    movimientos = movimientos.annotate(
         prioridad_rol=prioridad_rol_expr,
         orden_status=Case(
             When(status__startswith='pendiente', then=Value(1)),
@@ -2212,50 +2255,198 @@ def vista_rendiciones(request):
             default=Value(4),
             output_field=IntegerField(),
         ),
-    ).order_by(
+    )
+
+    # =========================================================
+    # 5) FILTROS EXCEL (backend) - SI ESTÁS USANDO excel_filters
+    # =========================================================
+    excel_filters_raw = request.GET.get('excel_filters', '').strip()
+    excel_filters = {}
+
+    if excel_filters_raw:
+        try:
+            parsed = json.loads(excel_filters_raw)
+            if isinstance(parsed, dict):
+                excel_filters = parsed
+        except Exception:
+            excel_filters = {}
+
+    # Map de columnas -> campo backend
+    # (ajusta si tus índices cambian)
+    # OJO: en fecha/hora y estado usamos texto normalizado en Python abajo.
+    backend_filter_map = {
+        "0": "usuario__full_name",   # Nombre (se maneja con filtro manual más abajo si no existe ese campo)
+        "1": "fecha",                # Fecha
+        "2": "fecha_transaccion",    # Fecha real del gasto
+        "3": "proyecto",             # Proyecto
+        "4": "cargos",               # Monto
+        "5": "tipo",                 # Tipo
+        "6": "vehiculo_flota",       # Vehículo
+        "7": "tipo_servicio_flota_nombre",  # Tipo servicio flota
+        # "8": fecha/hora servicio (manual)
+        "9": "kilometraje_servicio_flota",
+        "10": "servicio_flota",
+        "11": "observaciones",
+        # "12": comprobante (manual)
+        # "13": estado (manual)
+    }
+
+    # --- Filtros simples por queryset (cuando conviene)
+    # Para columnas complejas (estado, comprobante, fecha/hora), filtramos en memoria más abajo.
+    # Esto mantiene compatibilidad con tu panel Excel.
+    for col_idx, values in excel_filters.items():
+        if not isinstance(values, list) or not values:
+            continue
+
+        # Saltamos columnas complejas para filtrado manual
+        if col_idx in {"0", "8", "12", "13"}:
+            continue
+
+        # Normalizamos strings
+        values_str = [str(v).strip() for v in values if str(v).strip()]
+        if not values_str:
+            continue
+
+        if col_idx == "1":
+            # Fecha (d-m-Y) -> filtro manual luego
+            continue
+        elif col_idx == "2":
+            # Fecha real gasto -> filtro manual luego
+            continue
+        elif col_idx == "4":
+            # Monto formateado -> filtro manual luego
+            continue
+        elif col_idx == "6":
+            # Vehículo string compuesto -> filtro manual luego
+            continue
+        elif col_idx == "10":
+            # Servicio flota con # -> filtro manual luego
+            continue
+        elif col_idx == "9":
+            # KM con "KM" -> filtro manual luego
+            continue
+        else:
+            # campos directos (aproximados)
+            field_name = backend_filter_map.get(col_idx)
+            if field_name:
+                # Para FK o strings se puede usar __in sobre str no siempre funciona bien;
+                # mejor filtrado manual global más abajo para evitar inconsistencias.
+                pass
+
+    # =========================================================
+    # 6) FILTRO EXCEL MANUAL (EN MEMORIA) PARA GARANTIZAR COINCIDENCIA EXACTA CON LA TABLA
+    #    Esto evita el problema que reportaste de "no está en la misma hoja".
+    # =========================================================
+    # Importante: se aplica sobre TODO el queryset antes de paginar.
+    if excel_filters:
+        # Materializamos IDs permitidos comparando contra los mismos textos que pintas en la tabla
+        ids_ok = []
+
+        # Nota: iterar queryset puede costar, pero para rendiciones normalmente está bien.
+        for mov in movimientos:
+            # construimos los mismos valores que usas en data-excel-value
+            nombre_val = (mov.usuario.get_full_name() if callable(getattr(mov.usuario, "get_full_name", None)) else str(getattr(mov.usuario, "get_full_name", "") or "")).strip() or "—"
+            fecha_val = mov.fecha.strftime('%d-%m-%Y') if mov.fecha else "—"
+            fecha_real_val = (mov.fecha_transaccion.strftime('%d-%m-%Y') if getattr(mov, 'fecha_transaccion', None) else fecha_val)
+
+            proyecto_val = str(mov.proyecto or "—")
+            monto_val = f"${mov.cargos or 0:,.0f}".replace(",", ".")  # aprox CLP
+            tipo_val = str(mov.tipo or "—")
+
+            if getattr(mov, 'vehiculo_flota', None):
+                vf = mov.vehiculo_flota
+                vehiculo_val = f"{vf.patente}{' · ' + str(vf.marca) + ' ' + str(vf.modelo) if getattr(vf, 'marca', None) else ''}"
+            else:
+                vehiculo_val = "—"
+
+            tipo_serv_val = str(getattr(mov, 'tipo_servicio_flota_nombre', None) or "—")
+
+            if getattr(mov, 'fecha_servicio_flota', None):
+                fecha_hora_val = mov.fecha_servicio_flota.strftime('%d-%m-%Y')
+                if getattr(mov, 'hora_servicio_flota', None):
+                    fecha_hora_val += " " + mov.hora_servicio_flota.strftime('%I:%M %p').lower().replace('am', 'a.m.').replace('pm', 'p.m.')
+            else:
+                fecha_hora_val = "—"
+
+            km_val = f"{getattr(mov, 'kilometraje_servicio_flota', None):,} KM".replace(",", ".") if getattr(mov, 'kilometraje_servicio_flota', None) else "—"
+
+            if getattr(mov, 'servicio_flota', None):
+                sf = mov.servicio_flota
+                servicio_val = f"#{getattr(sf, 'service_code', None) or sf.id}"
+            else:
+                servicio_val = "—"
+
+            observ_val = str(mov.observaciones or "—")
+            comprobante_val = "Ver" if getattr(mov, 'comprobante', None) else "—"
+
+            status_map = {
+                'pendiente_supervisor': 'Pendiente aprobación del Supervisor',
+                'aprobado_supervisor': 'Pendiente aprobación del PM',
+                'rechazado_supervisor': 'Rechazado por Supervisor',
+                'aprobado_pm': 'Pendiente aprobación de Finanzas',
+                'rechazado_pm': 'Rechazado por PM',
+                'aprobado_finanzas': 'Aprobado por Finanzas',
+                'rechazado_finanzas': 'Rechazado por Finanzas',
+                'pendiente_abono_usuario': 'Pendiente aprobación del Usuario',
+                'aprobado_abono_usuario': 'Abono aprobado por Usuario',
+                'rechazado_abono_usuario': 'Abono rechazado por Usuario',
+            }
+            estado_val = status_map.get(mov.status, str(getattr(mov, 'get_status_display', lambda: mov.status)()))
+
+            row_vals = {
+                "0": nombre_val,
+                "1": fecha_val,
+                "2": fecha_real_val,
+                "3": proyecto_val,
+                "4": monto_val,
+                "5": tipo_val,
+                "6": vehiculo_val,
+                "7": tipo_serv_val,
+                "8": fecha_hora_val,
+                "9": km_val,
+                "10": servicio_val,
+                "11": observ_val,
+                "12": comprobante_val,
+                "13": estado_val,
+            }
+
+            ok = True
+            for col_idx, vals in excel_filters.items():
+                if not isinstance(vals, list) or not vals:
+                    continue
+                vals_norm = {str(v).strip() for v in vals}
+                if str(row_vals.get(str(col_idx), "—")).strip() not in vals_norm:
+                    ok = False
+                    break
+
+            if ok:
+                ids_ok.append(mov.id)
+
+        movimientos = movimientos.filter(id__in=ids_ok)
+
+    # =========================================================
+    # 7) ORDEN FINAL
+    # =========================================================
+    movimientos = movimientos.order_by(
         'prioridad_rol',
         'orden_status',
         '-fecha_transaccion',
-        '-fecha'
+        '-fecha',
+        '-id',
     )
 
-    # ==========================================================
-    # ✅ Helpers para filtros Excel (valores iguales a la tabla)
-    # ==========================================================
-    def _fmt_fecha(d):
-        return d.strftime('%d-%m-%Y') if d else '—'
+    # =========================================================
+    # 8) TOTALES
+    # =========================================================
+    total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
+    pendientes = movimientos.filter(status__startswith='pendiente').aggregate(total=Sum('cargos'))['total'] or 0
+    rechazados = movimientos.filter(status__startswith='rechazado').aggregate(total=Sum('cargos'))['total'] or 0
 
-    def _fmt_hora(h):
-        # h es time
-        if not h:
-            return ''
-        # 12h con "a. m." / "p. m." similar al template
-        try:
-            return h.strftime('%I:%M %p').lower().replace('am', 'a. m.').replace('pm', 'p. m.')
-        except Exception:
-            return ''
-
-    def _fmt_monto(m):
-        # En la tabla visual tú muestras: ${{ mov.cargos|floatformat:0|formato_clp }}
-        # Para filtro Excel usamos una versión estable tipo "$20.000"
-        try:
-            n = int(m or 0)
-        except Exception:
-            n = 0
-        return f"${n:,}".replace(',', '.')
-
-    def _fmt_km(km):
-        if km in [None, '']:
-            return '—'
-        try:
-            n = int(km)
-            return f"{n:,}".replace(',', '.') + " KM"
-        except Exception:
-            return '—'
-
-    def _estado_filtro(mov):
-        # Texto compacto para filtrar por estado (consistente)
-        mapa = {
+    # =========================================================
+    # 9) GLOBAL DISTINCTS PARA PANEL EXCEL (sobre queryset filtrado por rol, antes de paginar)
+    # =========================================================
+    def _estado_label(mov):
+        return {
             'pendiente_supervisor': 'Pendiente aprobación del Supervisor',
             'aprobado_supervisor': 'Pendiente aprobación del PM',
             'rechazado_supervisor': 'Rechazado por Supervisor',
@@ -2266,103 +2457,51 @@ def vista_rendiciones(request):
             'pendiente_abono_usuario': 'Pendiente aprobación del Usuario',
             'aprobado_abono_usuario': 'Abono aprobado por Usuario',
             'rechazado_abono_usuario': 'Abono rechazado por Usuario',
-        }
-        return mapa.get(mov.status, getattr(mov, 'get_status_display', lambda: str(mov.status))())
+        }.get(mov.status, mov.get_status_display() if hasattr(mov, 'get_status_display') else str(mov.status))
 
-    def _row_values(mov):
-        usuario_nombre = (mov.usuario.get_full_name() or getattr(mov.usuario, 'username', '') or '').strip() or '—'
+    excel_global = {str(i): set() for i in range(14)}  # 0..13 (sin Acciones)
 
-        fecha_real = mov.fecha_transaccion if mov.fecha_transaccion else mov.fecha
+    for mov in movimientos:
+        excel_global["0"].add((mov.usuario.get_full_name() if callable(getattr(mov.usuario, "get_full_name", None)) else str(mov.usuario)).strip() or "—")
+        excel_global["1"].add(mov.fecha.strftime('%d-%m-%Y') if mov.fecha else "—")
+        excel_global["2"].add(mov.fecha_transaccion.strftime('%d-%m-%Y') if getattr(mov, 'fecha_transaccion', None) else (mov.fecha.strftime('%d-%m-%Y') if mov.fecha else "—"))
+        excel_global["3"].add(str(mov.proyecto or "—"))
+        excel_global["4"].add(f"${mov.cargos or 0:,.0f}".replace(",", "."))
+        excel_global["5"].add(str(mov.tipo or "—"))
 
-        if mov.vehiculo_flota:
-            vehiculo_txt = f"{mov.vehiculo_flota.patente}"
-            if getattr(mov.vehiculo_flota, 'marca', None):
-                vehiculo_txt += f" · {mov.vehiculo_flota.marca} {mov.vehiculo_flota.modelo or ''}".rstrip()
+        if getattr(mov, 'vehiculo_flota', None):
+            vf = mov.vehiculo_flota
+            excel_global["6"].add(f"{vf.patente}{' · ' + str(vf.marca) + ' ' + str(vf.modelo) if getattr(vf, 'marca', None) else ''}")
         else:
-            vehiculo_txt = '—'
+            excel_global["6"].add("—")
 
-        if mov.fecha_servicio_flota:
-            fh_serv = _fmt_fecha(mov.fecha_servicio_flota)
-            hora_txt = _fmt_hora(mov.hora_servicio_flota)
-            if hora_txt:
-                fh_serv = f"{fh_serv} {hora_txt}"
+        excel_global["7"].add(str(getattr(mov, 'tipo_servicio_flota_nombre', None) or "—"))
+
+        if getattr(mov, 'fecha_servicio_flota', None):
+            fh = mov.fecha_servicio_flota.strftime('%d-%m-%Y')
+            if getattr(mov, 'hora_servicio_flota', None):
+                fh += " " + mov.hora_servicio_flota.strftime('%I:%M %p').lower().replace('am', 'a.m.').replace('pm', 'p.m.')
+            excel_global["8"].add(fh)
         else:
-            fh_serv = '—'
+            excel_global["8"].add("—")
 
-        servicio_flota_txt = f"#{getattr(mov.servicio_flota, 'service_code', None) or mov.servicio_flota.id}" if mov.servicio_flota else '—'
+        excel_global["9"].add(f"{mov.kilometraje_servicio_flota:,} KM".replace(",", ".") if getattr(mov, 'kilometraje_servicio_flota', None) else "—")
 
-        return {
-            # índices = columnas de la tabla (0..14)
-            "0": usuario_nombre,
-            "1": _fmt_fecha(mov.fecha),
-            "2": _fmt_fecha(fecha_real),
-            "3": str(mov.proyecto) if mov.proyecto else '—',
-            "4": _fmt_monto(mov.cargos),
-            "5": str(mov.tipo) if mov.tipo else '—',
-            "6": vehiculo_txt,
-            "7": getattr(mov, 'tipo_servicio_flota_nombre', None) or '—',
-            "8": fh_serv,
-            "9": _fmt_km(getattr(mov, 'kilometraje_servicio_flota', None)),
-            "10": servicio_flota_txt,
-            "11": (mov.observaciones or '—').strip() if getattr(mov, 'observaciones', None) else '—',
-            "12": 'Ver' if getattr(mov, 'comprobante', None) else '—',
-            "13": _estado_filtro(mov),
-            "14": 'Acciones',
-        }
+        if getattr(mov, 'servicio_flota', None):
+            sf = mov.servicio_flota
+            excel_global["10"].add(f"#{getattr(sf, 'service_code', None) or sf.id}")
+        else:
+            excel_global["10"].add("—")
 
-    # Convertimos a lista una vez (para poder filtrar global y paginar después)
-    movimientos_list = list(movimientos_qs)
+        excel_global["11"].add(str(mov.observaciones or "—"))
+        excel_global["12"].add("Ver" if getattr(mov, 'comprobante', None) else "—")
+        excel_global["13"].add(_estado_label(mov))
 
-    # --- Valores globales para los dropdown tipo Excel (antes de aplicar filtro)
-    excel_global = {}
-    for mov in movimientos_list:
-        vals = _row_values(mov)
-        for k, v in vals.items():
-            # No incluir Acciones
-            if k == "14":
-                continue
-            excel_global.setdefault(k, set()).add(v or '—')
+    excel_global_json = json.dumps({k: sorted(list(v)) for k, v in excel_global.items()}, ensure_ascii=False)
 
-    excel_global_json = json.dumps({
-        k: sorted(list(v), key=lambda x: (str(x).lower()))
-        for k, v in excel_global.items()
-    }, ensure_ascii=False)
-
-    # --- Aplicar filtros Excel (globales, backend) ANTES de paginar
-    excel_filters_raw = request.GET.get('excel_filters', '').strip()
-    excel_filters = {}
-    if excel_filters_raw:
-        try:
-            parsed = json.loads(excel_filters_raw)
-            if isinstance(parsed, dict):
-                # normalizamos a sets de strings
-                for k, arr in parsed.items():
-                    if isinstance(arr, list):
-                        excel_filters[str(k)] = set(str(x) for x in arr)
-        except Exception:
-            excel_filters = {}
-
-    if excel_filters:
-        filtrados = []
-        for mov in movimientos_list:
-            vals = _row_values(mov)
-            ok = True
-            for col_idx, allowed in excel_filters.items():
-                if not allowed:
-                    continue
-                if vals.get(col_idx, '—') not in allowed:
-                    ok = False
-                    break
-            if ok:
-                filtrados.append(mov)
-        movimientos_list = filtrados
-
-    # --- Totales (sobre lista ya filtrada)
-    total = sum((m.cargos or Decimal('0')) for m in movimientos_list)
-    pendientes = sum((m.cargos or Decimal('0')) for m in movimientos_list if str(m.status).startswith('pendiente'))
-    rechazados = sum((m.cargos or Decimal('0')) for m in movimientos_list if str(m.status).startswith('rechazado'))
-
-    # --- Paginación
+    # =========================================================
+    # 10) PAGINACIÓN
+    # =========================================================
     cantidad_param = request.GET.get('cantidad', '10')
     try:
         if cantidad_param == 'todos':
@@ -2373,9 +2512,17 @@ def vista_rendiciones(request):
         cantidad_param = '10'
         page_size = 10
 
-    paginator = Paginator(movimientos_list, page_size)
+    paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page') or 1
     pagina = paginator.get_page(page_number)
+
+    # DEBUG opcional (puedes borrar después)
+    # print("ROLES:", {
+    #     "prop_es_supervisor": prop_es_supervisor, "prop_es_pm": prop_es_pm, "prop_es_facturacion": prop_es_facturacion,
+    #     "grp_es_supervisor": grp_es_supervisor, "grp_es_pm": grp_es_pm, "grp_es_facturacion": grp_es_facturacion,
+    #     "final_es_supervisor": es_supervisor, "final_es_pm": es_pm, "final_es_facturacion": es_facturacion,
+    #     "excel_filters_raw": excel_filters_raw,
+    # })
 
     return render(request, 'operaciones/vista_rendiciones.html', {
         'pagina': pagina,
@@ -2383,8 +2530,8 @@ def vista_rendiciones(request):
         'total': total,
         'pendientes': pendientes,
         'rechazados': rechazados,
-        'excel_global_json': excel_global_json,   # ✅ para dropdown global
-        'excel_filters_raw': excel_filters_raw,   # ✅ para preservar en paginación
+        'excel_global_json': excel_global_json,
+        'excel_filters_raw': excel_filters_raw,
     })
 
 
