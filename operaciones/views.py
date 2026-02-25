@@ -3,6 +3,7 @@
 import calendar
 import csv
 import io
+import json
 import locale
 import logging
 from datetime import datetime, time
@@ -2144,6 +2145,12 @@ def eliminar_rendicion(request, pk):
 # Supervisor / PM / Finanzas
 # ==========================================================
 
+
+
+
+
+
+
 @login_required
 def vista_rendiciones(request):
     user = request.user
@@ -2163,19 +2170,19 @@ def vista_rendiciones(request):
 
     # --- Qué ve cada rol
     if user.is_superuser:
-        movimientos = base_qs.all()
+        movimientos_qs = base_qs.all()
     elif getattr(user, 'es_supervisor', False):
-        movimientos = (
+        movimientos_qs = (
             base_qs
             .filter(Q(status__startswith='pendiente') | Q(status__startswith='rechazado'))
             .exclude(tipo__categoria='abono')
         )
     elif getattr(user, 'es_pm', False):
-        movimientos = base_qs.all()
+        movimientos_qs = base_qs.all()
     elif getattr(user, 'es_facturacion', False):
-        movimientos = base_qs.all()
+        movimientos_qs = base_qs.all()
     else:
-        movimientos = base_qs.none()
+        movimientos_qs = base_qs.none()
 
     # --- Qué estado es "pendiente para mí"
     if getattr(user, 'es_supervisor', False):
@@ -2196,7 +2203,7 @@ def vista_rendiciones(request):
     else:
         prioridad_rol_expr = Value(1, output_field=IntegerField())
 
-    movimientos = movimientos.annotate(
+    movimientos_qs = movimientos_qs.annotate(
         prioridad_rol=prioridad_rol_expr,
         orden_status=Case(
             When(status__startswith='pendiente', then=Value(1)),
@@ -2212,10 +2219,148 @@ def vista_rendiciones(request):
         '-fecha'
     )
 
-    # --- Totales
-    total = movimientos.aggregate(total=Sum('cargos'))['total'] or 0
-    pendientes = movimientos.filter(status__startswith='pendiente').aggregate(total=Sum('cargos'))['total'] or 0
-    rechazados = movimientos.filter(status__startswith='rechazado').aggregate(total=Sum('cargos'))['total'] or 0
+    # ==========================================================
+    # ✅ Helpers para filtros Excel (valores iguales a la tabla)
+    # ==========================================================
+    def _fmt_fecha(d):
+        return d.strftime('%d-%m-%Y') if d else '—'
+
+    def _fmt_hora(h):
+        # h es time
+        if not h:
+            return ''
+        # 12h con "a. m." / "p. m." similar al template
+        try:
+            return h.strftime('%I:%M %p').lower().replace('am', 'a. m.').replace('pm', 'p. m.')
+        except Exception:
+            return ''
+
+    def _fmt_monto(m):
+        # En la tabla visual tú muestras: ${{ mov.cargos|floatformat:0|formato_clp }}
+        # Para filtro Excel usamos una versión estable tipo "$20.000"
+        try:
+            n = int(m or 0)
+        except Exception:
+            n = 0
+        return f"${n:,}".replace(',', '.')
+
+    def _fmt_km(km):
+        if km in [None, '']:
+            return '—'
+        try:
+            n = int(km)
+            return f"{n:,}".replace(',', '.') + " KM"
+        except Exception:
+            return '—'
+
+    def _estado_filtro(mov):
+        # Texto compacto para filtrar por estado (consistente)
+        mapa = {
+            'pendiente_supervisor': 'Pendiente aprobación del Supervisor',
+            'aprobado_supervisor': 'Pendiente aprobación del PM',
+            'rechazado_supervisor': 'Rechazado por Supervisor',
+            'aprobado_pm': 'Pendiente aprobación de Finanzas',
+            'rechazado_pm': 'Rechazado por PM',
+            'aprobado_finanzas': 'Aprobado por Finanzas',
+            'rechazado_finanzas': 'Rechazado por Finanzas',
+            'pendiente_abono_usuario': 'Pendiente aprobación del Usuario',
+            'aprobado_abono_usuario': 'Abono aprobado por Usuario',
+            'rechazado_abono_usuario': 'Abono rechazado por Usuario',
+        }
+        return mapa.get(mov.status, getattr(mov, 'get_status_display', lambda: str(mov.status))())
+
+    def _row_values(mov):
+        usuario_nombre = (mov.usuario.get_full_name() or getattr(mov.usuario, 'username', '') or '').strip() or '—'
+
+        fecha_real = mov.fecha_transaccion if mov.fecha_transaccion else mov.fecha
+
+        if mov.vehiculo_flota:
+            vehiculo_txt = f"{mov.vehiculo_flota.patente}"
+            if getattr(mov.vehiculo_flota, 'marca', None):
+                vehiculo_txt += f" · {mov.vehiculo_flota.marca} {mov.vehiculo_flota.modelo or ''}".rstrip()
+        else:
+            vehiculo_txt = '—'
+
+        if mov.fecha_servicio_flota:
+            fh_serv = _fmt_fecha(mov.fecha_servicio_flota)
+            hora_txt = _fmt_hora(mov.hora_servicio_flota)
+            if hora_txt:
+                fh_serv = f"{fh_serv} {hora_txt}"
+        else:
+            fh_serv = '—'
+
+        servicio_flota_txt = f"#{getattr(mov.servicio_flota, 'service_code', None) or mov.servicio_flota.id}" if mov.servicio_flota else '—'
+
+        return {
+            # índices = columnas de la tabla (0..14)
+            "0": usuario_nombre,
+            "1": _fmt_fecha(mov.fecha),
+            "2": _fmt_fecha(fecha_real),
+            "3": str(mov.proyecto) if mov.proyecto else '—',
+            "4": _fmt_monto(mov.cargos),
+            "5": str(mov.tipo) if mov.tipo else '—',
+            "6": vehiculo_txt,
+            "7": getattr(mov, 'tipo_servicio_flota_nombre', None) or '—',
+            "8": fh_serv,
+            "9": _fmt_km(getattr(mov, 'kilometraje_servicio_flota', None)),
+            "10": servicio_flota_txt,
+            "11": (mov.observaciones or '—').strip() if getattr(mov, 'observaciones', None) else '—',
+            "12": 'Ver' if getattr(mov, 'comprobante', None) else '—',
+            "13": _estado_filtro(mov),
+            "14": 'Acciones',
+        }
+
+    # Convertimos a lista una vez (para poder filtrar global y paginar después)
+    movimientos_list = list(movimientos_qs)
+
+    # --- Valores globales para los dropdown tipo Excel (antes de aplicar filtro)
+    excel_global = {}
+    for mov in movimientos_list:
+        vals = _row_values(mov)
+        for k, v in vals.items():
+            # No incluir Acciones
+            if k == "14":
+                continue
+            excel_global.setdefault(k, set()).add(v or '—')
+
+    excel_global_json = json.dumps({
+        k: sorted(list(v), key=lambda x: (str(x).lower()))
+        for k, v in excel_global.items()
+    }, ensure_ascii=False)
+
+    # --- Aplicar filtros Excel (globales, backend) ANTES de paginar
+    excel_filters_raw = request.GET.get('excel_filters', '').strip()
+    excel_filters = {}
+    if excel_filters_raw:
+        try:
+            parsed = json.loads(excel_filters_raw)
+            if isinstance(parsed, dict):
+                # normalizamos a sets de strings
+                for k, arr in parsed.items():
+                    if isinstance(arr, list):
+                        excel_filters[str(k)] = set(str(x) for x in arr)
+        except Exception:
+            excel_filters = {}
+
+    if excel_filters:
+        filtrados = []
+        for mov in movimientos_list:
+            vals = _row_values(mov)
+            ok = True
+            for col_idx, allowed in excel_filters.items():
+                if not allowed:
+                    continue
+                if vals.get(col_idx, '—') not in allowed:
+                    ok = False
+                    break
+            if ok:
+                filtrados.append(mov)
+        movimientos_list = filtrados
+
+    # --- Totales (sobre lista ya filtrada)
+    total = sum((m.cargos or Decimal('0')) for m in movimientos_list)
+    pendientes = sum((m.cargos or Decimal('0')) for m in movimientos_list if str(m.status).startswith('pendiente'))
+    rechazados = sum((m.cargos or Decimal('0')) for m in movimientos_list if str(m.status).startswith('rechazado'))
 
     # --- Paginación
     cantidad_param = request.GET.get('cantidad', '10')
@@ -2228,7 +2373,7 @@ def vista_rendiciones(request):
         cantidad_param = '10'
         page_size = 10
 
-    paginator = Paginator(movimientos, page_size)
+    paginator = Paginator(movimientos_list, page_size)
     page_number = request.GET.get('page') or 1
     pagina = paginator.get_page(page_number)
 
@@ -2238,7 +2383,10 @@ def vista_rendiciones(request):
         'total': total,
         'pendientes': pendientes,
         'rechazados': rechazados,
+        'excel_global_json': excel_global_json,   # ✅ para dropdown global
+        'excel_filters_raw': excel_filters_raw,   # ✅ para preservar en paginación
     })
+
 
 @login_required
 def aprobar_rendicion(request, pk):

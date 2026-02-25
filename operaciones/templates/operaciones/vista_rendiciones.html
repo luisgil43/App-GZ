@@ -7,139 +7,209 @@
 {% block dashboard_content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-    <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
-        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
-        {% if user.es_pm %}
-        <a href="{% url 'operaciones:exportar_rendiciones_pm' %}" 
-           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
-            📥 Export to Excel
-        </a>
-        {% endif %}
-    </div>
+  <style>
+    /* ====== Cabecera tipo Excel (filtros por columna) ====== */
+    .excel-header-btn{
+      width:100%;
+      justify-content:center;
+      font-size:0.875rem;
+    }
+    .excel-header-btn .excel-arrow{
+      font-size:0.65rem;
+      margin-left:2px;
+    }
+    .excel-header-btn:hover .excel-arrow{
+      color:#111827;
+    }
+    .excel-panel{
+      position:fixed;
+      z-index:50;
+      width:300px;
+      background:#fff;
+      border-radius:0.75rem;
+      border:1px solid #d1d5db;
+      box-shadow:0 10px 30px rgba(0,0,0,.15);
+      padding:0.75rem;
+      font-size:0.8rem;
+    }
+    .excel-panel h3{
+      font-weight:600;
+      margin-bottom:0.5rem;
+    }
+    .excel-panel small{
+      font-size:0.7rem;
+      color:#6b7280;
+    }
+    .excel-panel .excel-options{
+      max-height:220px;
+      overflow-y:auto;
+      border:1px solid #e5e7eb;
+      border-radius:0.5rem;
+      padding:0.25rem 0.5rem;
+      margin-top:0.25rem;
+      background:#f9fafb;
+    }
+    .excel-col-filtered .excel-header-btn{
+      background:#e0f2fe;
+      border-radius:999px;
+    }
+    .excel-col-filtered .excel-arrow{
+      color:#2563eb !important;
+    }
+  </style>
 
-    <div class="flex justify-start mb-2">
-      <details class="relative">
-        <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-          ⚙️ Columnas
-        </summary>
+  <!-- Encabezado -->
+  <div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-2">
+    <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">🧾 Rendiciones</h2>
+    {% if user.es_pm %}
+    <a href="{% url 'operaciones:exportar_rendiciones_pm' %}"
+       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
+      📥 Export to Excel
+    </a>
+    {% endif %}
+  </div>
 
-        <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
-          <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+  <!-- Selector columnas -->
+  <div class="flex justify-start mb-2">
+    <details class="relative">
+      <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+        ⚙️ Columnas
+      </summary>
 
-          <!-- Master checkbox -->
-          <label class="flex items-center gap-2 mb-2 pb-2 border-b">
-            <input type="checkbox" id="col-toggle-all" checked>
-            <span class="font-semibold text-xs">Mostrar todas</span>
-          </label>
+      <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
+        <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
-          <!-- 0-based, mismo orden que thead -->
-          <div class="space-y-1 text-sm">
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="0" checked>
-              <span>Nombre</span>
-            </label>
+        <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+          <input type="checkbox" id="col-toggle-all" checked>
+          <span class="font-semibold text-xs">Mostrar todas</span>
+        </label>
 
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="1" checked>
-              <span>Fecha</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="2" checked>
-              <span>Fecha real del gasto</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="3" checked>
-              <span>Proyecto</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="4" checked>
-              <span>Monto</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="5" checked>
-              <span>Tipo</span>
-            </label>
-
-            <!-- ✅ NUEVAS columnas flota -->
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="6" checked>
-              <span>Vehículo (Flota)</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="7" checked>
-              <span>Tipo Servicio (Flota)</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="8" checked>
-              <span>Fecha/Hora Servicio</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="9" checked>
-              <span>KM Servicio</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="10" checked>
-              <span>Servicio Flota</span>
-            </label>
-
-            <!-- Resto -->
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="11" checked>
-              <span>Observaciones</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="12" checked>
-              <span>Comprobante</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="13" checked>
-              <span>Estado</span>
-            </label>
-
-            <label class="flex items-center gap-2">
-              <input type="checkbox" class="col-toggle" data-col="14" checked>
-              <span>Acciones</span>
-            </label>
-          </div>
+        <div class="space-y-1 text-sm">
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span>Nombre</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Fecha</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Fecha real del gasto</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Proyecto</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Monto</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>Tipo</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Vehículo (Flota)</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Tipo Servicio (Flota)</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Fecha/Hora Servicio</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>KM Servicio</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="10" checked><span>Servicio Flota</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="11" checked><span>Observaciones</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="12" checked><span>Comprobante</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="13" checked><span>Estado</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="14" checked><span>Acciones</span></label>
         </div>
-      </details>
-    </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- Botón limpiar filtros Excel -->
+  <div class="flex justify-start mb-2">
+    <button type="button"
+            id="btnExcelClearAll"
+            class="px-3 py-1 text-xs border rounded-full bg-white hover:bg-blue-50">
+      ❌ Limpiar filtros
+    </button>
+  </div>
+
+  <!-- Zona con valores globales para filtros Excel -->
+  <div id="rendicionesZone" data-excel-global='{{ excel_global_json|safe }}'>
 
     <!-- Tabla responsive -->
     <div class="overflow-x-auto">
-      <table class="table-auto w-full text-sm min-w-full sm:min-w-[1400px]"
+      <table id="tabla-rendiciones"
+             class="table-auto w-full text-sm min-w-full sm:min-w-[1400px]"
              style="white-space: nowrap;"
              data-columns-table="rendiciones">
+
         <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
           <tr>
-            <th class="p-2 border">Nombre</th>
-            <th class="p-2 border">Fecha</th>
-            <th class="p-2 border">Fecha real del gasto</th>
-            <th class="p-2 border">Proyecto</th>
-            <th class="p-2 border text-right">Monto</th>
-            <th class="p-2 border">Tipo</th>
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Nombre</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
 
-            <!-- ✅ NUEVAS columnas flota -->
-            <th class="p-2 border">Vehículo (Flota)</th>
-            <th class="p-2 border">Tipo Servicio (Flota)</th>
-            <th class="p-2 border">Fecha/Hora Servicio</th>
-            <th class="p-2 border text-right">KM Servicio</th>
-            <th class="p-2 border">Servicio Flota</th>
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Fecha</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
 
-            <th class="p-2 border">Observaciones</th>
-            <th class="p-2 border">Comprobante</th>
-            <th class="p-2 border">Estado</th>
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border text-right" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Monto</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Vehículo (Flota)</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Tipo Servicio (Flota)</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Fecha/Hora Servicio</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border text-right" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>KM Servicio</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Servicio Flota</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Comprobante</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
+            <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>Estado</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+            </th>
+
             <th class="p-2 border">Acciones</th>
           </tr>
         </thead>
@@ -147,10 +217,19 @@
         <tbody class="text-center">
           {% for mov in pagina %}
           <tr class="border-t align-top">
-            <td class="p-2 border">{{ mov.usuario.get_full_name }}</td>
-            <td class="p-2 border">{{ mov.fecha|date:"d-m-Y" }}</td>
+            <!-- 0 Nombre -->
+            <td class="p-2 border" data-excel-value="{{ mov.usuario.get_full_name|default:'—' }}">
+              {{ mov.usuario.get_full_name }}
+            </td>
 
-            <td class="p-2 border">
+            <!-- 1 Fecha -->
+            <td class="p-2 border" data-excel-value="{{ mov.fecha|date:'d-m-Y' }}">
+              {{ mov.fecha|date:"d-m-Y" }}
+            </td>
+
+            <!-- 2 Fecha real del gasto -->
+            <td class="p-2 border"
+                data-excel-value="{% if mov.fecha_transaccion %}{{ mov.fecha_transaccion|date:'d-m-Y' }}{% else %}{{ mov.fecha|date:'d-m-Y' }}{% endif %}">
               {% if mov.fecha_transaccion %}
                 {{ mov.fecha_transaccion|date:"d-m-Y" }}
               {% else %}
@@ -158,12 +237,25 @@
               {% endif %}
             </td>
 
-            <td class="p-2 border">{{ mov.proyecto }}</td>
-            <td class="p-2 border text-right">${{ mov.cargos|default:0|floatformat:0|formato_clp }}</td>
-            <td class="p-2 border">{{ mov.tipo }}</td>
+            <!-- 3 Proyecto -->
+            <td class="p-2 border" data-excel-value="{{ mov.proyecto|default:'—' }}">
+              {{ mov.proyecto }}
+            </td>
 
-            <!-- ✅ Flota -->
-            <td class="p-2 border">
+            <!-- 4 Monto -->
+            <td class="p-2 border text-right"
+                data-excel-value="${{ mov.cargos|default:0|floatformat:0|formato_clp }}">
+              ${{ mov.cargos|default:0|floatformat:0|formato_clp }}
+            </td>
+
+            <!-- 5 Tipo -->
+            <td class="p-2 border" data-excel-value="{{ mov.tipo|default:'—' }}">
+              {{ mov.tipo }}
+            </td>
+
+            <!-- 6 Vehículo -->
+            <td class="p-2 border"
+                data-excel-value="{% if mov.vehiculo_flota %}{{ mov.vehiculo_flota.patente }}{% if mov.vehiculo_flota.marca %} · {{ mov.vehiculo_flota.marca }} {{ mov.vehiculo_flota.modelo }}{% endif %}{% else %}—{% endif %}">
               {% if mov.vehiculo_flota %}
                 {{ mov.vehiculo_flota.patente }}{% if mov.vehiculo_flota.marca %} · {{ mov.vehiculo_flota.marca }} {{ mov.vehiculo_flota.modelo }}{% endif %}
               {% else %}
@@ -171,11 +263,14 @@
               {% endif %}
             </td>
 
-            <td class="p-2 border">
+            <!-- 7 Tipo servicio flota -->
+            <td class="p-2 border" data-excel-value="{{ mov.tipo_servicio_flota_nombre|default:'—' }}">
               {{ mov.tipo_servicio_flota_nombre|default:"—" }}
             </td>
 
-            <td class="p-2 border">
+            <!-- 8 Fecha/Hora servicio -->
+            <td class="p-2 border"
+                data-excel-value="{% if mov.fecha_servicio_flota %}{{ mov.fecha_servicio_flota|date:'d-m-Y' }}{% if mov.hora_servicio_flota %} {{ mov.hora_servicio_flota|time:'h:i a' }}{% endif %}{% else %}—{% endif %}">
               {% if mov.fecha_servicio_flota %}
                 {{ mov.fecha_servicio_flota|date:"d-m-Y" }}
                 {% if mov.hora_servicio_flota %}
@@ -186,7 +281,9 @@
               {% endif %}
             </td>
 
-            <td class="p-2 border text-right">
+            <!-- 9 KM -->
+            <td class="p-2 border text-right"
+                data-excel-value="{% if mov.kilometraje_servicio_flota %}{{ mov.kilometraje_servicio_flota|miles }} KM{% else %}—{% endif %}">
               {% if mov.kilometraje_servicio_flota %}
                 {{ mov.kilometraje_servicio_flota|miles }} KM
               {% else %}
@@ -194,7 +291,9 @@
               {% endif %}
             </td>
 
-            <td class="p-2 border">
+            <!-- 10 Servicio flota -->
+            <td class="p-2 border"
+                data-excel-value="{% if mov.servicio_flota %}#{{ mov.servicio_flota.service_code|default:mov.servicio_flota.id }}{% else %}—{% endif %}">
               {% if mov.servicio_flota %}
                 #{{ mov.servicio_flota.service_code|default:mov.servicio_flota.id }}
               {% else %}
@@ -202,9 +301,13 @@
               {% endif %}
             </td>
 
-            <td class="p-2 border">{{ mov.observaciones|default:"—" }}</td>
+            <!-- 11 Observaciones -->
+            <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'—' }}">
+              {{ mov.observaciones|default:"—" }}
+            </td>
 
-            <td class="p-2 border">
+            <!-- 12 Comprobante -->
+            <td class="p-2 border" data-excel-value="{% if mov.comprobante %}Ver{% else %}—{% endif %}">
               {% if mov.comprobante %}
                 <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
               {% else %}
@@ -212,8 +315,9 @@
               {% endif %}
             </td>
 
-            <!-- Estado con flujo completo -->
-            <td class="p-2 text-sm">
+            <!-- 13 Estado -->
+            <td class="p-2 text-sm"
+                data-excel-value="{% if mov.status == 'pendiente_supervisor' %}Pendiente aprobación del Supervisor{% elif mov.status == 'aprobado_supervisor' %}Pendiente aprobación del PM{% elif mov.status == 'rechazado_supervisor' %}Rechazado por Supervisor{% elif mov.status == 'aprobado_pm' %}Pendiente aprobación de Finanzas{% elif mov.status == 'rechazado_pm' %}Rechazado por PM{% elif mov.status == 'aprobado_finanzas' %}Aprobado por Finanzas{% elif mov.status == 'rechazado_finanzas' %}Rechazado por Finanzas{% elif mov.status == 'pendiente_abono_usuario' %}Pendiente aprobación del Usuario{% elif mov.status == 'aprobado_abono_usuario' %}Abono aprobado por Usuario{% elif mov.status == 'rechazado_abono_usuario' %}Abono rechazado por Usuario{% else %}{{ mov.get_status_display }}{% endif %}">
               <div class="flex flex-col gap-1 text-left leading-tight">
                 {% if mov.status == 'pendiente_supervisor' %}
                   <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
@@ -283,10 +387,9 @@
               </div>
             </td>
 
-            <!-- Acciones -->
+            <!-- 14 Acciones -->
             <td class="p-2 border text-center">
               {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
-                {# Supervisor #}
                 {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
                   <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
                     {% csrf_token %}
@@ -300,7 +403,6 @@
                   </button>
                 {% endif %}
 
-                {# PM #}
                 {% if user.es_pm and mov.status == "aprobado_supervisor" %}
                   <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
                     {% csrf_token %}
@@ -314,7 +416,6 @@
                   </button>
                 {% endif %}
 
-                {# Finanzas #}
                 {% if user.es_facturacion and mov.status == "aprobado_pm" %}
                   <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
                     {% csrf_token %}
@@ -328,7 +429,6 @@
                   </button>
                 {% endif %}
 
-                {# Abono aprobado por usuario #}
                 {% if mov.status == 'pendiente_abono_usuario' and mov.usuario == user %}
                   <form action="{% url 'operaciones:aprobar_rendicion' mov.id %}" method="post" class="inline">
                     {% csrf_token %}
@@ -345,7 +445,7 @@
             </td>
           </tr>
           {% empty %}
-          <tr>
+          <tr data-empty-row="1">
             <td colspan="15" class="p-4 text-center text-gray-500">No hay rendiciones disponibles.</td>
           </tr>
           {% endfor %}
@@ -369,17 +469,17 @@
       </div>
     </div>
 
-<script>
-  function abrirModalRechazo(id) {
-    const next = encodeURIComponent(location.pathname + location.search);
-    document.getElementById('formRechazo').action =
-      `/operaciones/rendiciones/rechazar/${id}/?next=${next}`;
-    document.getElementById('modalRechazo').classList.remove('hidden');
-  }
-  function cerrarModalRechazo() {
-    document.getElementById('modalRechazo').classList.add('hidden');
-  }
-</script>
+    <script>
+      function abrirModalRechazo(id) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        document.getElementById('formRechazo').action =
+          `/operaciones/rendiciones/rechazar/${id}/?next=${next}`;
+        document.getElementById('modalRechazo').classList.remove('hidden');
+      }
+      function cerrarModalRechazo() {
+        document.getElementById('modalRechazo').classList.add('hidden');
+      }
+    </script>
 
     <!-- Paginación -->
     <div class="mt-4 flex flex-wrap justify-between items-center text-sm">
@@ -392,6 +492,10 @@
           <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
           <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
         </select>
+
+        {% if excel_filters_raw %}
+          <input type="hidden" name="excel_filters" value="{{ excel_filters_raw|escape }}">
+        {% endif %}
       </form>
     </div>
 
@@ -405,15 +509,44 @@
 
     <div class="mt-2 flex justify-center gap-2 text-sm">
       {% if pagina.has_previous %}
-        <a href="?page=1&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+        <a href="?page=1&cantidad={{ cantidad }}{% if excel_filters_raw %}&excel_filters={{ excel_filters_raw|urlencode }}{% endif %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}{% if excel_filters_raw %}&excel_filters={{ excel_filters_raw|urlencode }}{% endif %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
       {% endif %}
       {% if pagina.has_next %}
-        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}{% if excel_filters_raw %}&excel_filters={{ excel_filters_raw|urlencode }}{% endif %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}{% if excel_filters_raw %}&excel_filters={{ excel_filters_raw|urlencode }}{% endif %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
       {% endif %}
     </div>
 
+  </div> <!-- /#rendicionesZone -->
+</div>
+
+<!-- Panel flotante tipo Excel -->
+<div id="excelFilterPanel" class="excel-panel hidden">
+  <h3 id="excelPanelTitle">Columna</h3>
+  <small>Filtrar valores</small>
+
+  <div class="mt-2">
+    <input id="excelFilterSearch"
+           type="text"
+           placeholder="Buscar..."
+           class="w-full border border-gray-300 rounded-md px-2 py-1 text-xs">
+  </div>
+
+  <div class="mt-2 excel-options" id="excelFilterOptions"></div>
+
+  <div class="mt-3 flex justify-end gap-2">
+    <button type="button"
+            id="excelFilterClearAll"
+            class="px-2 py-1 border rounded-md text-xs">
+      Limpiar
+    </button>
+    <button type="button"
+            id="excelFilterApply"
+            class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs">
+      Aplicar
+    </button>
+  </div>
 </div>
 
 <script>
@@ -470,6 +603,7 @@
 </script>
 
 <script>
+/* === Mostrar/Ocultar columnas === */
 (function () {
   const panel = document.getElementById('columnToggles');
   if (!panel) return;
@@ -577,4 +711,277 @@
   bindOutsideClickToClose();
 })();
 </script>
+
+<script>
+/* === Filtros tipo Excel (GLOBAL + backend) === */
+(function(){
+  const zona = document.getElementById('rendicionesZone');
+  if(!zona) return;
+
+  function loadExcelGlobalFromZona(){
+    try{
+      const raw = zona.dataset.excelGlobal || '{}';
+      return JSON.parse(raw);
+    }catch(_){
+      return {};
+    }
+  }
+
+  function loadActiveFiltersFromUrl(){
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('excel_filters');
+    if(!raw) return {};
+    try{
+      const obj = JSON.parse(raw);
+      const out = {};
+      Object.entries(obj || {}).forEach(([k, arr]) => {
+        if (Array.isArray(arr)) out[k] = new Set(arr.map(String));
+      });
+      return out;
+    }catch(_){
+      return {};
+    }
+  }
+
+  function saveActiveFiltersToUrl(activeFilters){
+    const plain = {};
+    Object.entries(activeFilters).forEach(([k, set]) => {
+      if (set && set.size) plain[k] = Array.from(set);
+    });
+
+    const params = new URLSearchParams(location.search);
+    params.delete('page'); // reinicia paginación
+    if (Object.keys(plain).length){
+      params.set('excel_filters', JSON.stringify(plain));
+    }else{
+      params.delete('excel_filters');
+    }
+    location.href = location.pathname + '?' + params.toString();
+  }
+
+  const excel = {
+    panel: document.getElementById('excelFilterPanel'),
+    titleEl: document.getElementById('excelPanelTitle'),
+    searchInput: document.getElementById('excelFilterSearch'),
+    optsBox: document.getElementById('excelFilterOptions'),
+    btnApply: document.getElementById('excelFilterApply'),
+    btnClearCol: document.getElementById('excelFilterClearAll'),
+    btnClearAllGlobal: document.getElementById('btnExcelClearAll'),
+    table: document.getElementById('tabla-rendiciones'),
+    headers: [],
+    distinctValues: loadExcelGlobalFromZona(), // ✅ globales del queryset
+    activeFilters: loadActiveFiltersFromUrl(),
+    currentColIndex: null,
+  };
+
+  if(!excel.table || !excel.panel) return;
+  excel.headers = Array.from(excel.table.querySelectorAll('thead th'));
+
+  function excelUpdateHeaderStates(){
+    excel.headers.forEach((th, idx)=>{
+      if(!th.hasAttribute('data-excel-col')) return;
+      const hasFilter = !!(excel.activeFilters[idx] && excel.activeFilters[idx].size > 0);
+      th.classList.toggle('excel-col-filtered', hasFilter);
+    });
+  }
+
+  function excelFilterOptionList(query){
+    const q = (query || '').trim().toLowerCase();
+    let visible = 0;
+
+    excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
+      const text = (lbl.dataset.optionText || lbl.textContent || '').toLowerCase();
+      const show = text.includes(q);
+      lbl.style.display = show ? '' : 'none';
+      if(show) visible++;
+    });
+
+    let msg = excel.optsBox.querySelector('[data-no-match="1"]');
+    if(!msg){
+      msg = document.createElement('div');
+      msg.dataset.noMatch = "1";
+      msg.className = "mt-2 text-xs text-gray-500";
+      msg.textContent = "No hay resultados.";
+      excel.optsBox.appendChild(msg);
+    }
+    msg.style.display = (q && visible === 0) ? '' : 'none';
+  }
+
+  function excelRenderOptions(colIndex){
+    excel.optsBox.innerHTML = '';
+
+    const values = Array.isArray(excel.distinctValues[String(colIndex)])
+      ? excel.distinctValues[String(colIndex)].slice()
+      : [];
+
+    values.sort((a,b)=>String(a).localeCompare(String(b), 'es', {sensitivity:'base'}));
+
+    const selected = excel.activeFilters[colIndex];
+
+    // Select all
+    const allLabel = document.createElement('label');
+    allLabel.className = 'flex items-center gap-1 mb-1 text-xs';
+    const allCb = document.createElement('input');
+    allCb.type = 'checkbox';
+    allCb.dataset.selectAll = '1';
+    allCb.checked = !selected || selected.size === values.length;
+
+    allCb.addEventListener('change', ()=>{
+      const q = (excel.searchInput?.value || '').trim().toLowerCase();
+      const onlyVisible = !!q;
+
+      const optionLabels = excel.optsBox.querySelectorAll('label[data-option-label]');
+      optionLabels.forEach(lbl=>{
+        if (onlyVisible && lbl.style.display === 'none') return;
+        const cb = lbl.querySelector('input[type="checkbox"][data-value]');
+        if(cb) cb.checked = allCb.checked;
+      });
+    });
+
+    allLabel.appendChild(allCb);
+    allLabel.appendChild(document.createTextNode(' (Seleccionar todo)'));
+    excel.optsBox.appendChild(allLabel);
+
+    // Opciones
+    values.forEach(val=>{
+      const label = document.createElement('label');
+      label.className = 'flex items-center gap-1 text-xs mt-0.5';
+      label.dataset.optionLabel = '1';
+      label.dataset.optionText = String(val);
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.value = String(val);
+      cb.checked = !selected || selected.has(String(val));
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + String(val)));
+      excel.optsBox.appendChild(label);
+    });
+  }
+
+  function excelOpenForHeader(th){
+    excel.currentColIndex = parseInt(th.dataset.excelIndex, 10);
+    excel.titleEl.textContent = th.innerText.trim();
+
+    excelRenderOptions(excel.currentColIndex);
+
+    const rect = th.getBoundingClientRect();
+    const panelWidth  = 300;
+    let left = rect.left + (rect.width - panelWidth) / 2;
+    let top  = rect.bottom + 4;
+
+    const minLeft = 8;
+    const maxLeft = window.innerWidth - panelWidth - 8;
+    if (left < minLeft) left = minLeft;
+    if (left > maxLeft) left = maxLeft;
+
+    excel.panel.style.left = left + 'px';
+    excel.panel.style.top  = top + 'px';
+
+    excel.panel.classList.remove('hidden');
+    excel.searchInput.value = '';
+    excelFilterOptionList('');
+    excel.searchInput.focus();
+  }
+
+  // Bind headers
+  excel.headers.forEach((th, idx)=>{
+    if(th.hasAttribute('data-excel-col')){
+      th.dataset.excelIndex = idx;
+      const btn = th.querySelector('.excel-header-btn');
+      if(btn){
+        btn.addEventListener('click', (ev)=>{
+          ev.stopPropagation();
+          excelOpenForHeader(th);
+        });
+      }
+    }
+  });
+
+  // Buscador interno panel
+  excel.searchInput.addEventListener('input', ()=>{
+    excelFilterOptionList(excel.searchInput.value);
+  });
+
+  excel.searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      excel.btnApply.click();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      excel.panel.classList.add('hidden');
+    }
+  });
+
+  // Limpiar solo columna actual
+  excel.btnClearCol.addEventListener('click', (e)=>{
+    e.preventDefault();
+    if (excel.currentColIndex == null) return;
+    delete excel.activeFilters[excel.currentColIndex];
+    saveActiveFiltersToUrl(excel.activeFilters);
+  });
+
+  // Aplicar (backend)
+  excel.btnApply.addEventListener('click', ()=>{
+    if(excel.currentColIndex == null){
+      excel.panel.classList.add('hidden');
+      return;
+    }
+
+    const q = (excel.searchInput?.value || '').trim().toLowerCase();
+    let chosenCheckboxes = [];
+
+    if(q){
+      const visibleLabels = Array.from(excel.optsBox.querySelectorAll('label[data-option-label]'))
+        .filter(lbl => lbl.style.display !== 'none');
+
+      chosenCheckboxes = visibleLabels
+        .map(lbl => lbl.querySelector('input[type="checkbox"][data-value]'))
+        .filter(Boolean);
+    }else{
+      chosenCheckboxes = Array.from(excel.optsBox.querySelectorAll('input[type="checkbox"][data-value]'));
+    }
+
+    const selected = new Set();
+    chosenCheckboxes.forEach(cb => {
+      if(cb.checked) selected.add(String(cb.dataset.value));
+    });
+
+    const allValues = Array.isArray(excel.distinctValues[String(excel.currentColIndex)])
+      ? excel.distinctValues[String(excel.currentColIndex)]
+      : [];
+
+    if (selected.size === 0 || selected.size === allValues.length){
+      delete excel.activeFilters[excel.currentColIndex];
+    } else {
+      excel.activeFilters[excel.currentColIndex] = selected;
+    }
+
+    saveActiveFiltersToUrl(excel.activeFilters);
+  });
+
+  // Limpiar todos (global)
+  if (excel.btnClearAllGlobal){
+    excel.btnClearAllGlobal.addEventListener('click', (e)=>{
+      e.preventDefault();
+      excel.activeFilters = {};
+      saveActiveFiltersToUrl(excel.activeFilters);
+    });
+  }
+
+  // Cerrar panel click afuera
+  document.addEventListener('click', (e)=>{
+    if(excel.panel.classList.contains('hidden')) return;
+    if(excel.panel.contains(e.target)) return;
+    if(e.target.closest('.excel-header-btn')) return;
+    excel.panel.classList.add('hidden');
+  });
+
+  // Marcar columnas filtradas al cargar
+  excelUpdateHeaderStates();
+})();
+</script>
+
 {% endblock %}
