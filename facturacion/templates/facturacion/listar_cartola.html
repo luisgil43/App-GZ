@@ -97,7 +97,7 @@
        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm shadow">
       + Registrar Abono
     </a>
-    <a href="{% url 'facturacion:exportar_cartola_finanzas' %}"
+    <a href="{% url 'facturacion:exportar_cartola_finanzas' %}{% if full_qs %}?{{ full_qs }}{% endif %}"
        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-full text-sm shadow">
       📥 Export to Excel
     </a>
@@ -356,7 +356,7 @@
           <td class="p-2 border">
   <input type="checkbox" class="chkHistorial" value="{{ mov.id }}">
 </td>
-          <td class="p-2 border">{{ mov.usuario }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.usuario }}">{{ mov.usuario }}</td>
 
           <!-- Fecha -->
           <td class="p-2 border" data-excel-value="{{ mov.fecha|date:'d-m-Y' }}">
@@ -383,22 +383,25 @@
   {% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:"H:i" }}{% else %}—{% endif %}
 </td>
 
-<td class="p-2 border-b border-gray-200 text-right">
+<td class="p-2 border-b border-gray-200 text-right"
+    data-excel-value="{% if mov.kilometraje_servicio_flota %}{{ mov.kilometraje_servicio_flota|miles }} KM{% else %}—{% endif %}">
   {% if mov.kilometraje_servicio_flota %}
     {{ mov.kilometraje_servicio_flota|miles }} KM
   {% else %}
     —
   {% endif %}
 </td>
-          <td class="p-2 border">{{ mov.proyecto }}</td>
-          <td class="p-2 border">{{ mov.tipo.categoria|title }}</td>
-          <td class="p-2 border">{{ mov.tipo }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.proyecto }}">{{ mov.proyecto }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.tipo.categoria|title }}">{{ mov.tipo.categoria|title }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.tipo }}">{{ mov.tipo }}</td>
 
           <td class="p-2 border" data-excel-value="{{ mov.rut_factura|default:'—' }}">{{ mov.rut_factura|default:"—" }}</td>
           <td class="p-2 border" data-excel-value="{{ mov.tipo_doc|default:'—' }}">{{ mov.tipo_doc|default:"—" }}</td>
           <td class="p-2 border" data-excel-value="{{ mov.numero_doc|default:'—' }}">{{ mov.numero_doc|default:"—" }}</td>
 
-          <td class="p-2 border">{{ mov.observaciones }}</td>
+          <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'(Vacías)' }}">
+            {{ mov.observaciones|default:"(Vacías)" }}
+          </td>
 
           <td class="p-2 border" data-excel-value="{{ mov.numero_transferencia|default:'—' }}">
             {{ mov.numero_transferencia|default:"—" }}
@@ -422,7 +425,7 @@
           </td>
 
           <!-- Status (valor limpio para filtro Excel) -->
-          <td class="p-2 text-sm" data-excel-value="{{ mov.get_status_display }}">
+          <td class="p-2 border text-sm" data-excel-value="{{ mov.get_status_display }}">
             <div class="flex flex-col gap-1 text-left leading-tight">
               {% if mov.status == 'pendiente_supervisor' %}
                 <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full font-medium">
@@ -557,7 +560,7 @@
         </tr>
         {% empty %}
         <tr data-empty-row="1">
-          <td colspan="19" class="p-4 text-center">No hay movimientos registrados.</td>
+          <td colspan="20" class="p-4 text-center">No hay movimientos registrados.</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -578,11 +581,14 @@
     <!-- Preservar filtros actuales (igual) -->
     <input type="hidden" name="usuario"     value="{{ filtros.usuario }}">
     <input type="hidden" name="fecha"       value="{{ filtros.fecha }}">
+    <input type="hidden" name="fecha_real"  value="{{ filtros.fecha_real }}">
     <input type="hidden" name="proyecto"    value="{{ filtros.proyecto }}">
     <input type="hidden" name="categoria"   value="{{ filtros.categoria }}">
     <input type="hidden" name="tipo"        value="{{ filtros.tipo }}">
     <input type="hidden" name="rut_factura" value="{{ filtros.rut_factura }}">
     <input type="hidden" name="estado"      value="{{ filtros.estado }}">
+    <input type="hidden" name="hora_servicio" value="{{ filtros.hora_servicio }}">
+    <input type="hidden" name="kilometraje_servicio" value="{{ filtros.kilometraje_servicio }}">
 
     <!-- ✅ preservar filtros excel si vienen por GET (en recarga normal) -->
     {% if request.GET.excel_filters %}
@@ -591,17 +597,23 @@
   </form>
 
   <!-- Paginación (igual) -->
-  <div class="mt-4 flex justify-center gap-2 text-sm">
-    {% if pagina.has_previous %}
-      <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-    {% endif %}
-    <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-    {% if pagina.has_next %}
-      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-    {% endif %}
-  </div>
+  <div class="mt-4 flex justify-center gap-2 text-sm flex-wrap">
+  {% if pagina.has_previous %}
+    <a href="?page=1{% if base_qs %}&{{ base_qs }}{% endif %}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+    <a href="?page={{ pagina.previous_page_number }}{% if base_qs %}&{{ base_qs }}{% endif %}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+  {% endif %}
+
+  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+
+  {% if pagina.has_next %}
+    <a href="?page={{ pagina.next_page_number }}{% if base_qs %}&{{ base_qs }}{% endif %}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+    <a href="?page={{ pagina.paginator.num_pages }}{% if base_qs %}&{{ base_qs }}{% endif %}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+  {% endif %}
+</div>
 </div>
 
 <!-- Modal de rechazo (igual) -->
@@ -1707,6 +1719,7 @@
     modal.__clickHandler = (e) => {
       if (e.target === modal || e.target.classList.contains('bg-black/50')) closeNiceModal();
     };
+    modal.addEventListener('click', modal.__clickHandler);
   }
 
   function closeNiceModal() {
@@ -1717,6 +1730,9 @@
 
     if (modal.__escHandler) document.removeEventListener('keydown', modal.__escHandler);
     modal.__escHandler = null;
+
+    if (modal.__clickHandler) modal.removeEventListener('click', modal.__clickHandler);
+    modal.__clickHandler = null;
   }
 </script>
 </div>

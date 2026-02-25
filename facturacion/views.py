@@ -1109,7 +1109,17 @@ def listar_cartola(request):
             page_size = 10
             cantidad_param = '10'
 
-    # --- Filtros
+    # ============================================================
+    # ✅ Excel filters (JSON) recibido por GET
+    # ============================================================
+    params = request.GET.copy()
+    excel_filters_raw = (params.get('excel_filters') or '').strip()
+    try:
+        excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
+    except json.JSONDecodeError:
+        excel_filters = {}
+
+    # --- Filtros clásicos
     usuario = (request.GET.get('usuario') or '').strip()
     fecha_txt = (request.GET.get('fecha') or '').strip()
     fecha_real_txt = (request.GET.get('fecha_real') or '').strip()
@@ -1195,7 +1205,7 @@ def listar_cartola(request):
             movimientos, 'fecha_transaccion', fecha_real_txt, 'fecha real del gasto'
         )
 
-    # --- Otros filtros
+    # --- Otros filtros clásicos
     if proyecto:
         movimientos = movimientos.filter(proyecto__nombre__icontains=proyecto)
 
@@ -1212,8 +1222,6 @@ def listar_cartola(request):
         movimientos = movimientos.filter(status=estado)
 
     if hora_servicio:
-        # TimeField normalmente no soporta icontains bien en todos los motores;
-        # usamos Cast para evitar problemas.
         movimientos = movimientos.annotate(
             hora_servicio_iso=Cast('hora_servicio_flota', CharField())
         ).filter(hora_servicio_iso__icontains=hora_servicio)
@@ -1224,8 +1232,6 @@ def listar_cartola(request):
     # ==========================================================
     # ✅ MOSTRAR TODO EL PROCESO + ABONOS (solo fuera de historial)
     # ==========================================================
-    # Esto incluye explícitamente TODOS los estados definidos en tu modelo,
-    # incluyendo los de abonos.
     estados_visibles = [codigo for codigo, _label in CartolaMovimiento.ESTADOS]
 
     movimientos = movimientos.filter(
@@ -1233,28 +1239,18 @@ def listar_cartola(request):
         status__in=estados_visibles
     )
 
-    # --- Orden personalizado (prioriza pendientes y flujo)
+    # --- Orden personalizado
     movimientos = movimientos.annotate(
         prioridad=Case(
-            # Pendientes flujo normal
             When(status='pendiente_supervisor', then=Value(0)),
-            When(status='aprobado_supervisor', then=Value(1)),   # Pendiente PM
-            When(status='aprobado_pm', then=Value(2)),           # Pendiente Finanzas
-
-            # Pendientes abono
+            When(status='aprobado_supervisor', then=Value(1)),
+            When(status='aprobado_pm', then=Value(2)),
             When(status='pendiente_abono_usuario', then=Value(3)),
-
-            # Rechazados (incluye rechazos de abono)
             When(status__startswith='rechazado', then=Value(4)),
-
-            # Aprobados finales
             When(status='aprobado_finanzas', then=Value(5)),
             When(status='aprobado_abono_usuario', then=Value(6)),
-
-            # Cualquier otro aprobado / pendiente
             When(status__startswith='aprobado', then=Value(7)),
             When(status__startswith='pendiente', then=Value(8)),
-
             default=Value(9),
             output_field=IntegerField(),
         )
@@ -1265,8 +1261,217 @@ def listar_cartola(request):
         '-id'
     )
 
-    # --- Paginación
-    paginator = Paginator(movimientos, page_size)
+    # ============================================================
+    # ✅ Excel filters (python) + excel_global_json (TODO el set filtrado)
+    # ============================================================
+    movimientos_list = list(movimientos)
+
+    def format_clp(n):
+        try:
+            n = 0 if n is None else n
+            n_int = int(n)
+            return f"${n_int:,}".replace(",", ".")
+        except Exception:
+            return "$0"
+
+    def format_km(n):
+        try:
+            if n is None or n == "":
+                return "—"
+            n_int = int(float(n))
+            return f"{n_int:,}".replace(",", ".") + " KM"
+        except Exception:
+            return "—"
+
+    if excel_filters:
+        def matches_excel_filters(mov):
+            for col, values in excel_filters.items():
+                if not values:
+                    continue
+                values_set = set(values)
+
+                # Índices tabla cartola (CON checkbox):
+                # 0  Checkbox
+                # 1  Usuario
+                # 2  Fecha
+                # 3  Fecha real del gasto
+                # 4  Vehículo
+                # 5  Hora servicio
+                # 6  Kilometraje servicio
+                # 7  Proyecto
+                # 8  Categoría
+                # 9  Tipo
+                # 10 RUT factura
+                # 11 Tipo de documento
+                # 12 Número de documento
+                # 13 Observaciones
+                # 14 N° Transferencia
+                # 15 Comprobante
+                # 16 Cargos
+                # 17 Abonos
+                # 18 Status
+                # 19 Acciones (no se filtra)
+
+                if col == "1":
+                    label = str(mov.usuario) if mov.usuario else ""
+
+                elif col == "2":
+                    d = getattr(mov, "fecha", None)
+                    label = d.strftime("%d-%m-%Y") if d else ""
+
+                elif col == "3":
+                    d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
+                    label = d.strftime("%d-%m-%Y") if d else ""
+
+                elif col == "4":
+                    label = str(getattr(mov, "vehiculo_flota", None) or "—").strip() or "—"
+
+                elif col == "5":
+                    h = getattr(mov, "hora_servicio_flota", None)
+                    label = h.strftime("%H:%M") if h else "—"
+
+                elif col == "6":
+                    label = format_km(getattr(mov, "kilometraje_servicio_flota", None))
+
+                elif col == "7":
+                    label = str(mov.proyecto) if mov.proyecto else ""
+
+                elif col == "8":
+                    if mov.tipo and getattr(mov.tipo, "categoria", None):
+                        label = (mov.tipo.categoria or "").title()
+                    else:
+                        label = ""
+
+                elif col == "9":
+                    label = str(mov.tipo) if mov.tipo else ""
+
+                elif col == "10":
+                    label = (getattr(mov, "rut_factura", None) or "—").strip() or "—"
+
+                elif col == "11":
+                    label = (getattr(mov, "tipo_doc", None) or "—").strip() or "—"
+
+                elif col == "12":
+                    label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
+
+                elif col == "13":
+                    label = (getattr(mov, "observaciones", None) or "").strip() or "(Vacías)"
+
+                elif col == "14":
+                    label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
+
+                elif col == "15":
+                    label = "Ver" if getattr(mov, "comprobante", None) else "—"
+
+                elif col == "16":
+                    label = format_clp(getattr(mov, "cargos", 0) or 0)
+
+                elif col == "17":
+                    label = format_clp(getattr(mov, "abonos", 0) or 0)
+
+                elif col == "18":
+                    label = mov.get_status_display() if getattr(mov, "status", None) else ""
+
+                else:
+                    continue
+
+                if label not in values_set:
+                    return False
+
+            return True
+
+        movimientos_list = [m for m in movimientos_list if matches_excel_filters(m)]
+
+    # --- excel_global (para panel Excel, basado en TODO el dataset filtrado)
+    excel_global = {}
+
+    excel_global[1] = sorted({str(m.usuario) for m in movimientos_list if m.usuario})
+
+    excel_global[2] = sorted({
+        m.fecha.strftime("%d-%m-%Y")
+        for m in movimientos_list
+        if getattr(m, "fecha", None)
+    })
+
+    excel_global[3] = sorted({
+        (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None)).strftime("%d-%m-%Y")
+        for m in movimientos_list
+        if (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
+    })
+
+    excel_global[4] = sorted({
+        (str(getattr(m, "vehiculo_flota", None) or "—").strip() or "—")
+        for m in movimientos_list
+    })
+
+    excel_global[5] = sorted({
+        (m.hora_servicio_flota.strftime("%H:%M") if getattr(m, "hora_servicio_flota", None) else "—")
+        for m in movimientos_list
+    })
+
+    excel_global[6] = sorted({
+        format_km(getattr(m, "kilometraje_servicio_flota", None))
+        for m in movimientos_list
+    })
+
+    excel_global[7] = sorted({str(m.proyecto) for m in movimientos_list if m.proyecto})
+
+    excel_global[8] = sorted({
+        (m.tipo.categoria or "").title()
+        for m in movimientos_list
+        if m.tipo and getattr(m.tipo, "categoria", None)
+    })
+
+    excel_global[9] = sorted({str(m.tipo) for m in movimientos_list if m.tipo})
+
+    excel_global[10] = sorted({
+        (getattr(m, "rut_factura", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[11] = sorted({
+        (getattr(m, "tipo_doc", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[12] = sorted({
+        (getattr(m, "numero_doc", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[13] = sorted({
+        (getattr(m, "observaciones", None) or "").strip() or "(Vacías)"
+        for m in movimientos_list
+    })
+
+    excel_global[14] = sorted({
+        (getattr(m, "numero_transferencia", None) or "—").strip() or "—"
+        for m in movimientos_list
+    })
+
+    excel_global[15] = sorted({
+        "Ver" if getattr(m, "comprobante", None) else "—"
+        for m in movimientos_list
+    })
+
+    excel_global[16] = sorted({
+        format_clp(getattr(m, "cargos", 0) or 0)
+        for m in movimientos_list
+    })
+
+    excel_global[17] = sorted({
+        format_clp(getattr(m, "abonos", 0) or 0)
+        for m in movimientos_list
+    })
+
+    estado_map = dict(CartolaMovimiento.ESTADOS)
+    status_codes = {m.status for m in movimientos_list if getattr(m, "status", None)}
+    excel_global[18] = sorted(estado_map.get(c, c) for c in status_codes)
+
+    excel_global_json = json.dumps(excel_global)
+
+    # --- Paginación (después de aplicar excel_filters)
+    paginator = Paginator(movimientos_list, page_size)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
@@ -1285,6 +1490,12 @@ def listar_cartola(request):
         'kilometraje_servicio': kilometraje_servicio,
     }
 
+    # ✅ para construir links preservando querystring
+    params_no_page = params.copy()
+    params_no_page.pop('page', None)
+    base_qs = params_no_page.urlencode()
+    full_qs = params.urlencode()
+
     return render(
         request,
         'facturacion/listar_cartola.html',
@@ -1293,8 +1504,12 @@ def listar_cartola(request):
             'cantidad': cantidad_param,
             'estado_choices': estado_choices,
             'filtros': filtros,
+            'excel_global_json': excel_global_json,  # ✅ IMPORTANTE
+            'base_qs': base_qs,                      # ✅ IMPORTANTE
+            'full_qs': full_qs,                      # ✅ IMPORTANTE
         }
     )
+
 
 @login_required
 @rol_requerido('facturacion', 'admin')
@@ -1695,6 +1910,11 @@ def rechazar_movimiento(request, pk):
     return redirect(next_url)
 
 
+
+
+from flota.models import Vehicle  # ✅ importar Vehicle
+
+
 @login_required
 @rol_requerido('facturacion', 'admin')
 def editar_movimiento(request, pk):
@@ -1707,17 +1927,104 @@ def editar_movimiento(request, pk):
         FormClass = MovimientoUsuarioForm
         estado_restaurado = 'pendiente_supervisor'
 
+    # ✅ helper interno para sincronizar con Flota
+    def _sync_movimiento_flota(mov):
+        """
+        Sincroniza KM/último movimiento del vehículo cuando la rendición es de Servicios.
+        No baja el odómetro si el KM editado es menor al actual (strict=False ya lo maneja).
+        """
+        try:
+            # Validar tipo = Servicios
+            tipo = getattr(mov, "tipo", None)
+            tipo_text = ""
+            if tipo:
+                tipo_text = (
+                    getattr(tipo, "nombre", None)
+                    or getattr(tipo, "name", None)
+                    or str(tipo)
+                    or ""
+                ).strip().lower()
+
+            es_servicio = "servicio" in tipo_text
+            if not es_servicio:
+                return
+
+            vehiculo = getattr(mov, "vehiculo_flota", None)
+            km = getattr(mov, "kilometraje_servicio_flota", None)
+
+            if not vehiculo or km in (None, ""):
+                return
+
+            km = int(km)
+
+            # Fecha/hora del movimiento para last_movement_at
+            fecha = getattr(mov, "fecha_servicio_flota", None) or getattr(mov, "fecha_transaccion", None)
+            hora = getattr(mov, "hora_servicio_flota", None)
+
+            if fecha and hora:
+                dt_naive = timezone.datetime.combine(fecha, hora)
+                dt_mov = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+            elif fecha:
+                dt_naive = timezone.datetime.combine(fecha, timezone.datetime.min.time())
+                dt_mov = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+            else:
+                dt_mov = timezone.now()
+
+            # ✅ Actualiza odómetro (no baja si km es menor al actual)
+            vehiculo.update_kilometraje(
+                nuevo_km=km,
+                source="rendicion",
+                ref=f"Rendición #{mov.pk}",
+                strict=False,
+            )
+
+            # ✅ Actualiza último movimiento (siempre)
+            Vehicle.objects.filter(pk=vehiculo.pk).update(
+                last_movement_at=dt_mov,
+                updated_at=timezone.now(),
+            )
+
+        except Exception:
+            # Silencioso para no romper guardado de la rendición
+            # Si quieres, aquí puedes loguear con logger.exception(...)
+            pass
+
     if request.method == 'POST':
-        form = FormClass(request.POST, request.FILES, instance=movimiento)
+        # ✅ PASAR USUARIO AL FORM
+        form = FormClass(request.POST, request.FILES, instance=movimiento, user=request.user)
 
         if form.is_valid():
             campos_editados = form.changed_data
-            if campos_editados:
-                movimiento.status = estado_restaurado
-                movimiento.motivo_rechazo = ""
 
-            form.save()
-            messages.success(request, "Movimiento actualizado correctamente.")
+            try:
+                with transaction.atomic():
+                    if campos_editados:
+                        movimiento.status = estado_restaurado
+                        movimiento.motivo_rechazo = ""
+
+                    movimiento = form.save()
+
+                    # ✅ NUEVO: sincronizar con flota si aplica
+                    _sync_movimiento_flota(movimiento)
+
+                messages.success(request, "Movimiento actualizado correctamente.")
+
+            except Exception:
+                messages.error(request, "No se pudo actualizar el movimiento.")
+                return render(
+                    request,
+                    'facturacion/editar_movimiento.html',
+                    {
+                        'form': form,
+                        'movimiento': movimiento,
+                        'next': (
+                            request.POST.get('next')
+                            or request.GET.get('next')
+                            or request.META.get('HTTP_REFERER')
+                            or reverse('facturacion:listar_cartola')
+                        ),
+                    }
+                )
 
             next_url = (
                 request.POST.get('next')
@@ -1727,15 +2034,11 @@ def editar_movimiento(request, pk):
             )
             return redirect(next_url)
 
-        # ✅ IMPORTANTE: mostrar error general si falla validación
         messages.error(request, "No se pudo guardar. Revisa los campos marcados en rojo.")
 
-        # ✅ DEBUG temporal (puedes dejarlo mientras pruebas)
-        # print("ERRORES FORM:", form.errors)
-        # print("ERRORES NON FIELD:", form.non_field_errors())
-
     else:
-        form = FormClass(instance=movimiento)
+        # ✅ PASAR USUARIO AL FORM
+        form = FormClass(instance=movimiento, user=request.user)
 
     next_url = (
         request.GET.get('next')
@@ -1948,45 +2251,83 @@ from django.utils import timezone
 
 @login_required
 @rol_requerido('facturacion', 'admin')
+@require_POST
+@csrf_protect
 def enviar_a_historial(request):
     """
     Recibe ids[] por POST y marca esos movimientos como en_historial=True.
-    Solo permite mover movimientos con status='aprobado_finanzas' y en_historial=False.
-    """
-    if request.method != "POST":
-        return JsonResponse({"ok": False, "error": "Método no permitido."}, status=405)
 
+    Permite mover al historial:
+    - Rendiciones normales: status='aprobado_finanzas'
+    - Abonos: status='aprobado_abono_usuario'
+
+    Solo si aún no están en historial.
+    """
     ids = request.POST.getlist("ids[]") or []
-    ids = [i for i in ids if str(i).isdigit()]
+    ids = [int(i) for i in ids if str(i).isdigit()]
 
     if not ids:
         return JsonResponse({"ok": False, "error": "No se recibieron IDs."}, status=400)
 
-    # ✅ Solo movemos aprobados por finanzas y que aún no estén en historial
-    qs = CartolaMovimiento.objects.filter(
-        id__in=ids,
-        status='aprobado_finanzas',
+    estados_permitidos_historial = [
+        'aprobado_finanzas',       # rendición normal
+        'aprobado_abono_usuario',  # abono
+    ]
+
+    # Traemos todos los seleccionados (para diagnosticar)
+    seleccionados = CartolaMovimiento.objects.filter(id__in=ids)
+
+    if not seleccionados.exists():
+        return JsonResponse({
+            "ok": False,
+            "error": "No se encontraron movimientos con los IDs enviados."
+        }, status=404)
+
+    # Filtramos los que sí se pueden mover
+    qs_validos = seleccionados.filter(
+        status__in=estados_permitidos_historial,
         en_historial=False,
     )
 
-    moved_count = qs.count()
+    moved_count = qs_validos.count()
+
+    # Si no hay ninguno válido, devolvemos detalle
     if moved_count == 0:
+        resumen = list(
+            seleccionados.values("id", "status", "en_historial")
+        )
+
         return JsonResponse({
             "ok": False,
-            "code": "NO_APROBADO_FINANZAS",
-            "error": "No se puede enviar al historial porque el/los movimiento(s) seleccionado(s) aún no están Aprobados por Finanzas."
+            "code": "NO_FINALIZADO_PARA_HISTORIAL",
+            "error": (
+                "No se puede enviar al historial porque los movimientos seleccionados "
+                "no están finalizados (Aprobado por Finanzas o Abono aprobado por Usuario), "
+                "o ya fueron enviados al historial."
+            ),
+            "detalle": resumen,  # útil para depurar en consola
         }, status=400)
 
-    qs.update(
+    # Movemos solo los válidos
+    qs_validos.update(
         en_historial=True,
         historial_enviado_el=timezone.now(),
         historial_enviado_por=request.user
     )
 
+    # Cantidad no movida (si hubo mezcla)
+    not_moved_count = len(ids) - moved_count
+
     return JsonResponse({
         "ok": True,
-        "moved": moved_count
+        "moved": moved_count,
+        "not_moved": not_moved_count,
+        "message": (
+            f"Se enviaron {moved_count} movimiento(s) al historial."
+            + (f" {not_moved_count} no calificaban para historial." if not_moved_count > 0 else "")
+        )
     }, status=200)
+
 
 
 @login_required

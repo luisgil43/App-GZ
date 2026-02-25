@@ -222,8 +222,8 @@ class MovimientoUsuarioForm(forms.ModelForm):
 
         # ==========================================================
         # ✅ FILTRO CORRECTO DE VEHÍCULOS FLOTA
-        # Solo vehículos ACTIVOS por status + ASIGNADOS ACTIVAMENTE al usuario
-        # (SIN excepción para staff/superuser)
+        # - Superusuario: TODOS los vehículos activos
+        # - Usuario normal: solo los asignados activamente
         # ==========================================================
         try:
             qs_veh = (
@@ -238,18 +238,23 @@ class MovimientoUsuarioForm(forms.ModelForm):
 
             user = self.request_user
             if user and getattr(user, "is_authenticated", False):
-                # ✅ SIEMPRE filtrar por asignación activa del usuario
-                qs_veh = qs_veh.filter(
-                    assignments__user=user,
-                    assignments__active=True
-                ).distinct().order_by('patente')
+                if getattr(user, "is_superuser", False):
+                    # ✅ Superusuario ve todos
+                    qs_veh = qs_veh.distinct().order_by('patente')
+                else:
+                    # ✅ Usuario normal: solo asignados activos
+                    qs_veh = qs_veh.filter(
+                        assignments__user=user,
+                        assignments__active=True
+                    ).distinct().order_by('patente')
             else:
                 # Por seguridad, si no viene user, no mostrar nada
                 qs_veh = qs_veh.none()
 
             self.fields['vehiculo_flota'].queryset = qs_veh
 
-            if not qs_veh.exists():
+            # help_text solo para usuarios NO superuser sin vehículos
+            if (not getattr(user, "is_superuser", False)) and (not qs_veh.exists()):
                 self.fields['vehiculo_flota'].help_text = (
                     "No tienes vehículos asignados actualmente. "
                     "Si necesitas rendir un servicio de flota, solicita una asignación activa."
@@ -403,15 +408,17 @@ class MovimientoUsuarioForm(forms.ModelForm):
                 cleaned['fecha_servicio_flota'] = cleaned.get('fecha_transaccion')
 
             # ✅ Seguridad backend:
-            # si por POST manipulado meten un vehículo no asignado, bloquearlo.
+            # superusuario puede usar cualquier vehículo activo
+            # usuario normal solo vehículo asignado
             user = self.request_user
             if user and getattr(user, "is_authenticated", False) and vehiculo:
-                asignado = vehiculo.assignments.filter(user=user, active=True).exists()
-                if not asignado:
-                    self.add_error(
-                        'vehiculo_flota',
-                        "Ese vehículo no está asignado a tu usuario."
-                    )
+                if not getattr(user, "is_superuser", False):
+                    asignado = vehiculo.assignments.filter(user=user, active=True).exists()
+                    if not asignado:
+                        self.add_error(
+                            'vehiculo_flota',
+                            "Ese vehículo no está asignado a tu usuario."
+                        )
         else:
             # Si NO es servicio, limpiar flota para evitar datos basura
             cleaned['vehiculo_flota'] = None

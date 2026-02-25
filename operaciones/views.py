@@ -1787,12 +1787,12 @@ def editar_rendicion(request, pk):
         )
         return redirect('operaciones:mis_rendiciones')
 
-    # Helpers locales (mismos criterios que usas en mis_rendiciones)
+    # Helpers locales
     from django.core.exceptions import ValidationError
     from django.db import transaction
     from django.utils import timezone
 
-    from flota.models import VehicleService
+    from flota.models import Vehicle, VehicleService
 
     def _map_legacy_service_type(tipo_servicio_obj):
         if not tipo_servicio_obj:
@@ -1825,7 +1825,6 @@ def editar_rendicion(request, pk):
         Valida que:
         - fecha_transaccion no sea futura
         - si es servicio (flota), fecha+hora del servicio no sea futura
-        Devuelve: (ok: bool, mensaje: str|None)
         """
         if not fecha_tx:
             return True, None
@@ -1833,11 +1832,9 @@ def editar_rendicion(request, pk):
         now_local = timezone.localtime(timezone.now())
         hoy_local = now_local.date()
 
-        # 1) Fecha futura (cualquier rendición)
         if fecha_tx > hoy_local:
             return False, "No puedes registrar una rendición con fecha futura."
 
-        # 2) Fecha/Hora futura (solo servicios flota)
         if es_servicio and hora_servicio:
             try:
                 dt_servicio = datetime.combine(fecha_tx, hora_servicio)
@@ -1851,8 +1848,53 @@ def editar_rendicion(request, pk):
 
         return True, None
 
+    def _sync_vehicle_from_rendicion_flota(obj_mov):
+        """
+        Sincroniza odómetro y último movimiento del vehículo desde la rendición flota.
+        - No baja odómetro si el KM es menor (strict=False).
+        """
+        try:
+            vehiculo = getattr(obj_mov, "vehiculo_flota", None)
+            km = getattr(obj_mov, "kilometraje_servicio_flota", None)
+
+            if not vehiculo or km in (None, ""):
+                return
+
+            km = int(km)
+
+            fecha = getattr(obj_mov, "fecha_servicio_flota", None) or getattr(obj_mov, "fecha_transaccion", None)
+            hora = getattr(obj_mov, "hora_servicio_flota", None)
+
+            if fecha and hora:
+                dt_naive = timezone.datetime.combine(fecha, hora)
+                dt_mov = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+            elif fecha:
+                dt_naive = timezone.datetime.combine(fecha, timezone.datetime.min.time())
+                dt_mov = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+            else:
+                dt_mov = timezone.now()
+
+            # ✅ Odometer event + update (sin bajar km si es menor)
+            vehiculo.update_kilometraje(
+                nuevo_km=km,
+                source="rendicion",
+                ref=f"Rendición #{obj_mov.pk}",
+                strict=False,
+            )
+
+            # ✅ Último movimiento
+            Vehicle.objects.filter(pk=vehiculo.pk).update(
+                last_movement_at=dt_mov,
+                updated_at=timezone.now(),
+            )
+
+        except Exception:
+            # No romper la edición por un problema de sync de flota
+            pass
+
     if request.method == 'POST':
-        form = MovimientoUsuarioForm(request.POST, request.FILES, instance=rendicion)
+        # ✅ IMPORTANTE: pasar user al form
+        form = MovimientoUsuarioForm(request.POST, request.FILES, instance=rendicion, user=request.user)
 
         if form.is_valid():
             # --- Detectar cambios ---
@@ -1877,7 +1919,6 @@ def editar_rendicion(request, pk):
             )
             if nuevo_comprobante:
                 obj.comprobante = nuevo_comprobante
-            # else: se mantiene el actual
 
             # ✅ Validación de kilometraje "legacy" (si existe campo kilometraje en Cartola)
             if _cartola_tiene_campo_km():
@@ -1906,7 +1947,7 @@ def editar_rendicion(request, pk):
             tipo_mov = cd.get("tipo")
             es_rendicion_flota = _es_tipo_servicios(tipo_mov)
 
-            # ✅ Validación fecha/hora no futura (también para no-flota valida fecha)
+            # ✅ Validación fecha/hora no futura
             ok_no_futuro, msg_no_futuro = _validar_no_futuro(
                 fecha_tx=cd.get("fecha_transaccion"),
                 hora_servicio=cd.get("hora_servicio_flota"),
@@ -1931,12 +1972,11 @@ def editar_rendicion(request, pk):
             if es_rendicion_flota:
                 vehiculo = cd.get("vehiculo_flota")
                 tipo_servicio_flota = cd.get("tipo_servicio_flota")
-                fecha_servicio = cd.get("fecha_transaccion")  # <- misma fecha real del gasto
+                fecha_servicio = cd.get("fecha_transaccion")
                 hora_servicio = cd.get("hora_servicio_flota")
                 km_servicio = cd.get("kilometraje_servicio_flota")
                 monto_servicio = cd.get("cargos") or 0
 
-                # Validación básica (por si algo raro pasa)
                 if not vehiculo:
                     form.add_error("vehiculo_flota", "Selecciona un vehículo.")
                 if not tipo_servicio_flota:
@@ -1953,7 +1993,7 @@ def editar_rendicion(request, pk):
                         {'form': form, 'rendicion': rendicion}
                     )
 
-                # ✅ Validación cronológica KM de FLOTA (por vehículo, fecha+hora)
+                # ✅ Validación cronológica KM de FLOTA
                 exclude_service_id = obj.servicio_flota_id if getattr(obj, "servicio_flota_id", None) else None
                 ok_flota_km, msg_flota_km, ultimo_ref, servicio_conflicto = _validar_km_servicio_flota_vs_ultimo(
                     vehicle_id=vehiculo.id,
@@ -1964,7 +2004,6 @@ def editar_rendicion(request, pk):
                 )
 
                 if not ok_flota_km:
-                    # ✅ Si el conflicto viene de una rendición ya aprobada, mostrar mensaje especial
                     rendicion_conflicto = None
                     try:
                         if servicio_conflicto:
@@ -1999,10 +2038,9 @@ def editar_rendicion(request, pk):
                         {'form': form, 'rendicion': rendicion}
                     )
 
-            # Guardar todo
             try:
                 with transaction.atomic():
-                    # Guardar el status si lo tocamos arriba
+                    # Guardar status si lo tocamos arriba
                     obj.status = rendicion.status
                     obj.save()
 
@@ -2017,7 +2055,6 @@ def editar_rendicion(request, pk):
 
                         legacy_type = _map_legacy_service_type(tipo_servicio_flota)
 
-                        # Si ya existe servicio flota vinculado, se actualiza; si no, se crea
                         servicio = getattr(obj, "servicio_flota", None)
 
                         if servicio:
@@ -2071,8 +2108,11 @@ def editar_rendicion(request, pk):
                             "tipo_servicio_flota_snapshot",
                         ])
 
+                        # ✅ NUEVO: sync explícito de flota desde rendición editada
+                        _sync_vehicle_from_rendicion_flota(obj)
+
                     else:
-                        # Si dejó de ser tipo Servicios, limpiamos datos flota para evitar basura
+                        # Si dejó de ser tipo Servicios, limpiar datos flota
                         campos_limpiar = []
                         for fld in [
                             "vehiculo_flota",
@@ -2086,8 +2126,7 @@ def editar_rendicion(request, pk):
                                 setattr(obj, fld, None)
                                 campos_limpiar.append(fld)
 
-                        # OJO: no borro servicio_flota histórico aquí (por auditoría), solo desvinculo si quieres
-                        # Si prefieres mantener vínculo histórico, comenta estas 2 líneas
+                        # Desvincular servicio histórico si así lo quieres
                         if hasattr(obj, "servicio_flota"):
                             obj.servicio_flota = None
                             campos_limpiar.append("servicio_flota")
@@ -2116,13 +2155,13 @@ def editar_rendicion(request, pk):
                 form.add_error(None, f"No se pudo actualizar la rendición/servicio de flota: {e}")
 
     else:
-        form = MovimientoUsuarioForm(instance=rendicion)
+        # ✅ IMPORTANTE: pasar user al form
+        form = MovimientoUsuarioForm(instance=rendicion, user=request.user)
 
     return render(request, 'operaciones/editar_rendicion.html', {
         'form': form,
         'rendicion': rendicion,
     })
-
 
 @login_required
 def eliminar_rendicion(request, pk):
