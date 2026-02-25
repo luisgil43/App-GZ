@@ -97,9 +97,13 @@
           <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>KM Servicio</span></label>
           <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="10" checked><span>Servicio Flota</span></label>
           <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="11" checked><span>Observaciones</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="12" checked><span>Comprobante</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="13" checked><span>Estado</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="14" checked><span>Acciones</span></label>
+          <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="12" checked>
+          <span>N° Documento</span>
+        </label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="13" checked><span>Comprobante</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="14" checked><span>Estado</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="15" checked><span>Acciones</span></label>
         </div>
       </div>
     </details>
@@ -197,6 +201,11 @@
                 <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
+             <th class="p-2 border" data-excel-col>
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>Número de documento</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+              </th>
 
             <th class="p-2 border" data-excel-col>
               <button type="button" class="excel-header-btn flex items-center gap-1">
@@ -305,7 +314,7 @@
             <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'—' }}">
               {{ mov.observaciones|default:"—" }}
             </td>
-
+            <td class="p-2 border" data-excel-value="{{ mov.numero_doc|default:'—' }}">{{ mov.numero_doc|default:"—" }}</td>
             <!-- 12 Comprobante -->
             <td class="p-2 border" data-excel-value="{% if mov.comprobante %}Ver{% else %}—{% endif %}">
               {% if mov.comprobante %}
@@ -446,7 +455,7 @@
           </tr>
           {% empty %}
           <tr data-empty-row="1">
-            <td colspan="15" class="p-4 text-center text-gray-500">No hay rendiciones disponibles.</td>
+            <td colspan="16" class="p-4 text-center text-gray-500">No hay rendiciones disponibles.</td>
           </tr>
           {% endfor %}
         </tbody>

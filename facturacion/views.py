@@ -1080,13 +1080,26 @@ def exportar_facturacion_excel(request):
     return response
 
 
+import re
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Case, CharField, IntegerField, Q, Value, When
+from django.db.models.functions import Cast
+from django.shortcuts import render
+
+# Ajusta imports según tu estructura real
+# from .models import CartolaMovimiento
+# from .decorators import rol_requerido
+
+
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_cartola(request):
     # --- Cantidad/paginación (mantén string para la UI)
     cantidad_param = request.GET.get('cantidad', '10')
 
-    # Limitamos a máx. 100 (y "todos" también se interpreta como 100)
     if cantidad_param == 'todos':
         page_size = 100
     else:
@@ -1096,31 +1109,39 @@ def listar_cartola(request):
             page_size = 10
             cantidad_param = '10'
 
-    # --- Filtros (string trimming)
+    # --- Filtros
     usuario = (request.GET.get('usuario') or '').strip()
     fecha_txt = (request.GET.get('fecha') or '').strip()
-    fecha_real_txt = (request.GET.get('fecha_real') or '').strip()  # ✅ nuevo
+    fecha_real_txt = (request.GET.get('fecha_real') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
     categoria = (request.GET.get('categoria') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
     rut_factura = (request.GET.get('rut_factura') or '').strip()
     estado = (request.GET.get('estado') or '').strip()
-
-    # ✅ nuevos filtros opcionales (si luego agregas inputs al form-filtros)
     hora_servicio = (request.GET.get('hora_servicio') or '').strip()
     kilometraje_servicio = (request.GET.get('kilometraje_servicio') or '').strip()
 
     # --- Base queryset
-    movimientos = CartolaMovimiento.objects.all()
+    movimientos = CartolaMovimiento.objects.select_related(
+        'usuario',
+        'proyecto',
+        'tipo',
+        'vehiculo_flota',
+        'tipo_servicio_flota',
+        'servicio_flota',
+        'aprobado_por_supervisor',
+        'aprobado_por_pm',
+        'aprobado_por_finanzas',
+    ).all()
 
-    # Anotar fechas / km como texto si quieres usar icontains en algunos casos
+    # Anotaciones auxiliares para filtros parciales
     movimientos = movimientos.annotate(
         fecha_iso=Cast('fecha', CharField()),
         fecha_transaccion_iso=Cast('fecha_transaccion', CharField()),
         km_servicio_iso=Cast('kilometraje_servicio_flota', CharField()),
     )
 
-    # --- Filtro usuario: username / nombres / apellidos
+    # --- Filtro usuario
     if usuario:
         movimientos = movimientos.filter(
             Q(usuario__username__icontains=usuario) |
@@ -1128,7 +1149,7 @@ def listar_cartola(request):
             Q(usuario__last_name__icontains=usuario)
         )
 
-    # --- Helper para filtrar fechas parciales (DD, DD-MM, DD-MM-YYYY)
+    # --- Helper fecha parcial (DD, DD-MM, DD-MM-YYYY)
     def aplicar_filtro_fecha_parcial(qs, field_name, valor, warning_label):
         if not valor:
             return qs
@@ -1165,10 +1186,9 @@ def listar_cartola(request):
             )
             return qs
 
-    # --- Filtro fecha (fecha del registro)
+    # --- Filtros fecha
     movimientos = aplicar_filtro_fecha_parcial(movimientos, 'fecha', fecha_txt, 'fecha')
 
-    # ✅ Filtro fecha real del gasto (fecha_transaccion)
     if fecha_real_txt:
         movimientos = movimientos.filter(fecha_transaccion__isnull=False)
         movimientos = aplicar_filtro_fecha_parcial(
@@ -1191,50 +1211,78 @@ def listar_cartola(request):
     if estado:
         movimientos = movimientos.filter(status=estado)
 
-    # ✅ Hora servicio flota (si viene por GET)
     if hora_servicio:
-        movimientos = movimientos.filter(hora_servicio_flota__icontains=hora_servicio)
+        # TimeField normalmente no soporta icontains bien en todos los motores;
+        # usamos Cast para evitar problemas.
+        movimientos = movimientos.annotate(
+            hora_servicio_iso=Cast('hora_servicio_flota', CharField())
+        ).filter(hora_servicio_iso__icontains=hora_servicio)
 
-    # ✅ Kilometraje servicio flota (si viene por GET)
     if kilometraje_servicio:
         movimientos = movimientos.filter(km_servicio_iso__icontains=kilometraje_servicio)
 
-    # ✅ SOLO MOSTRAR: pendientes por finanzas + aprobados por finanzas
+    # ==========================================================
+    # ✅ MOSTRAR TODO EL PROCESO + ABONOS (solo fuera de historial)
+    # ==========================================================
+    # Esto incluye explícitamente TODOS los estados definidos en tu modelo,
+    # incluyendo los de abonos.
+    estados_visibles = [codigo for codigo, _label in CartolaMovimiento.ESTADOS]
+
     movimientos = movimientos.filter(
-        status__in=['aprobado_pm', 'aprobado_finanzas'],
-        en_historial=False
+        en_historial=False,
+        status__in=estados_visibles
     )
 
-    # --- ORDEN personalizado
+    # --- Orden personalizado (prioriza pendientes y flujo)
     movimientos = movimientos.annotate(
         prioridad=Case(
-            When(status='aprobado_pm', then=Value(0)),
-            When(status__startswith='pendiente', then=Value(1)),
-            When(status__startswith='rechazado', then=Value(2)),
-            When(status__startswith='aprobado', then=Value(3)),
-            default=Value(4),
+            # Pendientes flujo normal
+            When(status='pendiente_supervisor', then=Value(0)),
+            When(status='aprobado_supervisor', then=Value(1)),   # Pendiente PM
+            When(status='aprobado_pm', then=Value(2)),           # Pendiente Finanzas
+
+            # Pendientes abono
+            When(status='pendiente_abono_usuario', then=Value(3)),
+
+            # Rechazados (incluye rechazos de abono)
+            When(status__startswith='rechazado', then=Value(4)),
+
+            # Aprobados finales
+            When(status='aprobado_finanzas', then=Value(5)),
+            When(status='aprobado_abono_usuario', then=Value(6)),
+
+            # Cualquier otro aprobado / pendiente
+            When(status__startswith='aprobado', then=Value(7)),
+            When(status__startswith='pendiente', then=Value(8)),
+
+            default=Value(9),
             output_field=IntegerField(),
         )
-    ).order_by('prioridad', '-fecha')
+    ).order_by(
+        'prioridad',
+        '-fecha_transaccion',
+        '-fecha',
+        '-id'
+    )
 
     # --- Paginación
     paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page')
     pagina = paginator.get_page(page_number)
 
-    # --- Estado choices y eco de filtros a la plantilla
+    # --- Choices / filtros para template
     estado_choices = CartolaMovimiento.ESTADOS
     filtros = {
         'usuario': usuario,
         'fecha': fecha_txt,
-        'fecha_real': fecha_real_txt,           # ✅ nuevo
+        'fecha_real': fecha_real_txt,
         'proyecto': proyecto,
         'categoria': categoria,
         'tipo': tipo,
         'rut_factura': rut_factura,
         'estado': estado,
-        'hora_servicio': hora_servicio,         # ✅ nuevo
-        'kilometraje_servicio': kilometraje_servicio,  # ✅ nuevo
+        'hora_servicio': hora_servicio,
+        'kilometraje_servicio': kilometraje_servicio,
     }
 
     return render(
@@ -1247,7 +1295,6 @@ def listar_cartola(request):
             'filtros': filtros,
         }
     )
-
 
 @login_required
 @rol_requerido('facturacion', 'admin')
