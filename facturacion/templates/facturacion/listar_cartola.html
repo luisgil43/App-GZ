@@ -1122,7 +1122,6 @@
 })();
 </script>
 
-<!-- ✅ LÓGICA FILTROS TIPO EXCEL (port Hyperlink, adaptado a GZ) -->
 <script>
 (function(){
   const zona = document.getElementById('cartolaZone');
@@ -1190,6 +1189,15 @@
 
   window.excel = excel; // ✅ para que el refreshList pueda serializarlos
 
+  // ✅ Normalizador (evita fallos por &nbsp;, saltos de línea, dobles espacios, mayúsculas)
+  function normalizeValue(s){
+    s = (s ?? '').toString();
+    s = s.replace(/\u00A0/g, ' ');     // NBSP -> espacio normal
+    s = s.replace(/\s+/g, ' ');        // colapsar espacios/saltos de línea
+    s = s.trim().toLowerCase();
+    return s;
+  }
+
   function excelGetCellValue(td){
     if(!td) return '(Vacías)';
     let text = '';
@@ -1198,7 +1206,7 @@
     } else {
       text = (td.textContent || '');
     }
-    text = text.trim();
+    text = (text || '').replace(/\u00A0/g, ' ').trim();
     return text || '(Vacías)';
   }
 
@@ -1231,6 +1239,14 @@
   function excelApplyFilters(){
     let visibleCount = 0;
 
+    // ✅ cache de valores normalizados por columna (para comparar rápido y sin “mismatch”)
+    const normCache = {};
+    Object.entries(excel.activeFilters).forEach(([colIndexStr, values])=>{
+      if(values && values.size){
+        normCache[colIndexStr] = new Set(Array.from(values).map(normalizeValue));
+      }
+    });
+
     const emptyRow = excel.tbody ? excel.tbody.querySelector('tr[data-empty-row="1"]') : null;
     if (emptyRow) emptyRow.style.display = 'none';
 
@@ -1247,9 +1263,11 @@
         if (!values || values.size === 0) continue;
 
         const cell = row.cells[idx];
-        const text = excelGetCellValue(cell);
+        const raw = excelGetCellValue(cell);
+        const t = normalizeValue(raw);
 
-        if (!values.has(text)) {
+        const allowed = normCache[colIndexStr];
+        if (allowed && !allowed.has(t)) {
           visible = false;
           break;
         }
@@ -1269,21 +1287,49 @@
 
   window.excelApplyFiltersGZ = excelApplyFilters;
 
+  // ✅ Helper: refrescar servidor (para que el filtro aplique a TODAS las páginas)
+  async function refreshServerToPage1(){
+    if (window.refreshCartolaList) {
+      await window.refreshCartolaList({ page: 1 });
+    } else {
+      // fallback (si no está el ajax activo)
+      const params = new URLSearchParams(location.search);
+      params.set('page', '1');
+
+      if (window.excel && window.excel.activeFilters) {
+        const plain = {};
+        Object.entries(window.excel.activeFilters).forEach(([col, set]) => {
+          if (set && set.size) plain[col] = Array.from(set);
+        });
+        if (Object.keys(plain).length) {
+          params.set('excel_filters', JSON.stringify(plain));
+        } else {
+          params.delete('excel_filters');
+        }
+      }
+
+      location.href = `${location.pathname}?${params.toString()}`;
+    }
+  }
+
   function excelClearAll(){
     excel.activeFilters = {};
     excelApplyFilters();
     if(excel.panel) excel.panel.classList.add('hidden');
+
+    // ✅ IMPORTANTE: aplicar filtro a todo el dataset (server) y volver a page 1
+    refreshServerToPage1();
   }
 
   function excelFilterOptionList(query){
     if(!excel.optsBox) return;
 
-    const q = query.trim().toLowerCase();
+    const q = (query || '').trim().toLowerCase();
     let visible = 0;
 
     excel.optsBox.querySelectorAll('label[data-option-label]').forEach(lbl=>{
-      const text = lbl.textContent.toLowerCase();
-      const show = text.includes(q);
+      const text = (lbl.textContent || '').toLowerCase();
+      const show = !q || text.includes(q);
       lbl.style.display = show ? '' : 'none';
       if(show) visible++;
     });
@@ -1395,9 +1441,7 @@
     excel.searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        if (excel.btnApply && !excel.btnApply.disabled) {
-          excel.btnApply.click();
-        }
+        if (excel.btnApply && !excel.btnApply.disabled) excel.btnApply.click();
       }
     });
 
@@ -1410,7 +1454,7 @@
 
     // ✅ CLEAR: limpia SOLO la columna actual
     if (excel.btnClearAll) {
-      excel.btnClearAll.addEventListener('click', async (e) => {
+      excel.btnClearAll.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
 
@@ -1429,7 +1473,8 @@
         excelApplyFilters();
         excel.panel.classList.add('hidden');
 
-        
+        // ✅ IMPORTANTE: aplicar filtro a todo el dataset (server) y volver a page 1
+        refreshServerToPage1();
       });
     }
 
@@ -1483,7 +1528,8 @@
       excelApplyFilters();
       excel.panel.classList.add('hidden');
 
-     
+      // ✅ IMPORTANTE: aplicar filtro a todo el dataset (server) y volver a page 1
+      refreshServerToPage1();
     });
 
     document.addEventListener('click', (e)=>{
@@ -1540,7 +1586,7 @@
   // Inicial
   initExcelFilters();
 })();
-</script> 
+</script>
 <script>
 (function(){
   function bindHistorialControls(){

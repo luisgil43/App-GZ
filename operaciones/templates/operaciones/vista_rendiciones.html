@@ -130,90 +130,91 @@
 
         <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
           <tr>
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="0">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Nombre</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="1">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Fecha</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="2">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Fecha real del gasto</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="3">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Proyecto</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border text-right" data-excel-col>
+            <th class="p-2 border text-right" data-excel-col data-excel-idx="4">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Monto</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="5">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Tipo</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="6">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Vehículo (Flota)</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="7">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Tipo Servicio (Flota)</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="8">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Fecha/Hora Servicio</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border text-right" data-excel-col>
+            <th class="p-2 border text-right" data-excel-col data-excel-idx="9">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>KM Servicio</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="10">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Servicio Flota</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="11">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Observaciones</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
-             <th class="p-2 border" data-excel-col>
+
+            <th class="p-2 border" data-excel-col data-excel-idx="12">
               <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>Número de documento</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
               </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="13">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Comprobante</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
             </th>
 
-            <th class="p-2 border" data-excel-col>
+            <th class="p-2 border" data-excel-col data-excel-idx="14">
               <button type="button" class="excel-header-btn flex items-center gap-1">
                 <span>Estado</span><span class="excel-arrow text-gray-500">▼</span>
               </button>
@@ -314,8 +315,11 @@
             <td class="p-2 border" data-excel-value="{{ mov.observaciones|default:'—' }}">
               {{ mov.observaciones|default:"—" }}
             </td>
+
+            <!-- 12 Número de documento -->
             <td class="p-2 border" data-excel-value="{{ mov.numero_doc|default:'—' }}">{{ mov.numero_doc|default:"—" }}</td>
-            <!-- 12 Comprobante -->
+
+            <!-- 13 Comprobante -->
             <td class="p-2 border" data-excel-value="{% if mov.comprobante %}Ver{% else %}—{% endif %}">
               {% if mov.comprobante %}
                 <a href="{{ mov.comprobante.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
@@ -324,7 +328,7 @@
               {% endif %}
             </td>
 
-            <!-- 13 Estado -->
+            <!-- 14 Estado -->
             <td class="p-2 text-sm"
                 data-excel-value="{% if mov.status == 'pendiente_supervisor' %}Pendiente aprobación del Supervisor{% elif mov.status == 'aprobado_supervisor' %}Pendiente aprobación del PM{% elif mov.status == 'rechazado_supervisor' %}Rechazado por Supervisor{% elif mov.status == 'aprobado_pm' %}Pendiente aprobación de Finanzas{% elif mov.status == 'rechazado_pm' %}Rechazado por PM{% elif mov.status == 'aprobado_finanzas' %}Aprobado por Finanzas{% elif mov.status == 'rechazado_finanzas' %}Rechazado por Finanzas{% elif mov.status == 'pendiente_abono_usuario' %}Pendiente aprobación del Usuario{% elif mov.status == 'aprobado_abono_usuario' %}Abono aprobado por Usuario{% elif mov.status == 'rechazado_abono_usuario' %}Abono rechazado por Usuario{% else %}{{ mov.get_status_display }}{% endif %}">
               <div class="flex flex-col gap-1 text-left leading-tight">
@@ -396,7 +400,7 @@
               </div>
             </td>
 
-            <!-- 14 Acciones -->
+            <!-- 15 Acciones -->
             <td class="p-2 border text-center">
               {% if not mov.tipo or mov.tipo.categoria != 'abono' %}
                 {% if user.es_supervisor and mov.status == "pendiente_supervisor" %}
@@ -787,9 +791,10 @@
   excel.headers = Array.from(excel.table.querySelectorAll('thead th'));
 
   function excelUpdateHeaderStates(){
-    excel.headers.forEach((th, idx)=>{
+    excel.headers.forEach((th)=>{
       if(!th.hasAttribute('data-excel-col')) return;
-      const hasFilter = !!(excel.activeFilters[idx] && excel.activeFilters[idx].size > 0);
+      const colIdx = parseInt(th.dataset.excelIndex, 10);
+      const hasFilter = !!(excel.activeFilters[colIdx] && excel.activeFilters[colIdx].size > 0);
       th.classList.toggle('excel-col-filtered', hasFilter);
     });
   }
@@ -894,10 +899,13 @@
     excel.searchInput.focus();
   }
 
-  // Bind headers
-  excel.headers.forEach((th, idx)=>{
+  // Bind headers (✅ ahora usa data-excel-idx fijo)
+  excel.headers.forEach((th)=>{
     if(th.hasAttribute('data-excel-col')){
-      th.dataset.excelIndex = idx;
+      const fixed = th.dataset.excelIdx;
+      if (fixed == null) return;
+      th.dataset.excelIndex = fixed;
+
       const btn = th.querySelector('.excel-header-btn');
       if(btn){
         btn.addEventListener('click', (ev)=>{

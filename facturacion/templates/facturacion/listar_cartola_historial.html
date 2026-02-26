@@ -467,6 +467,36 @@
     }
   }
 
+  // ✅ Navegar al server con filtros y page=1 (CLAVE)
+  function navigateWithExcelFiltersToPage1(){
+    try{
+      const u = new URL(location.href);
+
+      const plain = {};
+      Object.entries(excel.activeFilters).forEach(([col, set])=>{
+        if(set && set.size) plain[col] = Array.from(set);
+      });
+
+      if(Object.keys(plain).length){
+        u.searchParams.set('excel_filters', JSON.stringify(plain));
+      }else{
+        u.searchParams.delete('excel_filters');
+      }
+
+      // ✅ siempre al aplicar/limpiar: page=1
+      u.searchParams.set('page', '1');
+
+      // (opcional) preservar cantidad si existe
+      const cur = new URL(location.href);
+      const cantidad = cur.searchParams.get('cantidad');
+      if(cantidad && !u.searchParams.get('cantidad')){
+        u.searchParams.set('cantidad', cantidad);
+      }
+
+      location.href = u.toString();
+    }catch(_){}
+  }
+
   let excelGlobalValues = loadExcelGlobalFromZona();
 
   const excel = {
@@ -526,7 +556,7 @@
     });
   }
 
-  function excelApplyFilters(){
+  function excelApplyFiltersDOMOnly(){
     let visibleCount = 0;
 
     const emptyRow = excel.tbody ? excel.tbody.querySelector('tr[data-empty-row="1"]') : null;
@@ -567,13 +597,11 @@
 
   function excelClearAllFilters(){
     excel.activeFilters = {};
-    excelApplyFilters();
+    excelApplyFiltersDOMOnly();
     if(excel.panel) excel.panel.classList.add('hidden');
-    try{
-      const u = new URL(location.href);
-      u.searchParams.delete('excel_filters');
-      history.replaceState(null,'',u.toString());
-    }catch(_){}
+
+    // ✅ ahora sí: refrescar server a page 1 sin filtros
+    navigateWithExcelFiltersToPage1();
   }
 
   function excelFilterOptionList(query){
@@ -709,6 +737,7 @@
       }
     });
 
+    // ✅ Limpiar SOLO columna actual
     if (excel.btnClearCol) {
       excel.btnClearCol.addEventListener('click', (e) => {
         e.preventDefault();
@@ -726,13 +755,15 @@
         excelRenderOptions(excel.currentColIndex);
         excelFilterOptionList('');
 
-        excelApplyFilters();
+        excelApplyFiltersDOMOnly();
         excel.panel.classList.add('hidden');
 
-        updateUrlWithExcelFilters();
+        // ✅ ahora sí: refrescar server a page 1 con filtros actualizados
+        navigateWithExcelFiltersToPage1();
       });
     }
 
+    // ✅ Aplicar
     excel.btnApply.addEventListener('click', ()=>{
       if(excel.currentColIndex == null){
         excel.panel.classList.add('hidden');
@@ -740,7 +771,6 @@
       }
 
       const q = (excel.searchInput?.value || '').trim().toLowerCase();
-
       let chosenCheckboxes = [];
 
       if(q){
@@ -760,23 +790,18 @@
       });
 
       const fullSet = excel.distinctValues[excel.currentColIndex] || new Set();
-      const visibleUniverse = q
-        ? new Set(chosenCheckboxes.map(cb => cb.dataset.value))
-        : null;
 
-      if(selected.size === 0){
+      if(selected.size === 0 || (!q && selected.size === fullSet.size)){
         delete excel.activeFilters[excel.currentColIndex];
-      } else if(!q && selected.size === fullSet.size){
-        delete excel.activeFilters[excel.currentColIndex];
-      } else if(q && visibleUniverse && selected.size === visibleUniverse.size){
-        excel.activeFilters[excel.currentColIndex] = selected;
       } else {
         excel.activeFilters[excel.currentColIndex] = selected;
       }
 
-      excelApplyFilters();
+      excelApplyFiltersDOMOnly();
       excel.panel.classList.add('hidden');
-      updateUrlWithExcelFilters();
+
+      // ✅ CLAVE: refrescar server a page 1 con filtros
+      navigateWithExcelFiltersToPage1();
     });
 
     document.addEventListener('click', (e)=>{
@@ -787,25 +812,6 @@
     });
 
     excel.panelEventsBound = true;
-  }
-
-  function updateUrlWithExcelFilters(){
-    try{
-      const u = new URL(location.href);
-
-      const plain = {};
-      Object.entries(excel.activeFilters).forEach(([col, set])=>{
-        if(set && set.size) plain[col] = Array.from(set);
-      });
-
-      if(Object.keys(plain).length){
-        u.searchParams.set('excel_filters', JSON.stringify(plain));
-      }else{
-        u.searchParams.delete('excel_filters');
-      }
-
-      history.replaceState(null,'',u.toString());
-    }catch(_){}
   }
 
   function initExcelFilters(){
@@ -822,7 +828,7 @@
     excelGlobalValues = loadExcelGlobalFromZona();
 
     excelBuildDistinctValues();
-    excelApplyFilters();
+    excelApplyFiltersDOMOnly();
 
     excel.headers.forEach((th, idx)=>{
       if(th.hasAttribute('data-excel-col')){
@@ -837,8 +843,6 @@
         }
       }
     });
-
-    updateUrlWithExcelFilters();
   }
 
   if(excel.btnClearAllTop){
@@ -850,37 +854,7 @@
 
   initExcelFilters();
 
-  document.addEventListener('click', (e)=>{
-    const a = e.target.closest('a[href]');
-    if(!a) return;
-    if(!a.getAttribute('href').includes('page=')) return;
-
-    try{
-      const u = new URL(a.href, location.href);
-
-      const plain = {};
-      Object.entries(excel.activeFilters).forEach(([col, set])=>{
-        if(set && set.size) plain[col] = Array.from(set);
-      });
-
-      if(Object.keys(plain).length){
-        u.searchParams.set('excel_filters', JSON.stringify(plain));
-      }else{
-        u.searchParams.delete('excel_filters');
-      }
-
-      const cur = new URL(location.href);
-      const cantidad = cur.searchParams.get('cantidad');
-      if(cantidad && !u.searchParams.get('cantidad')){
-        u.searchParams.set('cantidad', cantidad);
-      }
-
-      a.href = u.toString();
-    }catch(_){}
-  });
-
 })();
 </script>
-
 </div>
 {% endblock %}

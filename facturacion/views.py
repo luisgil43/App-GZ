@@ -1168,10 +1168,7 @@ def listar_cartola(request):
         m = re.match(r'^(\d{1,2})(?:-(\d{1,2}))?(?:-(\d{1,4}))?$', fecha_normalizada)
 
         if not m:
-            messages.warning(
-                request,
-                f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY."
-            )
+            messages.warning(request, f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY.")
             return qs
 
         dia_str = m.group(1)
@@ -1190,10 +1187,7 @@ def listar_cartola(request):
             return qs.filter(q_fecha)
 
         except ValueError:
-            messages.warning(
-                request,
-                f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY."
-            )
+            messages.warning(request, f"Formato de {warning_label} inválido. Use DD, DD-MM o DD-MM-YYYY.")
             return qs
 
     # --- Filtros fecha
@@ -1263,8 +1257,15 @@ def listar_cartola(request):
 
     # ============================================================
     # ✅ Excel filters (python) + excel_global_json (TODO el set filtrado)
+    #    IMPORTANTE: Los valores deben ser EXACTAMENTE los mismos que en data-excel-value del template
     # ============================================================
     movimientos_list = list(movimientos)
+
+    def _norm(s):
+        s = "" if s is None else str(s)
+        s = s.replace("\u00A0", " ")
+        s = re.sub(r"\s+", " ", s).strip().lower()
+        return s
 
     def format_clp(n):
         try:
@@ -1274,7 +1275,11 @@ def listar_cartola(request):
         except Exception:
             return "$0"
 
-    def format_km(n):
+    def format_km_cell(n):
+        """
+        Debe calzar con el template:
+        data-excel-value="{% if mov.kilometraje_servicio_flota %}{{ mov.kilometraje_servicio_flota|miles }} KM{% else %}—{% endif %}"
+        """
         try:
             if n is None or n == "":
                 return "—"
@@ -1283,12 +1288,75 @@ def listar_cartola(request):
         except Exception:
             return "—"
 
+    def _fmt_fecha_cell(dt_or_d):
+        """
+        Debe calzar con el template:
+        data-excel-value="{{ mov.fecha|date:'d-m-Y' }}"
+        (soporta DateField o DateTimeField)
+        """
+        if not dt_or_d:
+            return ""
+        try:
+            # si es datetime aware/naive, intentamos localtime si aplica
+            if hasattr(dt_or_d, "hour"):
+                try:
+                    if timezone.is_aware(dt_or_d):
+                        dt_or_d = timezone.localtime(dt_or_d)
+                except Exception:
+                    pass
+                return dt_or_d.strftime("%d-%m-%Y")
+            return dt_or_d.strftime("%d-%m-%Y")
+        except Exception:
+            try:
+                return str(dt_or_d)
+            except Exception:
+                return ""
+
+    def _fmt_hora_cell(t):
+        """
+        Debe calzar con template:
+        data-excel-value="{% if mov.hora_servicio_flota %}{{ mov.hora_servicio_flota|time:'H:i' }}{% else %}—{% endif %}"
+        """
+        if not t:
+            return "—"
+        try:
+            return t.strftime("%H:%M")
+        except Exception:
+            return str(t)
+
+    def _fmt_obs_cell(obs):
+        """
+        Debe calzar con template:
+        data-excel-value="{{ mov.observaciones|default:'(Vacías)' }}"
+        """
+        s = (obs or "").strip()
+        return s if s else "(Vacías)"
+
+    def _status_cell(mov):
+        """
+        Debe calzar con template:
+        data-excel-value="{{ mov.get_status_display }}"
+        """
+        try:
+            return mov.get_status_display() if getattr(mov, "status", None) else ""
+        except Exception:
+            return ""
+
     if excel_filters:
+        # normalizamos valores seleccionados (lo mismo que hace tu JS)
+        excel_filters_norm = {}
+        for col, values in (excel_filters or {}).items():
+            if not values:
+                continue
+            try:
+                excel_filters_norm[str(col)] = set(_norm(v) for v in values)
+            except Exception:
+                continue
+
         def matches_excel_filters(mov):
-            for col, values in excel_filters.items():
-                if not values:
+            for col, allowed_norm in excel_filters_norm.items():
+                if not allowed_norm:
                     continue
-                values_set = set(values)
 
                 # Índices tabla cartola (CON checkbox):
                 # 0  Checkbox
@@ -1316,22 +1384,20 @@ def listar_cartola(request):
                     label = str(mov.usuario) if mov.usuario else ""
 
                 elif col == "2":
-                    d = getattr(mov, "fecha", None)
-                    label = d.strftime("%d-%m-%Y") if d else ""
+                    label = _fmt_fecha_cell(getattr(mov, "fecha", None))
 
                 elif col == "3":
                     d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
-                    label = d.strftime("%d-%m-%Y") if d else ""
+                    label = _fmt_fecha_cell(d)
 
                 elif col == "4":
                     label = str(getattr(mov, "vehiculo_flota", None) or "—").strip() or "—"
 
                 elif col == "5":
-                    h = getattr(mov, "hora_servicio_flota", None)
-                    label = h.strftime("%H:%M") if h else "—"
+                    label = _fmt_hora_cell(getattr(mov, "hora_servicio_flota", None))
 
                 elif col == "6":
-                    label = format_km(getattr(mov, "kilometraje_servicio_flota", None))
+                    label = format_km_cell(getattr(mov, "kilometraje_servicio_flota", None))
 
                 elif col == "7":
                     label = str(mov.proyecto) if mov.proyecto else ""
@@ -1355,7 +1421,7 @@ def listar_cartola(request):
                     label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
 
                 elif col == "13":
-                    label = (getattr(mov, "observaciones", None) or "").strip() or "(Vacías)"
+                    label = _fmt_obs_cell(getattr(mov, "observaciones", None))
 
                 elif col == "14":
                     label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
@@ -1370,12 +1436,12 @@ def listar_cartola(request):
                     label = format_clp(getattr(mov, "abonos", 0) or 0)
 
                 elif col == "18":
-                    label = mov.get_status_display() if getattr(mov, "status", None) else ""
+                    label = _status_cell(mov)
 
                 else:
                     continue
 
-                if label not in values_set:
+                if _norm(label) not in allowed_norm:
                     return False
 
             return True
@@ -1383,18 +1449,19 @@ def listar_cartola(request):
         movimientos_list = [m for m in movimientos_list if matches_excel_filters(m)]
 
     # --- excel_global (para panel Excel, basado en TODO el dataset filtrado)
+    #     IMPORTANTE: producir los mismos textos que van en data-excel-value
     excel_global = {}
 
     excel_global[1] = sorted({str(m.usuario) for m in movimientos_list if m.usuario})
 
     excel_global[2] = sorted({
-        m.fecha.strftime("%d-%m-%Y")
+        _fmt_fecha_cell(getattr(m, "fecha", None))
         for m in movimientos_list
         if getattr(m, "fecha", None)
     })
 
     excel_global[3] = sorted({
-        (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None)).strftime("%d-%m-%Y")
+        _fmt_fecha_cell(getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
         for m in movimientos_list
         if (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
     })
@@ -1405,12 +1472,12 @@ def listar_cartola(request):
     })
 
     excel_global[5] = sorted({
-        (m.hora_servicio_flota.strftime("%H:%M") if getattr(m, "hora_servicio_flota", None) else "—")
+        _fmt_hora_cell(getattr(m, "hora_servicio_flota", None))
         for m in movimientos_list
     })
 
     excel_global[6] = sorted({
-        format_km(getattr(m, "kilometraje_servicio_flota", None))
+        format_km_cell(getattr(m, "kilometraje_servicio_flota", None))
         for m in movimientos_list
     })
 
@@ -1440,7 +1507,7 @@ def listar_cartola(request):
     })
 
     excel_global[13] = sorted({
-        (getattr(m, "observaciones", None) or "").strip() or "(Vacías)"
+        _fmt_obs_cell(getattr(m, "observaciones", None))
         for m in movimientos_list
     })
 
@@ -1464,9 +1531,13 @@ def listar_cartola(request):
         for m in movimientos_list
     })
 
-    estado_map = dict(CartolaMovimiento.ESTADOS)
-    status_codes = {m.status for m in movimientos_list if getattr(m, "status", None)}
-    excel_global[18] = sorted(estado_map.get(c, c) for c in status_codes)
+    # ✅ CLAVE: status debe salir EXACTAMENTE como en la celda (get_status_display),
+    # NO como mapping manual (que puede diferir y romper el filtro)
+    excel_global[18] = sorted({
+        _status_cell(m)
+        for m in movimientos_list
+        if getattr(m, "status", None)
+    })
 
     excel_global_json = json.dumps(excel_global)
 
@@ -1504,9 +1575,9 @@ def listar_cartola(request):
             'cantidad': cantidad_param,
             'estado_choices': estado_choices,
             'filtros': filtros,
-            'excel_global_json': excel_global_json,  # ✅ IMPORTANTE
-            'base_qs': base_qs,                      # ✅ IMPORTANTE
-            'full_qs': full_qs,                      # ✅ IMPORTANTE
+            'excel_global_json': excel_global_json,
+            'base_qs': base_qs,
+            'full_qs': full_qs,
         }
     )
 
@@ -2059,11 +2130,100 @@ def editar_movimiento(request, pk):
 @login_required
 @rol_requerido('admin')
 def eliminar_movimiento(request, pk):
+    from django.db import transaction
+    from django.db.models import Max
+    from django.utils import timezone
+
+    from flota.models import VehicleOdometerEvent, VehicleService
+
     movimiento = get_object_or_404(CartolaMovimiento, pk=pk)
+
+    def _recalcular_km_y_ultimo_movimiento(vehicle_id: int):
+        from flota.models import Vehicle
+
+        max_km_service = (
+            VehicleService.objects
+            .filter(vehicle_id=vehicle_id, kilometraje_declarado__isnull=False)
+            .aggregate(m=Max('kilometraje_declarado'))
+            .get('m')
+        ) or 0
+
+        max_km_event = (
+            VehicleOdometerEvent.objects
+            .filter(vehicle_id=vehicle_id)
+            .aggregate(m=Max('new_km'))
+            .get('m')
+        ) or 0
+
+        nuevo_km = max(int(max_km_service), int(max_km_event))
+
+        last_service = (
+            VehicleService.objects
+            .filter(vehicle_id=vehicle_id)
+            .order_by('-service_date', '-created_at', '-pk')
+            .first()
+        )
+
+        last_movement_at = None
+        if last_service:
+            if last_service.service_time:
+                dt_naive = timezone.datetime.combine(last_service.service_date, last_service.service_time)
+            else:
+                dt_naive = timezone.datetime.combine(last_service.service_date, timezone.datetime.min.time())
+            last_movement_at = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+
+        Vehicle.objects.filter(pk=vehicle_id).update(
+            kilometraje_actual=nuevo_km,
+            last_movement_at=last_movement_at,
+            updated_at=timezone.now(),
+        )
+
     if request.method == 'POST':
-        movimiento.delete()
-        messages.success(request, "Movimiento eliminado correctamente.")
-        return redirect('facturacion:listar_cartola')
+        try:
+            with transaction.atomic():
+                servicio = getattr(movimiento, "servicio_flota", None)
+                vehiculo_id = getattr(movimiento, "vehiculo_flota_id", None) or (servicio.vehicle_id if servicio else None)
+
+                if servicio:
+                    # borrar odometer events del servicio
+                    try:
+                        if getattr(servicio, "service_code", None) is not None:
+                            VehicleOdometerEvent.objects.filter(
+                                vehicle_id=servicio.vehicle_id,
+                                source="servicio",
+                                reference=f"Servicio #{servicio.service_code}"
+                            ).delete()
+                    except Exception:
+                        pass
+
+                    try:
+                        servicio.delete()
+                    except Exception:
+                        pass
+
+                # borrar odometer event de la rendición (si existe)
+                if vehiculo_id:
+                    try:
+                        VehicleOdometerEvent.objects.filter(
+                            vehicle_id=vehiculo_id,
+                            source="rendicion",
+                            reference=f"Rendición #{movimiento.pk}"
+                        ).delete()
+                    except Exception:
+                        pass
+
+                movimiento.delete()
+
+                if vehiculo_id:
+                    _recalcular_km_y_ultimo_movimiento(vehiculo_id)
+
+            messages.success(request, "Movimiento eliminado correctamente.")
+            return redirect('facturacion:listar_cartola')
+
+        except Exception as e:
+            messages.error(request, f"No se pudo eliminar el movimiento correctamente: {e}")
+            return redirect('facturacion:listar_cartola')
+
     return render(request, 'facturacion/eliminar_movimiento.html', {'movimiento': movimiento})
 
 
@@ -2338,11 +2498,13 @@ def listar_cartola_historial(request):
     """
     import json
     import re
+    from datetime import datetime
 
     from django.contrib import messages
     from django.core.paginator import Paginator
     from django.db.models import CharField, Q
     from django.db.models.functions import Cast
+    from django.utils import timezone
 
     # --- Cantidad/paginación (mantén string para la UI)
     cantidad_param = request.GET.get('cantidad', '10')
@@ -2364,7 +2526,7 @@ def listar_cartola_historial(request):
     except json.JSONDecodeError:
         excel_filters = {}
 
-    # --- Filtros clásicos (si los usas)
+    # --- Filtros clásicos
     usuario = (request.GET.get('usuario') or '').strip()
     fecha_txt = (request.GET.get('fecha') or '').strip()
     proyecto = (request.GET.get('proyecto') or '').strip()
@@ -2374,7 +2536,17 @@ def listar_cartola_historial(request):
     estado = (request.GET.get('estado') or '').strip()
 
     # --- Base queryset (SOLO HISTORIAL)
-    movimientos = CartolaMovimiento.objects.filter(en_historial=True)
+    movimientos = (
+        CartolaMovimiento.objects
+        .select_related(
+            'usuario',
+            'proyecto',
+            'tipo',
+            'vehiculo_flota',
+            'tipo_servicio_flota',
+        )
+        .filter(en_historial=True)
+    )
 
     movimientos = movimientos.annotate(
         fecha_iso=Cast('fecha', CharField())
@@ -2427,12 +2599,18 @@ def listar_cartola_historial(request):
         movimientos = movimientos.filter(status=estado)
 
     # Orden: más recientes arriba
-    movimientos = movimientos.order_by('-fecha')
+    movimientos = movimientos.order_by('-fecha', '-id')
 
     # ============================================================
     # Excel filters (python) + excel_global_json
     # ============================================================
     movimientos_list = list(movimientos)
+
+    def _norm(s):
+        s = "" if s is None else str(s)
+        s = s.replace("\u00A0", " ")
+        s = re.sub(r"\s+", " ", s).strip().lower()
+        return s
 
     def format_clp(n):
         try:
@@ -2442,7 +2620,8 @@ def listar_cartola_historial(request):
         except Exception:
             return "$0"
 
-    def format_km(n):
+    def format_km_cell(n):
+        # debe calzar con template: "{{ mov.kilometraje_servicio_flota|miles }} KM" o "—"
         try:
             if n is None or n == "":
                 return "—"
@@ -2451,12 +2630,54 @@ def listar_cartola_historial(request):
         except Exception:
             return "—"
 
+    def _fmt_fecha_cell(dt_or_d):
+        # debe calzar con date:'d-m-Y' del template (soporta DateTime/Date)
+        if not dt_or_d:
+            return ""
+        try:
+            if isinstance(dt_or_d, datetime):
+                if timezone.is_aware(dt_or_d):
+                    dt_or_d = timezone.localtime(dt_or_d)
+                return dt_or_d.strftime("%d-%m-%Y")
+            return dt_or_d.strftime("%d-%m-%Y")
+        except Exception:
+            return ""
+
+    def _fmt_hora_cell(t):
+        # debe calzar con time:'H:i' del template o "—"
+        if not t:
+            return "—"
+        try:
+            return t.strftime("%H:%M")
+        except Exception:
+            return str(t)
+
+    def _fmt_obs_cell(obs):
+        # debe calzar con default:'(Vacías)'
+        s = (obs or "").strip()
+        return s if s else "(Vacías)"
+
+    def _status_cell(mov):
+        # debe calzar con data-excel-value="{{ mov.get_status_display }}"
+        try:
+            return mov.get_status_display() if getattr(mov, "status", None) else ""
+        except Exception:
+            return ""
+
     if excel_filters:
+        excel_filters_norm = {}
+        for col, values in (excel_filters or {}).items():
+            if not values:
+                continue
+            try:
+                excel_filters_norm[str(col)] = set(_norm(v) for v in values)
+            except Exception:
+                continue
+
         def matches_excel_filters(mov):
-            for col, values in excel_filters.items():
-                if not values:
+            for col, allowed_norm in excel_filters_norm.items():
+                if not allowed_norm:
                     continue
-                values_set = set(values)
 
                 # Índices tabla historial (CON checkbox):
                 # 0  Checkbox
@@ -2484,22 +2705,20 @@ def listar_cartola_historial(request):
                     label = str(mov.usuario) if mov.usuario else ""
 
                 elif col == "2":
-                    d = getattr(mov, "fecha", None)
-                    label = d.strftime("%d-%m-%Y") if d else ""
+                    label = _fmt_fecha_cell(getattr(mov, "fecha", None))
 
                 elif col == "3":
                     d = getattr(mov, "fecha_transaccion", None) or getattr(mov, "fecha", None)
-                    label = d.strftime("%d-%m-%Y") if d else ""
+                    label = _fmt_fecha_cell(d)
 
                 elif col == "4":
                     label = str(getattr(mov, "vehiculo_flota", None) or "—").strip() or "—"
 
                 elif col == "5":
-                    h = getattr(mov, "hora_servicio_flota", None)
-                    label = h.strftime("%H:%M") if h else "—"
+                    label = _fmt_hora_cell(getattr(mov, "hora_servicio_flota", None))
 
                 elif col == "6":
-                    label = format_km(getattr(mov, "kilometraje_servicio_flota", None))
+                    label = format_km_cell(getattr(mov, "kilometraje_servicio_flota", None))
 
                 elif col == "7":
                     label = str(mov.proyecto) if mov.proyecto else ""
@@ -2526,7 +2745,7 @@ def listar_cartola_historial(request):
                     label = (getattr(mov, "numero_doc", None) or "—").strip() or "—"
 
                 elif col == "14":
-                    label = (getattr(mov, "observaciones", None) or "").strip() or "(Vacías)"
+                    label = _fmt_obs_cell(getattr(mov, "observaciones", None))
 
                 elif col == "15":
                     label = (getattr(mov, "numero_transferencia", None) or "—").strip() or "—"
@@ -2541,12 +2760,12 @@ def listar_cartola_historial(request):
                     label = format_clp(getattr(mov, "abonos", 0) or 0)
 
                 elif col == "19":
-                    label = mov.get_status_display() if getattr(mov, "status", None) else ""
+                    label = _status_cell(mov)
 
                 else:
                     continue
 
-                if label not in values_set:
+                if _norm(label) not in allowed_norm:
                     return False
 
             return True
@@ -2558,17 +2777,16 @@ def listar_cartola_historial(request):
     # ==========================
     excel_global = {}
 
-    # 0 checkbox (no se usa)
     excel_global[1] = sorted({str(m.usuario) for m in movimientos_list if m.usuario})
 
     excel_global[2] = sorted({
-        m.fecha.strftime("%d-%m-%Y")
+        _fmt_fecha_cell(getattr(m, "fecha", None))
         for m in movimientos_list
         if getattr(m, "fecha", None)
     })
 
     excel_global[3] = sorted({
-        (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None)).strftime("%d-%m-%Y")
+        _fmt_fecha_cell(getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
         for m in movimientos_list
         if (getattr(m, "fecha_transaccion", None) or getattr(m, "fecha", None))
     })
@@ -2579,12 +2797,12 @@ def listar_cartola_historial(request):
     })
 
     excel_global[5] = sorted({
-        (m.hora_servicio_flota.strftime("%H:%M") if getattr(m, "hora_servicio_flota", None) else "—")
+        _fmt_hora_cell(getattr(m, "hora_servicio_flota", None))
         for m in movimientos_list
     })
 
     excel_global[6] = sorted({
-        format_km(getattr(m, "kilometraje_servicio_flota", None))
+        format_km_cell(getattr(m, "kilometraje_servicio_flota", None))
         for m in movimientos_list
     })
 
@@ -2619,7 +2837,7 @@ def listar_cartola_historial(request):
     })
 
     excel_global[14] = sorted({
-        (getattr(m, "observaciones", None) or "").strip() or "(Vacías)"
+        _fmt_obs_cell(getattr(m, "observaciones", None))
         for m in movimientos_list
     })
 
@@ -2643,14 +2861,24 @@ def listar_cartola_historial(request):
         for m in movimientos_list
     })
 
-    estado_map = dict(CartolaMovimiento.ESTADOS)
-    status_codes = {m.status for m in movimientos_list if getattr(m, "status", None)}
-    excel_global[19] = sorted(estado_map.get(c, c) for c in status_codes)
+    excel_global[19] = sorted({
+        _status_cell(m)
+        for m in movimientos_list
+        if getattr(m, "status", None)
+    })
 
     excel_global_json = json.dumps(excel_global)
 
+    # ============================================================
+    # ✅ PAGINACIÓN
+    # ✅ FIX: si hay excel_filters activos, forzar page=1
+    # ============================================================
     paginator = Paginator(movimientos_list, page_size)
-    page_number = request.GET.get('page')
+
+    page_number = request.GET.get('page') or '1'
+    if excel_filters and str(page_number) != '1':
+        page_number = '1'
+
     pagina = paginator.get_page(page_number)
 
     estado_choices = CartolaMovimiento.ESTADOS

@@ -2165,25 +2165,120 @@ def editar_rendicion(request, pk):
 
 @login_required
 def eliminar_rendicion(request, pk):
+    from django.db import transaction
+    from django.db.models import Max
+    from django.utils import timezone
+
+    from flota.models import VehicleOdometerEvent, VehicleService
+
     rendicion = get_object_or_404(CartolaMovimiento, pk=pk, usuario=request.user)
 
     if rendicion.status in ['aprobado_abono_usuario', 'aprobado_finanzas']:
         messages.error(request, "No puedes eliminar una rendición ya aprobada.")
         return redirect('operaciones:mis_rendiciones')
 
+    def _recalcular_km_y_ultimo_movimiento(vehicle_id: int):
+        """
+        Recalcula kilometraje_actual del vehículo usando el mayor KM disponible
+        (services + odometer_events), y actualiza last_movement_at desde el último service.
+        """
+        from flota.models import Vehicle
+
+        # max km desde servicios
+        max_km_service = (
+            VehicleService.objects
+            .filter(vehicle_id=vehicle_id, kilometraje_declarado__isnull=False)
+            .aggregate(m=Max('kilometraje_declarado'))
+            .get('m')
+        ) or 0
+
+        # max km desde eventos
+        max_km_event = (
+            VehicleOdometerEvent.objects
+            .filter(vehicle_id=vehicle_id)
+            .aggregate(m=Max('new_km'))
+            .get('m')
+        ) or 0
+
+        nuevo_km = max(int(max_km_service), int(max_km_event))
+
+        # último movimiento: desde el último servicio (por fecha + created_at)
+        last_service = (
+            VehicleService.objects
+            .filter(vehicle_id=vehicle_id)
+            .order_by('-service_date', '-created_at', '-pk')
+            .first()
+        )
+
+        last_movement_at = None
+        if last_service:
+            if last_service.service_time:
+                dt_naive = timezone.datetime.combine(last_service.service_date, last_service.service_time)
+            else:
+                dt_naive = timezone.datetime.combine(last_service.service_date, timezone.datetime.min.time())
+            last_movement_at = timezone.make_aware(dt_naive, timezone.get_current_timezone())
+
+        Vehicle.objects.filter(pk=vehicle_id).update(
+            kilometraje_actual=nuevo_km,
+            last_movement_at=last_movement_at,
+            updated_at=timezone.now(),
+        )
+
     if request.method == 'POST':
-        # (Opcional futuro) eliminar o anular km pendiente en flota si aplica
-        rendicion.delete()
-        messages.success(request, "Rendición eliminada correctamente.")
-        return redirect('operaciones:mis_rendiciones')
+        try:
+            with transaction.atomic():
+                # --- Si es rendición flota, borrar huella en flota ---
+                servicio = getattr(rendicion, "servicio_flota", None)
+                vehiculo_id = getattr(rendicion, "vehiculo_flota_id", None) or (servicio.vehicle_id if servicio else None)
+
+                if servicio:
+                    # 1) borrar odometer events creados por el servicio (source=servicio, ref=Servicio #code)
+                    try:
+                        if getattr(servicio, "service_code", None) is not None:
+                            VehicleOdometerEvent.objects.filter(
+                                vehicle_id=servicio.vehicle_id,
+                                source="servicio",
+                                reference=f"Servicio #{servicio.service_code}"
+                            ).delete()
+                    except Exception:
+                        pass
+
+                    # 2) borrar el servicio
+                    try:
+                        servicio.delete()
+                    except Exception:
+                        pass
+
+                # 3) borrar odometer event creado por la rendición (source=rendicion, ref=Rendición #id)
+                if vehiculo_id:
+                    try:
+                        VehicleOdometerEvent.objects.filter(
+                            vehicle_id=vehiculo_id,
+                            source="rendicion",
+                            reference=f"Rendición #{rendicion.pk}"
+                        ).delete()
+                    except Exception:
+                        pass
+
+                # 4) borrar la rendición
+                rendicion.delete()
+
+                # 5) recalcular km del vehículo (si aplica)
+                if vehiculo_id:
+                    _recalcular_km_y_ultimo_movimiento(vehiculo_id)
+
+            messages.success(request, "Rendición eliminada correctamente.")
+            return redirect('operaciones:mis_rendiciones')
+
+        except Exception as e:
+            messages.error(request, f"No se pudo eliminar la rendición correctamente: {e}")
+            return redirect('operaciones:mis_rendiciones')
 
     return render(request, 'operaciones/eliminar_rendicion.html', {'rendicion': rendicion})
-
 
 # ==========================================================
 # Supervisor / PM / Finanzas
 # ==========================================================
-
 
 
 
@@ -2195,25 +2290,20 @@ def vista_rendiciones(request):
     # =========================================================
     # 1) DETECCIÓN DE ROLES (robusta)
     # =========================================================
-    # Usa tus flags actuales, pero también intenta leer grupos/roles por nombre
-    # por si las props es_pm/es_supervisor/es_facturacion no reflejan multirol.
     user_groups = set()
     try:
         user_groups = set(user.groups.values_list('name', flat=True))
     except Exception:
         user_groups = set()
 
-    # Flags por propiedades (si existen)
     prop_es_supervisor = bool(getattr(user, 'es_supervisor', False))
     prop_es_pm = bool(getattr(user, 'es_pm', False))
     prop_es_facturacion = bool(getattr(user, 'es_facturacion', False))
 
-    # Fallback por grupos (ajusta nombres si en tu sistema se llaman distinto)
     grp_es_supervisor = any(g.lower() in {'supervisor'} for g in user_groups)
     grp_es_pm = any(g.lower() in {'pm'} for g in user_groups)
     grp_es_facturacion = any(g.lower() in {'facturacion', 'finanzas'} for g in user_groups)
 
-    # Resultado final (OR de ambos mecanismos)
     es_superuser = user.is_superuser
     es_supervisor = prop_es_supervisor or grp_es_supervisor
     es_pm = prop_es_pm or grp_es_pm
@@ -2236,38 +2326,34 @@ def vista_rendiciones(request):
 
     # =========================================================
     # 3) FILTRO POR ROLES (EXPLÍCITO POR ESTADOS)
-    #    Esto evita comportamientos raros con Q() vacío.
     # =========================================================
     if es_superuser:
         movimientos = base_qs.all()
     else:
         q_roles = Q()
 
-        # Supervisor: ve pendientes/rechazados de su etapa (excepto abonos)
         if es_supervisor:
             q_roles |= (
                 Q(status__in=['pendiente_supervisor', 'rechazado_supervisor']) &
                 ~Q(tipo__categoria='abono')
             )
 
-        # PM: ve su bandeja (pendiente PM + rechazado PM + aprobado PM + etc. si quieres)
-        # Si quieres que PM vea TODO, reemplaza este bloque por q_roles |= Q(pk__isnull=False)
         if es_pm:
             q_roles |= Q(status__in=['aprobado_supervisor', 'rechazado_pm', 'aprobado_pm', 'aprobado_finanzas'])
 
-        # Finanzas: ve su bandeja
         if es_facturacion:
             q_roles |= Q(status__in=['aprobado_pm', 'rechazado_finanzas', 'aprobado_finanzas'])
 
-        # Abonos del usuario (si aplica)
-        q_roles |= Q(status__in=['pendiente_abono_usuario', 'aprobado_abono_usuario', 'rechazado_abono_usuario'], usuario=user)
+        q_roles |= Q(
+            status__in=['pendiente_abono_usuario', 'aprobado_abono_usuario', 'rechazado_abono_usuario'],
+            usuario=user
+        )
 
         movimientos = base_qs.filter(q_roles).distinct() if q_roles else base_qs.none()
 
     # =========================================================
     # 4) PRIORIDAD DE ORDEN SEGÚN ROL (multirol)
     # =========================================================
-    # Cambia el orden si quieres priorizar PM primero.
     pending_statuses = []
     if es_supervisor:
         pending_statuses.append('pendiente_supervisor')
@@ -2311,85 +2397,44 @@ def vista_rendiciones(request):
             excel_filters = {}
 
     # Map de columnas -> campo backend
-    # (ajusta si tus índices cambian)
-    # OJO: en fecha/hora y estado usamos texto normalizado en Python abajo.
+    # (solo referencia; filtramos manual para calzar EXACTO con data-excel-value)
     backend_filter_map = {
-        "0": "usuario__full_name",   # Nombre (se maneja con filtro manual más abajo si no existe ese campo)
-        "1": "fecha",                # Fecha
-        "2": "fecha_transaccion",    # Fecha real del gasto
-        "3": "proyecto",             # Proyecto
-        "4": "cargos",               # Monto
-        "5": "tipo",                 # Tipo
-        "6": "vehiculo_flota",       # Vehículo
-        "7": "tipo_servicio_flota_nombre",  # Tipo servicio flota
-        # "8": fecha/hora servicio (manual)
-        "9": "kilometraje_servicio_flota",
-        "10": "servicio_flota",
+        "0": "usuario__full_name",
+        "1": "fecha",
+        "2": "fecha_transaccion",
+        "3": "proyecto",
+        "4": "cargos",
+        "5": "tipo",
+        "6": "vehiculo_flota",
+        "7": "tipo_servicio_flota_nombre",
+        "8": "fecha_servicio_flota",            # manual (incluye hora)
+        "9": "kilometraje_servicio_flota",      # manual (incluye KM)
+        "10": "servicio_flota",                 # manual (incluye #)
         "11": "observaciones",
-        # "12": comprobante (manual)
-        # "13": estado (manual)
+        "12": "numero_doc",                     # ✅ NUEVO: Número de documento
+        "13": "comprobante",                    # manual (Ver/—)
+        "14": "status",                         # manual (label)
     }
-
-    # --- Filtros simples por queryset (cuando conviene)
-    # Para columnas complejas (estado, comprobante, fecha/hora), filtramos en memoria más abajo.
-    # Esto mantiene compatibilidad con tu panel Excel.
-    for col_idx, values in excel_filters.items():
-        if not isinstance(values, list) or not values:
-            continue
-
-        # Saltamos columnas complejas para filtrado manual
-        if col_idx in {"0", "8", "12", "13"}:
-            continue
-
-        # Normalizamos strings
-        values_str = [str(v).strip() for v in values if str(v).strip()]
-        if not values_str:
-            continue
-
-        if col_idx == "1":
-            # Fecha (d-m-Y) -> filtro manual luego
-            continue
-        elif col_idx == "2":
-            # Fecha real gasto -> filtro manual luego
-            continue
-        elif col_idx == "4":
-            # Monto formateado -> filtro manual luego
-            continue
-        elif col_idx == "6":
-            # Vehículo string compuesto -> filtro manual luego
-            continue
-        elif col_idx == "10":
-            # Servicio flota con # -> filtro manual luego
-            continue
-        elif col_idx == "9":
-            # KM con "KM" -> filtro manual luego
-            continue
-        else:
-            # campos directos (aproximados)
-            field_name = backend_filter_map.get(col_idx)
-            if field_name:
-                # Para FK o strings se puede usar __in sobre str no siempre funciona bien;
-                # mejor filtrado manual global más abajo para evitar inconsistencias.
-                pass
 
     # =========================================================
     # 6) FILTRO EXCEL MANUAL (EN MEMORIA) PARA GARANTIZAR COINCIDENCIA EXACTA CON LA TABLA
-    #    Esto evita el problema que reportaste de "no está en la misma hoja".
     # =========================================================
-    # Importante: se aplica sobre TODO el queryset antes de paginar.
     if excel_filters:
-        # Materializamos IDs permitidos comparando contra los mismos textos que pintas en la tabla
         ids_ok = []
 
-        # Nota: iterar queryset puede costar, pero para rendiciones normalmente está bien.
         for mov in movimientos:
-            # construimos los mismos valores que usas en data-excel-value
-            nombre_val = (mov.usuario.get_full_name() if callable(getattr(mov.usuario, "get_full_name", None)) else str(getattr(mov.usuario, "get_full_name", "") or "")).strip() or "—"
+            nombre_val = (
+                mov.usuario.get_full_name() if callable(getattr(mov.usuario, "get_full_name", None))
+                else str(getattr(mov.usuario, "get_full_name", "") or "")
+            ).strip() or "—"
+
             fecha_val = mov.fecha.strftime('%d-%m-%Y') if mov.fecha else "—"
             fecha_real_val = (mov.fecha_transaccion.strftime('%d-%m-%Y') if getattr(mov, 'fecha_transaccion', None) else fecha_val)
 
             proyecto_val = str(mov.proyecto or "—")
-            monto_val = f"${mov.cargos or 0:,.0f}".replace(",", ".")  # aprox CLP
+
+            monto_val = f"${mov.cargos or 0:,.0f}".replace(",", ".")
+
             tipo_val = str(mov.tipo or "—")
 
             if getattr(mov, 'vehiculo_flota', None):
@@ -2407,7 +2452,8 @@ def vista_rendiciones(request):
             else:
                 fecha_hora_val = "—"
 
-            km_val = f"{getattr(mov, 'kilometraje_servicio_flota', None):,} KM".replace(",", ".") if getattr(mov, 'kilometraje_servicio_flota', None) else "—"
+            km_raw = getattr(mov, 'kilometraje_servicio_flota', None)
+            km_val = f"{km_raw:,} KM".replace(",", ".") if km_raw else "—"
 
             if getattr(mov, 'servicio_flota', None):
                 sf = mov.servicio_flota
@@ -2416,6 +2462,10 @@ def vista_rendiciones(request):
                 servicio_val = "—"
 
             observ_val = str(mov.observaciones or "—")
+
+            # ✅ NUEVO: número de documento
+            numero_doc_val = str(getattr(mov, "numero_doc", None) or "—")
+
             comprobante_val = "Ver" if getattr(mov, 'comprobante', None) else "—"
 
             status_map = {
@@ -2430,8 +2480,28 @@ def vista_rendiciones(request):
                 'aprobado_abono_usuario': 'Abono aprobado por Usuario',
                 'rechazado_abono_usuario': 'Abono rechazado por Usuario',
             }
-            estado_val = status_map.get(mov.status, str(getattr(mov, 'get_status_display', lambda: mov.status)()))
+            try:
+                estado_fallback = mov.get_status_display() if hasattr(mov, "get_status_display") else str(mov.status)
+            except Exception:
+                estado_fallback = str(mov.status)
+            estado_val = status_map.get(mov.status, estado_fallback)
 
+            # ✅ IMPORTANTE: índices deben calzar con TU TABLA (0..14, sin Acciones)
+            # 0 Nombre
+            # 1 Fecha
+            # 2 Fecha real del gasto
+            # 3 Proyecto
+            # 4 Monto
+            # 5 Tipo
+            # 6 Vehículo
+            # 7 Tipo servicio flota
+            # 8 Fecha/Hora servicio
+            # 9 KM servicio
+            # 10 Servicio flota
+            # 11 Observaciones
+            # 12 Número de documento
+            # 13 Comprobante
+            # 14 Estado
             row_vals = {
                 "0": nombre_val,
                 "1": fecha_val,
@@ -2445,8 +2515,9 @@ def vista_rendiciones(request):
                 "9": km_val,
                 "10": servicio_val,
                 "11": observ_val,
-                "12": comprobante_val,
-                "13": estado_val,
+                "12": numero_doc_val,
+                "13": comprobante_val,
+                "14": estado_val,
             }
 
             ok = True
@@ -2498,7 +2569,8 @@ def vista_rendiciones(request):
             'rechazado_abono_usuario': 'Abono rechazado por Usuario',
         }.get(mov.status, mov.get_status_display() if hasattr(mov, 'get_status_display') else str(mov.status))
 
-    excel_global = {str(i): set() for i in range(14)}  # 0..13 (sin Acciones)
+    # ✅ CLAVE: ahora son 0..14 (sin Acciones)
+    excel_global = {str(i): set() for i in range(15)}  # 0..14
 
     for mov in movimientos:
         excel_global["0"].add((mov.usuario.get_full_name() if callable(getattr(mov.usuario, "get_full_name", None)) else str(mov.usuario)).strip() or "—")
@@ -2533,8 +2605,12 @@ def vista_rendiciones(request):
             excel_global["10"].add("—")
 
         excel_global["11"].add(str(mov.observaciones or "—"))
-        excel_global["12"].add("Ver" if getattr(mov, 'comprobante', None) else "—")
-        excel_global["13"].add(_estado_label(mov))
+
+        # ✅ NUEVO: número de documento
+        excel_global["12"].add(str(getattr(mov, "numero_doc", None) or "—"))
+
+        excel_global["13"].add("Ver" if getattr(mov, 'comprobante', None) else "—")
+        excel_global["14"].add(_estado_label(mov))
 
     excel_global_json = json.dumps({k: sorted(list(v)) for k, v in excel_global.items()}, ensure_ascii=False)
 
@@ -2554,14 +2630,6 @@ def vista_rendiciones(request):
     paginator = Paginator(movimientos, page_size)
     page_number = request.GET.get('page') or 1
     pagina = paginator.get_page(page_number)
-
-    # DEBUG opcional (puedes borrar después)
-    # print("ROLES:", {
-    #     "prop_es_supervisor": prop_es_supervisor, "prop_es_pm": prop_es_pm, "prop_es_facturacion": prop_es_facturacion,
-    #     "grp_es_supervisor": grp_es_supervisor, "grp_es_pm": grp_es_pm, "grp_es_facturacion": grp_es_facturacion,
-    #     "final_es_supervisor": es_supervisor, "final_es_pm": es_pm, "final_es_facturacion": es_facturacion,
-    #     "excel_filters_raw": excel_filters_raw,
-    # })
 
     return render(request, 'operaciones/vista_rendiciones.html', {
         'pagina': pagina,
