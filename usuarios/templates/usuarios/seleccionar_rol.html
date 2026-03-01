@@ -14,14 +14,21 @@
     <form method="post">
       {% csrf_token %}
       <div class="space-y-3">
+
+        {% if can_user %}
         <button type="submit" name="opcion" value="usuario"
           class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-xl">
           Entrar como Usuario
         </button>
+        {% endif %}
+
+        {% if can_admin %}
         <button type="submit" name="opcion" value="admin"
           class="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-xl">
           Entrar como Administrador
         </button>
+        {% endif %}
+
       </div>
     </form>
   </div>

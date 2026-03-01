@@ -25,7 +25,9 @@
           <th class="p-2 border">Incluir chofer</th>
           <th class="p-2 border text-left">Correos extra (TO)</th>
           <th class="p-2 border text-left">Correos extra (CC)</th>
-          <th class="p-2 border">Acciones</th>
+
+          {# ✅ evita que se aplaste y se parta #}
+          <th class="p-2 border whitespace-nowrap w-[160px] min-w-[160px]">Acciones</th>
         </tr>
       </thead>
 
@@ -62,11 +64,14 @@
               {{ cfg.extra_emails_cc|default:"—" }}
             </td>
 
-            <td class="p-2 border">
-              <a href="{% url 'flota:notification_edit' v.id %}"
-                 class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
-                ⚙️ Configurar
-              </a>
+            {# ✅ mismo ancho + no wrap + centra #}
+            <td class="p-2 border whitespace-nowrap w-[160px] min-w-[160px]">
+              <div class="flex justify-center">
+                <a href="{% url 'flota:notification_edit' v.id %}"
+                   class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700 inline-flex items-center gap-1">
+                  ⚙️ <span>Configurar</span>
+                </a>
+              </div>
             </td>
           </tr>
           {% endwith %}

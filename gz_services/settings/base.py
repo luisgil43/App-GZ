@@ -140,6 +140,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+
+    # ✅ NUEVO: switch user/admin por sesión (redirige /dashboard/ <-> /dashboard_admin/index/)
+    "usuarios.middleware.UIModeRedirectMiddleware",
+
     "axes.middleware.AxesMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "usuarios.middleware.Enforce2FAMiddleware",

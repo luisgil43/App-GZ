@@ -550,23 +550,68 @@ def login_unificado(request):
     return render(request, 'usuarios/login.html', context)
 
 
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
+
+
 @login_required
 def seleccionar_rol(request):
-    usuario = request.user
-    roles_usuario = usuario.roles.all()
+    u = request.user
 
-    if request.method == 'POST':
-        opcion = request.POST.get('opcion')
-        if opcion == 'usuario':
-            return redirect('dashboard:index')
-        elif opcion in ['admin', 'rrhh', 'supervisor', 'pm', 'facturacion', 'logistica', 'subcontrato', 'flota', 'bodeguero', 'prevencion']:
-            return redirect('dashboard_admin:index')
-        else:
-            messages.error(request, "Rol no reconocido.")
-            return redirect('usuarios:seleccionar_rol')
+    # --- Define qué es "admin" en tu sistema ---
+    # OJO: en tu modelo, "admin_general" es el rol 'admin'
+    # y además hay roles administrativos como pm/supervisor/rrhh/etc.
+    ADMIN_ROLE_NAMES = {
+        "admin", "pm", "supervisor", "rrhh", "prevencion",
+        "logistica", "subcontrato", "facturacion", "flota", "bodeguero"
+    }
 
-    return render(request, 'usuarios/seleccionar_rol.html', {'roles': roles_usuario})
+    # ✅ Perfil usuario: SOLO si tiene rol 'usuario' (o superuser)
+    can_user = bool(getattr(u, "es_usuario", False))
 
+    # ✅ Perfil admin: si tiene cualquiera de los roles admin (o superuser)
+    can_admin = bool(
+        u.is_superuser or u.roles.filter(nombre__in=ADMIN_ROLE_NAMES).exists()
+    )
+
+    # ------------------------------------------------------------------
+    # ✅ REGLA NUEVA: si NO tiene ambos perfiles, NO preguntamos.
+    # ------------------------------------------------------------------
+    if not (can_user and can_admin):
+        # Guardar modo en sesión para que tu middleware lo respete (si aplica)
+        if can_admin and not can_user:
+            request.session["ui_mode"] = "admin"
+            return redirect("/dashboard_admin/index/")
+        if can_user and not can_admin:
+            request.session["ui_mode"] = "user"
+            return redirect("/dashboard/")
+        # Si llega aquí: no tiene ni usuario ni admin
+        messages.error(request, "No tienes un rol válido para ingresar.")
+        return redirect("usuarios:no_autorizado")
+
+    # ------------------------------------------------------------------
+    # ✅ Solo si tiene ambos perfiles, mostramos selector
+    # ------------------------------------------------------------------
+    if request.method == "POST":
+        opcion = (request.POST.get("opcion") or "").strip().lower()
+
+        if opcion == "usuario":
+            request.session["ui_mode"] = "user"
+            return redirect("/dashboard/")
+
+        if opcion == "admin":
+            request.session["ui_mode"] = "admin"
+            return redirect("/dashboard_admin/index/")
+
+        messages.error(request, "Opción inválida.")
+        return redirect("usuarios:seleccionar_rol")
+
+    # GET -> render selector (tiene ambos)
+    return render(request, "usuarios/seleccionar_rol.html", {
+        "can_user": can_user,
+        "can_admin": can_admin,
+    })
 
 @login_required
 def marcar_notificacion_como_leida(request, pk):

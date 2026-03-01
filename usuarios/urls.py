@@ -3,6 +3,8 @@
 from django.urls import path
 from django.views.generic import TemplateView
 
+from usuarios.views_switch_mode import switch_mode
+
 from . import views
 # from .views import UsuarioLoginView, AdminLoginView
 from .views import no_autorizado_view
@@ -28,6 +30,7 @@ urlpatterns = [
          # 2FA
     path('two-factor/', views.two_factor_verify, name='two_factor_verify'),
     path('seguridad/', views.two_factor_setup, name='two_factor_setup'),
+    path("switch-mode/", switch_mode, name="switch_mode"),
 
 
 ]

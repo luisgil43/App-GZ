@@ -21,8 +21,14 @@
     </div>
   </div>
 
+  <!-- ✅ Scroll horizontal como "Rendiciones":
+       - wrapper overflow-x-auto
+       - tabla con min-width en sm+
+       - nowrap para que no parta celdas -->
   <div class="overflow-x-auto">
-    <table class="w-full text-sm">
+    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+           style="white-space: nowrap;">
+
       <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
         <tr>
           <th class="p-2 border w-12"> </th>
@@ -72,8 +78,11 @@
 
               <div class="p-3 bg-gray-50">
                 {% if node.types %}
+
+                  <!-- ✅ wrapper con scroll -->
                   <div class="overflow-x-auto">
-                    <table class="w-full text-sm bg-white rounded-xl overflow-hidden border">
+                    <table class="table-auto w-full text-sm bg-white rounded-xl overflow-hidden border min-w-full sm:min-w-[1100px]"
+                           style="white-space: nowrap;">
                       <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
                         <tr>
                           <th class="p-2 border w-12"> </th>
@@ -127,15 +136,16 @@
                             <td class="p-0 border" colspan="6">
                               <div class="p-3 bg-white">
 
+                                <!-- ✅ wrapper con scroll -->
                                 <div class="overflow-x-auto">
-                                  <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                  <table class="table-auto w-full text-sm border rounded-xl overflow-hidden min-w-full sm:min-w-[1300px]"
+                                         style="white-space: nowrap;">
                                     <thead class="bg-gray-50 text-gray-700 font-semibold text-center">
                                       <tr>
                                         <th class="p-2 border whitespace-nowrap">Fecha</th>
                                         <th class="p-2 border">KM declarado</th>
                                         <th class="p-2 border">Monto</th>
                                         <th class="p-2 border">Próx. KM</th>
-                                        <!-- ✅ NO partir Próx. Fecha -->
                                         <th class="p-2 border whitespace-nowrap">Próx. Fecha</th>
                                         <th class="p-2 border">Notas</th>
                                         <th class="p-2 border whitespace-nowrap">Acciones</th>
@@ -167,7 +177,6 @@
                                           {% endif %}
                                         </td>
 
-                                        <!-- ✅ NO partir Próx. Fecha -->
                                         <td class="p-2 border whitespace-nowrap">
                                           {% if s.next_due_date %}
                                             {{ s.next_due_date|date:"d-m-Y" }}
@@ -299,7 +308,7 @@
     btn.addEventListener('click', ()=>toggleRow(btn));
   });
 
-  // Modal delete igual que el tuyo
+  // Modal delete
   function openDeleteModal(id, tipo, vehiculo){
     const modal = document.getElementById('deleteModal');
     const text = document.getElementById('deleteText');

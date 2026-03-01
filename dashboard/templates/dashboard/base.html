@@ -118,18 +118,32 @@
         <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
       </div>
 
-      <!-- DERECHA: Nombre + cerrar sesión -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-4 items-start text-sm md:text-base text-right leading-tight">
-        <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
-          {{ request.user.get_full_name|default:request.user.username }}
-        </span>
-        <form method="post" action="{% url 'dashboard_admin:logout' %}">
-          {% csrf_token %}
-          <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-            Cerrar Sesión
-          </button>
-        </form>
-      </div>
+   <!-- DERECHA: Nombre + switch + cerrar sesión -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-3 items-start text-sm md:text-base text-right leading-tight">
+  <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
+    {{ request.user.get_full_name|default:request.user.username }}
+  </span>
+
+  {# ✅ Botón solo si tiene rol usuario + admin #}
+ {# ✅ Botón SOLO si tiene rol usuario + rol admin #}
+{% if request.user.is_authenticated and request.user.es_usuario %}
+  {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
+    <form method="post" action="{% url 'usuarios:switch_mode' %}" class="inline-block">
+      {% csrf_token %}
+      <button type="submit"
+              class="px-3 py-1 rounded-full text-xs border bg-white hover:bg-gray-50 text-gray-800 whitespace-nowrap">
+        🔁 Cambiar a Admin
+      </button>
+    </form>
+  {% endif %}
+{% endif %}
+<form method="post" action="{% url 'logout' %}">
+  {% csrf_token %}
+  <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+    Cerrar Sesión
+  </button>
+</form>
+</div>
     </div>
 
   </div>
