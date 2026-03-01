@@ -1,6 +1,7 @@
+# flota/urls.py
 from django.urls import path
 
-from . import views
+from . import views, views_cron
 
 app_name = "flota"
 
@@ -30,9 +31,16 @@ urlpatterns = [
     path("servicios/<int:pk>/editar/", views.service_edit, name="service_edit"),
     path("servicios/<int:pk>/eliminar/", views.service_delete, name="service_delete"),
 
-    # ✅ Tipos de servicio (nuevo, estilo Status)
+    # ✅ Tipos de servicio
     path("tipos-servicio/", views.service_type_manage, name="service_type_manage"),
     path("tipos-servicio/<int:pk>/editar/", views.service_type_manage, name="service_type_edit"),
     path("tipos-servicio/<int:pk>/toggle/", views.service_type_toggle_active, name="service_type_toggle_active"),
     path("tipos-servicio/<int:pk>/eliminar/", views.service_type_delete, name="service_type_delete"),
+
+    # ✅ Notificaciones (tu módulo)
+    path("notificaciones/", views.notification_list, name="notification_list"),
+    path("notificaciones/<int:vehicle_id>/editar/", views.notification_edit, name="notification_edit"),
+
+    # ✅ CRON Flota (igual RRHH)
+    path("cron/mantenciones/", views_cron.cron_flota_mantenciones, name="cron_flota_mantenciones"),
 ]

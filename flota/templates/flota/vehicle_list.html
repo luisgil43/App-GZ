@@ -86,6 +86,11 @@
        class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-full text-sm shadow">
       ⚙️ Crear status
     </a>
+
+    <a href="{% url 'flota:notification_list' %}"
+       class="bg-white hover:bg-gray-50 text-gray-900 px-4 py-2 rounded-full text-sm shadow border">
+      🔔 Notificaciones
+    </a>
   </div>
 </div>
 
@@ -251,8 +256,7 @@
         </tr>
         {% empty %}
         <tr data-empty-row="1">
-          <td colspan="16
-        " class="p-6 text-center text-gray-500">No hay vehículos registrados.</td>
+          <td colspan="16" class="p-6 text-center text-gray-500">No hay vehículos registrados.</td>
         </tr>
         {% endfor %}
       </tbody>

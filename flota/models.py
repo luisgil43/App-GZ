@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import EmailValidator
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -159,7 +160,7 @@ class Vehicle(models.Model):
         if nuevo_km < self.kilometraje_actual:
             if strict:
                 raise ValidationError(f"El kilometraje no puede ser menor al actual ({self.kilometraje_actual}).")
-        # En fuentes automáticas (servicio/combustible/etc) NO bajamos el odómetro
+            # En fuentes automáticas (servicio/combustible/etc) NO bajamos el odómetro
             return
 
         if nuevo_km == self.kilometraje_actual:
@@ -171,7 +172,7 @@ class Vehicle(models.Model):
             new_km=nuevo_km,
             source=source,
             reference=ref,
-        )   
+        )
         self.kilometraje_actual = nuevo_km
         self.save(update_fields=["kilometraje_actual", "updated_at"])
 
@@ -492,7 +493,12 @@ class VehicleService(models.Model):
         v = self.vehicle
 
         if self.kilometraje_declarado is not None:
-            v.update_kilometraje(self.kilometraje_declarado, source="servicio", ref=f"Servicio #{self.service_code}", strict=False,)
+            v.update_kilometraje(
+                self.kilometraje_declarado,
+                source="servicio",
+                ref=f"Servicio #{self.service_code}",
+                strict=False,
+            )
 
         v.last_movement_at = dt
 
@@ -513,3 +519,170 @@ class VehicleService(models.Model):
         if self.service_type_obj_id:
             return f"{self.vehicle} - {self.service_type_obj.name} ({self.service_date})"
         return f"{self.vehicle} - {self.get_service_type_display()} ({self.service_date})"
+
+
+# ==========================================================
+# ✅ NUEVO: Configuración de notificaciones por vehículo
+# ==========================================================
+class VehicleNotificationSettings(models.Model):
+    """
+    Configuración por vehículo para notificaciones (cron diario 09:00).
+    - enabled: activa/desactiva
+    - include_assigned_driver: incluye el email del chofer asignado activo (si existe)
+    - extra_emails_to / extra_emails_cc: correos adicionales separados por coma
+    """
+    vehicle = models.OneToOneField(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="notification_settings",
+    )
+
+    enabled = models.BooleanField(default=False)
+
+    include_assigned_driver = models.BooleanField(
+        default=True,
+        help_text="Si está activo, se incluirá el correo del chofer asignado (si existe email)."
+    )
+
+    extra_emails_to = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Correos adicionales (TO) separados por coma."
+    )
+    extra_emails_cc = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Correos adicionales (CC) separados por coma."
+    )
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Notificación de flota"
+        verbose_name_plural = "Notificaciones de flota"
+
+    def __str__(self):
+        return f"Notificaciones {self.vehicle.patente} ({'ON' if self.enabled else 'OFF'})"
+
+    def _split_emails(self, raw: str) -> list[str]:
+        raw = (raw or "").replace(";", ",")
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        return parts
+
+    def _validate_emails(self, emails: list[str]) -> list[str]:
+        v = EmailValidator()
+        out: list[str] = []
+        for e in emails:
+            try:
+                v(e)
+                out.append(e.lower())
+            except Exception:
+                continue
+        # únicos, orden estable
+        seen = set()
+        uniq = []
+        for e in out:
+            if e not in seen:
+                seen.add(e)
+                uniq.append(e)
+        return uniq
+
+    def get_assigned_driver_email(self) -> str | None:
+        a = self.vehicle.assignments.filter(active=True).select_related("user").first()
+        if not a:
+            return None
+        u = a.user
+        email = (getattr(u, "email", "") or "").strip()
+        return email or None
+
+    def get_to_emails(self) -> list[str]:
+        emails = []
+        if self.include_assigned_driver:
+            e = self.get_assigned_driver_email()
+            if e:
+                emails.append(e)
+
+        emails.extend(self._split_emails(self.extra_emails_to))
+        return self._validate_emails(emails)
+
+    def get_cc_emails(self) -> list[str]:
+        emails = self._split_emails(self.extra_emails_cc)
+        return self._validate_emails(emails)
+    
+
+# ==========================================================
+# ✅ NUEVO: Lock diario para CRON Flota (igual RRHH)
+# ==========================================================
+class FlotaCronDiarioEjecutado(models.Model):
+    nombre = models.CharField(max_length=80)
+    fecha = models.DateField()
+
+    class Meta:
+        verbose_name = "Cron diario ejecutado (Flota)"
+        verbose_name_plural = "Cron diarios ejecutados (Flota)"
+        constraints = [
+            models.UniqueConstraint(fields=["nombre", "fecha"], name="uniq_flota_cron_por_dia")
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.fecha}"
+
+
+# ==========================================================
+# ✅ NUEVO: Historial de alertas enviadas (para NO repetir)
+# ==========================================================
+class FlotaAlertaEnviada(models.Model):
+    """
+    Guarda qué alerta se envió para:
+    - PRE (pre_km / pre_days): una vez por base_service y threshold
+    - OVERDUE (overdue_km / overdue_days): una vez por día (sent_on = hoy)
+    """
+
+    MODE_CHOICES = [
+        ("pre_km", "Pre KM"),
+        ("pre_days", "Pre días"),
+        ("overdue_km", "Vencido KM"),
+        ("overdue_days", "Vencido días"),
+    ]
+
+    vehicle = models.ForeignKey("flota.Vehicle", on_delete=models.CASCADE, related_name="alerts_sent")
+    service_type = models.ForeignKey("flota.VehicleServiceType", on_delete=models.CASCADE, related_name="alerts_sent")
+    base_service = models.ForeignKey("flota.VehicleService", on_delete=models.CASCADE, related_name="alerts_base")
+
+    mode = models.CharField(max_length=20, choices=MODE_CHOICES)
+
+    # threshold:
+    # - pre: el umbral (1000/500/100 o 10/7/1)
+    # - overdue: 0
+    threshold = models.PositiveIntegerField(default=0)
+
+    # pre: None
+    # overdue: fecha del envío (para permitir 1/día)
+    sent_on = models.DateField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Alerta enviada (Flota)"
+        verbose_name_plural = "Alertas enviadas (Flota)"
+        indexes = [
+            models.Index(fields=["vehicle", "service_type", "base_service", "mode"]),
+            models.Index(fields=["sent_on"]),
+        ]
+        constraints = [
+            # PRE: única por base_service+threshold (sent_on NULL)
+            models.UniqueConstraint(
+                fields=["vehicle", "service_type", "base_service", "mode", "threshold"],
+                name="uniq_flota_pre_alert_once",
+            ),
+            # OVERDUE: única por día (sent_on NOT NULL)
+            models.UniqueConstraint(
+                fields=["vehicle", "service_type", "base_service", "mode", "sent_on"],
+                name="uniq_flota_overdue_daily",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.vehicle_id} {self.service_type_id} {self.mode} thr={self.threshold} on={self.sent_on}"

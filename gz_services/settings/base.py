@@ -270,7 +270,7 @@ CONTRATOS_CRON_TOKEN = os.environ.get("CONTRATOS_CRON_TOKEN", "")
 # Ej: "rrhh@tuempresa.cl,pm@tuempresa.cl,contador@tuempresa.cl"
 CONTRATOS_ALERT_EMAILS = os.environ.get("CONTRATOS_ALERT_EMAILS", "")
 
-
+FLOTA_CRON_TOKEN = os.environ.get("FLOTA_CRON_TOKEN", "")
 
 
 # ===============================

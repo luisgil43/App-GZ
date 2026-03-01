@@ -12,10 +12,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from .forms import (VehicleAssignmentForm, VehicleForm, VehicleServiceForm,
+from .forms import (VehicleAssignmentForm, VehicleForm,
+                    VehicleNotificationSettingsForm, VehicleServiceForm,
                     VehicleServiceTypeForm, VehicleStatusForm)
-from .models import (Vehicle, VehicleAssignment, VehicleService,
-                     VehicleServiceType, VehicleStatus)
+from .models import (Vehicle, VehicleAssignment, VehicleNotificationSettings,
+                     VehicleService, VehicleServiceType, VehicleStatus)
 
 
 @login_required
@@ -190,7 +191,6 @@ def assignment_create(request):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Bloqueamos posibles asignaciones activas del mismo vehículo antes de guardar
                     vehicle = form.cleaned_data.get("vehicle")
 
                     if vehicle:
@@ -221,10 +221,8 @@ def assignment_create(request):
                 return redirect("flota:assignment_list")
 
             except ValidationError:
-                # Ya agregamos errores al form
                 pass
             except IntegrityError:
-                # Fallback por concurrencia (doble click o 2 usuarios a la vez)
                 form.add_error(
                     "vehicle",
                     "No se pudo crear la asignación porque ese vehículo ya tiene una asignación activa."
@@ -246,7 +244,6 @@ def assignment_edit(request, pk):
         if form.is_valid():
             try:
                 with transaction.atomic():
-                    # Bloqueamos la asignación actual
                     a_locked = (
                         VehicleAssignment.objects
                         .select_for_update()
@@ -256,7 +253,6 @@ def assignment_edit(request, pk):
 
                     vehicle = form.cleaned_data.get("vehicle")
 
-                    # Si por edición cambia el vehículo, validar que no exista otra activa
                     if vehicle:
                         conflict = (
                             VehicleAssignment.objects
@@ -286,7 +282,6 @@ def assignment_edit(request, pk):
                 return redirect("flota:assignment_list")
 
             except ValidationError:
-                # Errores ya cargados al form
                 pass
             except IntegrityError:
                 form.add_error(
@@ -297,7 +292,6 @@ def assignment_edit(request, pk):
         form = VehicleAssignmentForm(instance=a)
 
     return render(request, "flota/assignment_form.html", {"form": form, "mode": "edit", "assignment": a})
-
 
 
 @login_required
@@ -318,7 +312,6 @@ def assignment_toggle_active(request, pk):
 
     try:
         with transaction.atomic():
-            # Bloqueamos esta asignación
             a = (
                 VehicleAssignment.objects
                 .select_for_update()
@@ -327,14 +320,12 @@ def assignment_toggle_active(request, pk):
             )
 
             if a.active:
-                # Pausar / cerrar
                 a.active = False
                 a.unassigned_at = a.unassigned_at or timezone.now()
                 a.save(update_fields=["active", "unassigned_at"])
                 messages.success(request, "Asignación pausada (cerrada).")
                 return redirect("flota:assignment_list")
 
-            # Reactivar: validar que no exista otra activa del mismo vehículo
             conflict = (
                 VehicleAssignment.objects
                 .select_for_update()
@@ -360,7 +351,6 @@ def assignment_toggle_active(request, pk):
                 )
                 return redirect("flota:assignment_list")
 
-            # Reactivar
             a.active = True
             a.unassigned_at = None
             a.save(update_fields=["active", "unassigned_at"])
@@ -375,6 +365,7 @@ def assignment_toggle_active(request, pk):
         )
 
     return redirect("flota:assignment_list")
+
 
 @login_required
 @require_POST
@@ -444,7 +435,6 @@ def service_type_delete(request, pk):
     except Exception:
         messages.error(request, "No se puede eliminar este tipo porque está en uso por uno o más servicios.")
     return redirect("flota:service_type_manage")
-
 
 
 def _is_fuel_service(service: VehicleService) -> bool:
@@ -584,14 +574,12 @@ def _fuel_feedback_messages(request, fuel_service: VehicleService):
 # ---------------------------
 @login_required
 def service_list(request):
-    # Traemos todos los servicios ordenados para que el primero sea "el último"
     services = (
         VehicleService.objects
         .select_related("vehicle", "service_type_obj")
         .order_by("vehicle_id", "-service_date", "-created_at")
     )
 
-    # grouped = { vehicle_id: { "vehicle": Vehicle, "types": { "Cambio de Aceite": [svc, ...] }, "last_service_*": ... } }
     grouped = {}
     type_names_by_vehicle = defaultdict(set)
 
@@ -602,23 +590,19 @@ def service_list(request):
             grouped[v.id] = {
                 "vehicle": v,
                 "types": defaultdict(list),
-                # Estos dos se setean con el primer servicio que encontremos (que es el más reciente por el order_by)
                 "last_service_date": None,
                 "last_service_label": "—",
             }
 
-        # Nombre del tipo (configurable si existe, si no legacy)
         type_name = s.service_type_obj.name if s.service_type_obj_id else s.get_service_type_display()
 
         grouped[v.id]["types"][type_name].append(s)
         type_names_by_vehicle[v.id].add(type_name)
 
-        # Primer servicio encontrado para ese vehículo = último servicio (por el order_by)
         if grouped[v.id]["last_service_date"] is None:
             grouped[v.id]["last_service_date"] = s.service_date
             grouped[v.id]["last_service_label"] = f"{type_name} · {s.service_date.strftime('%d-%m-%Y')}"
 
-    # Asegurar que salgan vehículos aunque no tengan servicios (para que tu tabla no desaparezca)
     vehicles = Vehicle.objects.all().order_by("-id")
     for v in vehicles:
         if v.id not in grouped:
@@ -629,7 +613,6 @@ def service_list(request):
                 "last_service_label": "—",
             }
 
-    # Convertimos defaultdict a dict normal para el template
     for vid in list(grouped.keys()):
         grouped[vid]["types"] = dict(grouped[vid]["types"])
 
@@ -640,7 +623,6 @@ def service_list(request):
             "grouped": grouped,
         },
     )
-
 
 
 @login_required
@@ -682,6 +664,7 @@ def service_edit(request, pk):
 
     return render(request, "flota/service_form.html", {"form": form, "mode": "edit"})
 
+
 @login_required
 @require_POST
 def service_delete(request, pk):
@@ -689,3 +672,60 @@ def service_delete(request, pk):
     s.delete()
     messages.success(request, "Servicio eliminado.")
     return redirect("flota:service_list")
+
+
+# ==========================================================
+# ✅ NUEVO: NOTIFICACIONES (CONFIG POR VEHÍCULO)
+# ==========================================================
+
+@login_required
+def notification_list(request):
+    vehicles = (
+        Vehicle.objects
+        .all()
+        .select_related("status")
+        .order_by("-id")
+    )
+
+    settings_by_vehicle = {
+        s.vehicle_id: s
+        for s in VehicleNotificationSettings.objects.select_related("vehicle").all()
+    }
+
+    rows = []
+    for v in vehicles:
+        cfg = settings_by_vehicle.get(v.id)
+        rows.append({
+            "vehicle": v,
+            "cfg": cfg,
+        })
+
+    return render(request, "flota/notification_list.html", {"rows": rows})
+
+
+@login_required
+def notification_edit(request, vehicle_id):
+    vehicle = get_object_or_404(Vehicle, pk=vehicle_id)
+
+    cfg, _created = VehicleNotificationSettings.objects.get_or_create(vehicle=vehicle)
+
+    if request.method == "POST":
+        form = VehicleNotificationSettingsForm(request.POST, instance=cfg)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Notificaciones actualizadas.")
+            return redirect("flota:notification_list")
+    else:
+        form = VehicleNotificationSettingsForm(instance=cfg)
+
+    assigned_email = cfg.get_assigned_driver_email() if cfg else None
+
+    return render(
+        request,
+        "flota/notification_form.html",
+        {
+            "vehicle": vehicle,
+            "form": form,
+            "assigned_email": assigned_email,
+        },
+    )

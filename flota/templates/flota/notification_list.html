@@ -1,0 +1,83 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Notificaciones Flota{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex items-center justify-between gap-2 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">🔔 Notificaciones - Flota</h2>
+    <a href="{% url 'flota:vehicle_list' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+      ← Volver a Flota
+    </a>
+  </div>
+
+  <div class="text-sm text-gray-600 mb-4">
+    Aquí activas/desactivas notificaciones por vehículo y defines correos extra (además del chofer asignado si lo marcas).
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm min-w-[900px]">
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2 border text-left">Vehículo</th>
+          <th class="p-2 border">Activado</th>
+          <th class="p-2 border">Incluir chofer</th>
+          <th class="p-2 border text-left">Correos extra (TO)</th>
+          <th class="p-2 border text-left">Correos extra (CC)</th>
+          <th class="p-2 border">Acciones</th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center">
+        {% for row in rows %}
+          {% with v=row.vehicle cfg=row.cfg %}
+          <tr class="border-t hover:bg-gray-50">
+            <td class="p-2 border text-left">
+              <div class="font-semibold text-gray-800">{{ v }}</div>
+              <div class="text-xs text-gray-500">{{ v.marca }} {{ v.modelo }} • Patente: {{ v.patente }}</div>
+            </td>
+
+            <td class="p-2 border">
+              {% if cfg and cfg.enabled %}
+                <span class="text-xs px-2 py-1 rounded-full bg-green-50 text-green-800 border border-green-200">Sí</span>
+              {% else %}
+                <span class="text-xs px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">No</span>
+              {% endif %}
+            </td>
+
+            <td class="p-2 border">
+              {% if cfg and cfg.include_assigned_driver %}
+                ✅
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+            <td class="p-2 border text-left">
+              {{ cfg.extra_emails_to|default:"—" }}
+            </td>
+
+            <td class="p-2 border text-left">
+              {{ cfg.extra_emails_cc|default:"—" }}
+            </td>
+
+            <td class="p-2 border">
+              <a href="{% url 'flota:notification_edit' v.id %}"
+                 class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                ⚙️ Configurar
+              </a>
+            </td>
+          </tr>
+          {% endwith %}
+        {% empty %}
+          <tr>
+            <td colspan="6" class="p-6 text-center text-gray-500">No hay vehículos.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}

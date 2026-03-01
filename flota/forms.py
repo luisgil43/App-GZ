@@ -4,11 +4,12 @@ from decimal import Decimal
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.core.validators import EmailValidator
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import (Vehicle, VehicleAssignment, VehicleService,
-                     VehicleServiceType, VehicleStatus)
+from .models import (Vehicle, VehicleAssignment, VehicleNotificationSettings,
+                     VehicleService, VehicleServiceType, VehicleStatus)
 
 # ---------------------------
 # VEHICLE
@@ -259,13 +260,11 @@ class VehicleServiceTypeForm(forms.ModelForm):
                 self.fields[f].widget.attrs.update({"min": "0", "step": "1"})
 
         # ✅ Heurística para edición:
-        # Si el tipo ya existe y NO tiene frecuencias, asumimos que no requiere frecuencia
         inst = getattr(self, "instance", None)
         if inst and inst.pk:
             has_freq = bool((inst.interval_km or 0) > 0 or (inst.interval_days or 0) > 0)
             self.fields["requires_frequency"].initial = has_freq
         else:
-            # En creación lo dejamos marcado por defecto
             self.fields["requires_frequency"].initial = True
 
     def clean_name(self):
@@ -297,15 +296,11 @@ class VehicleServiceTypeForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
 
-        # Si ya hay errores base (ej. conversión inválida), no seguimos forzando int(...)
         if self.errors:
             return cleaned
 
-        # ✅ Checkbox del form
         requires_frequency = bool(cleaned.get("requires_frequency"))
 
-        # ✅ Normalizar vacíos a 0 para campos numéricos opcionales
-        # (evita IntegrityError por NOT NULL en Postgres)
         km = cleaned.get("interval_km")
         days = cleaned.get("interval_days")
         alert_km = cleaned.get("alert_before_km")
@@ -327,7 +322,6 @@ class VehicleServiceTypeForm(forms.ModelForm):
         km_steps = self._parse_csv(km_steps_raw, "alert_before_km_steps") if km_steps_raw else []
         days_steps = self._parse_csv(days_steps_raw, "alert_before_days_steps") if days_steps_raw else []
 
-        # ✅ Validaciones de negativos por seguridad
         if km < 0:
             self.add_error("interval_km", "La frecuencia (KM) no puede ser negativa.")
         if days < 0:
@@ -337,51 +331,26 @@ class VehicleServiceTypeForm(forms.ModelForm):
         if alert_days < 0:
             self.add_error("alert_before_days", "El aviso (días) no puede ser negativo.")
 
-        # Si ya hay errores numéricos, cortar aquí
         if self.errors:
             return cleaned
 
-        # ------------------------------------------------------------
-        # ✅ Regla principal con checkbox:
-        # Si requiere frecuencia, debe tener KM y/o días > 0
-        # ------------------------------------------------------------
         if requires_frequency and km == 0 and days == 0:
             raise ValidationError(
                 "Marcaste que este tipo requiere frecuencia. Debes indicar una frecuencia por KM y/o por días."
             )
 
-        # ------------------------------------------------------------
-        # ✅ Avisos requieren frecuencia correspondiente
-        # ------------------------------------------------------------
-        # Avisos por KM requieren frecuencia KM
         if km == 0:
             if alert_km > 0:
-                self.add_error(
-                    "alert_before_km",
-                    "Para usar aviso por KM, primero debes indicar una frecuencia (KM)."
-                )
+                self.add_error("alert_before_km", "Para usar aviso por KM, primero debes indicar una frecuencia (KM).")
             if km_steps:
-                self.add_error(
-                    "alert_before_km_steps",
-                    "Para usar avisos múltiples por KM, primero debes indicar una frecuencia (KM)."
-                )
+                self.add_error("alert_before_km_steps", "Para usar avisos múltiples por KM, primero debes indicar una frecuencia (KM).")
 
-        # Avisos por días requieren frecuencia días
         if days == 0:
             if alert_days > 0:
-                self.add_error(
-                    "alert_before_days",
-                    "Para usar aviso por días, primero debes indicar una frecuencia (días)."
-                )
+                self.add_error("alert_before_days", "Para usar aviso por días, primero debes indicar una frecuencia (días).")
             if days_steps:
-                self.add_error(
-                    "alert_before_days_steps",
-                    "Para usar avisos múltiples por días, primero debes indicar una frecuencia (días)."
-                )
+                self.add_error("alert_before_days_steps", "Para usar avisos múltiples por días, primero debes indicar una frecuencia (días).")
 
-        # ------------------------------------------------------------
-        # ✅ Si sí hay frecuencia, los avisos deben ser menores
-        # ------------------------------------------------------------
         if km > 0:
             for v in km_steps:
                 if v >= km:
@@ -400,9 +369,6 @@ class VehicleServiceTypeForm(forms.ModelForm):
             if alert_days >= days and alert_days != 0:
                 self.add_error("alert_before_days", "El aviso (días) debe ser menor que la frecuencia (días).")
 
-        # ------------------------------------------------------------
-        # ✅ Compat: si llenó múltiples y legacy viene en 0 => setear el menor
-        # ------------------------------------------------------------
         if km_steps and cleaned["alert_before_km"] == 0:
             cleaned["alert_before_km"] = min(km_steps)
 
@@ -411,12 +377,10 @@ class VehicleServiceTypeForm(forms.ModelForm):
 
         return cleaned
 
+
 # ---------------------------
 # SERVICE (INTELIGENTE)
 # ---------------------------
-
-
-
 
 class VehicleServiceForm(forms.ModelForm):
     # ✅ Confirmaciones separadas
@@ -466,7 +430,6 @@ class VehicleServiceForm(forms.ModelForm):
         inst = getattr(self, "instance", None)
         self._is_edit = bool(inst and inst.pk)
 
-        # Originales
         self._orig_vehicle_id = getattr(inst, "vehicle_id", None)
         self._orig_type_obj_id = getattr(inst, "service_type_obj_id", None)
         self._orig_service_type = getattr(inst, "service_type", None)
@@ -474,7 +437,6 @@ class VehicleServiceForm(forms.ModelForm):
         self._orig_monto = getattr(inst, "monto", None)
         self._orig_km = getattr(inst, "kilometraje_declarado", None)
 
-        # Para desempates mismo día
         self._anchor_created_at = getattr(inst, "created_at", None) or timezone.now()
         self._anchor_pk = getattr(inst, "pk", None) or 0
 
@@ -490,7 +452,6 @@ class VehicleServiceForm(forms.ModelForm):
         if "service_date" in self.fields:
             self.fields["service_date"].input_formats = ["%Y-%m-%d"]
 
-        # ✅ requeridos
         if "kilometraje_declarado" in self.fields:
             self.fields["kilometraje_declarado"].required = True
             self.fields["kilometraje_declarado"].widget.attrs.update({"min": "0", "step": "1"})
@@ -578,13 +539,11 @@ class VehicleServiceForm(forms.ModelForm):
         if not vehicle or not service_date:
             return cleaned
 
-        # Compat: si hay tipo configurable, forzar legacy a "otro"
         if st_obj and not cleaned.get("service_type"):
             cleaned["service_type"] = "otro"
 
         type_obj_id, legacy_type = self._get_type_key(cleaned)
 
-        # ¿Cambió identidad?
         identity_changed = False
         if self._is_edit:
             if vehicle.id != self._orig_vehicle_id:
@@ -608,9 +567,6 @@ class VehicleServiceForm(forms.ModelForm):
             exclude_pk=self.instance.pk if self._is_edit else None,
         )
 
-        # ------------------------------------------------------------
-        # A) FECHA BACKDATED: si estás quedando antes de un registro posterior
-        # ------------------------------------------------------------
         if date_changed and next_row is not None:
             if not cleaned.get("confirm_backdated_date"):
                 self.add_error(
@@ -623,9 +579,6 @@ class VehicleServiceForm(forms.ModelForm):
                     f'de un servicio posterior ({next_row.service_date.strftime("%d/%m/%Y")}).'
                 )
 
-        # ------------------------------------------------------------
-        # B) KM menor al KM actual del vehículo => confirmación separada
-        # ------------------------------------------------------------
         km_actual = int(vehicle.kilometraje_actual or 0)
         if km is not None:
             km = int(km)
@@ -640,9 +593,6 @@ class VehicleServiceForm(forms.ModelForm):
                         f"El kilometraje declarado ({km}) es menor al KM actual del vehículo ({km_actual})."
                     )
 
-        # ------------------------------------------------------------
-        # C) Consistencia del historial KM (vecinos)
-        # ------------------------------------------------------------
         if km_changed and km is not None:
             if prev_row and prev_row.kilometraje_declarado is not None:
                 if km < int(prev_row.kilometraje_declarado):
@@ -658,10 +608,6 @@ class VehicleServiceForm(forms.ModelForm):
                         f"El kilometraje no puede ser mayor al del servicio posterior ({next_row.kilometraje_declarado})."
                     )
 
-        # ------------------------------------------------------------
-        # D) MONTO alto => confirmación separada + notas obligatorias
-        #    ✅ PERO: si el servicio es COMBUSTIBLE => NO aplicar esta regla
-        # ------------------------------------------------------------
         is_fuel = (cleaned.get("service_type") == "combustible")
 
         if (not is_fuel) and amount_changed and monto is not None and prev_row and prev_row.monto is not None and prev_row.monto > 0:
@@ -682,3 +628,61 @@ class VehicleServiceForm(forms.ModelForm):
 
         cleaned["notes"] = notes
         return cleaned
+
+
+# ---------------------------
+# ✅ NUEVO: NOTIFICACIONES POR VEHÍCULO
+# ---------------------------
+
+class VehicleNotificationSettingsForm(forms.ModelForm):
+    class Meta:
+        model = VehicleNotificationSettings
+        fields = [
+            "enabled",
+            "include_assigned_driver",
+            "extra_emails_to",
+            "extra_emails_cc",
+        ]
+        labels = {
+            "enabled": "Activar notificaciones",
+            "include_assigned_driver": "Incluir correo del chofer asignado",
+            "extra_emails_to": "Correos adicionales (Para)",
+            "extra_emails_cc": "Correos adicionales (CC)",
+        }
+        help_texts = {
+            "extra_emails_to": "Separados por coma. Ej: pm@empresa.cl, supervisor@empresa.cl",
+            "extra_emails_cc": "Separados por coma. Ej: rrhh@empresa.cl",
+        }
+        widgets = {
+            "extra_emails_to": forms.TextInput(attrs={"placeholder": "pm@..., supervisor@..."}),
+            "extra_emails_cc": forms.TextInput(attrs={"placeholder": "rrhh@..."}),
+        }
+
+    def _normalize_emails(self, raw: str) -> str:
+        raw = (raw or "").replace(";", ",")
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+
+        v = EmailValidator()
+        good = []
+        for e in parts:
+            try:
+                v(e)
+                good.append(e.lower())
+            except Exception:
+                raise ValidationError("Hay correos inválidos. Usa correos separados por coma.")
+
+        # únicos, orden estable
+        seen = set()
+        uniq = []
+        for e in good:
+            if e not in seen:
+                seen.add(e)
+                uniq.append(e)
+
+        return ", ".join(uniq)
+
+    def clean_extra_emails_to(self):
+        return self._normalize_emails(self.cleaned_data.get("extra_emails_to") or "")
+
+    def clean_extra_emails_cc(self):
+        return self._normalize_emails(self.cleaned_data.get("extra_emails_cc") or "")
