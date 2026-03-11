@@ -726,7 +726,46 @@ def actualizar_motivo_rechazo(request, pk):
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
 def asignar_trabajadores(request, pk):
-    cotizacion = get_object_or_404(ServicioCotizado, pk=pk)
+    """
+    Soporta que pk venga como:
+      - ID real (ServicioCotizado.id)
+      - o DU (ServicioCotizado.du), con o sin ceros (83 / 00000083)
+    """
+
+    # 1) Intentar por ID real primero
+    cotizacion = ServicioCotizado.objects.filter(pk=pk).first()
+
+    # 2) Si no existe, interpretar pk como DU
+    if not cotizacion:
+        du_raw = str(pk).strip()
+
+        candidates = []
+        if du_raw:
+            candidates.append(du_raw)
+
+            # si viene "00000083" -> también probar "83"
+            try:
+                candidates.append(str(int(du_raw)))
+            except Exception:
+                pass
+
+            # si viene "83" -> también probar "00000083"
+            if du_raw.isdigit():
+                candidates.append(du_raw.zfill(8))
+
+        cotizacion = (
+            ServicioCotizado.objects
+            .filter(du__in=list(dict.fromkeys(candidates)))  # unique sin perder orden
+            .first()
+        )
+
+    # 3) Si igual no existe, manejar elegante (en vez del 404 feo)
+    if not cotizacion:
+        messages.error(
+            request,
+            "No se encontró la cotización (ID/DU). Puede haber sido eliminada o no existe."
+        )
+        return redirect('operaciones:listar_servicios_supervisor')
 
     if request.method == 'POST':
         form = AsignarTrabajadoresForm(request.POST)
@@ -740,11 +779,6 @@ def asignar_trabajadores(request, pk):
             cotizacion.trabajadores_asignados.set(trabajadores)
 
             # Primera asignación:
-            #  - venimos de "aprobado_pendiente"
-            #  - y antes no tenía trabajadores
-            #
-            # Reasignación:
-            #  - ya tenía trabajadores; NO tocamos el estado
             if not tenia_asignados and cotizacion.estado == 'aprobado_pendiente':
                 cotizacion.estado = 'asignado'
 
@@ -775,7 +809,6 @@ def asignar_trabajadores(request, pk):
                     },
                 )
 
-                # Log para debug: ver qué pasó con cada envío
                 for log in logs:
                     logger.info(
                         "Telegram asignación servicio DU%s -> usuario_id=%s status=%s error=%s",
@@ -793,9 +826,7 @@ def asignar_trabajadores(request, pk):
     else:
         # Precargamos los técnicos que ya estaban asignados → se ve como REASIGNACIÓN
         form = AsignarTrabajadoresForm(
-            initial={
-                "trabajadores": cotizacion.trabajadores_asignados.all()
-            }
+            initial={"trabajadores": cotizacion.trabajadores_asignados.all()}
         )
 
     return render(request, 'operaciones/asignar_trabajadores.html', {
