@@ -151,11 +151,10 @@
 
 
   <!-- Contenedor principal -->
-<div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+<div id="app-wrapper" class="flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
 
     <!-- Menú lateral con animación -->
-    <nav id="side-nav"
-      class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
+    <nav id="side-nav" class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
       <h2 class="text-2xl font-bold mb-8">Menú</h2>
       <ul class="space-y-4 text-base">
         <li>
@@ -368,6 +367,32 @@ function toggleNotifications() {
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
   lucide.createIcons();
+</script>
+<script>
+  (function () {
+    function applyHeaderOffset(){
+      const header = document.querySelector('header');
+      const wrapper = document.getElementById('app-wrapper');
+      if (!header || !wrapper) return;
+
+      const h = Math.ceil(header.getBoundingClientRect().height || 0);
+
+      // Empujar TODO el contenido hacia abajo (incluye main)
+      wrapper.style.paddingTop = h + 'px';
+
+      // Sidebar pegado debajo del header
+      const nav = document.getElementById('side-nav');
+      if (nav) {
+        nav.style.top = h + 'px';
+        nav.style.height = `calc(100vh - ${h}px)`;
+      }
+    }
+
+    window.addEventListener('load', applyHeaderOffset);
+    window.addEventListener('resize', applyHeaderOffset);
+    setTimeout(applyHeaderOffset, 50);
+    setTimeout(applyHeaderOffset, 250);
+  })();
 </script>
 </body>
 

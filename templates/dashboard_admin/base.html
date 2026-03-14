@@ -152,7 +152,7 @@
 
 
     <!-- Contenedor principal -->
-    <div class="pt-14 flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+    <div id="app-wrapper" class="flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
 
   <!-- Menú lateral con animación -->
     <nav id="side-nav"
@@ -581,6 +581,32 @@ function toggleNotifications() {
   }
 </script>
 
+<script>
+  (function () {
+    function applyHeaderOffset(){
+      const header = document.querySelector('header');
+      const wrapper = document.getElementById('app-wrapper');
+      if (!header || !wrapper) return;
+
+      const h = Math.ceil(header.getBoundingClientRect().height || 0);
+      wrapper.style.paddingTop = h + 'px';
+
+      // Mantener el sidebar pegado justo debajo del header
+      const nav = document.getElementById('side-nav');
+      if (nav) {
+        nav.style.top = h + 'px';
+        nav.style.height = `calc(100vh - ${h}px)`;
+      }
+    }
+
+    window.addEventListener('load', applyHeaderOffset);
+    window.addEventListener('resize', applyHeaderOffset);
+
+    // Por si el header cambia al cargar fuentes/iconos
+    setTimeout(applyHeaderOffset, 50);
+    setTimeout(applyHeaderOffset, 250);
+  })();
+</script>
 </body>
 </html>
 
