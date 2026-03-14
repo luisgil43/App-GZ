@@ -1,0 +1,556 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% block title %}Prevención - Documentos{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+  <div>
+    <h2 class="text-2xl font-bold text-gray-800">🦺 Prevención - Documentos</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      Repositorio de documentos empresa, trabajador y ambos, con versiones y notificaciones consolidadas.
+    </p>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-start sm:justify-end gap-2 shrink-0">
+    <a href="{% url 'prevencion:download_general_history_excel' %}"
+       class="px-4 py-2 rounded-full text-sm text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm whitespace-nowrap">
+      ⬇️ Historial excel
+    </a>
+
+    <a href="{% url 'prevencion:notifications_edit' %}"
+       class="px-4 py-2 rounded-full text-sm text-white bg-amber-500 hover:bg-amber-600 shadow-sm whitespace-nowrap">
+      🔔 Notificaciones
+    </a>
+
+    <a href="{% url 'prevencion:type_manage' %}"
+       class="px-4 py-2 rounded-full text-sm text-white bg-slate-600 hover:bg-slate-700 shadow-sm whitespace-nowrap">
+      ⚙️ Tipos de documento
+    </a>
+
+    <a href="{% url 'prevencion:document_create' %}"
+       class="px-4 py-2 rounded-full text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-sm whitespace-nowrap">
+      ➕ Crear documento
+    </a>
+  </div>
+</div>
+
+  <style>
+    .rotate-90 { transform: rotate(90deg); }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+
+  <div class="mt-4">
+    <h3 class="text-lg font-bold text-gray-800 mb-2">🏢 Documentos Empresa</h3>
+
+    {% if empresa_rows %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[1200px]" style="white-space:nowrap;">
+          <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+            <tr>
+              <th class="p-2 border w-12"></th>
+              <th class="p-2 border text-left">Tipo</th>
+              <th class="p-2 border">Cantidad</th>
+              <th class="p-2 border">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="text-center">
+            {% for row in empresa_rows %}
+              <tr class="border-t bg-white hover:bg-gray-50">
+                <td class="p-2 border">
+                  <button type="button"
+                          class="toggle-row inline-flex items-center justify-center w-8 h-8 rounded-full border bg-white hover:bg-gray-100"
+                          data-target="emp-type-{{ row.type.id }}"
+                          aria-expanded="false">
+                    <span class="arrow text-lg leading-none">›</span>
+                  </button>
+                </td>
+                <td class="p-2 border text-left font-semibold text-gray-800">{{ row.type.name }}</td>
+                <td class="p-2 border">{{ row.history_count }}</td>
+                <td class="p-2 border">
+                  <div class="flex justify-center">
+                    <button type="button"
+                            class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center gap-1"
+                            onclick="openCompanyZipModal('{{ row.type.id }}', '{{ row.type.name|escapejs }}')">
+                      ⬇️ Descargar ZIP documentos
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr id="emp-type-{{ row.type.id }}" class="hidden">
+                <td class="p-0 border" colspan="4">
+                  <div class="p-3 bg-gray-50">
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-sm bg-white rounded-xl overflow-hidden border">
+                        <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                          <tr>
+                            <th class="p-2 border whitespace-nowrap">Estado</th>
+                            <th class="p-2 border whitespace-nowrap">Creación</th>
+                            <th class="p-2 border whitespace-nowrap">Caduca</th>
+                            <th class="p-2 border whitespace-nowrap">Días</th>
+                            <th class="p-2 border">Archivo</th>
+                            <th class="p-2 border whitespace-nowrap">Aplica a todos</th>
+                            <th class="p-2 border whitespace-nowrap">Notificar</th>
+                            <th class="p-2 border whitespace-nowrap">Fecha de carga</th>
+                            <th class="p-2 border whitespace-nowrap">Subido por</th>
+                            <th class="p-2 border whitespace-nowrap">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody class="text-center">
+                          {% for d in row.docs %}
+                            <tr class="border-t hover:bg-gray-50">
+                              <td class="p-2 border">
+                                <span class="inline-block px-3 py-1 rounded-full text-xs font-medium {{ d.badge_class }}">
+                                  {{ d.status_label_ui }}
+                                </span>
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                {% if d.issue_date %}{{ d.issue_date|date:"d-m-Y" }}{% else %}—{% endif %}
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                {% if d.no_requiere_vencimiento %}—{% elif d.expiry_date %}{{ d.expiry_date|date:"d-m-Y" }}{% else %}—{% endif %}
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                {% if d.remaining_days_ui != None %}{{ d.remaining_days_ui }}{% else %}—{% endif %}
+                              </td>
+                              <td class="p-2 border">
+                                <a href="{{ d.file.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+                              </td>
+                              <td class="p-2 border">
+                                {% if d.scope == "ambos" %}
+                                  {% if d.apply_to_all_workers %}✅{% else %}—{% endif %}
+                                {% else %}
+                                  —
+                                {% endif %}
+                              </td>
+                              <td class="p-2 border">
+                                {% if d.notify_enabled %}✅{% else %}—{% endif %}
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                {{ d.created_at|date:"d-m-Y H:i" }}
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                {% if d.created_by %}
+                                  {{ d.created_by.get_full_name|default:d.created_by.username }}
+                                {% else %}
+                                  —
+                                {% endif %}
+                              </td>
+                              <td class="p-2 border whitespace-nowrap">
+                                <div class="flex justify-center gap-2 flex-nowrap">
+                                  <a href="{% url 'prevencion:document_download' d.id %}"
+                                     target="_blank"
+                                     rel="noopener"
+                                     class="px-3 py-1 text-xs rounded-full bg-sky-600 text-white hover:bg-sky-700">
+                                    ⬇️ Descargar
+                                  </a>
+                                  <a href="{% url 'prevencion:document_replace' d.id %}"
+                                     class="px-3 py-1 text-xs rounded-full bg-indigo-600 text-white hover:bg-indigo-700">
+                                    🔁 Reemplazar
+                                  </a>
+                                  <button type="button"
+                                          class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                                          onclick="openDeleteModal('{{ d.id }}', '{{ row.type.name }}', 'Empresa')">
+                                    🗑️ Eliminar
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          {% empty %}
+                            <tr><td colspan="10" class="p-4 text-gray-500">Sin documentos.</td></tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-4 text-center text-gray-500 bg-gray-50 rounded-xl border">No hay documentos empresa.</div>
+    {% endif %}
+  </div>
+
+  <div class="mt-8">
+    <h3 class="text-lg font-bold text-gray-800 mb-2">👷 Documentos Trabajador</h3>
+
+    {% if worker_rows %}
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm min-w-[1200px]" style="white-space:nowrap;">
+          <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+            <tr>
+              <th class="p-2 border w-12"></th>
+              <th class="p-2 border text-left">Trabajador</th>
+              <th class="p-2 border">Tipos</th>
+              <th class="p-2 border">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="text-center">
+            {% for row in worker_rows %}
+              {% with w=row.worker %}
+              <tr class="border-t bg-white hover:bg-gray-50">
+                <td class="p-2 border">
+                  <button type="button"
+                          class="toggle-row inline-flex items-center justify-center w-8 h-8 rounded-full border bg-white hover:bg-gray-100"
+                          data-target="wrk-{{ w.id }}"
+                          aria-expanded="false">
+                    <span class="arrow text-lg leading-none">›</span>
+                  </button>
+                </td>
+                <td class="p-2 border text-left">
+                  <div class="font-semibold text-gray-800">{{ w.get_full_name|default:w.username }}</div>
+                  <div class="text-xs text-gray-500">{{ w.email|default:"—" }}</div>
+                </td>
+                <td class="p-2 border">{{ row.types|length }}</td>
+                <td class="p-2 border">
+                  <div class="flex justify-center">
+                    <button type="button"
+                            class="px-3 py-1 text-xs rounded-full bg-sky-600 text-white hover:bg-sky-700 inline-flex items-center gap-1"
+                            onclick="openZipModal('{{ w.id }}', '{{ w.get_full_name|default:w.username|escapejs }}')">
+                      ⬇️ Descargar ZIP documentos
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr id="wrk-{{ w.id }}" class="hidden">
+                <td class="p-0 border" colspan="4">
+                  <div class="p-3 bg-gray-50">
+                    {% for type_id, block in row.types.items %}
+                      <div class="bg-white border rounded-xl mb-3 overflow-hidden">
+                        <div class="flex items-center justify-between px-3 py-2 bg-gray-100">
+                          <div class="font-semibold text-gray-800">{{ block.type.name }}</div>
+                          <button type="button"
+                                  class="toggle-row inline-flex items-center justify-center w-8 h-8 rounded-full border bg-white hover:bg-gray-100"
+                                  data-target="wrk-{{ w.id }}-type-{{ type_id }}"
+                                  aria-expanded="false">
+                            <span class="arrow text-lg leading-none">›</span>
+                          </button>
+                        </div>
+
+                        <div id="wrk-{{ w.id }}-type-{{ type_id }}" class="hidden">
+                          <div class="p-3">
+                            <div class="overflow-x-auto">
+                              <table class="w-full text-sm border rounded-xl overflow-hidden">
+                                <thead class="bg-gray-50 text-gray-700 font-semibold text-center">
+                                  <tr>
+                                    <th class="p-2 border whitespace-nowrap">Estado</th>
+                                    <th class="p-2 border whitespace-nowrap">Creación</th>
+                                    <th class="p-2 border whitespace-nowrap">Caduca</th>
+                                    <th class="p-2 border whitespace-nowrap">Días</th>
+                                    <th class="p-2 border">Archivo</th>
+                                    <th class="p-2 border whitespace-nowrap">Aplica a todos</th>
+                                    <th class="p-2 border whitespace-nowrap">Notificar</th>
+                                    <th class="p-2 border whitespace-nowrap">Fecha de carga</th>
+                                    <th class="p-2 border whitespace-nowrap">Subido por</th>
+                                    <th class="p-2 border whitespace-nowrap">Acciones</th>
+                                  </tr>
+                                </thead>
+
+                                <tbody class="text-center">
+                                  {% for d in block.docs %}
+                                    <tr class="border-t hover:bg-gray-50">
+                                      <td class="p-2 border">
+                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium {{ d.badge_class }}">
+                                          {{ d.status_label_ui }}
+                                        </span>
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        {% if d.issue_date %}{{ d.issue_date|date:"d-m-Y" }}{% else %}—{% endif %}
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        {% if d.no_requiere_vencimiento %}—{% elif d.expiry_date %}{{ d.expiry_date|date:"d-m-Y" }}{% else %}—{% endif %}
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        {% if d.remaining_days_ui != None %}{{ d.remaining_days_ui }}{% else %}—{% endif %}
+                                      </td>
+                                      <td class="p-2 border">
+                                        <a href="{{ d.file.url }}" target="_blank" class="text-blue-600 underline">Ver</a>
+                                      </td>
+                                      <td class="p-2 border">
+                                        {% if d.scope == "ambos" and d.apply_to_all_workers %}
+                                          ✅
+                                        {% else %}
+                                          —
+                                        {% endif %}
+                                      </td>
+                                      <td class="p-2 border">
+                                        {% if d.notify_enabled %}✅{% else %}—{% endif %}
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        {{ d.created_at|date:"d-m-Y H:i" }}
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        {% if d.created_by %}
+                                          {{ d.created_by.get_full_name|default:d.created_by.username }}
+                                        {% else %}
+                                          —
+                                        {% endif %}
+                                      </td>
+                                      <td class="p-2 border whitespace-nowrap">
+                                        <div class="flex justify-center gap-2 flex-nowrap">
+                                          <a href="{% url 'prevencion:document_download' d.id %}"
+                                             target="_blank"
+                                             rel="noopener"
+                                             class="px-3 py-1 text-xs rounded-full bg-sky-600 text-white hover:bg-sky-700">
+                                            ⬇️ Descargar
+                                          </a>
+                                          <a href="{% url 'prevencion:document_replace' d.id %}"
+                                             class="px-3 py-1 text-xs rounded-full bg-indigo-600 text-white hover:bg-indigo-700">
+                                            🔁 Reemplazar
+                                          </a>
+                                          <button type="button"
+                                                  class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                                                  onclick="openDeleteModal('{{ d.id }}', '{{ block.type.name }}', '{{ w.get_full_name|default:w.username }}')">
+                                            🗑️ Eliminar
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  {% empty %}
+                                    <tr><td colspan="10" class="p-4 text-gray-500">Sin documentos.</td></tr>
+                                  {% endfor %}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        </div>
+
+                      </div>
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="p-4 text-center text-gray-500 bg-gray-50 rounded-xl border">No hay documentos de trabajadores.</div>
+    {% endif %}
+  </div>
+
+</div>
+
+<div id="deleteModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Eliminar documento</h3>
+      <p class="text-sm text-gray-600 mt-2" id="deleteText">¿Seguro que deseas eliminar este documento?</p>
+
+      <form method="post" id="deleteForm" class="mt-4">
+        {% csrf_token %}
+        <div class="flex justify-end gap-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeDeleteModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Eliminar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="zipModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Descargar ZIP documentos</h3>
+      <p class="text-sm text-gray-600 mt-2" id="zipText">
+        Selecciona qué documentos deseas descargar.
+      </p>
+
+      <div class="mt-4 space-y-3">
+        <a id="zipCurrentOnly"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+          Solo vigentes
+        </a>
+
+        <a id="zipCurrentAndNoExpiry"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-sky-600 text-white hover:bg-sky-700">
+          Vigentes + sin caducidad
+        </a>
+
+        <a id="zipFullHistory"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700">
+          Historial completo
+        </a>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4">
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeZipModal()">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="companyZipModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Descargar ZIP empresa</h3>
+      <p class="text-sm text-gray-600 mt-2" id="companyZipText">
+        Selecciona qué documentos deseas descargar.
+      </p>
+
+      <div class="mt-4 space-y-3">
+        <a id="companyZipCurrentOnly"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+          Solo vigentes
+        </a>
+
+        <a id="companyZipCurrentAndNoExpiry"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-sky-600 text-white hover:bg-sky-700">
+          Vigentes + sin caducidad
+        </a>
+
+        <a id="companyZipFullHistory"
+           href="#"
+           class="w-full inline-flex justify-center px-4 py-2 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700">
+          Historial completo
+        </a>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-4">
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeCompanyZipModal()">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function setExpanded(btn, expanded){
+    btn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    const arrow = btn.querySelector('.arrow');
+    if(arrow){
+      arrow.style.transform = expanded ? 'rotate(90deg)' : 'rotate(0deg)';
+      arrow.style.transition = 'transform .15s ease';
+      arrow.style.display = 'inline-block';
+    }
+  }
+
+  function toggleRow(btn){
+    const targetId = btn.getAttribute('data-target');
+    const row = document.getElementById(targetId);
+    if(!row) return;
+    const isHidden = row.classList.contains('hidden');
+    row.classList.toggle('hidden');
+    setExpanded(btn, isHidden);
+  }
+
+  document.querySelectorAll('.toggle-row').forEach(btn => {
+    setExpanded(btn, false);
+    btn.addEventListener('click', () => toggleRow(btn));
+  });
+
+  function openDeleteModal(id, tipo, owner){
+    const modal = document.getElementById('deleteModal');
+    const text = document.getElementById('deleteText');
+    const form = document.getElementById('deleteForm');
+
+    text.textContent = `Vas a eliminar el documento "${tipo}" (${owner}). ¿Deseas continuar?`;
+    form.action = `{% url 'prevencion:document_delete' 0 %}`.replace('/0/', `/${id}/`);
+    modal.classList.remove('hidden');
+  }
+
+  function closeDeleteModal(){
+    document.getElementById('deleteModal').classList.add('hidden');
+  }
+
+  function openZipModal(workerId, workerName){
+    const modal = document.getElementById('zipModal');
+    const text = document.getElementById('zipText');
+
+    const base = `{% url 'prevencion:worker_document_zip' 0 %}`.replace('/0/', `/${workerId}/`);
+
+    document.getElementById('zipCurrentOnly').href = `${base}?mode=current_only`;
+    document.getElementById('zipCurrentAndNoExpiry').href = `${base}?mode=current_and_no_expiry`;
+    document.getElementById('zipFullHistory').href = `${base}?mode=full_history`;
+
+    text.textContent = `Selecciona qué documentos deseas descargar para ${workerName}.`;
+    modal.classList.remove('hidden');
+  }
+
+  function closeZipModal(){
+    document.getElementById('zipModal').classList.add('hidden');
+  }
+
+  function openCompanyZipModal(typeId, typeName){
+    const modal = document.getElementById('companyZipModal');
+    const text = document.getElementById('companyZipText');
+
+    const base = `{% url 'prevencion:company_document_zip' 0 %}`.replace('/0/', `/${typeId}/`);
+
+    document.getElementById('companyZipCurrentOnly').href = `${base}?mode=current_only`;
+    document.getElementById('companyZipCurrentAndNoExpiry').href = `${base}?mode=current_and_no_expiry`;
+    document.getElementById('companyZipFullHistory').href = `${base}?mode=full_history`;
+
+    text.textContent = `Selecciona qué documentos deseas descargar para ${typeName}.`;
+    modal.classList.remove('hidden');
+  }
+
+  function closeCompanyZipModal(){
+    document.getElementById('companyZipModal').classList.add('hidden');
+  }
+
+  document.getElementById('zipCurrentOnly').addEventListener('click', closeZipModal);
+  document.getElementById('zipCurrentAndNoExpiry').addEventListener('click', closeZipModal);
+  document.getElementById('zipFullHistory').addEventListener('click', closeZipModal);
+
+  document.getElementById('companyZipCurrentOnly').addEventListener('click', closeCompanyZipModal);
+  document.getElementById('companyZipCurrentAndNoExpiry').addEventListener('click', closeCompanyZipModal);
+  document.getElementById('companyZipFullHistory').addEventListener('click', closeCompanyZipModal);
+
+  document.addEventListener('keydown', (e) => {
+    if(e.key === 'Escape'){
+      closeDeleteModal();
+      closeZipModal();
+      closeCompanyZipModal();
+    }
+  });
+
+  document.getElementById('deleteModal').addEventListener('click', (e) => {
+    if(e.target.id === 'deleteModal') closeDeleteModal();
+  });
+
+  document.getElementById('zipModal').addEventListener('click', (e) => {
+    if(e.target.id === 'zipModal') closeZipModal();
+  });
+
+  document.getElementById('companyZipModal').addEventListener('click', (e) => {
+    if(e.target.id === 'companyZipModal') closeCompanyZipModal();
+  });
+</script>
+
+{% endblock %}

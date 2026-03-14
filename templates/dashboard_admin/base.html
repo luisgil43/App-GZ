@@ -183,20 +183,41 @@
                 </li>
                 {% endif %}
 
-                {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">🦺 Prevención de Riesgo</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Cursos</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Firma de documentos</a></li>
-                        <li><a href="#" class="hover:text-emerald-400">Asignación de EPP</a></li>
-                    </ul>
-                </li>
-                {% endif %}
+      {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🦺 Prevención</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'prevencion:dashboard' %}" class="hover:text-emerald-400">
+        Documentos
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:document_create' %}" class="hover:text-emerald-400">
+        Crear documento
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:notifications_edit' %}" class="hover:text-emerald-400">
+        Notificaciones
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:type_manage' %}" class="hover:text-emerald-400">
+        Tipos de documento
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
 
 
 {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}

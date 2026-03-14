@@ -1,0 +1,30 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Eliminar documento{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-6 sm:p-8 max-w-xl">
+
+  <h2 class="text-2xl font-bold text-gray-800">🗑️ Eliminar documento</h2>
+
+  <div class="mt-4 p-3 bg-gray-50 border rounded-xl text-sm">
+    <div><strong>Tipo:</strong> {{ doc.doc_type.name }}</div>
+    <div><strong>Alcance:</strong> {{ doc.get_scope_display }}</div>
+  </div>
+
+  <p class="mt-4 text-sm text-gray-600">
+    Esta acción no se puede deshacer.
+  </p>
+
+  <form method="post" class="mt-5 flex justify-end gap-2">
+    {% csrf_token %}
+    <a href="{% url 'prevencion:dashboard' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+      Cancelar
+    </a>
+    <button type="submit"
+            class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+      Eliminar
+    </button>
+  </form>
+</div>
+{% endblock %}

@@ -275,7 +275,7 @@ CONTRATOS_CRON_TOKEN = os.environ.get("CONTRATOS_CRON_TOKEN", "")
 CONTRATOS_ALERT_EMAILS = os.environ.get("CONTRATOS_ALERT_EMAILS", "")
 
 FLOTA_CRON_TOKEN = os.environ.get("FLOTA_CRON_TOKEN", "")
-
+PREVENCION_CRON_TOKEN = os.environ.get("PREVENCION_CRON_TOKEN", "")
 
 # ===============================
 # Email (desde variables de entorno)

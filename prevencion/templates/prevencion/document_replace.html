@@ -1,0 +1,413 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Reemplazar documento{% endblock %}
+
+{% block dashboard_content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<style>
+  .prev-card {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  .prev-input,
+  .prev-date-input,
+  .prev-file-input {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 1rem;
+    background: #fff;
+    padding: .85rem 1rem;
+    font-size: 1rem;
+    color: #111827;
+    transition: all .2s ease;
+  }
+
+  .prev-input:focus,
+  .prev-date-input:focus,
+  .prev-file-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+  }
+
+  .prev-file-input {
+    padding: .75rem 1rem;
+  }
+
+  .prev-file-input::file-selector-button {
+    margin-right: .9rem;
+    border: 0;
+    border-radius: .85rem;
+    background: #2563eb;
+    color: #fff;
+    padding: .72rem 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s ease;
+  }
+
+  .prev-file-input::file-selector-button:hover {
+    background: #1d4ed8;
+  }
+
+  .prev-check {
+    width: 1.1rem;
+    height: 1.1rem;
+    accent-color: #2563eb;
+  }
+
+  .workers-box {
+    border: 1px solid #d1d5db;
+    border-radius: 1.25rem;
+    background: #fff;
+    padding: 1rem;
+  }
+
+  .workers-scroll {
+    max-height: 270px;
+    overflow-y: auto;
+    padding-right: .25rem;
+  }
+
+  .worker-row {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    padding: .35rem 0;
+    font-size: 1rem;
+    color: #111827;
+  }
+
+  .worker-row input[type="checkbox"] {
+    width: 1.05rem;
+    height: 1.05rem;
+    accent-color: #2563eb;
+    flex: 0 0 auto;
+  }
+
+  .worker-row label {
+    margin: 0;
+    cursor: pointer;
+  }
+
+  .flatpickr-calendar {
+    border-radius: 1rem !important;
+    box-shadow: 0 12px 30px rgba(0,0,0,.14) !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  .flatpickr-day.selected,
+  .flatpickr-day.startRange,
+  .flatpickr-day.endRange {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+  }
+
+  .flatpickr-day.today {
+    border-color: #2563eb !important;
+  }
+</style>
+
+<div class="bg-white shadow mt-3 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6 prev-card">
+
+  <div class="flex items-center justify-between mb-5">
+    <h2 class="text-2xl font-bold text-gray-800">🔁 Reemplazar documento</h2>
+    <a href="{% url 'prevencion:dashboard' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+      ← Volver
+    </a>
+  </div>
+
+  <div class="p-4 bg-gray-50 border rounded-2xl text-sm mb-5">
+    <div><strong>Tipo:</strong> {{ old.doc_type.name }}</div>
+    <div><strong>Alcance:</strong> {{ old.get_scope_display }}</div>
+    {% if old.scope == "ambos" %}
+      <div><strong>Aplica a todos:</strong> {% if old.apply_to_all_workers %}Sí{% else %}No{% endif %}</div>
+    {% endif %}
+    {% if old.scope != "empresa" and not old.apply_to_all_workers %}
+      <div><strong>Trabajadores actuales:</strong> {{ old.workers_display }}</div>
+    {% endif %}
+    <div class="mt-2">
+      <a class="text-blue-600 underline" href="{{ old.file.url }}" target="_blank">Ver archivo actual</a>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" class="space-y-5">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="p-3 rounded-xl bg-red-50 text-red-700 text-sm">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-2">Nuevo archivo</label>
+      {{ form.file }}
+      {% if form.file.errors %}
+        <div class="text-sm text-red-600 mt-1">{{ form.file.errors }}</div>
+      {% endif %}
+    </div>
+
+    <div class="flex items-center gap-2">
+      {{ form.no_requiere_vencimiento }}
+      <label class="text-sm text-gray-700">No requiere vencimiento</label>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Fecha de creación</label>
+        {{ form.issue_date }}
+        {% if form.issue_date.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.issue_date.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Fecha de caducidad</label>
+        {{ form.expiry_date }}
+        {% if form.expiry_date.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.expiry_date.errors }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="applyAllBox" class="flex items-center gap-2">
+      {{ form.apply_to_all_workers }}
+      <label class="text-sm text-gray-700">
+        Disponible para todos los trabajadores actuales y futuros
+      </label>
+    </div>
+
+    <div class="workers-box" id="workersBox">
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <label class="block text-sm font-semibold text-gray-700">Trabajadores (si aplica)</label>
+
+        <label id="checkAllWrapper"
+               class="flex items-center gap-2 text-sm text-blue-700 font-medium cursor-pointer">
+          <input type="checkbox" id="checkAllWorkers" class="prev-check">
+          Seleccionar todo
+        </label>
+      </div>
+
+      <div class="workers-scroll">
+        {% for checkbox in form.workers %}
+          <div class="worker-row">
+            {{ checkbox.tag }}
+            <label for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+          </div>
+        {% empty %}
+          <p class="text-sm text-gray-500">No hay trabajadores disponibles.</p>
+        {% endfor %}
+      </div>
+
+      {% if form.workers.errors %}
+        <div class="text-sm text-red-600 mt-2">{{ form.workers.errors }}</div>
+      {% endif %}
+
+      <p class="text-xs text-gray-500 mt-3">
+        Empresa: no usa trabajadores. Trabajador: exige solo uno. Ambos: permite uno o varios, o marcar que aplica a todos.
+      </p>
+    </div>
+
+    <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+      Al reemplazar, la versión anterior queda <strong>sin notificaciones</strong> y la nueva queda <strong>vigente</strong>.
+    </div>
+
+    <div class="flex justify-end gap-3 pt-2">
+      <a href="{% url 'prevencion:dashboard' %}"
+         class="px-6 py-2.5 rounded-full text-sm border bg-white hover:bg-gray-50">
+        Cancelar
+      </a>
+      <button type="submit"
+              class="px-6 py-2.5 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700">
+        Reemplazar
+      </button>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const scope = "{{ old.scope|lower }}";
+    const issueDate = document.getElementById("id_issue_date");
+    const expiryDate = document.getElementById("id_expiry_date");
+    const noExpiry = document.getElementById("id_no_requiere_vencimiento");
+    const expiryInput = document.getElementById("id_expiry_date");
+
+    const applyAllInput = document.getElementById("id_apply_to_all_workers");
+    const applyAllBox = document.getElementById("applyAllBox");
+    const workersContainer = document.getElementById("workersBox");
+    const workersCheckboxes = Array.from(document.querySelectorAll('input[name="workers"]'));
+    const checkAll = document.getElementById("checkAllWorkers");
+    const checkAllWrapper = document.getElementById("checkAllWrapper");
+
+    if (issueDate) {
+      flatpickr(issueDate, {
+        locale: "es",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: false
+      });
+    }
+
+    if (expiryDate) {
+      flatpickr(expiryDate, {
+        locale: "es",
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        allowInput: false
+      });
+    }
+
+    function updateExpiryState() {
+      if (!noExpiry || !expiryInput) return;
+      expiryInput.disabled = noExpiry.checked;
+      if (noExpiry.checked) {
+        expiryInput.value = "";
+      }
+    }
+
+    function updateSelectAllState() {
+      if (!workersCheckboxes.length || !checkAll) return;
+      const checkedCount = workersCheckboxes.filter(cb => cb.checked).length;
+      checkAll.checked = checkedCount === workersCheckboxes.length;
+      checkAll.indeterminate = checkedCount > 0 && checkedCount < workersCheckboxes.length;
+    }
+
+    function clearWorkers() {
+      workersCheckboxes.forEach(cb => {
+        cb.checked = false;
+      });
+      updateSelectAllState();
+    }
+
+    function enforceSingleSelection(changedCheckbox) {
+      if (scope !== "trabajador") return;
+
+      if (changedCheckbox && changedCheckbox.checked) {
+        workersCheckboxes.forEach(cb => {
+          if (cb !== changedCheckbox) cb.checked = false;
+        });
+      }
+
+      updateSelectAllState();
+    }
+
+    if (checkAll) {
+      checkAll.addEventListener("change", function () {
+        const applyAll = applyAllInput ? applyAllInput.checked : false;
+
+        if (scope !== "ambos" || applyAll) {
+          checkAll.checked = false;
+          return;
+        }
+
+        workersCheckboxes.forEach(cb => {
+          cb.checked = checkAll.checked;
+        });
+        updateSelectAllState();
+      });
+    }
+
+    workersCheckboxes.forEach(cb => {
+      cb.addEventListener("change", function () {
+        enforceSingleSelection(cb);
+        updateSelectAllState();
+      });
+    });
+
+    function updateWorkersVisibility() {
+      if (!workersContainer) return;
+
+      const applyAll = applyAllInput ? applyAllInput.checked : false;
+
+      if (scope === "empresa") {
+        if (applyAllBox) applyAllBox.style.display = "none";
+        workersContainer.style.display = "none";
+        if (applyAllInput) applyAllInput.checked = false;
+        clearWorkers();
+        return;
+      }
+
+      if (scope === "trabajador") {
+        if (applyAllBox) applyAllBox.style.display = "none";
+        if (applyAllInput) applyAllInput.checked = false;
+        workersContainer.style.display = "";
+
+        if (checkAllWrapper) checkAllWrapper.style.display = "none";
+        if (checkAll) {
+          checkAll.checked = false;
+          checkAll.indeterminate = false;
+        }
+
+        const checked = workersCheckboxes.filter(cb => cb.checked);
+        if (checked.length > 1) {
+          workersCheckboxes.forEach((cb, idx) => {
+            cb.checked = idx === 0 ? cb.checked : false;
+          });
+        }
+
+        updateSelectAllState();
+        return;
+      }
+
+      if (scope === "ambos") {
+        if (applyAllBox) applyAllBox.style.display = "flex";
+
+        if (applyAll) {
+          workersContainer.style.display = "none";
+          clearWorkers();
+        } else {
+          workersContainer.style.display = "";
+          if (checkAllWrapper) checkAllWrapper.style.display = "flex";
+        }
+
+        updateSelectAllState();
+        return;
+      }
+
+      if (applyAllBox) applyAllBox.style.display = "none";
+      workersContainer.style.display = "none";
+      clearWorkers();
+    }
+
+    if (applyAllInput) {
+      applyAllInput.addEventListener("change", updateWorkersVisibility);
+    }
+
+    if (noExpiry) {
+      noExpiry.addEventListener("change", updateExpiryState);
+      updateExpiryState();
+    }
+
+    const textInputs = document.querySelectorAll("input[type='text'], input[type='date'], input[type='file']");
+    textInputs.forEach(el => {
+      if (el.type === "file") {
+        el.classList.add("prev-file-input");
+      } else if (el.type === "date") {
+        el.classList.add("prev-date-input");
+      } else {
+        el.classList.add("prev-input");
+      }
+    });
+
+    const checks = document.querySelectorAll("input[type='checkbox']");
+    checks.forEach(el => {
+      if (el.id !== "checkAllWorkers") {
+        el.classList.add("prev-check");
+      }
+    });
+
+    updateExpiryState();
+    updateWorkersVisibility();
+    updateSelectAllState();
+  });
+</script>
+{% endblock %}

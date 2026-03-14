@@ -39,9 +39,12 @@ def logout_view(request):
     return redirect('usuarios:login_unificado')
 
 
+@login_required(login_url='usuarios:login')
 def inicio_admin(request):
     queryset = Notificacion.objects.filter(
-        usuario=request.user).order_by('leido', '-fecha')
+        usuario=request.user
+    ).order_by('leido', '-fecha')
+
     notificaciones = queryset[:10]
     no_leidas = queryset.filter(leido=False).count()
 

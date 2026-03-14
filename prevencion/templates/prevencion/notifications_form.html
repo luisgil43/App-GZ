@@ -1,0 +1,63 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Notificaciones - Prevención{% endblock %}
+
+{% block dashboard_content %}
+<div class="w-full">
+  <div class="bg-white shadow mt-3 rounded-none sm:rounded-2xl px-3 py-4 sm:p-8 max-w-3xl mx-auto">
+
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-800">🔔 Notificaciones - Prevención</h2>
+        <p class="text-sm text-gray-500 mt-1">
+          Configura destinatarios y si se incluye el correo del trabajador (cuando aplique).
+        </p>
+      </div>
+      <a href="{% url 'prevencion:dashboard' %}" class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        ← Volver
+      </a>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+
+      <div class="flex items-center gap-2">
+        {{ form.enabled }}
+        <label class="text-sm font-medium text-gray-700">Activar notificaciones</label>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {{ form.include_worker }}
+        <label class="text-sm font-medium text-gray-700">Incluir correo del trabajador (si aplica)</label>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Correos adicionales (Para)</label>
+        {{ form.extra_to }}
+        <p class="text-xs text-gray-500 mt-1">
+          Separados por coma. Ej: pm@empresa.cl, supervisor@empresa.cl
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Correos adicionales (CC)</label>
+        {{ form.extra_cc }}
+        <p class="text-xs text-gray-500 mt-1">
+          Separados por coma. Ej: rrhh@empresa.cl
+        </p>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <a href="{% url 'prevencion:dashboard' %}"
+           class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+          Cancelar
+        </a>
+        <button type="submit"
+                class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+          Guardar
+        </button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endblock %}
