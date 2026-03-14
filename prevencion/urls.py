@@ -39,4 +39,6 @@ urlpatterns = [
     ),
     # CRON
     path("cron/documentos/", views_cron.cron_prevencion_documentos, name="cron_prevencion_documentos"),
+
+    path("mis-documentos/", views.mis_documentos_prevencion, name="mis_documentos"),
 ]

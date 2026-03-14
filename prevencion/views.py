@@ -875,3 +875,87 @@ def company_document_zip(request, type_id: int):
     response = HttpResponse(output.getvalue(), content_type="application/zip")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response
+
+
+@login_required
+@rol_requerido("usuario", "admin", "pm", "supervisor", "prevencion")
+def mis_documentos_prevencion(request):
+    """
+    Vista usuario:
+    - Muestra solo los documentos de prevención que aplican al usuario logueado.
+    - Incluye:
+        * scope=trabajador asignados al usuario
+        * scope=ambos asignados al usuario
+        * scope=ambos con apply_to_all_workers=True
+    - Solo lectura.
+    """
+    today = timezone.localdate()
+    worker = request.user
+
+    docs_qs = (
+        PrevencionDocument.objects
+        .select_related("doc_type", "created_by")
+        .prefetch_related("workers")
+        .filter(scope__in=["trabajador", "ambos"])
+        .order_by("doc_type__name", "-created_at", "-id")
+    )
+
+    order_rank = {
+        "vigente": 0,
+        "proximo": 1,
+        "vencido": 2,
+        "sin_vencimiento": 3,
+    }
+
+    docs_by_type = {}
+
+    for d in docs_qs:
+        include_doc = False
+
+        if d.scope == "ambos" and d.apply_to_all_workers:
+            include_doc = True
+        elif d.workers.filter(pk=worker.pk).exists():
+            include_doc = True
+
+        if not include_doc:
+            continue
+
+        st = d.compute_status(today=today)
+        d.status_code = st
+        d.status_label_ui = d.status_label(today=today)
+        d.badge_class = _badge_classes(st)
+        d.remaining_days_ui = d.remaining_days(today=today)
+
+        bucket = docs_by_type.get(d.doc_type_id)
+        if not bucket:
+            bucket = {
+                "type": d.doc_type,
+                "docs": [],
+            }
+            docs_by_type[d.doc_type_id] = bucket
+
+        bucket["docs"].append(d)
+
+    document_blocks = list(docs_by_type.values())
+
+    for block in document_blocks:
+        block["docs"].sort(
+            key=lambda x: (
+                0 if getattr(x, "current", False) else 1,
+                order_rank.get(getattr(x, "status_code", "sin_vencimiento"), 9),
+                x.expiry_date or date.max,
+                -(x.created_at.timestamp() if x.created_at else 0),
+            )
+        )
+
+    document_blocks.sort(
+        key=lambda b: (b["type"].name or "").lower()
+    )
+
+    return render(
+        request,
+        "prevencion/mis_documentos.html",
+        {
+            "document_blocks": document_blocks,
+        },
+    )

@@ -215,7 +215,11 @@
           <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🦺
             Prevención de Riesgo <span class="arrow">▶</span></span>
           <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="#" class="hover:text-emerald-400">Mis Cursos</a></li>
+            <li>
+  <a href="{% url 'prevencion:mis_documentos' %}" class="hover:text-emerald-400">
+    Mis Cursos y Documentos
+  </a>
+</li>
             <li><a href="#" class="hover:text-emerald-400">Firma de documentos</a></li>
             <li><a href="#" class="hover:text-emerald-400">Mis EPP asignados</a></li>
           </ul>
