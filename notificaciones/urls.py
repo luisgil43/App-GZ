@@ -1,12 +1,9 @@
 from django.urls import path
 
-# De momento sin vistas reales, solo skeleton
-# from . import views
+from . import views_cron
 
 app_name = "notificaciones"
 
 urlpatterns = [
-    # Aquí más adelante pondremos:
-    # path("telegram/asignaciones/", views.lista_telegram_asignaciones, name="telegram_asignaciones"),
-    # path("email/contratos/", views.lista_email_contratos, name="email_contratos"),
+    path("diario/", views_cron.cron_diario_general, name="cron_diario_general"),
 ]

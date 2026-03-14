@@ -19,12 +19,8 @@ def health_check(request):
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    # ... tus otras urls ...
-]
-
-urlpatterns = [
     # Health check
+    path('admin/', admin.site.urls),
     path('healthz', health_check),
 
 
@@ -129,7 +125,7 @@ urlpatterns = [
 
     path("bot-gz/", include("bot_gz.urls", namespace="bot_gz")),
     path("prevencion/", include("prevencion.urls")),
-
+    path("cron/", include(("notificaciones.urls", "notificaciones"), namespace="cron_general")),
 
 ]
 
