@@ -1,0 +1,224 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}
+  {% if mode == "edit" %}Editar herramienta{% else %}Crear herramienta{% endif %}
+{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <style>
+    /* Inputs PRO (fallback, por si el form no trae clases) */
+    .campo{
+      width:100%;
+      border:2px solid #e5e7eb; /* gray-200 */
+      border-radius:1rem;       /* rounded-2xl vibe */
+      padding:.65rem .85rem;
+      font-size:.95rem;
+      background:#fff;
+      transition:border-color .15s, box-shadow .15s;
+      outline:none;
+    }
+    .campo:focus{
+      border-color:#3b82f6; /* blue-500 */
+      box-shadow:0 0 0 3px rgba(59,130,246,.20);
+    }
+    .campo-error{
+      border-color:#ef4444 !important; /* red-500 */
+      box-shadow:0 0 0 3px rgba(239,68,68,.15) !important;
+    }
+    .help{
+      font-size:.75rem;
+      color:#6b7280; /* gray-500 */
+      margin-top:.25rem;
+    }
+  </style>
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">
+      {% if mode == "edit" %}✏️ Editar herramienta{% else %}➕ Crear herramienta{% endif %}
+    </h2>
+
+    <a href="{% url 'logistica:herramientas_list' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+      ← Volver
+    </a>
+  </div>
+
+  {# ✅ Tips SOLO al crear #}
+  {% if mode != "edit" %}
+    <div class="border rounded-2xl p-4 bg-blue-50 mb-4">
+      <div class="font-semibold text-gray-800">💡 Recomendaciones para crear</div>
+      <ul class="mt-2 text-sm text-gray-700 list-disc pl-5 space-y-1">
+        <li><b>Nombre:</b> usa un nombre claro y corto (ej: “Taladro percutor”).</li>
+        <li><b>Serial:</b> debe ser <b>único</b>. Ideal copiar exactamente el del equipo.</li>
+        <li><b>Valor comercial:</b> monto referencial (sin puntos ni símbolos, el sistema formatea).</li>
+        <li><b>Bodega:</b> selecciona dónde quedará almacenada inicialmente.</li>
+        <li><b>Foto:</b> ayuda a identificarla rápido (opcional).</li>
+      </ul>
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {% csrf_token %}
+
+    <!-- Datos -->
+    <div class="border rounded-2xl p-4 bg-white shadow-sm space-y-3">
+      <h3 class="text-lg font-bold text-gray-800">Datos</h3>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Nombre</label>
+        <div class="mt-1">
+          {{ form.nombre }}
+        </div>
+        <div class="help">Ej: Taladro, Amoladora, Máquina de cortar, Arnés, etc.</div>
+        {% if form.nombre.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.nombre.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Descripción</label>
+        <div class="mt-1">
+          {{ form.descripcion }}
+        </div>
+        <div class="help">Opcional. Puedes incluir marca, modelo, accesorios o estado general.</div>
+        {% if form.descripcion.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.descripcion.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Serial</label>
+        <div class="mt-1">
+          {{ form.serial }}
+        </div>
+        <div class="help">Debe ser único. Ej: 234235325253 o “SN-AX12-8890”.</div>
+        {% if form.serial.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.serial.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Valor comercial</label>
+        <div class="mt-1">
+          {{ form.valor_comercial }}
+        </div>
+        <div class="help">Valor referencial del equipo (CLP). Ej: 500000</div>
+        {% if form.valor_comercial.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.valor_comercial.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Bodega</label>
+        <div class="mt-1">
+          {{ form.bodega }}
+        </div>
+        <div class="help">Define el lugar de almacenamiento o dónde queda disponible.</div>
+        {% if form.bodega.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.bodega.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Foto (opcional)</label>
+        <div class="mt-1">
+          {{ form.foto }}
+        </div>
+        <div class="help">Ideal una foto donde se vea el equipo completo (y el serial si se puede).</div>
+        {% if form.foto.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.foto.errors }}</div>
+        {% endif %}
+        {% if mode == "edit" and obj.foto %}
+          <div class="mt-2">
+            <a href="{{ obj.foto.url }}" target="_blank"
+               class="text-sm text-blue-600 hover:text-blue-800">
+              📷 Ver foto actual
+            </a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Estado -->
+    <div class="border rounded-2xl p-4 bg-white shadow-sm space-y-3">
+      <h3 class="text-lg font-bold text-gray-800">Estado</h3>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Estado</label>
+        <div class="mt-1">
+          {{ form.status }}
+        </div>
+        <div class="help">Si la herramienta queda guardada en bodega, puedes dejar “En bodega”.</div>
+        {% if form.status.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.status.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Justificación</label>
+        <div class="mt-1">
+          {{ form.status_justificacion }}
+        </div>
+        {% if form.status_justificacion.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.status_justificacion.errors }}</div>
+        {% endif %}
+        <div class="help">
+          Obligatoria si el estado es dañada / extraviada / robada.
+        </div>
+      </div>
+
+      <div class="pt-2 flex flex-col sm:flex-row gap-2">
+        <button type="submit"
+                class="px-5 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+          💾 Guardar
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+  // ✅ Aplicar estilo PRO a inputs del form (sin tocar forms.py)
+  (function(){
+    const inputs = document.querySelectorAll(
+      'input[type="text"], input[type="number"], input[type="email"], input[type="date"], input[type="datetime-local"], input[type="file"], select, textarea'
+    );
+
+    inputs.forEach(el=>{
+      const cls = (el.getAttribute('class') || '').trim();
+      if(!cls){
+        el.classList.add('campo');
+      }else{
+        // aunque tenga clases, garantizamos look consistente (sin romper)
+        el.classList.add('border','rounded-xl','px-3','py-2');
+      }
+    });
+
+    // ✅ Placeholders / hints (solo si no vienen definidos)
+    function setPH(sel, value){
+      const el = document.querySelector(sel);
+      if(!el) return;
+      if(!(el.getAttribute('placeholder') || '').trim()){
+        el.setAttribute('placeholder', value);
+      }
+    }
+
+    setPH('input[name="nombre"]', 'Ej: Taladro percutor');
+    setPH('input[name="serial"]', 'Ej: 234235325253 / SN-AX12-8890');
+    setPH('input[name="valor_comercial"]', 'Ej: 500000');
+    setPH('textarea[name="descripcion"]', 'Ej: Marca/Modelo, accesorios, observaciones...');
+    setPH('textarea[name="status_justificacion"]', 'Explica el motivo del estado seleccionado...');
+
+    // marcar campos con error si existen errores en el DOM
+    document.querySelectorAll('.text-red-600').forEach(err=>{
+      const wrap = err.closest('div');
+      if(!wrap) return;
+      const field = wrap.querySelector('input, select, textarea');
+      if(field) field.classList.add('campo-error');
+    });
+  })();
+</script>
+{% endblock %}

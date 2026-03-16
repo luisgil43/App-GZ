@@ -1,0 +1,31 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Eliminar herramienta{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <h2 class="text-2xl font-bold text-gray-800 mb-2">🗑️ Eliminar herramienta</h2>
+  <p class="text-sm text-gray-600 mb-4">
+    Vas a eliminar: <span class="font-semibold">{{ obj.nombre }}</span> (Serial: {{ obj.serial|default:"—" }})
+  </p>
+
+  <div class="border rounded-2xl p-4 bg-red-50">
+    <p class="text-sm text-red-800">
+      ⚠️ Esta acción eliminará también fotos e historial de inventarios asociados.
+      <br/>Solo el <b>admin general</b> puede eliminar.
+    </p>
+
+    <form method="post" class="mt-4 flex gap-2">
+      {% csrf_token %}
+      <a href="{% url 'logistica:herramientas_list' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        Cancelar
+      </a>
+      <button type="submit"
+              class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+        Eliminar definitivamente
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

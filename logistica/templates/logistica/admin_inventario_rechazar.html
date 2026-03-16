@@ -1,0 +1,139 @@
+{% extends "dashboard_admin/base.html" %}
+{% block title %}Rechazar inventario{% endblock %}
+
+{% block dashboard_content %}
+
+<style>
+  /* Inputs PRO (fallback) */
+  .campo{
+    width:100%;
+    border:2px solid #e5e7eb; /* gray-200 */
+    border-radius:1rem;
+    padding:.65rem .85rem;
+    font-size:.95rem;
+    background:#fff;
+    transition:border-color .15s, box-shadow .15s;
+    outline:none;
+  }
+  .campo:focus{
+    border-color:#ef4444; /* red-500 */
+    box-shadow:0 0 0 3px rgba(239,68,68,.18);
+  }
+  .campo-error{
+    border-color:#ef4444 !important;
+    box-shadow:0 0 0 3px rgba(239,68,68,.18) !important;
+  }
+</style>
+
+<!-- ✅ MODAL (centrado) -->
+<div id="rejectInvModal" class="fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
+
+      <!-- Header -->
+      <div class="px-5 py-4 border-b flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold text-gray-800">❌ Rechazar inventario</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            Esto re-habilita el inventario para que el usuario vuelva a subir una foto.
+          </p>
+        </div>
+
+        <a href="{% url 'logistica:herramientas_list' %}"
+           class="shrink-0 px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50">
+          ✕ Cerrar
+        </a>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-4">
+
+        <div class="border rounded-2xl p-4 bg-gray-50">
+          <div class="text-sm text-gray-700">
+            Herramienta: <span class="font-semibold">{{ inv.herramienta.nombre }}</span>
+            • Usuario: <span class="font-semibold">{{ inv.asignacion.asignado_a.get_full_name|default:inv.asignacion.asignado_a.username }}</span>
+            • Enviado: <span class="font-semibold">{{ inv.created_at|date:"d/m/Y H:i" }}</span>
+          </div>
+
+          {% if inv.foto %}
+            <div class="mt-3 flex flex-wrap gap-2">
+              <a href="{{ inv.foto.url }}" target="_blank"
+                 class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+                🔍 Ver foto enviada
+              </a>
+            </div>
+          {% endif %}
+        </div>
+
+        <form method="post" class="space-y-3">
+          {% csrf_token %}
+
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Motivo de rechazo (obligatorio)</label>
+
+            <div class="mt-1">
+              {{ form.motivo_rechazo }}
+            </div>
+
+            {% if form.motivo_rechazo.errors %}
+              <div class="text-sm text-red-600 mt-1">{{ form.motivo_rechazo.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="flex flex-col sm:flex-row justify-end gap-2 pt-2">
+            <a href="{% url 'logistica:herramientas_list' %}"
+               class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+              Cancelar
+            </a>
+
+            <button type="submit"
+                    class="px-5 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700 shadow">
+              Rechazar inventario
+            </button>
+          </div>
+
+          <div class="text-xs text-gray-500">
+            * Al rechazar, el usuario volverá a ver el botón para realizar inventario nuevamente.
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ✅ Estilo PRO al textarea si el widget no trae class
+  (function(){
+    const el = document.querySelector('textarea[name="motivo_rechazo"]');
+    if(!el) return;
+
+    const hasClass = (el.getAttribute('class') || '').trim().length > 0;
+    if(!hasClass){
+      el.classList.add('campo');
+    }else{
+      el.classList.add('border','rounded-xl','px-3','py-2');
+    }
+
+    // marcar error si hay errores visibles
+    const err = el.closest('div')?.querySelector('.text-red-600');
+    if(err) el.classList.add('campo-error');
+  })();
+
+  // ✅ Cerrar con ESC + click fuera
+  function closeRejectInvModal(){
+    window.location.href = "{% url 'logistica:herramientas_list' %}";
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeRejectInvModal();
+  });
+
+  document.getElementById('rejectInvModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'rejectInvModal') closeRejectInvModal();
+  });
+</script>
+
+{% endblock %}

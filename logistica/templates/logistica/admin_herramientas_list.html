@@ -1,0 +1,741 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Herramientas - Logística{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+<style>
+  .campo-filtro {
+    border: 2px solid #1f2937;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    height: 2.25rem;
+    background-color: white;
+    transition: border-color 0.2s ease-in-out;
+  }
+  .campo-filtro:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    outline: none;
+  }
+
+  .tabla-responsive{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+  }
+  .tabla-responsive table{
+    white-space: nowrap;
+    min-width: 1400px;
+  }
+
+  .line-clamp-2{
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>
+
+  <!-- Título + botones -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">🧰 Herramientas</h2>
+
+    <div class="flex gap-2 flex-wrap">
+      <a href="{% url 'logistica:bodegas_manage' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        🏬 Bodegas
+      </a>
+
+      <a href="{% url 'logistica:herramienta_create' %}"
+         class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+        ➕ Crear herramienta
+      </a>
+
+      <a href="{% url 'logistica:exportar_herramientas_excel' %}?q={{ q|urlencode }}&status={{ status|urlencode }}"
+         class="px-4 py-2 rounded-full text-sm bg-emerald-600 text-white hover:bg-emerald-700">
+        📥 Exportar Excel
+      </a>
+    </div>
+  </div>
+
+  <!-- Filtros (auto-submit) -->
+  <form id="form-filtros" method="get" class="mb-3 text-base">
+    <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+
+      <div class="w-full sm:w-[420px]">
+        <label class="text-xs text-gray-600">Buscar</label>
+        <input type="text"
+               name="q"
+               value="{{ q }}"
+               placeholder="Nombre / Serial / Descripción..."
+               class="border rounded-lg px-3 py-2 w-full"
+               autocomplete="off">
+      </div>
+
+      <div class="w-full sm:w-56">
+        <label class="text-xs text-gray-600">Estado herramienta</label>
+        <select name="status" class="border rounded-lg px-3 py-2 w-full">
+          <option value="">Todos</option>
+          {% for val,label in STATUS_CHOICES %}
+            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
+        <a href="{% url 'logistica:herramientas_list' %}"
+           class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow whitespace-nowrap">
+          ❌ Limpiar
+        </a>
+      </div>
+
+      <!-- mantener cantidad actual -->
+      <input type="hidden" name="cantidad" value="{{ cantidad }}">
+    </div>
+  </form>
+
+  <!-- Selector de columnas -->
+  <div class="flex justify-start mb-2">
+    <details class="relative">
+      <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+        ⚙️ Columnas
+      </summary>
+
+      <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
+        <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+        <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+          <input type="checkbox" id="col-toggle-all" checked>
+          <span class="font-semibold text-xs">Mostrar todas</span>
+        </label>
+
+        <div class="space-y-1 text-sm">
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span>Herramienta</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Serial</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Valor</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Bodega</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Asignada a</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>Asignación</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Estado herramienta</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Justificación</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Inventario</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>Acciones</span></label>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  {% if not pagina.object_list %}
+    <div class="p-4 bg-gray-50 border rounded-xl text-gray-700">
+      No hay herramientas registradas.
+    </div>
+  {% else %}
+    <div class="tabla-responsive" data-scrollbox>
+      <table class="w-full text-sm" data-columns-table="herramientas-admin">
+        <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+          <tr>
+            <th class="p-2 border text-left">Herramienta</th>
+            <th class="p-2 border">Serial</th>
+            <th class="p-2 border">Valor</th>
+            <th class="p-2 border">Bodega</th>
+            <th class="p-2 border">Asignada a</th>
+            <th class="p-2 border">Asignación</th>
+            <th class="p-2 border">Estado herramienta</th>
+            <th class="p-2 border">Justificación</th>
+            <th class="p-2 border">Inventario</th>
+            <th class="p-2 border whitespace-nowrap">Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody class="text-center">
+          {% for h in pagina %}
+            <tr class="border-t hover:bg-gray-50">
+
+              <!-- Herramienta -->
+              <td class="p-2 border text-left">
+                <div class="font-semibold text-gray-800">{{ h.nombre }}</div>
+                {% if h.descripcion %}
+                  <div class="text-xs text-gray-500 line-clamp-2">{{ h.descripcion }}</div>
+                {% endif %}
+                {% if h.foto %}
+                  <div class="mt-1">
+                    <a href="{{ h.foto.url }}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800">
+                      📷 Ver foto
+                    </a>
+                  </div>
+                {% endif %}
+                <div class="text-xs text-gray-500 mt-1">
+                  <span class="font-semibold">Creada por:</span>
+                  {{ h.creada_por.get_full_name|default:h.creada_por.username }}
+                  • {{ h.created_at|date:"d/m/Y" }}
+                </div>
+              </td>
+
+              <td class="p-2 border">{{ h.serial|default:"—" }}</td>
+
+              <td class="p-2 border">
+                {% if h.valor_comercial != None %}
+                  ${{ h.valor_comercial|clp_round }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <td class="p-2 border">
+                {{ h.bodega.nombre|default:"—" }}
+              </td>
+
+              <!-- Asignada a -->
+              <td class="p-2 border">
+                {% if h.asignada_a %}
+                  <div class="font-medium text-gray-800">
+                    {{ h.asignada_a.get_full_name|default:h.asignada_a.username }}
+                  </div>
+                  <div class="text-[11px] text-gray-500 whitespace-normal">
+                    {% if h.asignada_por %}
+                      Por: {{ h.asignada_por.get_full_name|default:h.asignada_por.username }}
+                    {% else %}
+                      Por: —
+                    {% endif %}
+                    {% if h.asignada_at %}
+                      • {{ h.asignada_at|date:"d/m/Y H:i" }}
+                    {% endif %}
+                  </div>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <!-- Estado asignación -->
+              <td class="p-2 border">
+                {% if h.asignacion_activa %}
+                  {% if h.asignacion_estado == "pendiente" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      Pendiente
+                    </span>
+                  {% elif h.asignacion_estado == "aceptada" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                      Aceptada • Firmada
+                    </span>
+                  {% elif h.asignacion_estado == "rechazada" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Rechazada
+                    </span>
+                    {% if h.asignacion_activa.comentario_rechazo %}
+                      <div class="mt-1 text-xs text-gray-600 text-left whitespace-normal max-w-[520px]">
+                        <span class="font-semibold">Motivo:</span> {{ h.asignacion_activa.comentario_rechazo }}
+                      </div>
+                    {% endif %}
+                  {% else %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {{ h.asignacion_estado }}
+                    </span>
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <!-- Estado herramienta -->
+              <td class="p-2 border">
+                <div class="flex flex-col items-center gap-2">
+                  <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    {{ h.get_status_display }}
+                  </span>
+
+                  <button type="button"
+                          class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50"
+                          onclick="openStatusModal('{{ h.id }}', '{{ h.get_status_display|escapejs }}')">
+                    🔁 Cambiar
+                  </button>
+                </div>
+              </td>
+
+              <!-- Justificación -->
+              <td class="p-2 border text-left">
+                <span class="text-xs text-gray-700 whitespace-pre-line">
+                  {{ h.status_justificacion|default:"" }}
+                </span>
+              </td>
+
+              <!-- Inventario -->
+              <td class="p-2 border">
+                <div class="flex flex-col items-center gap-2">
+
+                  {% if h.last_inv %}
+                    {% if h.last_inv.estado == "pendiente" %}
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Pendiente revisión
+                      </span>
+
+                      <div class="flex flex-wrap justify-center gap-2">
+                        {% if h.last_inv.foto %}
+                          <a href="{{ h.last_inv.foto.url }}" target="_blank"
+                             class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                            🔎 Ver foto
+                          </a>
+                        {% endif %}
+
+                        <form method="post"
+                              action="{% url 'logistica:aprobar_inventario' h.last_inv.id %}?next={{ request.get_full_path|urlencode }}">
+                          {% csrf_token %}
+                          <button type="submit"
+                                  class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                            ✅ Aprobar
+                          </button>
+                        </form>
+
+                        <a href="{% url 'logistica:rechazar_inventario' h.last_inv.id %}?next={{ request.get_full_path|urlencode }}"
+                           class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                          ❌ Rechazar
+                        </a>
+                      </div>
+
+                    {% elif h.last_inv.estado == "rechazado" %}
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Rechazado
+                      </span>
+
+                      {% if h.last_inv.foto %}
+                        <a href="{{ h.last_inv.foto.url }}" target="_blank"
+                           class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                          🔎 Ver foto
+                        </a>
+                      {% endif %}
+
+                      {% if h.last_inv.motivo_rechazo %}
+                        <div class="text-[11px] text-gray-600 text-left max-w-[260px] whitespace-normal">
+                          <span class="font-semibold">Motivo:</span> {{ h.last_inv.motivo_rechazo }}
+                        </div>
+                      {% endif %}
+
+                    {% else %}
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                        OK
+                      </span>
+
+                      {% if h.last_inv.foto %}
+                        <a href="{{ h.last_inv.foto.url }}" target="_blank"
+                           class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                          🔎 Ver foto
+                        </a>
+                      {% endif %}
+                    {% endif %}
+                  {% else %}
+                    {% if h.inventory_required %}
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                        Solicitado
+                      </span>
+                    {% else %}
+                      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                        OK
+                      </span>
+                    {% endif %}
+                  {% endif %}
+
+                  {% if not h.last_inv or h.last_inv.estado != "pendiente" %}
+                    <form method="post" action="{% url 'logistica:solicitar_inventario' h.id %}">
+                      {% csrf_token %}
+                      <button type="submit"
+                              class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                        📸 Solicitar
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  <a href="{% url 'logistica:inventario_historial_admin' h.id %}"
+                     class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                    🗂 Historial
+                  </a>
+
+                  <span class="text-[11px] text-gray-500">
+                    Próx. fecha: {% if h.next_inventory_due %}{{ h.next_inventory_due|date:"d/m/Y" }}{% else %}—{% endif %}
+                  </span>
+
+                </div>
+              </td>
+
+              <!-- Acciones -->
+              <td class="p-2 border whitespace-nowrap">
+                <div class="flex justify-center gap-2 flex-nowrap">
+                  <a href="{% url 'logistica:herramienta_edit' h.id %}"
+                     class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                    ✏️ Editar
+                  </a>
+
+                  <a href="{% url 'logistica:herramienta_assign' h.id %}"
+                     class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                    👤 Asignar
+                  </a>
+
+                  <form method="post" action="{% url 'logistica:herramienta_reset_assignment_status' h.id %}">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                      🔄 Reiniciar estado
+                    </button>
+                  </form>
+
+                  {% if can_delete %}
+                    <a href="{% url 'logistica:herramienta_delete' h.id %}"
+                       class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                      🗑️ Eliminar
+                    </a>
+                  {% endif %}
+                </div>
+              </td>
+
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Selector cantidad -->
+    <form method="get" class="mt-4 flex items-center gap-2">
+      <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+      <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+        <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+        <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+        <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+        <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+        <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+      </select>
+
+      <input type="hidden" name="q" value="{{ q }}">
+      <input type="hidden" name="status" value="{{ status }}">
+    </form>
+
+    <!-- Paginación -->
+    <div class="mt-4 flex justify-center gap-2 text-sm">
+      {% if pagina.has_previous %}
+        <a href="?page=1&cantidad={{ cantidad }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+      {% endif %}
+
+      <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+
+      {% if pagina.has_next %}
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&status={{ status|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+      {% endif %}
+    </div>
+
+  {% endif %}
+</div>
+
+<!-- ===== Auto filtros mientras escribes + mantener caret ===== -->
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'tools_filtros_focus';
+
+  function rememberCaret(el) {
+    try {
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+    } catch (_) {}
+  }
+
+  function restoreCaret() {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    } catch (_) {}
+  }
+
+  function ensureCantidadHidden() {
+    if (!form.querySelector('input[name="cantidad"]')) {
+      const sel = document.getElementById('cantidad');
+      if (sel) {
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'cantidad'; h.value = sel.value;
+        form.appendChild(h);
+      }
+    }
+  }
+
+  let t;
+  function submitDebounced(el) {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 450);
+  }
+
+  inputs.forEach(el => {
+    el.addEventListener('input',  () => submitDebounced(el));
+    el.addEventListener('change', () => submitDebounced(el));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitDebounced(el); }
+    });
+  });
+
+  selects.forEach(el => el.addEventListener('change', () => {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    form.requestSubmit();
+  }));
+
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+})();
+</script>
+
+<!-- ===== Selector de columnas (persistente) ===== -->
+<script>
+(function () {
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  const table =
+    document.querySelector('[data-columns-table]') ||
+    document.querySelector('table');
+  if (!table) return;
+
+  const tableId = table.dataset.columnsTable || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) { return {}; }
+  }
+
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const state = loadState();
+
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false;
+      th.style.display = visible ? '' : 'none';
+    });
+
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) master.checked = allOn;
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
+})();
+</script>
+
+<!-- Modal cambiar estado herramienta (tu mismo modal, intacto) -->
+<div id="statusModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Cambiar estado de herramienta</h3>
+      <p class="text-sm text-gray-600 mt-2" id="statusText"></p>
+
+      <form method="post" id="statusForm" class="mt-4 space-y-3">
+        {% csrf_token %}
+
+        <div>
+          <label class="text-sm font-medium text-gray-700">Estado</label>
+          <select name="status" class="w-full mt-1 border rounded-xl px-3 py-2 text-sm" id="statusSelect" onchange="toggleJust()">
+            {% for val,label in STATUS_CHOICES %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div id="justWrap" class="hidden">
+          <label class="text-sm font-medium text-gray-700">Justificación (obligatoria)</label>
+          <textarea name="justificacion" rows="4"
+                    class="w-full mt-1 border rounded-xl p-3 text-sm"
+                    placeholder="Explica el motivo del cambio..."></textarea>
+          <div class="text-xs text-gray-500 mt-1">
+            Obligatorio si el estado es: dañada / extraviada / robada.
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeStatusModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+            Guardar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openStatusModal(toolId, currentLabel){
+    const modal = document.getElementById('statusModal');
+    const text = document.getElementById('statusText');
+    const form = document.getElementById('statusForm');
+    text.textContent = `Estado actual: ${currentLabel}. Selecciona el nuevo estado.`;
+
+    form.action = "{% url 'logistica:herramienta_change_status' 0 %}".replace('/0/', `/${toolId}/`);
+    modal.classList.remove('hidden');
+    toggleJust();
+  }
+
+  function closeStatusModal(){
+    document.getElementById('statusModal').classList.add('hidden');
+  }
+
+  function toggleJust(){
+    const sel = document.getElementById('statusSelect');
+    const wrap = document.getElementById('justWrap');
+    if(!sel || !wrap) return;
+    const v = sel.value;
+    const needs = (v === 'danada' || v === 'extraviada' || v === 'robada');
+    wrap.classList.toggle('hidden', !needs);
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeStatusModal();
+  });
+
+  document.getElementById('statusModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'statusModal') closeStatusModal();
+  });
+</script>
+
+<script>
+/* === Persistencia scroll horizontal (Herramientas Admin) === */
+(function () {
+  const KEY = 'tools-list-scrollX:' + location.pathname;
+
+  function getBox() {
+    return document.querySelector('.tabla-responsive');
+  }
+
+  function saveX(x){
+    try { sessionStorage.setItem(KEY, String(x)); } catch(_) {}
+  }
+  function readX(){
+    try { return Number(sessionStorage.getItem(KEY) || 0); } catch(_) { return 0; }
+  }
+
+  function attachSaver(box){
+    if (!box || box.__hasScrollSaver) return;
+    box.__hasScrollSaver = true;
+
+    let t = null;
+    box.addEventListener('scroll', () => {
+      if (t) return;
+      t = setTimeout(() => {
+        t = null;
+        saveX(box.scrollLeft);
+      }, 120);
+    }, { passive: true });
+  }
+
+  function restore(){
+    const box = getBox();
+    if (!box) return;
+    requestAnimationFrame(() => { box.scrollLeft = readX(); });
+    attachSaver(box);
+  }
+
+  document.addEventListener('DOMContentLoaded', restore);
+
+  window.addEventListener('beforeunload', () => {
+    const box = getBox();
+    if (box) saveX(box.scrollLeft);
+  });
+
+  // por si algo re-renderiza (filtros/DOM)
+  const mo = new MutationObserver(() => setTimeout(restore, 0));
+  mo.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+
+{% endblock %}

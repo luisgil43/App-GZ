@@ -1,0 +1,723 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}Mis Herramientas - Logística{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <style>
+    .tabla-responsive{
+      overflow-x:auto;
+      -webkit-overflow-scrolling: touch;
+      width:100%;
+      max-width:100%;
+    }
+    .tabla-responsive table{
+      white-space:nowrap;
+      min-width:1150px;
+    }
+    .line-clamp-2{
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+    }
+  </style>
+
+  <div class="mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">🧰 Mis Herramientas Asignadas</h2>
+    <p class="text-sm text-gray-500 mt-1">
+      Aquí verás solo tus herramientas asignadas actualmente. Si se reasigna una herramienta, deja de aparecerte automáticamente.
+    </p>
+  </div>
+
+  <!-- ✅ Filtros (GET, auto-submit) -->
+  <form id="form-filtros" method="get" class="mb-3 text-base">
+    <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-full">
+
+      <div class="w-full sm:w-[420px]">
+        <label class="text-xs text-gray-600">Buscar</label>
+        <input type="text"
+               name="q"
+               value="{{ q }}"
+               placeholder="Nombre / Serial / Descripción..."
+               class="border rounded-lg px-3 py-2 w-full"
+               autocomplete="off">
+      </div>
+
+      <div class="w-full sm:w-56">
+        <label class="text-xs text-gray-600">Estado asignación</label>
+        <select name="estado" class="border rounded-lg px-3 py-2 w-full">
+          <option value="">Todos</option>
+          {% for val,label in ESTADO_ASIG_CHOICES %}
+            <option value="{{ val }}" {% if estado == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
+        <a href="{% url 'logistica:mis_herramientas' %}"
+           class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow whitespace-nowrap">
+          ❌ Limpiar
+        </a>
+      </div>
+
+      <!-- mantener cantidad actual -->
+      <input type="hidden" name="cantidad" value="{{ cantidad }}">
+    </div>
+  </form>
+
+  <!-- ✅ Selector de columnas -->
+  <div class="flex justify-start mb-2">
+    <details class="relative">
+      <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+        ⚙️ Columnas
+      </summary>
+
+      <div id="columnToggles" class="absolute left-0 mt-1 w-72 bg-white border rounded-xl shadow-lg p-3 z-10">
+        <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+        <label class="flex items-center gap-2 mb-2 pb-2 border-b">
+          <input type="checkbox" id="col-toggle-all" checked>
+          <span class="font-semibold text-xs">Mostrar todas</span>
+        </label>
+
+        <div class="space-y-1 text-sm">
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span></span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Herramienta</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Serial</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Valor comercial</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Fecha asignación</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>Asignado por</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Estado asignación</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Inventario</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Acciones</span></label>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  {% if not pagina.object_list %}
+    <div class="p-4 bg-gray-50 border rounded-xl text-gray-700">
+      No tienes herramientas asignadas actualmente.
+    </div>
+  {% else %}
+
+    <!-- ✅ POST (aceptar masivo) separado del GET -->
+    <form method="post" action="{% url 'logistica:aceptar_herramientas' %}" id="massAcceptForm">
+      {% csrf_token %}
+
+      <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="text-sm text-gray-600">
+          Puedes aceptar de forma masiva o individual. <br class="sm:hidden"/>
+          <span class="text-xs text-gray-500">
+            * Al aceptar, se registrará tu firma digital y te haces responsable según lo establecido en tu contrato.
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button type="button"
+                  id="btnMassAccept"
+                  class="hidden px-4 py-2 rounded-full text-sm bg-emerald-600 text-white hover:bg-emerald-700">
+            ✅ Aceptar seleccionadas
+          </button>
+        </div>
+      </div>
+
+      <div class="tabla-responsive">
+        <table class="w-full text-sm" data-columns-table="mis-herramientas-usuario">
+          <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+            <tr>
+              <th class="p-2 border w-12">
+                <input type="checkbox" id="checkAll" class="w-4 h-4">
+              </th>
+              <th class="p-2 border text-left">Herramienta</th>
+              <th class="p-2 border">Serial</th>
+              <th class="p-2 border">Valor comercial</th>
+              <th class="p-2 border">Fecha asignación</th>
+              <th class="p-2 border">Asignado por</th>
+              <th class="p-2 border">Estado asignación</th>
+              <th class="p-2 border">Inventario</th>
+              <th class="p-2 border whitespace-nowrap">Acciones</th>
+            </tr>
+          </thead>
+
+          <tbody class="text-center">
+            {% for a in pagina %}
+              {% with h=a.herramienta %}
+              <tr class="border-t hover:bg-gray-50">
+                <td class="p-2 border">
+                  {% if a.estado == "pendiente" %}
+                    <input type="checkbox" name="asignaciones" value="{{ a.id }}" class="rowCheck w-4 h-4">
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td class="p-2 border text-left">
+                  <div class="font-semibold text-gray-800">{{ h.nombre }}</div>
+                  {% if h.descripcion %}
+                    <div class="text-xs text-gray-500 line-clamp-2">{{ h.descripcion }}</div>
+                  {% endif %}
+                  {% if h.foto %}
+                    <div class="mt-1">
+                      <a href="{{ h.foto.url }}" target="_blank" class="text-xs text-blue-600 hover:text-blue-800">
+                        📷 Ver foto
+                      </a>
+                    </div>
+                  {% endif %}
+                </td>
+
+                <td class="p-2 border">{{ h.serial|default:"—" }}</td>
+
+                <td class="p-2 border">
+                  {% if h.valor_comercial != None %}
+                    ${{ h.valor_comercial|clp_round }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+                <td class="p-2 border">{{ a.asignado_at|date:"d/m/Y H:i" }}</td>
+
+                <td class="p-2 border">
+                  {{ a.asignado_por.get_full_name|default:a.asignado_por.username }}
+                </td>
+
+                <td class="p-2 border">
+                  {% if a.estado == "pendiente" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                      Pendiente
+                    </span>
+                  {% elif a.estado == "aceptada" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                      Aceptada • Firmada
+                    </span>
+                    {% if request.user.firma_digital %}
+                      <div class="mt-1 flex justify-center">
+                        <img src="{{ request.user.firma_digital.url }}"
+                             alt="Firma"
+                             class="h-10 object-contain border rounded bg-white px-2">
+                      </div>
+                    {% endif %}
+                  {% elif a.estado == "rechazada" %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                      Rechazada
+                    </span>
+                    {% if a.comentario_rechazo %}
+                      <div class="mt-1 text-xs text-gray-600 text-left whitespace-pre-line">
+                        <span class="font-semibold">Motivo:</span> {{ a.comentario_rechazo }}
+                      </div>
+                    {% endif %}
+                  {% else %}
+                    <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {{ a.estado }}
+                    </span>
+                  {% endif %}
+                </td>
+
+                <!-- Inventario (estado + historial) -->
+                <td class="p-2 border">
+                  <div class="flex flex-col items-center gap-1">
+
+                    {% if a.last_inv %}
+                      {% if a.last_inv.estado == "pendiente" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Pendiente revisión
+                        </span>
+                      {% elif a.last_inv.estado == "rechazado" %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Rechazado
+                        </span>
+                      {% else %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                          OK
+                        </span>
+                      {% endif %}
+                    {% else %}
+                      {% if h.inventory_required %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Solicitado
+                        </span>
+                      {% else %}
+                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                          OK
+                        </span>
+                      {% endif %}
+                    {% endif %}
+
+                    <a href="{% url 'logistica:historial_inventario' a.id %}"
+                       class="text-xs text-blue-600 hover:text-blue-800">
+                      🗂 Ver historial
+                    </a>
+                  </div>
+                </td>
+
+                <!-- Acciones -->
+                <td class="p-2 border whitespace-nowrap">
+                  <div class="flex justify-center gap-2 flex-nowrap">
+
+                    {# 📸 Botón inventario SOLO si asignación aceptada + inventory_required + (sin last_inv o last_inv rechazada) #}
+                    {% if a.estado == "aceptada" and h.inventory_required %}
+                      {% if not a.last_inv %}
+                        <a href="{% url 'logistica:subir_inventario' a.id %}"
+                           class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                          📸 Inventario
+                        </a>
+                      {% elif a.last_inv.estado == "rechazado" %}
+                        <a href="{% url 'logistica:subir_inventario' a.id %}"
+                           class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                          📸 Inventario
+                        </a>
+                      {% endif %}
+                    {% endif %}
+
+                    {% if a.estado == "pendiente" %}
+                      <button type="button"
+                              class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700"
+                              onclick="openAcceptModal('single', '{{ a.id }}')">
+                        ✅ Aceptar
+                      </button>
+
+                      <button type="button"
+                              class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                              onclick="openRejectModal('{{ a.id }}', '{{ h.nombre|escapejs }}')">
+                        ❌ Rechazar
+                      </button>
+                    {% else %}
+                      <span class="text-xs text-gray-500">—</span>
+                    {% endif %}
+                  </div>
+                </td>
+
+              </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+    </form>
+
+    <!-- ✅ Selector cantidad -->
+    <form method="get" class="mt-4 flex items-center gap-2">
+      <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+      <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
+        <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+        <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+        <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+        <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+        <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+      </select>
+
+      <input type="hidden" name="q" value="{{ q }}">
+      <input type="hidden" name="estado" value="{{ estado }}">
+    </form>
+
+    <!-- ✅ Paginación -->
+    <div class="mt-4 flex justify-center gap-2 text-sm">
+      {% if pagina.has_previous %}
+        <a href="?page=1&cantidad={{ cantidad }}&q={{ q|urlencode }}&estado={{ estado|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
+        <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&estado={{ estado|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+      {% endif %}
+
+      <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+
+      {% if pagina.has_next %}
+        <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&estado={{ estado|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
+        <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&q={{ q|urlencode }}&estado={{ estado|urlencode }}"
+           class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+      {% endif %}
+    </div>
+
+  {% endif %}
+</div>
+
+<!-- ✅ Modal Aceptar (centrado, bonito) -->
+<div id="acceptModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Aceptar herramientas</h3>
+      <p class="text-sm text-gray-600 mt-2" id="acceptText">
+        Al aceptar, quedará registro con tu firma digital y serás responsable según tu contrato.
+      </p>
+
+      <div class="flex justify-end gap-2 mt-4">
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeAcceptModal()">
+          Cancelar
+        </button>
+
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm bg-emerald-600 text-white hover:bg-emerald-700"
+                onclick="confirmAccept()">
+          ✅ Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal rechazo -->
+<div id="rejectModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Rechazar herramienta</h3>
+      <p class="text-sm text-gray-600 mt-2" id="rejectText"></p>
+
+      <form method="post" id="rejectForm" class="mt-4">
+        {% csrf_token %}
+        <label class="text-sm font-medium text-gray-700">Comentario (obligatorio)</label>
+        <textarea name="comentario" rows="4"
+                  class="w-full mt-2 border rounded-xl p-3 text-sm"
+                  placeholder="Explica por qué rechazas esta herramienta..."></textarea>
+
+        <div class="flex justify-end gap-2 mt-4">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeRejectModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Rechazar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ Auto filtros mientras escribes + mantener caret -->
+<script>
+(function () {
+  const form = document.getElementById('form-filtros');
+  if (!form) return;
+
+  const inputs  = form.querySelectorAll('input[type="text"]');
+  const selects = form.querySelectorAll('select');
+
+  const KEY = 'mis_tools_filtros_focus';
+
+  function rememberCaret(el) {
+    try {
+      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+    } catch (_) {}
+  }
+
+  function restoreCaret() {
+    try {
+      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+      if (!data) return;
+      const el = form.elements[data.name];
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      const len = (el.value || '').length;
+      const p = Math.min((data.pos ?? len), len);
+      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
+    } catch (_) {}
+  }
+
+  function ensureCantidadHidden() {
+    if (!form.querySelector('input[name="cantidad"]')) {
+      const sel = document.getElementById('cantidad');
+      if (sel) {
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'cantidad'; h.value = sel.value;
+        form.appendChild(h);
+      }
+    }
+  }
+
+  let t;
+  function submitDebounced(el) {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    clearTimeout(t);
+    t = setTimeout(() => form.requestSubmit(), 450);
+  }
+
+  inputs.forEach(el => {
+    el.addEventListener('input',  () => submitDebounced(el));
+    el.addEventListener('change', () => submitDebounced(el));
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submitDebounced(el); }
+    });
+  });
+
+  selects.forEach(el => el.addEventListener('change', () => {
+    rememberCaret(el);
+    ensureCantidadHidden();
+    form.requestSubmit();
+  }));
+
+  window.addEventListener('DOMContentLoaded', restoreCaret);
+})();
+</script>
+
+<!-- ✅ Selector de columnas (persistente) -->
+<script>
+(function () {
+  const panel = document.getElementById('columnToggles');
+  if (!panel) return;
+
+  const table =
+    document.querySelector('[data-columns-table]') ||
+    document.querySelector('table');
+  if (!table) return;
+
+  const tableId = table.dataset.columnsTable || location.pathname;
+  const STORAGE_KEY = 'cols:' + tableId;
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) { return {}; }
+  }
+
+  function saveState(state) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function applyVisibility() {
+    const state = loadState();
+
+    const theadCells = table.querySelectorAll('thead tr th');
+    theadCells.forEach((th, idx) => {
+      const visible = state[idx] !== false;
+      th.style.display = visible ? '' : 'none';
+    });
+
+    table.querySelectorAll('tbody tr').forEach((tr) => {
+      const tds = tr.querySelectorAll('td');
+      tds.forEach((td, idx) => {
+        const visible = state[idx] !== false;
+        td.style.display = visible ? '' : 'none';
+      });
+    });
+
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+    let allOn = true;
+
+    checks.forEach((cb) => {
+      const idx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[idx] !== false;
+      cb.checked = visible;
+      if (!visible) allOn = false;
+    });
+
+    if (master) master.checked = allOn;
+  }
+
+  function bindToggles() {
+    const checks = panel.querySelectorAll('.col-toggle');
+    const master = panel.querySelector('#col-toggle-all');
+
+    checks.forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const idx = parseInt(cb.dataset.col || '0', 10);
+        const state = loadState();
+        state[idx] = cb.checked;
+        saveState(state);
+        applyVisibility();
+      });
+    });
+
+    if (master) {
+      master.addEventListener('change', () => {
+        const val = master.checked;
+        const state = loadState();
+
+        checks.forEach((cb) => {
+          const idx = parseInt(cb.dataset.col || '0', 10);
+          cb.checked = val;
+          state[idx] = val;
+        });
+
+        saveState(state);
+        applyVisibility();
+      });
+    }
+  }
+
+  function bindOutsideClickToClose() {
+    const details = panel.closest('details');
+    if (!details) return;
+
+    document.addEventListener('click', (e) => {
+      if (!details.open) return;
+      if (details.contains(e.target)) return;
+      details.open = false;
+    });
+  }
+
+  bindToggles();
+  applyVisibility();
+  bindOutsideClickToClose();
+})();
+</script>
+
+<script>
+  const checkAll = document.getElementById('checkAll');
+  const btnMass = document.getElementById('btnMassAccept');
+  const formMass = document.getElementById('massAcceptForm');
+
+  // === Modal aceptar state ===
+  let acceptMode = null; // 'single' | 'mass'
+  let acceptSingleId = null;
+
+  function openAcceptModal(mode, singleId){
+    acceptMode = mode;
+    acceptSingleId = singleId || null;
+
+    const modal = document.getElementById('acceptModal');
+    const text = document.getElementById('acceptText');
+
+    if(mode === 'mass'){
+      text.textContent = "Vas a aceptar las herramientas seleccionadas. Al aceptar, quedará registro con tu firma digital y serás responsable según tu contrato. ¿Continuar?";
+    }else{
+      text.textContent = "Vas a aceptar esta herramienta. Al aceptar, quedará registro con tu firma digital y serás responsable según tu contrato. ¿Continuar?";
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeAcceptModal(){
+    document.getElementById('acceptModal').classList.add('hidden');
+    acceptMode = null;
+    acceptSingleId = null;
+  }
+
+  function confirmAccept(){
+    if(acceptMode === 'single' && acceptSingleId){
+      document.querySelectorAll('.rowCheck').forEach(c => c.checked = false);
+      const target = document.querySelector(`.rowCheck[value="${acceptSingleId}"]`);
+      if(target) target.checked = true;
+    }
+    formMass.submit();
+  }
+
+  function updateMassButton(){
+    const checks = document.querySelectorAll('.rowCheck');
+    let any = false;
+    checks.forEach(c => { if(c.checked) any = true; });
+    if(btnMass){
+      btnMass.classList.toggle('hidden', !any);
+    }
+  }
+
+  if(checkAll){
+    checkAll.addEventListener('change', ()=>{
+      const checks = document.querySelectorAll('.rowCheck');
+      checks.forEach(c => { c.checked = checkAll.checked; });
+      updateMassButton();
+    });
+  }
+
+  document.querySelectorAll('.rowCheck').forEach(c=>{
+    c.addEventListener('change', ()=>{
+      if(!c.checked && checkAll) checkAll.checked = false;
+      updateMassButton();
+    });
+  });
+
+  if(btnMass){
+    btnMass.addEventListener('click', ()=>{
+      openAcceptModal('mass');
+    });
+  }
+
+  function openRejectModal(asigId, nombre){
+    const modal = document.getElementById('rejectModal');
+    const text = document.getElementById('rejectText');
+    const form = document.getElementById('rejectForm');
+
+    text.textContent = `Vas a rechazar "${nombre}". Debes dejar un comentario obligatorio.`;
+    form.action = "{% url 'logistica:rechazar_herramienta' 0 %}".replace('/0/', `/${asigId}/`);
+    modal.classList.remove('hidden');
+  }
+
+  function closeRejectModal(){
+    document.getElementById('rejectModal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      closeRejectModal();
+      closeAcceptModal();
+    }
+  });
+
+  document.getElementById('rejectModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'rejectModal') closeRejectModal();
+  });
+  document.getElementById('acceptModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'acceptModal') closeAcceptModal();
+  });
+</script>
+
+<script>
+/* === Persistencia scroll horizontal (Mis Herramientas Usuario) === */
+(function () {
+  const KEY = 'my-tools-list-scrollX:' + location.pathname;
+
+  function getBox() {
+    return document.querySelector('.tabla-responsive');
+  }
+
+  function saveX(x){
+    try { sessionStorage.setItem(KEY, String(x)); } catch(_) {}
+  }
+  function readX(){
+    try { return Number(sessionStorage.getItem(KEY) || 0); } catch(_) { return 0; }
+  }
+
+  function attachSaver(box){
+    if (!box || box.__hasScrollSaver) return;
+    box.__hasScrollSaver = true;
+
+    let t = null;
+    box.addEventListener('scroll', () => {
+      if (t) return;
+      t = setTimeout(() => {
+        t = null;
+        saveX(box.scrollLeft);
+      }, 120);
+    }, { passive: true });
+  }
+
+  function restore(){
+    const box = getBox();
+    if (!box) return;
+    requestAnimationFrame(() => { box.scrollLeft = readX(); });
+    attachSaver(box);
+  }
+
+  document.addEventListener('DOMContentLoaded', restore);
+
+  window.addEventListener('beforeunload', () => {
+    const box = getBox();
+    if (box) saveX(box.scrollLeft);
+  });
+
+  const mo = new MutationObserver(() => setTimeout(restore, 0));
+  mo.observe(document.body, { childList: true, subtree: true });
+})();
+</script>
+
+{% endblock %}

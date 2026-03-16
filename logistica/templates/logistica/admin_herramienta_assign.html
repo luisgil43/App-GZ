@@ -1,0 +1,161 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Asignar herramienta{% endblock %}
+
+{% block dashboard_content %}
+
+<style>
+  .campo{
+    width:100%;
+    border:2px solid #e5e7eb;
+    border-radius:1rem;
+    padding:.65rem .85rem;
+    font-size:.95rem;
+    background:#fff;
+    transition:border-color .15s, box-shadow .15s;
+    outline:none;
+  }
+  .campo:focus{
+    border-color:#3b82f6;
+    box-shadow:0 0 0 3px rgba(59,130,246,.18);
+  }
+  .campo-error{
+    border-color:#ef4444 !important;
+    box-shadow:0 0 0 3px rgba(239,68,68,.18) !important;
+  }
+  .help{
+    font-size:.75rem;
+    color:#6b7280;
+    margin-top:.25rem;
+  }
+</style>
+
+<!-- ✅ MODAL CENTRADO -->
+<div id="assignModal" class="fixed inset-0 z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
+
+      <!-- Header -->
+      <div class="px-5 py-4 border-b flex items-start justify-between gap-3">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold text-gray-800">👤 Asignar herramienta</h2>
+          <p class="text-sm text-gray-500 mt-1">
+            Puedes asignar a un usuario, o elegir “Sin asignar” para dejarla en bodega.
+          </p>
+        </div>
+
+        <a href="{% url 'logistica:herramientas_list' %}"
+           class="shrink-0 px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50">
+          ✕ Cerrar
+        </a>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-4">
+
+        <div class="border rounded-2xl p-4 bg-gray-50">
+          <div class="font-semibold text-gray-800 text-lg">{{ tool.nombre }}</div>
+          <div class="text-sm text-gray-600 mt-1">
+            Serial: <span class="font-semibold">{{ tool.serial|default:"—" }}</span>
+            • Valor: <span class="font-semibold">${{ tool.valor_comercial|clp_round }}</span>
+            • Estado: <span class="font-semibold">{{ tool.get_status_display }}</span>
+          </div>
+          <div class="help">
+            Puedes asignar a un usuario, o elegir “Sin asignar” para dejarla en bodega.
+          </div>
+        </div>
+
+        <div class="border rounded-2xl p-4">
+          <form method="post" class="space-y-4">
+            {% csrf_token %}
+
+            <div>
+              <label class="text-sm font-semibold text-gray-700">Asignar a</label>
+              <div class="mt-1">
+                {{ form.asignado_a }}
+              </div>
+              <div class="help">
+                Si eliges “Sin asignar”, se cerrará la asignación activa (si existe) y quedará <b>En bodega</b>.
+              </div>
+              {% if form.asignado_a.errors %}
+                <div class="text-sm text-red-600 mt-1">{{ form.asignado_a.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div>
+              <label class="text-sm font-semibold text-gray-700">Fecha asignación</label>
+              <div class="mt-1">
+                {{ form.asignado_at }}
+              </div>
+              {% if form.asignado_at.errors %}
+                <div class="text-sm text-red-600 mt-1">{{ form.asignado_at.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div class="pt-1 flex flex-col sm:flex-row gap-2 justify-end">
+              <button type="submit"
+                      class="px-5 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+                ✅ Guardar
+              </button>
+
+              <a href="{% url 'logistica:herramientas_list' %}"
+                 class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+                Cancelar
+              </a>
+            </div>
+
+            <div class="text-xs text-gray-500">
+              * Si asignas/reasignas, el usuario quedará en estado <b>Pendiente</b> y deberá <b>aceptar con firma</b>.
+              Además, se solicitará inventario (foto) al nuevo usuario.
+            </div>
+          </form>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ✅ Estilo PRO a inputs/select del form si el widget no trae clases
+  (function(){
+    const targets = [
+      'select[name="asignado_a"]',
+      'input[name="asignado_at"]'
+    ];
+    targets.forEach(sel=>{
+      const el = document.querySelector(sel);
+      if(!el) return;
+
+      const hasClass = (el.getAttribute('class') || '').trim().length > 0;
+      if(!hasClass){
+        el.classList.add('campo');
+      }else{
+        el.classList.add('border','rounded-xl','px-3','py-2');
+      }
+
+      // marcar error si hay errores visibles cerca
+      const wrap = el.closest('div');
+      const err = wrap?.parentElement?.querySelector('.text-red-600');
+      if(err) el.classList.add('campo-error');
+    });
+  })();
+
+  // ✅ Cerrar con ESC + click fuera
+  function closeAssignModal(){
+    window.location.href = "{% url 'logistica:herramientas_list' %}";
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeAssignModal();
+  });
+
+  document.getElementById('assignModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'assignModal') closeAssignModal();
+  });
+</script>
+
+{% endblock %}

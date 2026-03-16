@@ -1,7 +1,7 @@
 # flota/urls.py
 from django.urls import path
 
-from . import views, views_cron
+from . import views, views_cron, views_user
 
 app_name = "flota"
 
@@ -43,4 +43,8 @@ urlpatterns = [
 
     # ✅ CRON Flota (igual RRHH)
     path("cron/mantenciones/", views_cron.cron_flota_mantenciones, name="cron_flota_mantenciones"),
+
+    # ✅ Usuario: mi vehículo + mantenimientos
+    path("mi-vehiculo/", views_user.my_vehicle_dashboard, name="my_vehicle"),
+    path("mi-vehiculo/excel/", views_user.my_vehicle_history_excel, name="my_vehicle_history_excel"),
 ]

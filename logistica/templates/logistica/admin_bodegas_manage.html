@@ -1,0 +1,293 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+{% block title %}Bodegas - Logística{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+    <div>
+      <h2 class="text-2xl font-bold text-gray-800">🏬 Bodegas</h2>
+      <p class="text-sm text-gray-500 mt-1">
+        Crea y administra bodegas. Luego las podrás seleccionar al crear/editar herramientas y materiales.
+      </p>
+    </div>
+
+    <a href="{% url 'logistica:herramientas_list' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+      ← Volver a herramientas
+    </a>
+  </div>
+
+  <style>
+    /* Inputs PRO (fallback, por si el form no trae classes) */
+    .campo{
+      width:100%;
+      border:2px solid #e5e7eb; /* gray-200 */
+      border-radius:1rem;       /* rounded-2xl vibe */
+      padding:.55rem .85rem;
+      font-size:.95rem;
+      background:#fff;
+      transition:border-color .15s, box-shadow .15s;
+      outline:none;
+    }
+    .campo:focus{
+      border-color:#3b82f6; /* blue-500 */
+      box-shadow:0 0 0 3px rgba(59,130,246,.20);
+    }
+    .campo-error{
+      border-color:#ef4444 !important; /* red-500 */
+      box-shadow:0 0 0 3px rgba(239,68,68,.15) !important;
+    }
+    .help{
+      font-size:.75rem;
+      color:#6b7280; /* gray-500 */
+      margin-top:.25rem;
+    }
+  </style>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+    <!-- FORM -->
+    <div class="lg:col-span-1">
+      <div class="border rounded-2xl p-4 bg-white shadow-sm">
+        <h3 class="text-lg font-bold text-gray-800 mb-3">
+          {% if edit %}✏️ Editar bodega{% else %}➕ Crear bodega{% endif %}
+        </h3>
+
+        <form method="post" class="space-y-3">
+          {% csrf_token %}
+
+          <!-- Nombre -->
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Nombre</label>
+
+            <div class="mt-1">
+              {{ form.nombre }}
+            </div>
+
+            {% if form.nombre.help_text %}
+              <div class="help">{{ form.nombre.help_text }}</div>
+            {% endif %}
+            {% if form.nombre.errors %}
+              <div class="text-sm text-red-600 mt-1">
+                {{ form.nombre.errors }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Ubicación -->
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Ubicación</label>
+            <div class="mt-1">
+              {{ form.ubicacion }}
+            </div>
+            {% if form.ubicacion.help_text %}
+              <div class="help">{{ form.ubicacion.help_text }}</div>
+            {% endif %}
+            {% if form.ubicacion.errors %}
+              <div class="text-sm text-red-600 mt-1">
+                {{ form.ubicacion.errors }}
+              </div>
+            {% endif %}
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex flex-col sm:flex-row gap-2 pt-2">
+            <button type="submit"
+                    class="w-full sm:w-auto px-5 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+              💾 Guardar
+            </button>
+
+            {% if edit %}
+              <a href="{% url 'logistica:bodegas_manage' %}"
+                 class="w-full sm:w-auto px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+                Cancelar edición
+              </a>
+            {% endif %}
+          </div>
+
+          {% if not can_delete_bodega %}
+            <div class="text-xs text-gray-500 pt-1">
+              Solo el <span class="font-semibold">Admin General</span> puede eliminar bodegas.
+            </div>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+
+    <!-- LIST -->
+    <div class="lg:col-span-2">
+      <div class="border rounded-2xl p-4 bg-white shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h3 class="text-lg font-bold text-gray-800">📋 Bodegas registradas</h3>
+
+          <div class="text-sm text-gray-600">
+            Total: <span class="font-semibold">{{ bodegas|length }}</span>
+          </div>
+        </div>
+
+        {% if not bodegas %}
+          <div class="p-4 bg-gray-50 border rounded-xl text-gray-700">
+            Aún no hay bodegas registradas.
+          </div>
+        {% else %}
+          <div class="overflow-x-auto">
+            <table class="table-auto w-full text-sm min-w-[1000px]" style="white-space: nowrap;">
+              <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                <tr>
+                  <th class="p-2 border text-left">Nombre</th>
+                  <th class="p-2 border text-left">Ubicación</th>
+                  <th class="p-2 border whitespace-nowrap">Creada</th>
+                  <th class="p-2 border whitespace-nowrap">Creada por</th>
+                  <th class="p-2 border whitespace-nowrap">Acción</th>
+                </tr>
+              </thead>
+
+              <tbody class="text-center">
+                {% for b in bodegas %}
+                <tr class="border-t hover:bg-gray-50">
+                  <td class="p-2 border text-left">
+                    <div class="font-semibold text-gray-900">{{ b.nombre }}</div>
+                    <div class="text-xs text-gray-500">
+                      ID: {{ b.id }}
+                    </div>
+                  </td>
+
+                  <td class="p-2 border text-left">
+                    {% if b.ubicacion %}
+                      <span class="text-gray-800">{{ b.ubicacion }}</span>
+                    {% else %}
+                      <span class="text-gray-400">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td class="p-2 border">
+                    {{ b.created_at|date:"d/m/Y" }}
+                  </td>
+
+                  <td class="p-2 border">
+                    {% if b.creada_por %}
+                      {{ b.creada_por.get_full_name|default:b.creada_por.username }}
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+
+                  <td class="p-2 border">
+                    <div class="flex justify-center gap-2 flex-nowrap">
+                      <a href="{% url 'logistica:bodegas_manage' %}?editar={{ b.id }}"
+                         class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                        ✏️ Editar
+                      </a>
+
+                      {% if can_delete_bodega %}
+                        <button type="button"
+                                class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                                onclick="openDeleteBodegaModal('{{ b.id }}', '{{ b.nombre|escapejs }}')">
+                          🗑️ Eliminar
+                        </button>
+                      {% endif %}
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if can_delete_bodega %}
+            <div class="mt-3 text-xs text-gray-500">
+              Consejo: si la bodega tiene herramientas asociadas, primero cámbialas a otra bodega para poder eliminar.
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ✅ Modal eliminar bodega centrado -->
+<div id="deleteBodegaModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">Eliminar bodega</h3>
+
+      <p class="text-sm text-gray-600 mt-2" id="deleteBodegaText">
+        ¿Seguro que deseas eliminar esta bodega?
+      </p>
+
+      <form method="post" id="deleteBodegaForm" class="mt-4">
+        {% csrf_token %}
+        <div class="flex justify-end gap-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeDeleteBodegaModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Eliminar
+          </button>
+        </div>
+      </form>
+
+      <div class="mt-3 text-xs text-gray-500">
+        Esta acción es irreversible.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ✅ Aplicar estilo PRO a inputs del form (sin tocar forms.py)
+  (function(){
+    const inputs = document.querySelectorAll('input[type="text"], input[type="number"], input[type="email"], input[type="date"], input[type="datetime-local"], select, textarea');
+    inputs.forEach(el=>{
+      const hasClass = (el.getAttribute('class') || '').trim().length > 0;
+      if(!hasClass){
+        el.classList.add('campo');
+      }else{
+        // aunque tenga clases, garantizamos look consistente (sin romper)
+        el.classList.add('border', 'rounded-xl', 'px-3', 'py-2');
+      }
+    });
+
+    // marcar campos con error si existen errores en el DOM
+    document.querySelectorAll('.text-red-600').forEach(err=>{
+      const wrap = err.closest('div');
+      if(!wrap) return;
+      const field = wrap.querySelector('input, select, textarea');
+      if(field) field.classList.add('campo-error');
+    });
+  })();
+
+  function openDeleteBodegaModal(id, nombre){
+    const modal = document.getElementById('deleteBodegaModal');
+    const text = document.getElementById('deleteBodegaText');
+    const form = document.getElementById('deleteBodegaForm');
+
+    text.textContent = `Vas a eliminar la bodega "${nombre}". ¿Deseas continuar?`;
+
+    const base = "{% url 'logistica:bodega_delete' 0 %}";
+    form.action = base.replace('/0/', `/${id}/`);
+
+    modal.classList.remove('hidden');
+  }
+
+  function closeDeleteBodegaModal(){
+    document.getElementById('deleteBodegaModal').classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeDeleteBodegaModal();
+  });
+
+  document.getElementById('deleteBodegaModal').addEventListener('click', (e)=>{
+    if(e.target.id === 'deleteBodegaModal') closeDeleteBodegaModal();
+  });
+</script>
+{% endblock %}

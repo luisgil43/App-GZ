@@ -1,0 +1,46 @@
+{% extends "dashboard/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Inventario - {{ herramienta.nombre }}{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📸 Inventario de herramienta</h2>
+    <p class="text-sm text-gray-600 mt-1">
+      Herramienta: <span class="font-semibold">{{ herramienta.nombre }}</span>
+      • Serial: <span class="font-semibold">{{ herramienta.serial|default:"—" }}</span>
+      • Valor: <span class="font-semibold">${{ herramienta.valor_comercial|clp_round }}</span>
+    </p>
+    <p class="text-xs text-gray-500 mt-1">
+      Sube una foto clara de la herramienta. Esto quedará registrado y será revisado por logística.
+    </p>
+  </div>
+
+  <div class="border rounded-2xl p-4">
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Foto (obligatoria)</label>
+        {{ form.foto }}
+        {% if form.foto.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.foto.errors }}</div>
+        {% endif %}
+      </div>
+
+      <div class="flex gap-2">
+        <a href="{% url 'logistica:mis_herramientas' %}"
+           class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+          ← Volver
+        </a>
+        <button type="submit"
+                class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+          📤 Enviar inventario
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
