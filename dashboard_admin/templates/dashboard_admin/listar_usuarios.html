@@ -219,11 +219,19 @@
             </button>
             {% endif %}
 
-            <button type="button"
-                    onclick="openResetTelegramModal('{{ usuario.id }}', '{{ usuario.username }}', '{% if usuario.telegram_activo %}1{% else %}0{% endif %}')"
-                    class="inline-block bg-sky-100 text-sky-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-sky-200 transition">
-              📲 Reset Telegram
-            </button>
+            {% if usuario.telegram_activo %}
+  <button type="button"
+          onclick="openResetTelegramModal('{{ usuario.id }}', '{{ usuario.username }}', '1')"
+          class="inline-block bg-sky-100 text-sky-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-sky-200 transition">
+    📲 Reset Telegram
+  </button>
+{% else %}
+  <button type="button"
+          onclick="openResetTelegramModal('{{ usuario.id }}', '{{ usuario.username }}', '0')"
+          class="inline-block bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-xs font-semibold cursor-not-allowed">
+    📲 Reset Telegram
+  </button>
+{% endif %}
           </td>
         </tr>
         {% empty %}
