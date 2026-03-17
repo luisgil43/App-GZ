@@ -118,9 +118,16 @@ def editar_usuario_view(request, user_id):
         usuario.is_superuser = 'is_superuser' in request.POST
         usuario.identidad = request.POST.get('identidad', usuario.identidad)
 
-        # 🔔 Campos de notificaciones
-        usuario.telegram_chat_id = request.POST.get('telegram_chat_id') or None
-        usuario.telegram_activo = 'telegram_activo' in request.POST
+        # 🔔 Campos de notificaciones (SOLO Telegram)
+        telegram_activo = 'telegram_activo' in request.POST
+        usuario.telegram_activo = telegram_activo
+
+        if telegram_activo:
+            usuario.telegram_chat_id = request.POST.get('telegram_chat_id') or None
+        else:
+            # ✅ si lo apagan, cortamos vínculo
+            usuario.telegram_chat_id = None
+
         usuario.email_notificaciones_activo = 'email_notificaciones_activo' in request.POST
 
         # --- Grupos ---
@@ -187,9 +194,9 @@ def crear_usuario_view(request, identidad=None):
         identidad_post = request.POST.get('identidad')
         roles_ids = request.POST.getlist('roles')
 
-        # 🔔 Campos notificaciones
-        telegram_chat_id = request.POST.get('telegram_chat_id') or None
+        # 🔔 Campos notificaciones (SOLO Telegram)
         telegram_activo = 'telegram_activo' in request.POST
+        telegram_chat_id = (request.POST.get('telegram_chat_id') or None) if telegram_activo else None
         email_notificaciones_activo = 'email_notificaciones_activo' in request.POST
 
         # Campos jerárquicos
@@ -200,13 +207,10 @@ def crear_usuario_view(request, identidad=None):
         pm = get_user_or_none(request.POST.get('pm'))
         rrhh_encargado = get_user_or_none(request.POST.get('rrhh_encargado'))
         prevencionista = get_user_or_none(request.POST.get('prevencionista'))
-        logistica_encargado = get_user_or_none(
-            request.POST.get('logistica_encargado'))
+        logistica_encargado = get_user_or_none(request.POST.get('logistica_encargado'))
         encargado_flota = get_user_or_none(request.POST.get('encargado_flota'))
-        encargado_subcontrato = get_user_or_none(
-            request.POST.get('encargado_subcontrato'))
-        encargado_facturacion = get_user_or_none(
-            request.POST.get('encargado_facturacion'))
+        encargado_subcontrato = get_user_or_none(request.POST.get('encargado_subcontrato'))
+        encargado_facturacion = get_user_or_none(request.POST.get('encargado_facturacion'))
 
         # Validaciones
         if password1 or password2:
@@ -242,9 +246,9 @@ def crear_usuario_view(request, identidad=None):
             usuario.encargado_subcontrato = encargado_subcontrato
             usuario.encargado_facturacion = encargado_facturacion
 
-            # 🔔 Notificaciones
-            usuario.telegram_chat_id = telegram_chat_id
+            # 🔔 Notificaciones (Telegram)
             usuario.telegram_activo = telegram_activo
+            usuario.telegram_chat_id = telegram_chat_id
             usuario.email_notificaciones_activo = email_notificaciones_activo
 
             if password1:
@@ -291,14 +295,12 @@ def crear_usuario_view(request, identidad=None):
         return redirect('dashboard_admin:listar_usuarios')
 
     # Si es GET
-    grupo_ids_post = request.POST.getlist(
-        'groups') if request.method == 'POST' else []
+    grupo_ids_post = request.POST.getlist('groups') if request.method == 'POST' else []
     if not grupo_ids_post and usuario:
         grupo_ids_post = [str(g.id) for g in usuario.groups.all()]
 
     roles_disponibles = Rol.objects.all()
-    roles_seleccionados = usuario.roles.values_list(
-        'id', flat=True) if usuario else []
+    roles_seleccionados = usuario.roles.values_list('id', flat=True) if usuario else []
     roles_seleccionados = [str(id) for id in roles_seleccionados]
 
     usuarios_activos = CustomUser.objects.filter(
@@ -314,7 +316,6 @@ def crear_usuario_view(request, identidad=None):
         'two_factor_enforce_date': getattr(settings, "TWO_FACTOR_ENFORCE_DATE", None),
     }
     return render(request, 'dashboard_admin/crear_usuario.html', contexto)
-
 
 User = get_user_model()
 
@@ -358,14 +359,26 @@ def listar_usuarios(request):
             except User.DoesNotExist:
                 messages.error(request, "Usuario no encontrado.")
 
-        # ✅ NUEVO: Reset Telegram (SIEMPRE disponible)
+        # ✅ Reset Telegram (corte real)
         elif "reset_telegram" in request.POST:
             try:
                 usuario = User.objects.get(id=user_id)
 
-                # Solo borramos el chat_id para forzar re-vinculación
+                old_chat_id = usuario.telegram_chat_id
+
+                # ✅ cortar vínculo
                 usuario.telegram_chat_id = None
-                usuario.save(update_fields=["telegram_chat_id"])
+                usuario.telegram_activo = False
+                usuario.save(update_fields=["telegram_chat_id", "telegram_activo"])
+
+                # ✅ despegar sesiones del bot (si existen)
+                try:
+                    from bot_gz.models import BotSession
+                    if old_chat_id:
+                        BotSession.objects.filter(chat_id=str(old_chat_id)).update(usuario=None)
+                    BotSession.objects.filter(usuario=usuario).update(usuario=None)
+                except Exception:
+                    pass
 
                 messages.success(
                     request,
@@ -435,7 +448,6 @@ def listar_usuarios(request):
         'filtros': filtros,
         'cantidad': str(cantidad_int),
     })
-
 
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')

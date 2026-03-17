@@ -462,6 +462,10 @@ def get_or_create_session(
     """
     Obtiene o crea la sesión del bot para este chat.
     Intenta vincularla con un CustomUser que tenga ese telegram_chat_id.
+
+    ✅ FIX:
+    - Si el usuario ya no calza (porque se reseteó chat_id o se desactivó telegram_activo),
+      limpiamos sesion.usuario para evitar que quede "pegado".
     """
     chat_id_str = str(chat_id)
 
@@ -482,12 +486,24 @@ def get_or_create_session(
         defaults=defaults,
     )
 
-    if not created and usuario and sesion.usuario_id != usuario.id:
+    # (Opcional sano) si existía sesión pero estaba desactivada, re-activarla
+    if not created and sesion.activa is False:
+        sesion.activa = True
+        sesion.save(update_fields=["activa"])
+
+    # ✅ Si encontramos usuario válido y no coincide con el actual, actualizamos
+    if usuario and sesion.usuario_id != usuario.id:
         sesion.usuario = usuario
         sesion.save(update_fields=["usuario"])
+        return sesion, sesion.usuario
+
+    # ✅ FIX CLAVE: si NO hay usuario válido pero la sesión tenía uno, lo limpiamos
+    if usuario is None and sesion.usuario_id is not None:
+        sesion.usuario = None
+        sesion.save(update_fields=["usuario"])
+        return sesion, None
 
     return sesion, sesion.usuario
-
 
 def _ik_main_menu() -> dict:
     return {
@@ -2485,6 +2501,9 @@ def handle_telegram_update(update: dict) -> None:
     - message / edited_message (texto y/o caption)
     - callback_query (inline_keyboard)
     - wizard de rendición (incluye comprobante como PDF/foto aunque venga SIN texto)
+
+    ✅ NUEVO:
+    - Vinculación por /start <token> generado en la web (activar_telegram).
     """
     callback = update.get("callback_query")
     if callback:
@@ -2523,6 +2542,64 @@ def handle_telegram_update(update: dict) -> None:
         logger.info("Update de Telegram sin chat_id: %s", update)
         return
 
+    # =========================
+    # ✅ NUEVO: /start <token> => vincular usuario
+    # =========================
+    if text and text.startswith("/start"):
+        parts = text.split(maxsplit=1)
+        start_token = parts[1].strip() if len(parts) > 1 else ""
+
+        if start_token:
+            cache_key = f"tg_link:{start_token}"
+            user_id = cache.get(cache_key)
+
+            if user_id:
+                u = CustomUser.objects.filter(id=user_id).first()
+                if u:
+                    # Vincular
+                    u.telegram_chat_id = chat_id
+                    u.telegram_activo = True
+                    u.save(update_fields=["telegram_chat_id", "telegram_activo"])
+
+                    # Consumir token (one-time)
+                    cache.delete(cache_key)
+
+                    # Crear/actualizar sesión y amarrarla al usuario
+                    sesion, _ = get_or_create_session(chat_id, from_user)
+                    if sesion.usuario_id != u.id:
+                        sesion.usuario = u
+                        sesion.save(update_fields=["usuario"])
+
+                    send_telegram_message(
+                        chat_id,
+                        "✅ Listo, tu cuenta quedó vinculada con Telegram.\n\n"
+                        "Ahora puedes pedirme: `mis liquidaciones`, `mi contrato`, `asignación`, `producción`, etc.",
+                        sesion=sesion,
+                        usuario=u,
+                        intent=None,
+                        meta={"linked_by": "start_token"},
+                        marcar_para_entrenamiento=False,
+                        reply_markup=_ik_main_menu(),
+                    )
+                    return
+
+            # Token inválido / expirado
+            sesion, usuario = get_or_create_session(chat_id, from_user)
+            send_telegram_message(
+                chat_id,
+                "⚠️ Ese link de activación no es válido o ya expiró.\n\n"
+                "Vuelve a la web → *Activar Telegram* y genera un link nuevo.",
+                sesion=sesion,
+                usuario=usuario,
+                intent=None,
+                meta={"link_error": "invalid_or_expired"},
+                marcar_para_entrenamiento=False,
+            )
+            return
+
+    # =========================
+    # Flujo normal (igual que tuyo)
+    # =========================
     sesion, usuario = get_or_create_session(chat_id, from_user)
     sesion.ultima_interaccion = timezone.now()
     sesion.save(update_fields=["ultima_interaccion"])

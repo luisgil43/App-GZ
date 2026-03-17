@@ -5,35 +5,138 @@
 {% block content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-  <h2 class="text-2xl font-bold text-gray-800">📲 Activar Telegram</h2>
-  <p class="text-sm text-gray-600 mt-1">
-    Para vincular tu cuenta con Telegram, abre el bot usando el botón de abajo.
-  </p>
+  <!-- ✅ Contenedor centrado -->
+  <div class="max-w-3xl mx-auto">
 
-  <div class="mt-4 border rounded-2xl p-4 bg-gray-50">
-    <ol class="list-decimal pl-5 text-sm text-gray-700 space-y-2">
-      <li>Haz clic en <b>“Abrir Telegram”</b>.</li>
-      <li>Telegram abrirá el chat con el bot y enviará el comando automáticamente.</li>
-      <li>Cuando quede vinculado, verás un mensaje de confirmación en Telegram.</li>
-    </ol>
-
-    <div class="mt-4 flex flex-col sm:flex-row gap-2">
-      <a href="{{ telegram_link }}" target="_blank"
-         class="px-5 py-2 rounded-full text-sm bg-sky-600 text-white hover:bg-sky-700 shadow text-center">
-        🚀 Abrir Telegram
-      </a>
-
-      <button type="button"
-              class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
-              onclick="navigator.clipboard.writeText('{{ telegram_link }}'); this.innerText='✅ Link copiado';">
-        📋 Copiar link
-      </button>
+    <div class="mb-4">
+      <h2 class="text-2xl font-bold text-gray-800">📲 Activar Telegram</h2>
+      <p class="text-sm text-gray-600 mt-1">
+        Vincula tu cuenta con Telegram para recibir información y avisos directamente en tu celular.
+      </p>
     </div>
 
-    <div class="text-xs text-gray-500 mt-3">
-      Bot: <b>@{{ bot_username }}</b>
+    <!-- ✅ Card principal -->
+    <div class="border rounded-2xl p-5 bg-gray-50">
+
+      <!-- Pasos -->
+      <div class="bg-white border rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">✅ Pasos para activar</h3>
+
+        <ol class="list-decimal pl-5 text-sm text-gray-700 space-y-2">
+          <li>Haz clic en <b>“Abrir Telegram”</b>.</li>
+          <li>Telegram abrirá el chat con el bot y enviará el comando automáticamente.</li>
+          <li>Cuando quede vinculado, verás un mensaje de confirmación en Telegram.</li>
+        </ol>
+
+        <div class="mt-4 flex flex-col sm:flex-row gap-2">
+          <a href="{{ telegram_link }}" target="_blank"
+             class="px-5 py-2 rounded-full text-sm bg-sky-600 text-white hover:bg-sky-700 shadow text-center">
+            🚀 Abrir Telegram
+          </a>
+
+          <button type="button"
+                  class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="navigator.clipboard.writeText('{{ telegram_link }}'); this.innerText='✅ Link copiado';">
+            📋 Copiar link
+          </button>
+        </div>
+
+        <div class="text-xs text-gray-500 mt-3">
+          Bot: <b>@{{ bot_username }}</b>
+        </div>
+      </div>
+
+      <!-- ✅ Beneficios (incentivo) -->
+      <div class="mt-4 bg-white border rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">⭐ ¿Qué puedes hacer al activarlo?</h3>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-700">
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">✅</span>
+            <div>
+              <b>Notificaciones importantes</b>
+              <div class="text-xs text-gray-500">Avisos y recordatorios directos en Telegram.</div>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">📄</span>
+            <div>
+              <b>Contratos y documentos</b>
+              <div class="text-xs text-gray-500">Acceso rápido a tu información desde el celular.</div>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">💵</span>
+            <div>
+              <b>Liquidaciones</b>
+              <div class="text-xs text-gray-500">Consulta y seguimiento de tus liquidaciones.</div>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">📊</span>
+            <div>
+              <b>Producción</b>
+              <div class="text-xs text-gray-500">Revisa tu producción cuando lo necesites.</div>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">🧰</span>
+            <div>
+              <b>Asignaciones</b>
+              <div class="text-xs text-gray-500">Recibe avisos de asignaciones y estados.</div>
+            </div>
+          </div>
+
+          <div class="flex items-start gap-2">
+            <span class="mt-[2px]">🦺</span>
+            <div>
+              <b>Cursos / Prevención</b>
+              <div class="text-xs text-gray-500">Información y alertas relacionadas a documentos/cursos.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ✅ Ayuda: descargar Telegram -->
+      <div class="mt-4 bg-white border rounded-2xl p-4">
+        <h3 class="text-sm font-semibold text-gray-800 mb-2">⬇️ ¿No tienes Telegram?</h3>
+        <p class="text-sm text-gray-600">
+          Descárgalo según tu dispositivo:
+        </p>
+
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <a href="https://apps.apple.com/app/telegram-messenger/id686449807" target="_blank"
+             class="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm flex items-center gap-2 justify-center">
+            🍎 iPhone / iPad (App Store)
+          </a>
+
+          <a href="https://play.google.com/store/apps/details?id=org.telegram.messenger" target="_blank"
+             class="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm flex items-center gap-2 justify-center">
+            🤖 Android (Google Play)
+          </a>
+
+          <a href="https://desktop.telegram.org/" target="_blank"
+             class="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm flex items-center gap-2 justify-center">
+            💻 Telegram Desktop
+          </a>
+
+          <a href="https://web.telegram.org/" target="_blank"
+             class="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50 text-sm flex items-center gap-2 justify-center">
+            🌐 Telegram Web
+          </a>
+        </div>
+
+        <div class="text-xs text-gray-500 mt-3">
+          Tip: si el botón “Abrir Telegram” no funciona en tu equipo, usa “Copiar link” y pégalo en Telegram.
+        </div>
+      </div>
+
     </div>
+
   </div>
-
 </div>
 {% endblock %}
