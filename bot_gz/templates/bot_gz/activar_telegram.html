@@ -1,0 +1,39 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}Activar Telegram{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <h2 class="text-2xl font-bold text-gray-800">📲 Activar Telegram</h2>
+  <p class="text-sm text-gray-600 mt-1">
+    Para vincular tu cuenta con Telegram, abre el bot usando el botón de abajo.
+  </p>
+
+  <div class="mt-4 border rounded-2xl p-4 bg-gray-50">
+    <ol class="list-decimal pl-5 text-sm text-gray-700 space-y-2">
+      <li>Haz clic en <b>“Abrir Telegram”</b>.</li>
+      <li>Telegram abrirá el chat con el bot y enviará el comando automáticamente.</li>
+      <li>Cuando quede vinculado, verás un mensaje de confirmación en Telegram.</li>
+    </ol>
+
+    <div class="mt-4 flex flex-col sm:flex-row gap-2">
+      <a href="{{ telegram_link }}" target="_blank"
+         class="px-5 py-2 rounded-full text-sm bg-sky-600 text-white hover:bg-sky-700 shadow text-center">
+        🚀 Abrir Telegram
+      </a>
+
+      <button type="button"
+              class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+              onclick="navigator.clipboard.writeText('{{ telegram_link }}'); this.innerText='✅ Link copiado';">
+        📋 Copiar link
+      </button>
+    </div>
+
+    <div class="text-xs text-gray-500 mt-3">
+      Bot: <b>@{{ bot_username }}</b>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -19,4 +19,5 @@ urlpatterns = [
     path("training/", views.training_dashboard, name="training_dashboard"),
     
     path("training/<int:pk>/", views.training_edit_message, name="training_edit_message"),
+    path("activar-telegram/", views.activar_telegram, name="activar_telegram")
 ]

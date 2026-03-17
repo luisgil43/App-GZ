@@ -1,4 +1,5 @@
 import re
+import secrets
 
 from django.conf import settings
 from django.contrib import messages
@@ -8,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import Group
 from django.contrib.auth.views import LoginView
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -320,7 +322,7 @@ User = get_user_model()
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_usuarios(request):
-    # 🔴 Acciones por POST (eliminar / reset 2FA)
+    # 🔴 Acciones por POST (eliminar / reset 2FA / reset Telegram)
     if request.method == "POST":
         user_id = request.POST.get("user_id")
 
@@ -352,6 +354,22 @@ def listar_usuarios(request):
                 messages.success(
                     request,
                     f'Se ha reseteado el 2FA del usuario "{usuario.username}".'
+                )
+            except User.DoesNotExist:
+                messages.error(request, "Usuario no encontrado.")
+
+        # ✅ NUEVO: Reset Telegram (SIEMPRE disponible)
+        elif "reset_telegram" in request.POST:
+            try:
+                usuario = User.objects.get(id=user_id)
+
+                # Solo borramos el chat_id para forzar re-vinculación
+                usuario.telegram_chat_id = None
+                usuario.save(update_fields=["telegram_chat_id"])
+
+                messages.success(
+                    request,
+                    f'Se ha reseteado Telegram del usuario "{usuario.username}".'
                 )
             except User.DoesNotExist:
                 messages.error(request, "Usuario no encontrado.")
@@ -417,6 +435,7 @@ def listar_usuarios(request):
         'filtros': filtros,
         'cantidad': str(cantidad_int),
     })
+
 
 @login_required(login_url='usuarios:login')
 @rol_requerido('admin', 'pm', 'rrhh')

@@ -109,7 +109,7 @@
   {% endif %}
 
   <!-- Tabla -->
-   <div class="overflow-x-auto">
+  <div class="overflow-x-auto">
     <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
       <thead class="bg-gray-100 text-gray-800 font-semibold text-left">
         <tr>
@@ -120,7 +120,6 @@
           <th class="px-4 py-2">Correo</th>
           <th class="px-4 py-2">Notif. correo</th>
           <th class="px-4 py-2">Telegram</th>
-          <!-- 💡 Nueva columna 2FA -->
           <th class="px-4 py-2">2FA</th>
           <th class="px-4 py-2">Roles</th>
           <th class="px-4 py-2">Activo</th>
@@ -136,7 +135,6 @@
           <td class="px-4 py-2">{{ usuario.identidad }}</td>
           <td class="px-4 py-2">{{ usuario.email }}</td>
 
-          <!-- Nueva columna: Notificaciones por correo -->
           <td class="px-4 py-2">
             {% if usuario.email_notificaciones_activo %}
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
@@ -149,7 +147,6 @@
             {% endif %}
           </td>
 
-          <!-- Nueva columna: Telegram -->
           <td class="px-4 py-2">
             {% if usuario.telegram_activo %}
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-sky-100 text-sky-800 text-xs font-semibold">
@@ -162,7 +159,6 @@
             {% endif %}
           </td>
 
-          <!-- 💡 Nueva columna: Estado 2FA -->
           <td class="px-4 py-2">
             {% if usuario.is_staff %}
               {% if usuario.two_factor_enabled %}
@@ -180,7 +176,6 @@
               </span>
             {% endif %}
           </td>
-
 
           <td class="px-4 py-2">
             {% for rol in usuario.roles.all %}
@@ -209,6 +204,7 @@
                class="text-blue-600 hover:underline text-sm font-medium">
               ✏️ Editar
             </a>
+
             <button type="button"
                     onclick="openModal('{{ usuario.id }}', '{{ usuario.username }}')"
                     class="text-red-600 hover:underline text-sm font-medium">
@@ -222,6 +218,12 @@
               🔄 Reset 2FA
             </button>
             {% endif %}
+
+            <button type="button"
+                    onclick="openResetTelegramModal('{{ usuario.id }}', '{{ usuario.username }}', '{% if usuario.telegram_activo %}1{% else %}0{% endif %}')"
+                    class="inline-block bg-sky-100 text-sky-800 px-3 py-1 rounded-full text-xs font-semibold hover:bg-sky-200 transition">
+              📲 Reset Telegram
+            </button>
           </td>
         </tr>
         {% empty %}
@@ -245,7 +247,6 @@
       <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
     </select>
 
-    <!-- Mantener filtros al cambiar cantidad -->
     <input type="hidden" name="identidad" value="{{ filtros.identidad }}">
     <input type="hidden" name="nombre" value="{{ filtros.nombre }}">
     <input type="hidden" name="email" value="{{ filtros.email }}">
@@ -321,6 +322,44 @@
   </div>
 </div>
 
+<!-- ✅ Modal Reset Telegram -->
+<div id="resetTelegramModal" class="fixed inset-0 hidden bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg max-w-sm w-full p-6">
+    <h2 class="text-xl font-semibold mb-4">Resetear Telegram</h2>
+    <p id="resetTelegramMessage" class="mb-6 text-gray-700"></p>
+    <div class="flex justify-end space-x-4">
+      <button type="button"
+              onclick="closeResetTelegramModal()"
+              class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 font-semibold">
+        Cancelar
+      </button>
+      <form method="POST" action="{% url 'dashboard_admin:listar_usuarios' %}">
+        {% csrf_token %}
+        <input type="hidden" name="user_id" id="resetTelegramUserId">
+        <button type="submit" name="reset_telegram"
+                class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-700 text-white font-semibold">
+          Resetear
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ NUEVO: Modal Aviso (para Telegram inactivo) -->
+<div id="infoModal" class="fixed inset-0 hidden bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-lg max-w-sm w-full p-6">
+    <h2 class="text-xl font-semibold mb-4">Aviso</h2>
+    <p id="infoMessage" class="mb-6 text-gray-700"></p>
+    <div class="flex justify-end">
+      <button type="button"
+              onclick="closeInfoModal()"
+              class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 font-semibold">
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
   function openModal(userId, username) {
     document.getElementById('confirmModal').classList.remove('hidden');
@@ -343,6 +382,48 @@
   function closeReset2FAModal() {
     document.getElementById('reset2FAModal').classList.add('hidden');
   }
+
+  // ✅ NUEVO: Modal aviso (reemplaza alert)
+  function openInfoModal(msg){
+    const m = document.getElementById('infoModal');
+    const p = document.getElementById('infoMessage');
+    if(p) p.textContent = msg || '';
+    if(m) m.classList.remove('hidden');
+  }
+  function closeInfoModal(){
+    document.getElementById('infoModal')?.classList.add('hidden');
+  }
+
+  // ✅ Reset Telegram
+  function openResetTelegramModal(userId, username, telegramActivoFlag) {
+    if (telegramActivoFlag !== '1') {
+      openInfoModal('Telegram está INACTIVO para este usuario. Primero debes habilitar "Telegram activo" en su perfil.');
+      return;
+    }
+    document.getElementById('resetTelegramModal').classList.remove('hidden');
+    document.getElementById('resetTelegramMessage').textContent =
+      `¿Resetear el vínculo de Telegram para "${username}"? (Se borrará el chat_id y deberá activar nuevamente).`;
+    document.getElementById('resetTelegramUserId').value = userId;
+  }
+
+  function closeResetTelegramModal() {
+    document.getElementById('resetTelegramModal').classList.add('hidden');
+  }
+
+  // ✅ Cerrar modales con ESC + click afuera (solo los nuevos, sin afectar tu lógica)
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      closeInfoModal();
+      closeResetTelegramModal();
+    }
+  });
+
+  document.getElementById('infoModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'infoModal') closeInfoModal();
+  });
+  document.getElementById('resetTelegramModal')?.addEventListener('click', (e)=>{
+    if(e.target.id === 'resetTelegramModal') closeResetTelegramModal();
+  });
 
   (function () {
     const form = document.getElementById('form-filtros');
@@ -367,7 +448,6 @@
       form.requestSubmit();
     }
 
-    // Inputs de texto => debounce / blur
     textInputs.forEach(el => {
       if (isTouch) {
         el.addEventListener('blur', () => submitNow(el));
@@ -400,12 +480,10 @@
       }
     });
 
-    // Selects => submit inmediato
     selects.forEach(el => {
       el.addEventListener('change', () => submitNow(el));
     });
 
-    // Restaurar foco/caret
     function restoreCaret() {
       try {
         const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');

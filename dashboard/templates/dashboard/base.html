@@ -253,7 +253,23 @@
             <li><a href="#" class="hover:text-emerald-400">Contrato de servicio</a></li>
           </ul>
         </li>
-      </ul>
+     
+     
+      <!-- ✅ AQUÍ VA: Activar Telegram (DENTRO DEL UL, NO AFUERA) -->
+      {% if request.user.is_authenticated and request.user.telegram_activo %}
+      <li data-toggle class="group">
+        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">📲 Activar Telegram <span class="arrow">▶</span></span>
+        <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
+          <li>
+            <a href="{% url 'bot_gz:activar_telegram' %}" class="hover:text-emerald-400">
+              Activar
+            </a>
+          </li>
+        </ul>
+      </li>
+      {% endif %}
+
+    </ul>
 <!-- Contenedor inferior del menú -->
 <div class="mt-10 text-center text-gray-400 text-xs">
   <p class="mb-1">Desarrollado por</p>

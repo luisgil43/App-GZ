@@ -2,15 +2,20 @@
 
 import json
 import logging
+import secrets
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.db.models import Q
 from django.http import (HttpResponseBadRequest, HttpResponseForbidden,
                          JsonResponse)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
+
+from usuarios.decoradores import rol_requerido
 
 from .models import BotIntent, BotMessageLog
 from .services import handle_telegram_update
@@ -186,3 +191,37 @@ def training_edit_message(request, pk: int):
         "intents": intents,
     }
     return render(request, "bot_gz/training_edit_message.html", ctx)
+
+@login_required(login_url='usuarios:login')
+@rol_requerido('usuario')
+def activar_telegram(request):
+    """
+    Genera un token temporal y muestra el link t.me/<bot>?start=<token>
+    Solo funciona si el usuario tiene telegram_activo=True (seguridad).
+    """
+    u = request.user
+
+    # Seguridad: solo si está habilitado por admin
+    if not getattr(u, "telegram_activo", False):
+        messages.error(request, "Telegram no está habilitado para tu usuario. Contacta a administración.")
+        return redirect("dashboard:inicio")  # ajusta si tu home de usuario es otro
+
+    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "").strip()
+    if not bot_username:
+        messages.error(request, "Falta configurar TELEGRAM_BOT_USERNAME en settings.")
+        return redirect("dashboard:inicio")
+
+    # token corto + seguro
+    token = secrets.token_urlsafe(16)
+
+    # guardamos en cache (sin migraciones)
+    # 20 minutos de validez
+    cache_key = f"tg_link:{token}"
+    cache.set(cache_key, u.id, timeout=20 * 60)
+
+    link = f"https://t.me/{bot_username}?start={token}"
+
+    return render(request, "bot_gz/activar_telegram.html", {
+        "telegram_link": link,
+        "bot_username": bot_username,
+    })
