@@ -18,10 +18,7 @@ from .models import HerramientaAsignacion, HerramientaInventario
 
 
 def _must_user(request):
-    if not getattr(request.user, "es_usuario", False):
-        return False
-    return True
-
+    return bool(getattr(request.user, "es_usuario", False))
 
 
 @login_required
@@ -29,14 +26,14 @@ def _must_user(request):
 def mis_herramientas(request):
     """
     Usuario ve SOLO sus asignaciones ACTIVAS.
-    Inventario: ve estado real según el último inventario de su asignación.
-    Con filtros + paginación.
+    Solo muestra asignaciones con cantidad_entregada > 0.
+    Inventario: estado real según último inventario de su asignación.
     """
     if not _must_user(request):
         return HttpResponseForbidden("No tienes permiso.")
 
     q = (request.GET.get("q") or "").strip()
-    estado_asig = (request.GET.get("estado") or "").strip()  # pendiente/aceptada/rechazada
+    estado_asig = (request.GET.get("estado") or "").strip()
     cantidad = (request.GET.get("cantidad") or "20").strip()
     page_number = (request.GET.get("page") or "1").strip()
 
@@ -44,7 +41,6 @@ def mis_herramientas(request):
         per_page = int(cantidad)
     except Exception:
         per_page = 20
-
     if per_page not in (5, 10, 20, 50, 100):
         per_page = 20
 
@@ -52,6 +48,7 @@ def mis_herramientas(request):
         HerramientaAsignacion.objects
         .select_related("herramienta", "asignado_por")
         .filter(asignado_a=request.user, active=True)
+        .filter(cantidad_entregada__gt=0)   # ✅ regla: si no tiene cantidad, no aparece
         .order_by("-asignado_at", "-id")
     )
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils import timezone
@@ -43,7 +45,6 @@ class BodegaForm(forms.ModelForm):
 
         if not nombre:
             self.add_error("nombre", "El nombre es obligatorio.")
-
         if not ubicacion:
             self.add_error("ubicacion", "La ubicación es obligatoria.")
 
@@ -53,12 +54,18 @@ class BodegaForm(forms.ModelForm):
 
 
 class HerramientaForm(forms.ModelForm):
+    sin_serial = forms.BooleanField(
+        required=False,
+        label="Sin serial (no aplica)",
+    )
+
     class Meta:
         model = Herramienta
         fields = [
             "nombre",
             "descripcion",
             "serial",
+            "cantidad",
             "valor_comercial",
             "foto",
             "bodega",
@@ -69,6 +76,7 @@ class HerramientaForm(forms.ModelForm):
             "nombre": "Nombre",
             "descripcion": "Descripción",
             "serial": "Serial",
+            "cantidad": "Cantidad",
             "valor_comercial": "Valor comercial",
             "foto": "Foto (opcional)",
             "bodega": "Bodega",
@@ -80,6 +88,12 @@ class HerramientaForm(forms.ModelForm):
             "status_justificacion": forms.Textarea(attrs={"rows": 3}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # ✅ CLAVE: que serial NO sea requerido por el field
+        self.fields["serial"].required = False
+
     def clean_valor_comercial(self):
         v = self.cleaned_data.get("valor_comercial")
         if v is None:
@@ -88,13 +102,49 @@ class HerramientaForm(forms.ModelForm):
             raise ValidationError("El valor comercial no puede ser negativo.")
         return v
 
+    def clean_cantidad(self):
+        c = self.cleaned_data.get("cantidad")
+        if c is None:
+            return c
+        try:
+            c = int(c)
+        except Exception:
+            raise ValidationError("Cantidad inválida.")
+        if c <= 0:
+            raise ValidationError("La cantidad debe ser mayor a 0.")
+        return c
+
+    def _gen_serial_unico(self) -> str:
+        for _ in range(30):
+            gen = f"AUTO-{uuid4().hex[:10].upper()}"
+            if not Herramienta.objects.filter(serial=gen).exists():
+                return gen
+        raise ValidationError("No se pudo generar un serial automático. Intenta de nuevo.")
+
     def clean(self):
         cleaned = super().clean()
+
+        # ✅ acá YA están todos los campos, incluido sin_serial
+        sin_serial = bool(cleaned.get("sin_serial"))
+        serial = (cleaned.get("serial") or "").strip()
+
+        if sin_serial:
+            # Si es edición y ya existe serial, lo respetamos
+            if self.instance and self.instance.pk and (self.instance.serial or "").strip():
+                cleaned["serial"] = self.instance.serial
+            else:
+                cleaned["serial"] = self._gen_serial_unico()
+        else:
+            if not serial:
+                self.add_error("serial", "Completa este campo o marca 'Sin serial (no aplica)'.")
+            else:
+                cleaned["serial"] = serial
+
         status = (cleaned.get("status") or "").strip()
         just = (cleaned.get("status_justificacion") or "").strip()
-
         if status in ("danada", "extraviada", "robada") and not just:
             self.add_error("status_justificacion", "Debes indicar una justificación para este estado.")
+
         return cleaned
 
 
@@ -134,9 +184,7 @@ class InventarioUploadForm(forms.ModelForm):
         model = HerramientaInventario
         fields = ["foto"]
         labels = {"foto": "Foto de inventario"}
-        widgets = {
-            "foto": forms.ClearableFileInput(),
-        }
+        widgets = {"foto": forms.ClearableFileInput()}
 
 
 class InventarioReviewForm(forms.Form):

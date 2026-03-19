@@ -514,6 +514,10 @@ class Herramienta(models.Model):
     descripcion = models.TextField(blank=True, null=True)
 
     serial = models.CharField(max_length=120, unique=True)
+
+    # ✅ NUEVO
+    cantidad = models.PositiveIntegerField(default=1, help_text="Cantidad disponible de esta herramienta/equipo.")
+
     valor_comercial = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     foto = models.ImageField(
@@ -578,6 +582,9 @@ class Herramienta(models.Model):
         if self.valor_comercial is not None and self.valor_comercial < 0:
             raise ValidationError({"valor_comercial": "El valor comercial no puede ser negativo."})
 
+        if self.cantidad is not None and int(self.cantidad) <= 0:
+            raise ValidationError({"cantidad": "La cantidad debe ser mayor a 0."})
+
         if self.status in ("danada", "extraviada", "robada"):
             if not (self.status_justificacion or "").strip():
                 raise ValidationError({"status_justificacion": "Debes indicar una justificación para este estado."})
@@ -609,6 +616,7 @@ class HerramientaAsignacion(models.Model):
         ("pendiente", "Pendiente"),
         ("aceptada", "Aceptada"),
         ("rechazada", "Rechazada"),
+        ("terminada", "Terminada"),
     ]
 
     herramienta = models.ForeignKey(Herramienta, on_delete=models.CASCADE, related_name="asignaciones")
@@ -626,6 +634,24 @@ class HerramientaAsignacion(models.Model):
     )
     asignado_at = models.DateTimeField(default=timezone.now)
 
+    # ✅ NUEVO: cantidad entregada en esta asignación
+    cantidad_entregada = models.PositiveIntegerField(default=1)
+
+    # ✅ NUEVO: cierre / devolución
+    closed_at = models.DateTimeField(blank=True, null=True)
+    closed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="herramientas_asignaciones_cerradas_por",
+    )
+    cantidad_devuelta = models.PositiveIntegerField(blank=True, null=True)
+    comentario_cierre = models.TextField(blank=True, null=True)
+
+    # Si devuelta < entregada, se exige justificar
+    justificacion_diferencia = models.TextField(blank=True, null=True)
+
     # responsable actual
     active = models.BooleanField(default=True)
 
@@ -642,15 +668,41 @@ class HerramientaAsignacion(models.Model):
         indexes = [
             models.Index(fields=["active", "estado"]),
             models.Index(fields=["asignado_a", "active"]),
+            models.Index(fields=["herramienta", "active"]),
         ]
 
     def __str__(self) -> str:
         return f"{self.herramienta} -> {self.asignado_a} ({self.estado})"
 
     def clean(self):
+        # rechazo requiere comentario
         if self.estado == "rechazada":
             if not (self.comentario_rechazo or "").strip():
                 raise ValidationError({"comentario_rechazo": "Debes indicar un comentario si rechazas."})
+
+        # cantidad entregada > 0
+        if self.cantidad_entregada is None or int(self.cantidad_entregada) <= 0:
+            raise ValidationError({"cantidad_entregada": "La cantidad entregada debe ser mayor a 0."})
+
+        # si está terminada, debe tener cierre coherente
+        if self.estado == "terminada":
+            if self.cantidad_devuelta is None:
+                raise ValidationError({"cantidad_devuelta": "Debes indicar cantidad devuelta."})
+            if int(self.cantidad_devuelta) < 0:
+                raise ValidationError({"cantidad_devuelta": "Cantidad devuelta inválida."})
+            if int(self.cantidad_devuelta) > int(self.cantidad_entregada):
+                raise ValidationError({"cantidad_devuelta": "No puede ser mayor que la entregada."})
+
+            dev = int(self.cantidad_devuelta)
+            ent = int(self.cantidad_entregada)
+
+            # si devuelta es menor, exigir justificación
+            if dev < ent and not (self.justificacion_diferencia or "").strip():
+                raise ValidationError({"justificacion_diferencia": "Debes justificar la diferencia (faltante/daño/pérdida)."})
+
+            # si devuelta es 0, exigir comentario
+            if dev == 0 and not (self.comentario_cierre or "").strip():
+                raise ValidationError({"comentario_cierre": "Si devolvió 0, debes indicar un comentario."})
 
     def close(self):
         self.active = False
@@ -724,3 +776,46 @@ class HerramientaInventario(models.Model):
         h = self.herramienta
         h.inventory_required = True
         h.save(update_fields=["inventory_required", "updated_at"])
+
+class HerramientaAsignacionLog(models.Model):
+    """
+    Historial/auditoría de cambios en asignaciones de herramientas.
+    """
+    ACCION_CHOICES = [
+        ("create", "Creada"),
+        ("update", "Editada"),
+        ("close", "Cerrada"),
+        ("reset", "Reiniciada"),
+        ("delete", "Eliminada"),
+    ]
+
+    asignacion = models.ForeignKey(
+        HerramientaAsignacion,
+        on_delete=models.CASCADE,
+        related_name="logs",
+    )
+    accion = models.CharField(max_length=20, choices=ACCION_CHOICES)
+    by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="herramientas_asignaciones_logs",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # JSON con resumen de cambios. Ej:
+    # {"cantidad_entregada": {"from": 2, "to": 3}, "asignado_at": {"from": "...", "to": "..."}}
+    cambios = models.JSONField(default=dict, blank=True)
+
+    nota = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["accion", "created_at"]),
+            models.Index(fields=["asignacion", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.asignacion_id} {self.accion} {self.created_at}"

@@ -1,0 +1,130 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Preview Importación - Herramientas{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">📥 Preview importación de herramientas</h2>
+    <a href="{% url 'logistica:herramientas_list' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+      ← Volver
+    </a>
+  </div>
+
+  <div class="bg-gray-50 border rounded-2xl p-4 mb-4 text-sm text-gray-700">
+    <div>Filas detectadas: <b>{{ preview_rows|length }}</b></div>
+    <div>Coincidencias por serial (se actualizarán): <b>{{ coincidencias }}</b></div>
+    {% if bodegas_faltantes %}
+      <div class="text-red-700 mt-1">
+        ⚠️ Filas con <b>bodega no encontrada</b>: <b>{{ bodegas_faltantes }}</b>.
+        Corrígela con el desplegable antes de confirmar.
+      </div>
+    {% endif %}
+  </div>
+
+  <form method="post" action="{% url 'logistica:herramientas_importar' %}">
+    {% csrf_token %}
+    <input type="hidden" name="confirmar" value="1">
+    <input type="hidden" name="token" value="{{ token }}">
+
+    <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center mb-4">
+      <div class="font-semibold text-gray-800">¿Qué hacer con la cantidad si ya existe?</div>
+
+      <label class="inline-flex items-center gap-2">
+        <input type="radio" name="modo" value="reemplazar" checked>
+        <span>Reemplazar (dejar la cantidad del Excel)</span>
+      </label>
+
+      <label class="inline-flex items-center gap-2">
+        <input type="radio" name="modo" value="sumar">
+        <span>Sumar (cantidad actual + Excel)</span>
+      </label>
+    </div>
+
+    <div class="overflow-x-auto border rounded-2xl">
+      <table class="w-full text-sm min-w-[1100px]">
+        <thead class="bg-gray-100 text-gray-800 font-semibold">
+          <tr>
+            <th class="p-2 border text-left">Nombre</th>
+            <th class="p-2 border">Serial</th>
+            <th class="p-2 border">Cantidad (Excel)</th>
+            <th class="p-2 border">Existe</th>
+            <th class="p-2 border">Cantidad actual</th>
+            <th class="p-2 border">Bodega (Excel)</th>
+            <th class="p-2 border">Bodega (selección)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in preview_rows %}
+          <tr class="border-t {% if r.existe %}bg-amber-50{% endif %}">
+            <td class="p-2 border text-left">
+              <div class="font-semibold text-gray-800">{{ r.nombre }}</div>
+              {% if r.descripcion %}
+                <div class="text-xs text-gray-600">{{ r.descripcion }}</div>
+              {% endif %}
+            </td>
+            <td class="p-2 border text-center">{{ r.serial }}</td>
+            <td class="p-2 border text-center">{{ r.cantidad }}</td>
+            <td class="p-2 border text-center">
+              {% if r.existe %}
+                <span class="px-2 py-1 rounded-full text-xs bg-amber-200 text-amber-900">Sí</span>
+              {% else %}
+                <span class="px-2 py-1 rounded-full text-xs bg-emerald-200 text-emerald-900">No</span>
+              {% endif %}
+            </td>
+            <td class="p-2 border text-center">
+              {% if r.existe %}{{ r.existe_cantidad }}{% else %}—{% endif %}
+            </td>
+            <td class="p-2 border">
+              {% if r.bodega_excel %}
+                {% if r.bodega_ok %}
+                  <span class="text-gray-800">{{ r.bodega_excel }}</span>
+                {% else %}
+                  <span class="text-red-700 font-semibold">{{ r.bodega_excel }}</span>
+                  <div class="text-xs text-red-600">No encontrada</div>
+                {% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="p-2 border">
+              <select name="bodega_sel_{{ forloop.counter0 }}" class="w-full border rounded-xl px-3 py-2">
+                <option value="">— Sin bodega —</option>
+                {% for b in bodegas %}
+                  <option value="{{ b.id }}"
+                    {% if r.bodega_id_detectada and r.bodega_id_detectada|add:"" == b.id|add:"" %}selected{% endif %}
+                    {% if r.existe_bodega and not r.bodega_excel and r.existe_bodega == b.nombre %}selected{% endif %}
+                  >
+                    {{ b.nombre }}
+                  </option>
+                {% endfor %}
+              </select>
+
+              {% if r.existe and r.existe_bodega %}
+                <div class="text-xs text-gray-500 mt-1">
+                  Bodega actual: <b>{{ r.existe_bodega }}</b>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 flex justify-end gap-2">
+      <a href="{% url 'logistica:herramientas_list' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        Cancelar
+      </a>
+
+      <button type="submit"
+              class="px-5 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+        ✅ Confirmar importación
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

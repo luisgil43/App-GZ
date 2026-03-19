@@ -51,8 +51,8 @@ from usuarios.utils import \
 from .forms import MovimientoUsuarioForm  # crearemos este form
 from .forms import (ServicioCotizadoForm, SitioMovilForm, validar_rut_chileno,
                     verificar_rut_sii)
-from .models import (RequisitoFoto, ServicioCotizado, SesionFotoTecnico,
-                     SitioMovil)
+from .models import (RequisitoFoto, ServicioCotizado, SesionFotos,
+                     SesionFotoTecnico, SitioMovil)
 from .views_fotos import _get_or_create_sesion, _norm_title
 
 # Configurar locale para nombres de meses en español
@@ -63,6 +63,108 @@ except locale.Error:
         locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
     except locale.Error:
         locale.setlocale(locale.LC_TIME, '')  # Usa el del sistema
+
+from django.db import transaction
+from django.utils import timezone
+
+from .models import RequisitoFoto, SesionFotoTecnico
+
+
+def _reset_asignacion_tecnico(asignacion):
+    """
+    Devuelve la asignación individual del técnico a estado 'asignado'
+    para forzar nueva aceptación.
+    """
+    asignacion.estado = 'asignado'
+
+    update_fields = ['estado']
+
+    if hasattr(asignacion, 'aceptado_en'):
+        asignacion.aceptado_en = None
+        update_fields.append('aceptado_en')
+
+    if hasattr(asignacion, 'finalizado_en'):
+        asignacion.finalizado_en = None
+        update_fields.append('finalizado_en')
+
+    if hasattr(asignacion, 'reintento_habilitado'):
+        asignacion.reintento_habilitado = False
+        update_fields.append('reintento_habilitado')
+
+    asignacion.save(update_fields=update_fields)
+
+
+def _clonar_requisitos_a_asignacion(origen_asignacion, destino_asignacion):
+    """
+    Copia requisitos activos desde una asignación existente hacia una nueva,
+    evitando duplicados por la constraint (tecnico_sesion + titulo_norm + activo).
+    """
+    if not origen_asignacion or not destino_asignacion:
+        return
+
+    requisitos = (
+        RequisitoFoto.objects
+        .filter(tecnico_sesion=origen_asignacion, activo=True)
+        .order_by('orden', 'id')
+    )
+
+    for req in requisitos:
+        RequisitoFoto.objects.get_or_create(
+            tecnico_sesion=destino_asignacion,
+            titulo=req.titulo,
+            defaults={
+                'descripcion': req.descripcion,
+                'obligatorio': req.obligatorio,
+                'orden': req.orden,
+                'activo': req.activo,
+            }
+        )
+
+
+def _sincronizar_asignaciones_sesion(servicio, tecnicos_actuales_ids, reset_para_ids=None):
+    """
+    Asegura que exista una SesionFotoTecnico por cada técnico actualmente asignado.
+    Si reset_para_ids viene informado, esas asignaciones vuelven a 'asignado'.
+
+    Retorna:
+      sesion, asignaciones_map
+    """
+    if reset_para_ids is None:
+        reset_para_ids = set()
+
+    sesion = _get_or_create_sesion(servicio)
+
+    existentes = {
+        a.tecnico_id: a
+        for a in sesion.asignaciones.select_related('tecnico').all()
+    }
+
+    # Tomamos una asignación existente como base para clonar requisitos a técnicos nuevos
+    asignacion_base = None
+    for a in existentes.values():
+        asignacion_base = a
+        break
+
+    for tecnico_id in tecnicos_actuales_ids:
+        asignacion = existentes.get(tecnico_id)
+
+        if not asignacion:
+            asignacion = SesionFotoTecnico.objects.create(
+                sesion=sesion,
+                tecnico_id=tecnico_id,
+                estado='asignado'
+            )
+            existentes[tecnico_id] = asignacion
+
+            if asignacion_base:
+                _clonar_requisitos_a_asignacion(asignacion_base, asignacion)
+
+        if tecnico_id in reset_para_ids:
+            _reset_asignacion_tecnico(asignacion)
+
+    return sesion, existentes
+
+
 
 
 
@@ -582,19 +684,15 @@ def advertencia_cotizaciones_omitidas(request):
 @login_required
 @rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
 def listar_servicios_supervisor(request):
-    # prioridad para ordenar
     estado_prioridad = Case(
         When(estado='aprobado_pendiente', then=Value(1)),
         When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
-        When(estado__in=['en_revision_supervisor',
-             'finalizado_trabajador'], then=Value(3)),
-        When(estado__in=['informe_subido', 'finalizado',
-             'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
+        When(estado__in=['en_revision_supervisor', 'finalizado_trabajador'], then=Value(3)),
+        When(estado__in=['informe_subido', 'finalizado', 'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
         default=Value(5),
         output_field=IntegerField()
     )
 
-    # queryset base (excluye bonos/adelantos/descuentos)
     servicios = (
         ServicioCotizado.objects
         .filter(estado__in=[
@@ -609,11 +707,14 @@ def listar_servicios_supervisor(request):
             'finalizado',
         ])
         .exclude(estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'])
+        .prefetch_related(
+            'trabajadores_asignados',
+            'sesion_fotos__asignaciones__tecnico',
+        )
         .annotate(prioridad=estado_prioridad)
         .order_by('prioridad', '-du')
     )
 
-    # Filtros
     du = request.GET.get('du', '')
     id_claro = request.GET.get('id_claro', '')
     id_new = request.GET.get('id_new', '')
@@ -630,18 +731,14 @@ def listar_servicios_supervisor(request):
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
     if estado:
-        # aunque elijan ajuste_*, igual no aparecerán porque ya están excluidos arriba
         servicios = servicios.filter(estado=estado)
 
-    # ========= Paginación (máx. 100) =========
     cantidad_param = request.GET.get("cantidad", "10")
 
     if cantidad_param == "todos":
-        # "todos" se interpreta como máximo 100
         per_page = 100
     else:
         try:
-            # mínimo 5, máximo 100
             per_page = max(5, min(int(cantidad_param), 100))
         except ValueError:
             per_page = 10
@@ -651,7 +748,52 @@ def listar_servicios_supervisor(request):
     page_number = request.GET.get("page") or 1
     pagina = paginator.get_page(page_number)
 
+    pagina_info = []
+    estados_aceptados = {
+        'en_proceso',
+        'en_revision_supervisor',
+        'aprobado_supervisor',
+        'aprobado_pm',
+    }
+
+    for servicio in pagina:
+        asignados = list(servicio.trabajadores_asignados.all())
+        asignados_ids = {u.id for u in asignados}
+
+        aceptados = []
+        pendientes = []
+
+        try:
+            sesion = servicio.sesion_fotos
+        except SesionFotos.DoesNotExist:
+            sesion = None
+
+        asignaciones = list(sesion.asignaciones.all()) if sesion else []
+
+        asignaciones_map = {
+            a.tecnico_id: a
+            for a in asignaciones
+            if a.tecnico_id in asignados_ids
+        }
+
+        for tecnico in asignados:
+            asg = asignaciones_map.get(tecnico.id)
+            if asg and asg.estado in estados_aceptados:
+                aceptados.append(tecnico)
+            else:
+                pendientes.append(tecnico)
+
+        pagina_info.append({
+            'servicio': servicio,
+            'aceptados_lista': aceptados,
+            'pendientes_lista': pendientes,
+            'aceptados_count': len(aceptados),
+            'pendientes_count': len(pendientes),
+            'total_count': len(asignados),
+        })
+
     return render(request, 'operaciones/listar_servicios_supervisor.html', {
+        'pagina_info': pagina_info,
         'pagina': pagina,
         'cantidad': request.GET.get("cantidad", "10"),
         'filtros': {
@@ -663,6 +805,7 @@ def listar_servicios_supervisor(request):
         },
         'estado_choices': ServicioCotizado.ESTADOS
     })
+
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
@@ -730,12 +873,14 @@ def asignar_trabajadores(request, pk):
     Soporta que pk venga como:
       - ID real (ServicioCotizado.id)
       - o DU (ServicioCotizado.du), con o sin ceros (83 / 00000083)
+
+    Modos:
+      - reasignar: reemplaza lista completa
+      - agregar: mantiene los actuales y solo agrega nuevos
     """
 
-    # 1) Intentar por ID real primero
     cotizacion = ServicioCotizado.objects.filter(pk=pk).first()
 
-    # 2) Si no existe, interpretar pk como DU
     if not cotizacion:
         du_raw = str(pk).strip()
 
@@ -743,23 +888,20 @@ def asignar_trabajadores(request, pk):
         if du_raw:
             candidates.append(du_raw)
 
-            # si viene "00000083" -> también probar "83"
             try:
                 candidates.append(str(int(du_raw)))
             except Exception:
                 pass
 
-            # si viene "83" -> también probar "00000083"
             if du_raw.isdigit():
                 candidates.append(du_raw.zfill(8))
 
         cotizacion = (
             ServicioCotizado.objects
-            .filter(du__in=list(dict.fromkeys(candidates)))  # unique sin perder orden
+            .filter(du__in=list(dict.fromkeys(candidates)))
             .first()
         )
 
-    # 3) Si igual no existe, manejar elegante (en vez del 404 feo)
     if not cotizacion:
         messages.error(
             request,
@@ -767,71 +909,227 @@ def asignar_trabajadores(request, pk):
         )
         return redirect('operaciones:listar_servicios_supervisor')
 
+    modo = (request.GET.get('modo') or request.POST.get('modo') or 'reasignar').strip().lower()
+    if modo not in {'reasignar', 'agregar'}:
+        modo = 'reasignar'
+
     if request.method == 'POST':
         form = AsignarTrabajadoresForm(request.POST)
+        dejar_pendiente = request.POST.get('dejar_pendiente_asignacion') == '1'
+
+        # ✅ IMPORTANTE:
+        # Este flujo debe ir ANTES de validar el form, porque puede no haber técnicos seleccionados.
+        if dejar_pendiente:
+            with transaction.atomic():
+                cotizacion.trabajadores_asignados.clear()
+
+                cotizacion.estado = 'aprobado_pendiente'
+                cotizacion.supervisor_asigna = request.user
+                cotizacion.tecnico_aceptado = None
+                cotizacion.tecnico_finalizo = None
+                cotizacion.supervisor_aprobo = None
+                cotizacion.supervisor_rechazo = None
+
+                update_fields = [
+                    'estado',
+                    'supervisor_asigna',
+                    'tecnico_aceptado',
+                    'tecnico_finalizo',
+                    'supervisor_aprobo',
+                    'supervisor_rechazo',
+                ]
+
+                if hasattr(cotizacion, 'fecha_aprobacion_supervisor'):
+                    cotizacion.fecha_aprobacion_supervisor = None
+                    update_fields.append('fecha_aprobacion_supervisor')
+
+                cotizacion.save(update_fields=update_fields)
+
+                sesion = _get_or_create_sesion(cotizacion)
+
+                qs = SesionFotoTecnico.objects.filter(sesion=sesion)
+                vals = {'estado': 'asignado'}
+
+                if hasattr(SesionFotoTecnico, 'aceptado_en'):
+                    vals['aceptado_en'] = None
+                if hasattr(SesionFotoTecnico, 'finalizado_en'):
+                    vals['finalizado_en'] = None
+                if hasattr(SesionFotoTecnico, 'reintento_habilitado'):
+                    vals['reintento_habilitado'] = False
+
+                qs.update(**vals)
+
+            messages.success(
+                request,
+                "El servicio quedó nuevamente pendiente por asignar. Se quitaron todos los técnicos y se limpió la aceptación previa."
+            )
+            return redirect('operaciones:listar_servicios_supervisor')
+
         if form.is_valid():
-            trabajadores = form.cleaned_data['trabajadores']
+            seleccionados = form.cleaned_data['trabajadores']
 
-            # Detectamos si ya tenía trabajadores antes del POST
-            tenia_asignados = cotizacion.trabajadores_asignados.exists()
+            old_ids = set(cotizacion.trabajadores_asignados.values_list('id', flat=True))
+            selected_ids = set(seleccionados.values_list('id', flat=True))
 
-            # Actualizamos las relaciones M2M
-            cotizacion.trabajadores_asignados.set(trabajadores)
+            # En modo agregar, no se permite quitar técnicos
+            if modo == 'agregar':
+                removed_ids = old_ids - selected_ids
+                if removed_ids:
+                    messages.error(
+                        request,
+                        "En modo 'agregar técnicos' no puedes quitar técnicos actuales. Usa 'Reasignar' si quieres reemplazar responsables."
+                    )
+                    return render(request, 'operaciones/asignar_trabajadores.html', {
+                        'cotizacion': cotizacion,
+                        'form': form,
+                        'modo': modo,
+                    })
 
-            # Primera asignación:
-            if not tenia_asignados and cotizacion.estado == 'aprobado_pendiente':
-                cotizacion.estado = 'asignado'
+                final_ids = old_ids | selected_ids
+            else:
+                final_ids = selected_ids
 
-            cotizacion.supervisor_asigna = request.user
-            cotizacion.save()
+            added_ids = final_ids - old_ids
+            removed_ids = old_ids - final_ids
 
-            # 🔔 Notificar a los trabajadores seleccionados (campanita)
-            for trabajador in trabajadores:
+            primera_asignacion = not old_ids
+
+            es_reasignacion_real = (
+                not primera_asignacion
+                and modo == 'reasignar'
+                and bool(removed_ids)
+            )
+
+            solo_agregando = (
+                not primera_asignacion
+                and not removed_ids
+                and bool(added_ids)
+            )
+
+            with transaction.atomic():
+                cotizacion.trabajadores_asignados.set(final_ids)
+
+                update_fields = ['supervisor_asigna']
+                cotizacion.supervisor_asigna = request.user
+
+                if primera_asignacion:
+                    if cotizacion.estado == 'aprobado_pendiente':
+                        cotizacion.estado = 'asignado'
+                        update_fields.append('estado')
+
+                    _sincronizar_asignaciones_sesion(
+                        cotizacion,
+                        tecnicos_actuales_ids=final_ids,
+                        reset_para_ids=set(final_ids),
+                    )
+
+                elif es_reasignacion_real:
+                    cotizacion.estado = 'asignado'
+                    cotizacion.tecnico_aceptado = None
+                    cotizacion.tecnico_finalizo = None
+                    cotizacion.supervisor_aprobo = None
+                    cotizacion.supervisor_rechazo = None
+
+                    update_fields.extend([
+                        'estado',
+                        'tecnico_aceptado',
+                        'tecnico_finalizo',
+                        'supervisor_aprobo',
+                        'supervisor_rechazo',
+                    ])
+
+                    if hasattr(cotizacion, 'fecha_aprobacion_supervisor'):
+                        cotizacion.fecha_aprobacion_supervisor = None
+                        update_fields.append('fecha_aprobacion_supervisor')
+
+                    _sincronizar_asignaciones_sesion(
+                        cotizacion,
+                        tecnicos_actuales_ids=final_ids,
+                        reset_para_ids=set(final_ids),
+                    )
+
+                elif solo_agregando:
+                    _sincronizar_asignaciones_sesion(
+                        cotizacion,
+                        tecnicos_actuales_ids=final_ids,
+                        reset_para_ids=set(added_ids),
+                    )
+
+                else:
+                    _sincronizar_asignaciones_sesion(
+                        cotizacion,
+                        tecnicos_actuales_ids=final_ids,
+                        reset_para_ids=set(),
+                    )
+
+                cotizacion.save(update_fields=update_fields)
+
+            if primera_asignacion or es_reasignacion_real:
+                usuarios_a_notificar = list(CustomUser.objects.filter(id__in=final_ids))
+            else:
+                usuarios_a_notificar = list(CustomUser.objects.filter(id__in=added_ids))
+
+            for trabajador in usuarios_a_notificar:
                 crear_notificacion(
                     usuario=trabajador,
                     mensaje=f"Se te ha asignado una nueva tarea: DU{str(cotizacion.du).zfill(8)}.",
                     url=reverse('operaciones:mis_servicios_tecnico'),
                 )
 
-            # 📲 Notificación por Telegram usando el helper centralizado
             try:
-                enlace_app = request.build_absolute_uri(
-                    reverse('operaciones:mis_servicios_tecnico')
-                )
-
-                logs = notificar_asignacion_servicio_tecnicos(
-                    servicio=cotizacion,
-                    actor=request.user,
-                    url=enlace_app,
-                    extra={
-                        "du": cotizacion.du,
-                        "id_claro": cotizacion.id_claro,
-                    },
-                )
-
-                for log in logs:
-                    logger.info(
-                        "Telegram asignación servicio DU%s -> usuario_id=%s status=%s error=%s",
-                        str(cotizacion.du).zfill(8),
-                        log.usuario_id,
-                        log.status,
-                        getattr(log, "error", ""),
+                if usuarios_a_notificar:
+                    enlace_app = request.build_absolute_uri(
+                        reverse('operaciones:mis_servicios_tecnico')
                     )
 
+                    logs = notificar_asignacion_servicio_tecnicos(
+                        servicio=cotizacion,
+                        actor=request.user,
+                        url=enlace_app,
+                        extra={
+                            "du": cotizacion.du,
+                            "id_claro": cotizacion.id_claro,
+                        },
+                    )
+
+                    for log in logs:
+                        logger.info(
+                            "Telegram asignación servicio DU%s -> usuario_id=%s status=%s error=%s",
+                            str(cotizacion.du).zfill(8),
+                            log.usuario_id,
+                            log.status,
+                            getattr(log, "error", ""),
+                        )
             except Exception:
                 logger.exception("Error enviando notificación Telegram de asignación")
 
-            messages.success(request, "Trabajadores asignados correctamente.")
+            if primera_asignacion:
+                messages.success(request, "Trabajadores asignados correctamente.")
+            elif es_reasignacion_real:
+                messages.success(
+                    request,
+                    "Servicio reasignado correctamente. El estado volvió a 'asignado' y los técnicos actuales deben aceptar nuevamente."
+                )
+            elif solo_agregando:
+                messages.success(
+                    request,
+                    "Técnicos agregados correctamente. Los nuevos deben aceptar su asignación."
+                )
+            else:
+                messages.success(request, "Asignación actualizada correctamente.")
+
             return redirect('operaciones:listar_servicios_supervisor')
+
     else:
-        # Precargamos los técnicos que ya estaban asignados → se ve como REASIGNACIÓN
+        inicial_ids = list(cotizacion.trabajadores_asignados.values_list('id', flat=True))
         form = AsignarTrabajadoresForm(
-            initial={"trabajadores": cotizacion.trabajadores_asignados.all()}
+            initial={"trabajadores": inicial_ids}
         )
 
     return render(request, 'operaciones/asignar_trabajadores.html', {
         'cotizacion': cotizacion,
-        'form': form
+        'form': form,
+        'modo': modo,
     })
 
 @login_required

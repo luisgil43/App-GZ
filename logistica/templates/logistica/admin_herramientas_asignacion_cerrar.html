@@ -1,0 +1,59 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Terminar asignación{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex items-center justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">✅ Terminar asignación</h2>
+    <a href="{% url 'logistica:herramientas_asignaciones_panel' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+      ← Volver
+    </a>
+  </div>
+
+  <div class="border rounded-2xl p-4 bg-gray-50 mb-4">
+    <div class="font-semibold text-gray-800">{{ asignacion.herramienta.nombre }}</div>
+    <div class="text-sm text-gray-600">Serial: {{ asignacion.herramienta.serial }}</div>
+    <div class="text-sm text-gray-600">
+      Asignada a: <b>{{ asignacion.asignado_a.get_full_name|default:asignacion.asignado_a.username }}</b>
+    </div>
+    <div class="text-sm text-gray-600">Cantidad entregada: <b>{{ asignacion.cantidad_entregada }}</b></div>
+  </div>
+
+  <form method="post" class="space-y-4">
+    {% csrf_token %}
+
+    <div class="border rounded-2xl p-4 bg-white shadow-sm space-y-3 max-w-2xl">
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Cantidad devuelta</label>
+        <div class="mt-1">{{ form.cantidad_devuelta }}</div>
+        {% if form.cantidad_devuelta.errors %}<div class="text-sm text-red-600 mt-1">{{ form.cantidad_devuelta.errors }}</div>{% endif %}
+        <div class="text-xs text-gray-500 mt-1">Si devuelve menos que lo entregado, debes justificar.</div>
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Justificación (si devuelve menos)</label>
+        <div class="mt-1">{{ form.justificacion_diferencia }}</div>
+        {% if form.justificacion_diferencia.errors %}<div class="text-sm text-red-600 mt-1">{{ form.justificacion_diferencia.errors }}</div>{% endif %}
+      </div>
+
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Comentario</label>
+        <div class="mt-1">{{ form.comentario_cierre }}</div>
+        {% if form.comentario_cierre.errors %}<div class="text-sm text-red-600 mt-1">{{ form.comentario_cierre.errors }}</div>{% endif %}
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button type="submit"
+                class="px-5 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700 shadow">
+          ✅ Terminar y actualizar stock
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

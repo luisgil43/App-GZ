@@ -1,3 +1,4 @@
+{# logistica/templates/logistica/admin_herramienta_form.html #}
 {% extends "dashboard_admin/base.html" %}
 {% load custom_filters %}
 
@@ -40,10 +41,18 @@
       {% if mode == "edit" %}✏️ Editar herramienta{% else %}➕ Crear herramienta{% endif %}
     </h2>
 
-    <a href="{% url 'logistica:herramientas_list' %}"
-       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
-      ← Volver
-    </a>
+    <div class="flex gap-2 flex-wrap">
+      <button type="button"
+              class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm"
+              onclick="openImportModal()">
+        📥 Importar
+      </button>
+
+      <a href="{% url 'logistica:herramientas_list' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+        ← Volver
+      </a>
+    </div>
   </div>
 
   {# ✅ Tips SOLO al crear #}
@@ -53,6 +62,7 @@
       <ul class="mt-2 text-sm text-gray-700 list-disc pl-5 space-y-1">
         <li><b>Nombre:</b> usa un nombre claro y corto (ej: “Taladro percutor”).</li>
         <li><b>Serial:</b> debe ser <b>único</b>. Ideal copiar exactamente el del equipo.</li>
+        <li><b>Cantidad:</b> cantidad inicial del item.</li>
         <li><b>Valor comercial:</b> monto referencial (sin puntos ni símbolos, el sistema formatea).</li>
         <li><b>Bodega:</b> selecciona dónde quedará almacenada inicialmente.</li>
         <li><b>Foto:</b> ayuda a identificarla rápido (opcional).</li>
@@ -94,9 +104,33 @@
         <div class="mt-1">
           {{ form.serial }}
         </div>
+
+        <div class="mt-2 flex items-center gap-2">
+          {{ form.sin_serial }}
+          <label for="{{ form.sin_serial.id_for_label }}" class="text-sm text-gray-700">
+            Sin serial (no aplica)
+          </label>
+        </div>
+        <div class="help">Si no tiene serial, marca la casilla y el sistema generará uno automático.</div>
+
         <div class="help">Debe ser único. Ej: 234235325253 o “SN-AX12-8890”.</div>
         {% if form.serial.errors %}
           <div class="text-sm text-red-600 mt-1">{{ form.serial.errors }}</div>
+        {% endif %}
+        {% if form.sin_serial.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.sin_serial.errors }}</div>
+        {% endif %}
+      </div>
+
+      <!-- ✅ NUEVO: Cantidad -->
+      <div>
+        <label class="text-sm font-semibold text-gray-700">Cantidad</label>
+        <div class="mt-1">
+          {{ form.cantidad }}
+        </div>
+        <div class="help">Cantidad inicial. Ej: 1, 2, 10…</div>
+        {% if form.cantidad.errors %}
+          <div class="text-sm text-red-600 mt-1">{{ form.cantidad.errors }}</div>
         {% endif %}
       </div>
 
@@ -180,6 +214,53 @@
   </form>
 </div>
 
+<!-- ✅ MODAL IMPORTAR -->
+<div id="importModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">📥 Importar herramientas</h3>
+      <p class="text-sm text-gray-600 mt-1">
+        Descarga la plantilla, complétala y luego súbela aquí.
+      </p>
+
+      <div class="mt-4 flex flex-col sm:flex-row gap-2">
+        <a href="{% url 'logistica:herramientas_importar_plantilla' %}"
+           class="px-4 py-2 rounded-full text-sm bg-emerald-600 text-white hover:bg-emerald-700 text-center">
+          ⬇️ Descargar plantilla
+        </a>
+
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeImportModal()">
+          Cancelar
+        </button>
+      </div>
+
+      <form method="post" enctype="multipart/form-data"
+            action="{% url 'logistica:herramientas_importar' %}"
+            class="mt-4 space-y-3">
+        {% csrf_token %}
+
+        <div>
+          <label class="text-sm font-medium text-gray-700">Archivo</label>
+          <input type="file" name="archivo" accept=".xlsx"
+                 class="w-full mt-1 border rounded-xl px-3 py-2 text-sm" required>
+          <div class="text-xs text-gray-500 mt-1">Formato: Excel (.xlsx)</div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+            📤 Importar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
   // ✅ Aplicar estilo PRO a inputs del form (sin tocar forms.py)
   (function(){
@@ -208,6 +289,7 @@
 
     setPH('input[name="nombre"]', 'Ej: Taladro percutor');
     setPH('input[name="serial"]', 'Ej: 234235325253 / SN-AX12-8890');
+    setPH('input[name="cantidad"]', 'Ej: 1');
     setPH('input[name="valor_comercial"]', 'Ej: 500000');
     setPH('textarea[name="descripcion"]', 'Ej: Marca/Modelo, accesorios, observaciones...');
     setPH('textarea[name="status_justificacion"]', 'Explica el motivo del estado seleccionado...');
@@ -219,6 +301,38 @@
       const field = wrap.querySelector('input, select, textarea');
       if(field) field.classList.add('campo-error');
     });
+  })();
+
+  function openImportModal(){
+    document.getElementById('importModal')?.classList.remove('hidden');
+  }
+  function closeImportModal(){
+    document.getElementById('importModal')?.classList.add('hidden');
+  }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeImportModal();
+  });
+
+  (function(){
+    const chk = document.querySelector('input[name="sin_serial"]');
+    const serial = document.querySelector('input[name="serial"]');
+    if(!chk || !serial) return;
+
+    function sync(){
+      const on = chk.checked;
+      if(on){
+        serial.value = '';
+        serial.disabled = true;
+        serial.classList.add('opacity-60');
+      }else{
+        serial.disabled = false;
+        serial.classList.remove('opacity-60');
+      }
+    }
+
+    chk.addEventListener('change', sync);
+    sync();
   })();
 </script>
 {% endblock %}

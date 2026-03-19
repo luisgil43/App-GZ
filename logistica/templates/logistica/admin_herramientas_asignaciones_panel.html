@@ -1,0 +1,505 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Asignaciones - Herramientas{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+    <h2 class="text-2xl font-bold text-gray-800">👥 Asignaciones de Herramientas</h2>
+
+    <a href="{% url 'logistica:herramientas_list' %}"
+       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+      ← Volver a herramientas
+    </a>
+  </div>
+
+  <form method="get" class="mb-4">
+    <div class="flex flex-col sm:flex-row gap-2 items-stretch">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar trabajador / herramienta / serial..."
+             class="border rounded-xl px-3 py-2 w-full">
+      <button type="submit"
+              class="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
+        🔎 Buscar
+      </button>
+      <a href="{% url 'logistica:herramientas_asignaciones_panel' %}"
+         class="px-4 py-2 rounded-xl border bg-white hover:bg-gray-50">
+        ❌ Limpiar
+      </a>
+    </div>
+  </form>
+
+  {% if not user_ids_sorted %}
+    <div class="p-4 bg-gray-50 border rounded-xl text-gray-700">
+      No hay asignaciones registradas.
+    </div>
+  {% else %}
+
+    <div class="space-y-3">
+      {% for uid in user_ids_sorted %}
+        {% with u=users|dictget:uid %}
+        <details class="border rounded-2xl overflow-hidden">
+          <summary class="cursor-pointer px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between">
+            <div class="font-semibold text-gray-800">
+              {{ u.get_full_name|default:u.username }}
+              <span class="text-xs text-gray-500 ml-2">@{{ u.username }}</span>
+            </div>
+            <div class="text-sm text-gray-600">
+              {{ grouped|dictget:uid|length }} asignación(es)
+            </div>
+          </summary>
+
+          <div class="p-4">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm min-w-[1200px]">
+                <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+                  <tr>
+                    <th class="p-2 border text-left">Herramienta</th>
+                    <th class="p-2 border">Serial</th>
+                    <th class="p-2 border">Cantidad</th>
+                    <th class="p-2 border">Bodega</th>
+                    <th class="p-2 border">Estado</th>
+                    <th class="p-2 border">Asignada por</th>
+                    <th class="p-2 border">Fecha</th>
+                    <th class="p-2 border">Inventario</th>
+                    <th class="p-2 border">Acciones</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {% for a in grouped|dictget:uid %}
+                    <tr class="border-t hover:bg-gray-50 text-center">
+
+                      <!-- Herramienta -->
+                      <td class="p-2 border text-left">
+                        <div class="font-semibold text-gray-800">{{ a.herramienta.nombre }}</div>
+                        {% if a.herramienta.descripcion %}
+                          <div class="text-xs text-gray-500">{{ a.herramienta.descripcion }}</div>
+                        {% endif %}
+
+                        <!-- última mod compacta -->
+                        <div class="mt-2 text-[11px] text-gray-500">
+                          <span class="font-semibold">Última mod:</span>
+                          {% if a.last_edit %}
+                            {{ a.last_edit.get_accion_display }}
+                            • {{ a.last_edit.created_at|date:"d/m/Y H:i" }}
+                            • {% if a.last_edit.by_user %}{{ a.last_edit.by_user.get_full_name|default:a.last_edit.by_user.username }}{% else %}—{% endif %}
+                          {% else %}
+                            —
+                          {% endif %}
+                        </div>
+
+                        <!-- contenedor oculto para el modal -->
+                        <div id="logsBox-{{ a.id }}" class="hidden">
+                          {% if a.logs_list %}
+                            <div class="space-y-2">
+                              {% for lg in a.logs_list %}
+                                <div class="border rounded-xl p-3 bg-gray-50">
+                                  <div class="font-semibold text-gray-800 text-sm">
+                                    {{ lg.get_accion_display }} • {{ lg.created_at|date:"d/m/Y H:i" }}
+                                  </div>
+                                  <div class="text-[11px] text-gray-600">
+                                    Por: {% if lg.by_user %}{{ lg.by_user.get_full_name|default:lg.by_user.username }}{% else %}—{% endif %}
+                                  </div>
+
+                                  {% if lg.cambios %}
+                                    <div class="mt-2 text-[12px] text-gray-700 space-y-1">
+                                      {% if lg.cambios.snapshot %}
+                                        <div class="font-semibold text-gray-800">Snapshot</div>
+                                        <div class="grid grid-cols-1 gap-1">
+                                          {% for k,v in lg.cambios.snapshot.items %}
+                                            <div class="flex gap-2">
+                                              <span class="text-gray-500 min-w-[140px]">{{ k }}:</span>
+                                              <span class="text-gray-900">{{ v }}</span>
+                                            </div>
+                                          {% endfor %}
+                                        </div>
+                                      {% endif %}
+
+                                      {% for campo, val in lg.cambios.items %}
+                                        {% if campo != "snapshot" %}
+                                          <div class="flex gap-2">
+                                            <span class="text-gray-500 min-w-[140px]">{{ campo }}:</span>
+
+                                            {% if val.from != None or val.to != None %}
+                                              <span class="text-gray-900">
+                                                <span class="px-2 py-0.5 rounded bg-gray-100">{{ val.from }}</span>
+                                                <span class="mx-1 text-gray-400">→</span>
+                                                <span class="px-2 py-0.5 rounded bg-emerald-50">{{ val.to }}</span>
+                                              </span>
+                                            {% else %}
+                                              <span class="text-gray-900">{{ val }}</span>
+                                            {% endif %}
+                                          </div>
+                                        {% endif %}
+                                      {% endfor %}
+                                    </div>
+                                  {% endif %}
+
+                                  {% if lg.nota %}
+                                    <div class="mt-2 text-[11px] text-gray-700">
+                                      <b>Nota:</b> {{ lg.nota }}
+                                    </div>
+                                  {% endif %}
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% else %}
+                            <div class="text-sm text-gray-600">Sin historial registrado.</div>
+                          {% endif %}
+                        </div>
+                      </td>
+
+                      <td class="p-2 border">{{ a.herramienta.serial }}</td>
+
+                      <td class="p-2 border">
+                        <div class="font-semibold">{{ a.cantidad_entregada }}</div>
+                        {% if not a.active and a.cantidad_devuelta != None %}
+                          <div class="text-[11px] text-gray-500">Dev: {{ a.cantidad_devuelta }}</div>
+                        {% endif %}
+                      </td>
+
+                      <td class="p-2 border">{{ a.herramienta.bodega.nombre|default:"—" }}</td>
+
+                      <td class="p-2 border">
+                        {% if a.active %}
+                          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Activa • {{ a.get_estado_display }}
+                          </span>
+                        {% else %}
+                          <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            Terminada
+                          </span>
+                          {% if a.closed_at %}
+                            <div class="text-[11px] text-gray-500 mt-1">{{ a.closed_at|date:"d/m/Y H:i" }}</div>
+                          {% endif %}
+                        {% endif %}
+                      </td>
+
+                      <td class="p-2 border">
+                        {{ a.asignado_por.get_full_name|default:a.asignado_por.username|default:"—" }}
+                      </td>
+
+                      <td class="p-2 border">{{ a.asignado_at|date:"d/m/Y H:i" }}</td>
+
+                      <!-- Inventario (por asignación) -->
+                      <td class="p-2 border">
+                        <div class="flex flex-col items-center gap-2">
+
+                          {% if a.last_inv %}
+                            {% if a.last_inv.estado == "pendiente" %}
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                Pendiente revisión
+                              </span>
+
+                              <div class="flex flex-wrap justify-center gap-2">
+                                {% if a.last_inv.foto %}
+                                  <a href="{{ a.last_inv.foto.url }}" target="_blank"
+                                     class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                                    🔎 Ver foto
+                                  </a>
+                                {% endif %}
+
+                                <form method="post"
+                                      action="{% url 'logistica:aprobar_inventario' a.last_inv.id %}?next={{ request.get_full_path|urlencode }}">
+                                  {% csrf_token %}
+                                  <button type="submit"
+                                          class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                                    ✅ Aprobar
+                                  </button>
+                                </form>
+
+                                <a href="{% url 'logistica:rechazar_inventario' a.last_inv.id %}?next={{ request.get_full_path|urlencode }}"
+                                   class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                                  ❌ Rechazar
+                                </a>
+                              </div>
+
+                            {% elif a.last_inv.estado == "rechazado" %}
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Rechazado
+                              </span>
+
+                              {% if a.last_inv.motivo_rechazo %}
+                                <div class="text-[11px] text-gray-600 text-left max-w-[260px] whitespace-normal">
+                                  <span class="font-semibold">Motivo:</span> {{ a.last_inv.motivo_rechazo }}
+                                </div>
+                              {% endif %}
+
+                            {% else %}
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                                OK
+                              </span>
+                            {% endif %}
+                          {% else %}
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                              —
+                            </span>
+                          {% endif %}
+
+                          {# solicitar inventario (igual que herramientas) #}
+                          {% if not a.last_inv or a.last_inv.estado != "pendiente" %}
+                            <form method="post" action="{% url 'logistica:solicitar_inventario_asignacion' a.id %}?next={{ request.get_full_path|urlencode }}">
+                              {% csrf_token %}
+                              <button type="submit"
+                                      class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700">
+                                📸 Solicitar
+                              </button>
+                            </form>
+                          {% endif %}
+
+                          <a href="{% url 'logistica:inventario_historial_asignacion_admin' a.id %}"
+                             class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                            🗂 Historial
+                          </a>
+
+                          <span class="text-[11px] text-gray-500">
+                            Próx: {% if a.herramienta.next_inventory_due %}{{ a.herramienta.next_inventory_due|date:"d/m/Y" }}{% else %}—{% endif %}
+                          </span>
+                        </div>
+                      </td>
+
+                      <!-- Acciones -->
+                      <td class="p-2 border whitespace-nowrap">
+                        <div class="flex justify-center gap-2 flex-wrap">
+
+                          {% if a.active %}
+                            <a href="{% url 'logistica:herramientas_asignacion_cerrar' a.id %}"
+                               class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                              ✅ Terminar
+                            </a>
+
+                            <form method="post" action="{% url 'logistica:herramientas_asignacion_reiniciar' a.id %}">
+                              {% csrf_token %}
+                              <button type="submit"
+                                      class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                                🔄 Reiniciar estado
+                              </button>
+                            </form>
+                          {% else %}
+                            <button type="button"
+                                    class="px-3 py-1 text-xs rounded-full bg-white border opacity-60 cursor-not-allowed">
+                              Terminada
+                            </button>
+                          {% endif %}
+
+                          {# ✅ Historial cambios (modal) #}
+                          <button type="button"
+                                  class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50"
+                                  onclick="openLogsModal('{{ a.id }}', '{{ a.herramienta.nombre|escapejs }}')">
+                            🧾 Cambios
+                          </button>
+
+                          {% if can_edit %}
+                            <button type="button"
+                                    class="px-3 py-1 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                                    onclick="openEditModal(
+                                      '{{ a.id }}',
+                                      '{{ a.asignado_a_id }}',
+                                      '{{ a.asignado_at|date:"Y-m-d\\TH:i" }}',
+                                      '{{ a.cantidad_entregada }}'
+                                    )">
+                              ✏️ Editar
+                            </button>
+                          {% endif %}
+
+                          {% if can_delete %}
+                            <button type="button"
+                                    class="px-3 py-1 text-xs rounded-full bg-gray-900 text-white hover:bg-black"
+                                    onclick="openDeleteModal('{{ a.id }}')">
+                              🗑️ Eliminar
+                            </button>
+                          {% endif %}
+                        </div>
+
+                        {% if not a.active and a.comentario_cierre or not a.active and a.justificacion_diferencia %}
+                          <div class="text-left text-xs text-gray-600 mt-2 whitespace-normal max-w-[360px]">
+                            {% if a.comentario_cierre %}<div><b>Comentario:</b> {{ a.comentario_cierre }}</div>{% endif %}
+                            {% if a.justificacion_diferencia %}<div><b>Justificación:</b> {{ a.justificacion_diferencia }}</div>{% endif %}
+                          </div>
+                        {% endif %}
+                      </td>
+
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </details>
+        {% endwith %}
+      {% endfor %}
+    </div>
+
+  {% endif %}
+</div>
+
+<!-- ===================== -->
+<!-- MODAL HISTORIAL CAMBIOS -->
+<!-- ===================== -->
+<div id="logsModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-5 py-4 border-b flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-bold text-gray-800">🧾 Historial de cambios</h3>
+          <p class="text-sm text-gray-500 mt-1" id="logsTitle"></p>
+        </div>
+        <button type="button"
+                class="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeLogsModal()">
+          ✕ Cerrar
+        </button>
+      </div>
+      <div class="p-5 max-h-[70vh] overflow-y-auto" id="logsBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT / DELETE modals: se mantienen como tú los tienes -->
+<div id="editModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">✏️ Editar asignación</h3>
+      <p class="text-sm text-gray-600 mt-1">Solo Logística/Admin puede editar. Cambios quedan registrados.</p>
+
+      <form method="post" id="editForm" class="mt-4 space-y-3">
+        {% csrf_token %}
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Asignado a</label>
+          <select name="asignado_a" id="edit_asignado_a" class="w-full mt-1 border rounded-xl px-3 py-2 text-sm">
+            {% for u in users_qs %}
+              <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }} (@{{ u.username }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Fecha asignación</label>
+          <input type="datetime-local" name="asignado_at" id="edit_asignado_at"
+                 class="w-full mt-1 border rounded-xl px-3 py-2 text-sm">
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Cantidad entregada</label>
+          <input type="number" min="1" name="cantidad_entregada" id="edit_cantidad"
+                 class="w-full mt-1 border rounded-xl px-3 py-2 text-sm">
+        </div>
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Nota (opcional)</label>
+          <textarea name="nota" rows="3" class="w-full mt-1 border rounded-xl p-3 text-sm"
+                    placeholder="Motivo del cambio, comentario interno..."></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeEditModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
+            Guardar cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div id="deleteModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-5">
+      <h3 class="text-lg font-bold text-gray-800">🗑️ Eliminar asignación</h3>
+      <p class="text-sm text-gray-600 mt-2">
+        Esto elimina el registro. Si la asignación está activa, el sistema devuelve la cantidad al stock.
+      </p>
+
+      <form method="post" id="deleteForm" class="mt-4 space-y-3">
+        {% csrf_token %}
+
+        <div>
+          <label class="text-sm font-semibold text-gray-700">Nota (opcional)</label>
+          <textarea name="nota" rows="3" class="w-full mt-1 border rounded-xl p-3 text-sm"
+                    placeholder="Motivo de eliminación..."></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeDeleteModal()">
+            Cancelar
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-gray-900 text-white hover:bg-black">
+            Sí, eliminar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function openLogsModal(asigId, toolName){
+    const modal = document.getElementById('logsModal');
+    const title = document.getElementById('logsTitle');
+    const body  = document.getElementById('logsBody');
+
+    title.textContent = `Asignación #${asigId} • ${toolName}`;
+    const src = document.getElementById(`logsBox-${asigId}`);
+    body.innerHTML = src ? src.innerHTML : '<div class="text-sm text-gray-600">Sin historial.</div>';
+
+    modal.classList.remove('hidden');
+  }
+  function closeLogsModal(){
+    document.getElementById('logsModal')?.classList.add('hidden');
+  }
+
+  function openEditModal(asigId, asignadoAId, asignadoAt, cantidad){
+    const modal = document.getElementById('editModal');
+    const form  = document.getElementById('editForm');
+
+    form.action = "{% url 'logistica:herramientas_asignacion_editar' 0 %}".replace('/0/', `/${asigId}/`);
+
+    const selUser = document.getElementById('edit_asignado_a');
+    const dt      = document.getElementById('edit_asignado_at');
+    const qty     = document.getElementById('edit_cantidad');
+
+    if(selUser) selUser.value = String(asignadoAId || '');
+    if(dt) dt.value = asignadoAt || '';
+    if(qty) qty.value = cantidad || '';
+
+    modal.classList.remove('hidden');
+  }
+  function closeEditModal(){ document.getElementById('editModal')?.classList.add('hidden'); }
+
+  function openDeleteModal(asigId){
+    const modal = document.getElementById('deleteModal');
+    const form  = document.getElementById('deleteForm');
+    form.action = "{% url 'logistica:herramientas_asignacion_eliminar' 0 %}".replace('/0/', `/${asigId}/`);
+    modal.classList.remove('hidden');
+  }
+  function closeDeleteModal(){ document.getElementById('deleteModal')?.classList.add('hidden'); }
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      closeLogsModal();
+      closeEditModal();
+      closeDeleteModal();
+    }
+  });
+
+  document.getElementById('logsModal')?.addEventListener('click', (e)=>{ if(e.target.id === 'logsModal') closeLogsModal(); });
+  document.getElementById('editModal')?.addEventListener('click', (e)=>{ if(e.target.id === 'editModal') closeEditModal(); });
+  document.getElementById('deleteModal')?.addEventListener('click', (e)=>{ if(e.target.id === 'deleteModal') closeDeleteModal(); });
+</script>
+
+{% endblock %}

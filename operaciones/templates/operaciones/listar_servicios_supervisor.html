@@ -228,7 +228,8 @@
       </tr>
     </thead>
     <tbody class="text-center">
-      {% for servicio in pagina %}
+      {% for row in pagina_info %}
+      {% with servicio=row.servicio %}
       <tr class="border-t">
         <td class="p-2 font-mono">DU{{ servicio.du }}</td>
         <td class="p-2">{{ servicio.id_claro }}</td>
@@ -252,112 +253,148 @@
           {% else %}—{% endif %}
         </td>
 
-        <!-- ====== STATUS (badge) ====== -->
-        <td class="p-2 text-sm">
-          <div class="flex flex-col gap-1 text-left">
+ <!-- ====== STATUS (badge) ====== -->
+<td class="p-2 text-sm">
+  <div class="flex flex-col gap-1 text-left">
 
-            <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
-              {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-              {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-              {% elif servicio.estado == 'en_progreso' and servicio.tecnico_aceptado %}bg-indigo-100 text-indigo-800
-              {% elif servicio.estado == 'en_progreso' %}bg-amber-100 text-amber-800
-              {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-              {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-              {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-              {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
-              {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-              {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
-              {% else %}bg-gray-100 text-gray-800{% endif %}">
+    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+      {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+      {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+      {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+      {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+      {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+      {% else %}bg-gray-100 text-gray-800{% endif %}">
 
-              {% if servicio.estado == 'aprobado_pendiente' %}
-                ✅ Aprobado por PM: {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% if servicio.estado == 'aprobado_pendiente' %}
+        ✅ Aprobado por PM:
+        {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
 
-              {% elif servicio.estado == 'asignado' %}
-                ✅ Asignado por Supervisor: {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+      {% elif servicio.estado == 'asignado' %}
+        👥 Asignado por Supervisor:
+        {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
 
-              {% elif servicio.estado == 'en_progreso' %}
-                {% if servicio.tecnico_aceptado %}
-                  🕓 En ejecución (aceptado por {{ servicio.tecnico_aceptado.get_full_name }})
-                {% else %}
-                  🔁 Reabierto — pendiente re-aceptación del técnico
-                {% endif %}
+      {% elif servicio.estado == 'en_progreso' %}
+        🕓 En ejecución
 
-              {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
-                ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
 
-              {% elif servicio.estado == 'rechazado_supervisor' %}
-                ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'rechazado_supervisor' %}
+        ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
 
-              {% elif servicio.estado == 'aprobado_supervisor' %}
-                ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+      {% elif servicio.estado == 'aprobado_supervisor' %}
+        ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
 
-              {% elif servicio.estado == 'ajuste_bono' %}
-                🎁 Bono
+      {% elif servicio.estado == 'ajuste_bono' %}
+        🎁 Bono
 
-              {% elif servicio.estado == 'ajuste_adelanto' %}
-                ⏩ Adelanto
+      {% elif servicio.estado == 'ajuste_adelanto' %}
+        ⏩ Adelanto
 
-              {% elif servicio.estado == 'ajuste_descuento' %}
-                ➖ Descuento
+      {% elif servicio.estado == 'ajuste_descuento' %}
+        ➖ Descuento
 
-              {% else %}
-                {{ servicio.estado }}
-              {% endif %}
+      {% else %}
+        {{ servicio.estado }}
+      {% endif %}
+    </div>
+
+    {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+        📝 Pendiente revisión del supervisor
+      </div>
+    {% endif %}
+
+    {% if servicio.estado == 'asignado' or servicio.estado == 'en_progreso' %}
+      <div class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="text-[11px] font-semibold text-gray-700">
+          Aceptaciones: {{ row.aceptados_count }}/{{ row.total_count }}
+        </div>
+
+        {% if row.aceptados_lista %}
+          <div class="mt-1">
+            <div class="text-[11px] font-medium text-emerald-700">✅ Aceptaron</div>
+            <div class="mt-1 space-y-0.5">
+              {% for tec in row.aceptados_lista %}
+                <div class="text-[11px] text-emerald-700 leading-4">
+                  {{ tec.get_full_name }}
+                </div>
+              {% endfor %}
             </div>
-
-            {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
-              <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                📝 Pendiente revisión del supervisor
-              </div>
-            {% endif %}
           </div>
+        {% endif %}
 
-          {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-            <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
-              <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
+        {% if row.pendientes_lista %}
+          <div class="mt-2">
+            <div class="text-[11px] font-medium text-amber-700">⏳ Pendientes</div>
+            <div class="mt-1 space-y-0.5">
+              {% for tec in row.pendientes_lista %}
+                <div class="text-[11px] text-amber-700 leading-4">
+                  {{ tec.get_full_name }}
+                </div>
+              {% endfor %}
             </div>
-          {% endif %}
-        </td>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
+      <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
+    </div>
+  {% endif %}
+</td>
 
         <!-- ====== ACCIONES ====== -->
 <td class="p-2 space-y-1">
-  {# 1) Aprobado por PM -> Asignar #}
   {% if servicio.estado == 'aprobado_pendiente' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
-       class="text-blue-600 hover:underline">
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
+       class="text-blue-600 hover:underline block">
       👥 Asignar
     </a>
 
-  {# 2) SOLO estos tres NO tienen acciones #}
   {% elif servicio.estado == 'ajuste_bono' or servicio.estado == 'ajuste_adelanto' or servicio.estado == 'ajuste_descuento' %}
     <span class="text-gray-400 italic">Sin acciones</span>
 
-  {# 3) Flujo normal con acciones (como antes) #}
   {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' or servicio.estado == 'rechazado_supervisor' %}
     <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}?next={{ request.get_full_path|urlencode }}"
        class="text-sky-700 hover:underline block">
       📋 Requerimientos fotos
     </a>
+
     <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
        class="text-emerald-700 hover:underline block">
       🔎 Revisión
     </a>
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
        class="text-indigo-600 hover:underline block">
       🔁 Reasignar
     </a>
+
+    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=agregar"
+       class="text-amber-700 hover:underline block">
+      ➕ Agregar más técnicos
+    </a>
+
     {% if servicio.motivo_rechazo %}
       <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
         <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
       </div>
     {% endif %}
 
-  {# 4) Aprobado por supervisor -> revisar + reabrir (igual que antes) #}
   {% elif servicio.estado == 'aprobado_supervisor' %}
     <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
        class="text-emerald-700 hover:underline block">
       🔎 Revisar
     </a>
+
     <button type="button"
             class="text-red-600 hover:underline block"
             onclick="abrirModalReabrir('{{ servicio.id }}')">
@@ -375,6 +412,7 @@
             ✕
           </button>
         </div>
+
         <form method="post"
               action="{% url 'operaciones:reabrir_servicio' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
               class="px-5 pt-4 pb-5 space-y-3">
@@ -382,6 +420,7 @@
           <p class="text-sm text-gray-600 leading-relaxed modal-copy">
             Indica el motivo por el cual se reabre la asignación.
           </p>
+
           <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
           <textarea name="motivo"
                     rows="4"
@@ -389,6 +428,7 @@
                     pattern=".*\S.*"
                     oninput="this.value = this.value.replace(/^\s+/, '')"
                     class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+
           <div class="flex items-center justify-end gap-2 pt-2">
             <button type="button"
                     class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
@@ -404,14 +444,14 @@
       </div>
     </div>
 
-  {# 5) Resto igual que antes (si lo tenías sin acciones, se mantiene) #}
   {% else %}
     <span class="text-gray-400 italic">Sin acciones</span>
   {% endif %}
 </td>
 
 
-      </tr>
+            </tr>
+      {% endwith %}
       {% endfor %}
     </tbody>
   </table>

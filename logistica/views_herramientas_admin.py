@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from decimal import Decimal
 
 from django.contrib import messages
@@ -70,23 +71,23 @@ def bodegas_manage(request):
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
 def herramientas_list(request):
-    if not _can_admin_logistica(request.user):
-        return HttpResponseForbidden("No tienes permiso.")
-
-    # ===== filtros + paginación =====
     q = (request.GET.get("q") or "").strip()
     status = (request.GET.get("status") or "").strip()
-
     cantidad = (request.GET.get("cantidad") or "20").strip()
-    if cantidad not in {"5", "10", "20", "50", "100"}:
-        cantidad = "20"
+    page_number = (request.GET.get("page") or "1").strip()
 
-    page_num = request.GET.get("page") or "1"
+    try:
+        per_page = int(cantidad)
+    except Exception:
+        per_page = 20
+
+    if per_page not in (5, 10, 20, 50, 100):
+        per_page = 20
 
     qs = (
         Herramienta.objects
         .select_related("bodega", "creada_por")
-        .order_by("-created_at")
+        .order_by("-created_at", "-id")
     )
 
     if q:
@@ -99,59 +100,43 @@ def herramientas_list(request):
     if status:
         qs = qs.filter(status=status)
 
-    paginator = Paginator(qs, int(cantidad))
-    pagina = paginator.get_page(page_num)
+    paginator = Paginator(qs, per_page)
+    pagina = paginator.get_page(page_number)
 
-    herramientas = list(pagina.object_list)
-    tool_ids = [h.id for h in herramientas]
+    tool_ids = [h.id for h in pagina.object_list]
 
-    # ===== asignación activa =====
-    active_assignments = (
-        HerramientaAsignacion.objects
-        .filter(active=True, herramienta_id__in=tool_ids)
-        .select_related("asignado_a", "asignado_por", "herramienta")
-    )
-    by_tool = {a.herramienta_id: a for a in active_assignments}
+    # ===== asignaciones activas por herramienta (multi) =====
+    active_count_by_tool = defaultdict(int)
+    active_names_by_tool = defaultdict(list)
 
-    # ===== último inventario (solo asignación activa) =====
-    active_asig_ids = [a.id for a in active_assignments]
-    latest_inv_by_tool = {}
-    if active_asig_ids:
-        invs = (
-            HerramientaInventario.objects
-            .filter(asignacion_id__in=active_asig_ids)
-            .select_related(
-                "revisado_por",
-                "asignacion",
-                "asignacion__asignado_a",
-                "asignacion__asignado_por",
-            )
-            .order_by("-created_at", "-id")
+    if tool_ids:
+        active_asigs = (
+            HerramientaAsignacion.objects
+            .filter(herramienta_id__in=tool_ids, active=True)
+            .select_related("asignado_a")
+            .order_by("-asignado_at", "-id")
         )
-        for inv in invs:
-            hid = inv.herramienta_id
-            if hid not in latest_inv_by_tool:
-                latest_inv_by_tool[hid] = inv
+        for a in active_asigs:
+            active_count_by_tool[a.herramienta_id] += 1
 
-    # ===== pegar atributos al objeto =====
-    for h in herramientas:
-        a = by_tool.get(h.id)
-        h.asignacion_activa = a
-        h.asignada_a = getattr(a, "asignado_a", None) if a else None
-        h.asignada_por = getattr(a, "asignado_por", None) if a else None
-        h.asignada_at = getattr(a, "asignado_at", None) if a else None
-        h.asignacion_estado = getattr(a, "estado", None) if a else None
-        h.last_inv = latest_inv_by_tool.get(h.id)
+            # preview: solo guardar 3 nombres
+            if len(active_names_by_tool[a.herramienta_id]) < 3:
+                u = a.asignado_a
+                name = (u.get_full_name() or u.username or "").strip()
+                if name:
+                    active_names_by_tool[a.herramienta_id].append(name)
 
-    # reemplazamos el object_list con la lista “enriquecida”
-    pagina.object_list = herramientas
+    # ===== hidratar atributos en cada herramienta =====
+    for h in pagina.object_list:
+        h.active_asig_count = int(active_count_by_tool.get(h.id, 0) or 0)
+        preview = active_names_by_tool.get(h.id, [])
+        h.active_assignees_preview = ", ".join(preview) if preview else ""
 
     return render(request, "logistica/admin_herramientas_list.html", {
         "pagina": pagina,
-        "herramientas": herramientas,  # por si lo usas en algún lado
         "q": q,
         "status": status,
-        "cantidad": cantidad,
+        "cantidad": str(per_page),
         "STATUS_CHOICES": Herramienta.STATUS_CHOICES,
         "can_delete": bool(getattr(request.user, "es_admin_general", False)),
     })
@@ -385,81 +370,6 @@ def herramienta_delete(request, tool_id: int):
     })
 
 
-@staff_member_required
-@rol_requerido("admin", "pm", "supervisor", "logistica")
-def herramienta_assign(request, tool_id: int):
-    if not _can_admin_logistica(request.user):
-        return HttpResponseForbidden("No tienes permiso.")
-
-    tool = get_object_or_404(Herramienta, pk=tool_id)
-    user_qs = CustomUser.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
-
-    if request.method == "POST":
-        form = HerramientaAsignarForm(request.POST, user_qs=user_qs)
-        if form.is_valid():
-            to_user = form.cleaned_data.get("asignado_a")  # puede ser None
-            asignado_at = form.cleaned_data["asignado_at"]
-
-            with transaction.atomic():
-                prev = HerramientaAsignacion.objects.filter(herramienta=tool, active=True).first()
-                if prev:
-                    prev.active = False
-                    prev.save(update_fields=["active"])
-
-                if to_user:
-                    # crear nueva asignación
-                    HerramientaAsignacion.objects.create(
-                        herramienta=tool,
-                        asignado_a=to_user,
-                        asignado_por=request.user,
-                        asignado_at=asignado_at,
-                        active=True,
-                        estado="pendiente",
-                    )
-
-                    # ✅ si hay asignación, estado debe ser asignada
-                    tool.status = "asignada"
-                    tool.inventory_required = True  # se solicita inventario al nuevo usuario
-                    tool.status_changed_at = timezone.now()
-                    tool.status_changed_by = request.user
-                    if not tool.next_inventory_due:
-                        tool.mark_inventory_due_default()
-                    tool.save(update_fields=[
-                        "status",
-                        "inventory_required",
-                        "status_changed_at",
-                        "status_changed_by",
-                        "next_inventory_due",
-                        "updated_at",
-                    ])
-
-                    messages.success(request, f"✅ Herramienta asignada a {to_user.get_full_name() or to_user.username}.")
-                    return redirect("logistica:herramientas_list")
-
-                # ✅ SIN ASIGNAR: queda en bodega
-                tool.status = "bodega"
-                tool.inventory_required = False  # si no hay responsable, no se solicita inventario
-                tool.status_changed_at = timezone.now()
-                tool.status_changed_by = request.user
-                tool.save(update_fields=[
-                    "status",
-                    "inventory_required",
-                    "status_changed_at",
-                    "status_changed_by",
-                    "updated_at",
-                ])
-
-                messages.success(request, "✅ Herramienta dejada sin asignar (en bodega).")
-                return redirect("logistica:herramientas_list")
-
-        messages.error(request, "❌ Revisa el formulario de asignación.")
-    else:
-        form = HerramientaAsignarForm(user_qs=user_qs)
-
-    return render(request, "logistica/admin_herramienta_assign.html", {
-        "tool": tool,
-        "form": form,
-    })
 
 
 @staff_member_required
@@ -605,7 +515,6 @@ def rechazar_inventario(request, inv_id: int):
         "next": nxt,
     })
 
-
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
 def inventario_historial_admin(request, tool_id: int):
@@ -626,11 +535,10 @@ def inventario_historial_admin(request, tool_id: int):
         .order_by("-created_at", "-id")
     )
 
-    return render(request, "logistica/admin_inventario_historial.html", {
+    return render(request, "logistica/admin_inventario_historial_asignacion.html", {
         "herramienta": tool,
         "inventarios": list(inventarios),
     })
-
 
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
@@ -687,3 +595,302 @@ def bodega_delete(request, bodega_id: int):
         messages.error(request, f"❌ No se pudo eliminar la bodega: {e}")
 
     return redirect("logistica:bodegas_manage")
+
+@staff_member_required
+@rol_requerido("admin", "pm", "supervisor", "logistica")
+def herramientas_importar_plantilla(request):
+    """
+    Descarga plantilla Excel para importar herramientas con cantidad.
+    Columnas:
+      nombre, serial(opcional), cantidad, valor_comercial, bodega, descripcion, status
+    """
+    if not _can_admin_logistica(request.user):
+        return HttpResponseForbidden("No tienes permiso.")
+
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Herramientas"
+
+    headers = ["nombre", "serial", "cantidad", "valor_comercial", "bodega", "descripcion", "status"]
+    ws.append(headers)
+
+    # ejemplo (serial puede ir vacío)
+    ws.append(["Taladro percutor", "SN-AX12-8890", 3, 500000, "Bodega Central", "Marca Bosch, con maletín", "bodega"])
+    ws.append(["Guantes", "", 20, "", "Bodega Central", "Guantes talla M", "bodega"])
+
+    widths = [24, 22, 10, 16, 22, 40, 14]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    filename = f"plantilla_importar_herramientas_{timezone.localdate().strftime('%Y-%m-%d')}.xlsx"
+    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    wb.save(resp)
+    return resp
+
+@staff_member_required
+@rol_requerido("admin", "pm", "supervisor", "logistica")
+def herramientas_importar(request):
+    """
+    Importa herramientas desde Excel con PREVIEW + confirmación.
+    - Permite serial vacío: se genera AUTO-XXXX
+    - En preview muestra coincidencias (serial) y bodegas no encontradas
+    - En confirmación el usuario decide:
+        - modo = reemplazar  -> cantidad queda igual al Excel
+        - modo = sumar       -> cantidad se suma al stock actual
+    - Permite corregir bodega por fila desde un dropdown en el preview
+    """
+    if not _can_admin_logistica(request.user):
+        return HttpResponseForbidden("No tienes permiso.")
+
+    if request.method != "POST":
+        raise Http404()
+
+    from decimal import Decimal
+    from uuid import uuid4
+
+    # ===== confirmación (2do POST) =====
+    confirmar = (request.POST.get("confirmar") or "").strip()
+    if confirmar == "1":
+        token = (request.POST.get("token") or "").strip()
+        modo = (request.POST.get("modo") or "reemplazar").strip()
+        if modo not in {"reemplazar", "sumar"}:
+            modo = "reemplazar"
+
+        session_key = f"logistica_import_tools:{token}"
+        payload = request.session.get(session_key)
+        if not payload:
+            messages.error(request, "❌ La sesión de importación expiró. Vuelve a subir el archivo.")
+            return redirect("logistica:herramientas_list")
+
+        rows = payload.get("rows") or []
+        if not rows:
+            messages.error(request, "❌ No hay filas para importar.")
+            return redirect("logistica:herramientas_list")
+
+        # bodegas válidas por id (para selección)
+        bodegas_by_id = {str(b.id): b for b in Bodega.objects.all()}
+
+        created = 0
+        updated = 0
+        errores = 0
+
+        with transaction.atomic():
+            for i, r in enumerate(rows):
+                try:
+                    nombre = (r.get("nombre") or "").strip()
+                    serial = (r.get("serial") or "").strip()
+                    if not nombre or not serial:
+                        continue
+
+                    cantidad = int(r.get("cantidad") or 1)
+                    if cantidad <= 0:
+                        cantidad = 1
+
+                    valor = r.get("valor_comercial")
+                    try:
+                        valor = Decimal(str(valor)) if valor not in (None, "") else Decimal("0")
+                    except Exception:
+                        valor = Decimal("0")
+                    if valor < 0:
+                        valor = Decimal("0")
+
+                    descripcion = (r.get("descripcion") or "").strip() or None
+                    status = (r.get("status") or "").strip() or None
+                    if status and status not in dict(Herramienta.STATUS_CHOICES):
+                        status = None
+
+                    # ✅ bodega seleccionada en preview
+                    bodega_sel = (request.POST.get(f"bodega_sel_{i}") or "").strip()
+                    bodega = bodegas_by_id.get(bodega_sel) if bodega_sel else None
+
+                    obj = Herramienta.objects.filter(serial=serial).first()
+                    if obj:
+                        obj.nombre = nombre
+                        obj.valor_comercial = valor
+                        obj.descripcion = descripcion
+                        if bodega is not None:
+                            obj.bodega = bodega
+                        if status:
+                            obj.status = status
+
+                        if modo == "sumar":
+                            obj.cantidad = int(obj.cantidad or 0) + cantidad
+                        else:
+                            obj.cantidad = cantidad
+
+                        obj.save()
+                        updated += 1
+                    else:
+                        obj = Herramienta.objects.create(
+                            nombre=nombre,
+                            serial=serial,
+                            cantidad=cantidad,
+                            valor_comercial=valor,
+                            descripcion=descripcion,
+                            bodega=bodega,
+                            status=status or "bodega",
+                            creada_por=request.user,
+                        )
+                        if not obj.next_inventory_due:
+                            obj.mark_inventory_due_default()
+                            obj.save(update_fields=["next_inventory_due", "updated_at"])
+                        created += 1
+
+                except Exception:
+                    errores += 1
+                    continue
+
+        # limpiar session
+        try:
+            del request.session[session_key]
+        except Exception:
+            pass
+
+        messages.success(
+            request,
+            f"✅ Importación lista ({modo}). Creadas: {created} • Actualizadas: {updated} • Errores: {errores}"
+        )
+        return redirect("logistica:herramientas_list")
+
+    # ===== preview (1er POST) =====
+    f = request.FILES.get("archivo")
+    if not f:
+        messages.error(request, "❌ Debes seleccionar un archivo.")
+        return redirect("logistica:herramientas_list")
+
+    name = (getattr(f, "name", "") or "").lower()
+    if not (name.endswith(".xlsx") or name.endswith(".xlsm")):
+        messages.error(request, "❌ El archivo debe ser .xlsx")
+        return redirect("logistica:herramientas_list")
+
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(f, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        messages.error(request, f"❌ No se pudo leer el Excel: {e}")
+        return redirect("logistica:herramientas_list")
+
+    rows_xl = list(ws.iter_rows(values_only=True))
+    if not rows_xl:
+        messages.error(request, "❌ El Excel viene vacío.")
+        return redirect("logistica:herramientas_list")
+
+    header = [str(x or "").strip().lower() for x in rows_xl[0]]
+    required = {"nombre", "cantidad"}  # ✅ serial ahora es opcional
+    if not required.issubset(set(header)):
+        messages.error(request, "❌ La plantilla no corresponde. Debe incluir al menos: nombre, cantidad.")
+        return redirect("logistica:herramientas_list")
+
+    idx = {col: header.index(col) for col in header if col}
+
+    def get_cell(r, col):
+        i = idx.get(col)
+        if i is None:
+            return None
+        return r[i] if i < len(r) else None
+
+    # bodegas por nombre (match por texto)
+    bodegas_by_name = {b.nombre.strip().lower(): b for b in Bodega.objects.all()}
+
+    # para detectar coincidencias por serial
+    existing_by_serial = {h.serial: h for h in Herramienta.objects.filter(serial__isnull=False).exclude(serial="")}
+
+    preview_rows = []
+    bodegas_faltantes = 0
+    coincidencias = 0
+
+    def gen_serial_unico() -> str:
+        for _ in range(40):
+            s = f"AUTO-{uuid4().hex[:10].upper()}"
+            if not Herramienta.objects.filter(serial=s).exists():
+                return s
+        return f"AUTO-{uuid4().hex[:10].upper()}"
+
+    for r in rows_xl[1:]:
+        try:
+            nombre = str(get_cell(r, "nombre") or "").strip()
+            if not nombre:
+                continue
+
+            serial = str(get_cell(r, "serial") or "").strip()
+            if not serial:
+                serial = gen_serial_unico()
+
+            # cantidad
+            c_raw = get_cell(r, "cantidad")
+            try:
+                cantidad = int(c_raw) if c_raw is not None and str(c_raw).strip() != "" else 1
+            except Exception:
+                cantidad = 1
+            if cantidad <= 0:
+                cantidad = 1
+
+            # valor
+            v_raw = get_cell(r, "valor_comercial")
+            try:
+                valor = str(v_raw).strip() if v_raw is not None and str(v_raw).strip() != "" else "0"
+            except Exception:
+                valor = "0"
+
+            bodega_name = str(get_cell(r, "bodega") or "").strip()
+            bodega = None
+            bodega_ok = True
+            if bodega_name:
+                bodega = bodegas_by_name.get(bodega_name.lower())
+                if not bodega:
+                    bodega_ok = False
+                    bodegas_faltantes += 1
+            else:
+                # si viene vacío, lo marcamos como "sin bodega" pero no es error
+                bodega_ok = True
+
+            descripcion = str(get_cell(r, "descripcion") or "").strip() or None
+            status = str(get_cell(r, "status") or "").strip() or ""
+            if status and status not in dict(Herramienta.STATUS_CHOICES):
+                status = ""
+
+            existe = existing_by_serial.get(serial)
+            if existe:
+                coincidencias += 1
+
+            preview_rows.append({
+                "nombre": nombre,
+                "serial": serial,
+                "cantidad": cantidad,
+                "valor_comercial": valor,
+                "bodega_excel": bodega_name,
+                "bodega_id_detectada": str(bodega.id) if bodega else "",
+                "bodega_ok": bodega_ok,
+                "descripcion": descripcion or "",
+                "status": status,
+                "existe": bool(existe),
+                "existe_cantidad": int(existe.cantidad) if existe else 0,
+                "existe_bodega": (existe.bodega.nombre if (existe and existe.bodega) else ""),
+            })
+
+        except Exception:
+            continue
+
+    if not preview_rows:
+        messages.warning(request, "⚠️ No se detectaron filas válidas para importar.")
+        return redirect("logistica:herramientas_list")
+
+    token = uuid4().hex
+    session_key = f"logistica_import_tools:{token}"
+    request.session[session_key] = {"rows": preview_rows}
+    request.session.modified = True
+
+    bodegas = list(Bodega.objects.all().order_by("nombre"))
+
+    return render(request, "logistica/admin_herramientas_import_preview.html", {
+        "token": token,
+        "preview_rows": preview_rows,
+        "bodegas": bodegas,
+        "coincidencias": coincidencias,
+        "bodegas_faltantes": bodegas_faltantes,
+    })

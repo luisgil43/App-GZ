@@ -4,24 +4,120 @@
 {% block title %}Asignar Trabajadores{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-xl mx-auto mt-10 bg-white p-6 rounded-xl shadow">
-  <h2 class="text-xl font-bold mb-4 text-gray-800">👷 Asignar Trabajadores</h2>
+<div class="max-w-2xl mx-auto mt-10 bg-white p-6 rounded-xl shadow">
+
+  {% if modo == 'agregar' %}
+    <h2 class="text-xl font-bold mb-2 text-gray-800">➕ Agregar más técnicos</h2>
+    <p class="mb-4 text-sm text-gray-600">
+      Los técnicos actuales se mantendrán. Los nuevos técnicos que agregues deberán aceptar su asignación.
+    </p>
+  {% else %}
+    <h2 class="text-xl font-bold mb-2 text-gray-800">👷 Asignar / Reasignar Trabajadores</h2>
+    <p class="mb-4 text-sm text-gray-600">
+      Si reemplazas técnicos actuales, el servicio volverá a estado asignado y deberá aceptarse nuevamente.
+    </p>
+  {% endif %}
+
   <p class="mb-4 break-words max-w-full">
-    Servicio: <strong>DU{{ cotizacion.id|stringformat:"08d" }}</strong> - 
+    Servicio:
+    <strong>DU{{ cotizacion.du }}</strong> -
     <span class="break-words text-gray-700">{{ cotizacion.detalle_tarea }}</span>
   </p>
 
-  <form method="post">
+  <form method="post" id="form-asignacion">
     {% csrf_token %}
-    {{ form.as_p }}
+    <input type="hidden" name="modo" value="{{ modo|default:'reasignar' }}">
+
+    <div id="zona-trabajadores" class="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
+      {{ form.as_p }}
+    </div>
+
+    <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-5">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          name="dejar_pendiente_asignacion"
+          value="1"
+          id="id_dejar_pendiente_asignacion"
+          class="mt-1 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+        >
+        <div>
+          <div class="font-semibold text-amber-800">
+            Dejar nuevamente pendiente por asignar
+          </div>
+          <div class="text-sm text-amber-700 mt-1">
+            Al marcar esta opción se quitarán todos los trabajadores del servicio y el proyecto volverá a estado
+            <strong>“Aprobado, pendiente por asignar”</strong>.
+            También se limpiará la aceptación / ejecución previa.
+          </div>
+        </div>
+      </label>
+    </div>
+
     <div class="flex justify-between mt-6">
-      <a href="{% url 'operaciones:listar_servicios_supervisor' %}" 
-         class="bg-gray-300 px-4 py-2 rounded-xl hover:bg-gray-400">Volver</a>
-      <button type="submit" 
+      <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
+         class="bg-gray-300 px-4 py-2 rounded-xl hover:bg-gray-400">
+        Volver
+      </a>
+
+      <button type="submit"
+              id="btn-submit-asignacion"
               class="bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
-        Asignar
+        {% if modo == 'agregar' %}
+          Agregar técnicos
+        {% else %}
+          Guardar asignación
+        {% endif %}
       </button>
     </div>
   </form>
 </div>
+
+<script>
+(function () {
+  const chk = document.getElementById('id_dejar_pendiente_asignacion');
+  const btn = document.getElementById('btn-submit-asignacion');
+  const form = document.getElementById('form-asignacion');
+  const zonaTrabajadores = document.getElementById('zona-trabajadores');
+
+  if (!chk || !btn || !form || !zonaTrabajadores) return;
+
+  function updateButton() {
+    if (chk.checked) {
+      btn.textContent = 'Dejar pendiente por asignar';
+      btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+      btn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+    } else {
+      btn.textContent = "{% if modo == 'agregar' %}Agregar técnicos{% else %}Guardar asignación{% endif %}";
+      btn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+      btn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+    }
+  }
+
+  function toggleTrabajadores() {
+    const campos = zonaTrabajadores.querySelectorAll('select, input, textarea');
+
+    campos.forEach((el) => {
+      if (el.name === 'modo') return;
+      if (el.name === 'dejar_pendiente_asignacion') return;
+      if (el.type === 'hidden') return;
+      el.disabled = chk.checked;
+    });
+
+    if (chk.checked) {
+      zonaTrabajadores.classList.add('opacity-60');
+    } else {
+      zonaTrabajadores.classList.remove('opacity-60');
+    }
+  }
+
+  chk.addEventListener('change', function () {
+    updateButton();
+    toggleTrabajadores();
+  });
+
+  updateButton();
+  toggleTrabajadores();
+})();
+</script>
 {% endblock %}

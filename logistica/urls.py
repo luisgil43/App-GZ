@@ -1,6 +1,7 @@
 from django.urls import path
 
-from . import views, views_herramientas_admin, views_herramientas_user
+from . import (views, views_herramientas_admin,
+               views_herramientas_asignaciones_admin, views_herramientas_user)
 
 app_name = "logistica"
 
@@ -52,7 +53,7 @@ urlpatterns = [
     path("herramientas/<int:tool_id>/editar/", views_herramientas_admin.herramienta_edit, name="herramienta_edit"),
     path("herramientas/<int:tool_id>/eliminar/", views_herramientas_admin.herramienta_delete, name="herramienta_delete"),
 
-    path("herramientas/<int:tool_id>/asignar/", views_herramientas_admin.herramienta_assign, name="herramienta_assign"),
+    
     path("herramientas/<int:tool_id>/reiniciar-asignacion/", views_herramientas_admin.herramienta_reset_assignment_status, name="herramienta_reset_assignment_status"),
     path("herramientas/<int:tool_id>/cambiar-estado/", views_herramientas_admin.herramienta_change_status, name="herramienta_change_status"),
 
@@ -67,4 +68,25 @@ urlpatterns = [
     path("bodegas/", views_herramientas_admin.bodegas_manage, name="bodegas_manage"),
     path("bodegas/<int:bodega_id>/eliminar/", views_herramientas_admin.bodega_delete, name="bodega_delete"),
     path("herramientas/exportar/", views_herramientas_admin.exportar_herramientas_excel, name="exportar_herramientas_excel"),
+
+    path("herramientas/importar/", views_herramientas_admin.herramientas_importar, name="herramientas_importar"),
+    path("herramientas/importar/plantilla/", views_herramientas_admin.herramientas_importar_plantilla, name="herramientas_importar_plantilla"),
+    path("herramientas/asignaciones/", views_herramientas_asignaciones_admin.asignaciones_panel, name="herramientas_asignaciones_panel"),
+
+# Asignar cantidad (desde herramienta)
+    path("herramientas/<int:herramienta_id>/asignar-cantidad/", views_herramientas_asignaciones_admin.asignar_cantidad, name="herramientas_asignar_cantidad"),
+
+# Terminar asignación (devolución)
+    path("herramientas/asignaciones/<int:asignacion_id>/cerrar/", views_herramientas_asignaciones_admin.cerrar_asignacion, name="herramientas_asignacion_cerrar"),
+
+# Reiniciar estado asignación (pendiente)
+    path("herramientas/asignaciones/<int:asignacion_id>/reiniciar/", views_herramientas_asignaciones_admin.reiniciar_estado_asignacion, name="herramientas_asignacion_reiniciar"),
+
+path("herramientas/asignaciones/<int:asignacion_id>/inventario/solicitar/",views_herramientas_asignaciones_admin.solicitar_inventario_asignacion,name="solicitar_inventario_asignacion",),
+
+path("herramientas/asignaciones/<int:asignacion_id>/editar/", views_herramientas_asignaciones_admin.editar_asignacion, name="herramientas_asignacion_editar"),
+path("herramientas/asignaciones/<int:asignacion_id>/eliminar/", views_herramientas_asignaciones_admin.eliminar_asignacion, name="herramientas_asignacion_eliminar"),
+
+path("herramientas/asignaciones/<int:asignacion_id>/inventario/historial/",views_herramientas_asignaciones_admin.inventario_historial_asignacion_admin,name="inventario_historial_asignacion_admin"),
+
 ]

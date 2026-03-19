@@ -1,5 +1,6 @@
 # operaciones/templatetags/custom_filters.py
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
 from django import template
 
 register = template.Library()
@@ -17,7 +18,7 @@ def miles(value):
 @register.filter
 def decimal_coma(value):
     try:
-        return str(value).replace('.', ',')
+        return str(value).replace(".", ",")
     except (ValueError, TypeError):
         return value
 
@@ -71,18 +72,34 @@ def miles_dec(value):
         d = Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError):
         return value
-    s = f"{d:,.2f}"                         # '1,234.50'
+    s = f"{d:,.2f}"  # '1,234.50'
     s = s.replace(",", "§").replace(".", ",").replace("§", ".")  # '1.234,50'
     if "," in s:
-        s = s.rstrip("0").rstrip(",")        # quita ceros/ coma final
+        s = s.rstrip("0").rstrip(",")  # quita ceros/ coma final
     return s
 
 
 @register.filter
 def clp_round(value):
     try:
-        d = Decimal(str(value or 0)).quantize(
-            Decimal('1'), rounding=ROUND_HALF_UP)
+        d = Decimal(str(value or 0)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
         return f"{int(d):,}".replace(",", ".")
     except Exception:
         return value
+
+
+@register.filter
+def dictget(d, key):
+    """
+    Permite obtener un valor de un diccionario desde templates:
+      {{ mydict|dictget:key }}
+    """
+    if d is None:
+        return None
+    try:
+        return d.get(key)
+    except Exception:
+        try:
+            return d[key]
+        except Exception:
+            return None
