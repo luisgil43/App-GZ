@@ -6,8 +6,9 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from usuarios.decoradores import rol_requerido
@@ -18,6 +19,56 @@ from .forms_herramientas_asignaciones import (
 from .models import (Bodega, Herramienta, HerramientaAsignacion,
                      HerramientaAsignacionLog, HerramientaInventario)
 
+
+def _is_ajax(request) -> bool:
+    return (request.headers.get("x-requested-with") or "").lower() == "xmlhttprequest"
+
+
+def _user_label(u) -> str:
+    if not u:
+        return ""
+    name = (u.get_full_name() or "").strip()
+    return name or (u.username or "")
+
+
+def _build_inventory_payload_for_asignacion(request, a: HerramientaAsignacion) -> dict:
+    """
+    Devuelve JSON para que el frontend reconstruya la celda Inventario sin template parcial.
+    """
+    # last_inv (por asignación)
+    last_inv = (
+        HerramientaInventario.objects
+        .filter(asignacion=a)
+        .select_related("revisado_por")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+    inv = None
+    if last_inv:
+        inv = {
+            "id": last_inv.id,
+            "estado": last_inv.estado or "",
+            "motivo_rechazo": (last_inv.motivo_rechazo or ""),
+            "foto_url": (last_inv.foto.url if getattr(last_inv, "foto", None) else ""),
+            "puede_aprobar": (last_inv.estado == "pendiente"),
+            "aprobar_url": reverse("logistica:aprobar_inventario", args=[last_inv.id]),
+            "rechazar_url": reverse("logistica:rechazar_inventario", args=[last_inv.id]),
+        }
+
+    # reglas de “solicitar”
+    puede_solicitar = (not last_inv) or (last_inv.estado != "pendiente")
+
+    return {
+        "ok": True,
+        "asig_id": a.id,
+        "tool_id": a.herramienta_id,
+        "inv": inv,
+        "puede_solicitar": puede_solicitar,
+        "solicitar_url": reverse("logistica:solicitar_inventario_asignacion", args=[a.id]),
+        "historial_url": reverse("logistica:inventario_historial_asignacion_admin", args=[a.id]),
+        "prox_due": (a.herramienta.next_inventory_due.strftime("%d/%m/%Y") if a.herramienta.next_inventory_due else ""),
+    }
 
 def _can_admin_logistica(user) -> bool:
     if getattr(user, "es_admin_general", False):
@@ -299,14 +350,22 @@ def reiniciar_estado_asignacion(request, asignacion_id: int):
     """
     Reinicia a pendiente solo si sigue activa.
     Registra log (reset)
+    ✅ Soporta AJAX: devuelve JSON para refrescar SOLO la celda Estado (sin recargar página).
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
     if request.method != "POST":
         raise Http404()
 
-    a = get_object_or_404(HerramientaAsignacion, pk=asignacion_id)
+    a = get_object_or_404(
+        HerramientaAsignacion.objects.select_related("herramienta"),
+        pk=asignacion_id,
+    )
+
     if not a.active:
+        # AJAX
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "No puedes reiniciar una asignación terminada."}, status=400)
         messages.error(request, "No puedes reiniciar una asignación terminada.")
         return redirect("logistica:herramientas_asignaciones_panel")
 
@@ -325,6 +384,20 @@ def reiniciar_estado_asignacion(request, asignacion_id: int):
         cambios={"estado": {"from": prev_estado, "to": "pendiente"}},
         nota=None,
     )
+
+    # ✅ AJAX: refrescar SOLO la celda Estado
+    if _is_ajax(request):
+        estado_html = (
+            '<span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">'
+            f'Activa • {a.get_estado_display()}'
+            "</span>"
+        )
+        return JsonResponse({
+            "ok": True,
+            "asig_id": a.id,
+            "message": "✅ Estado reiniciado a Pendiente.",
+            "estado_html": estado_html,
+        })
 
     messages.success(request, "✅ Estado reiniciado a Pendiente.")
     return redirect("logistica:herramientas_asignaciones_panel")
@@ -538,40 +611,55 @@ def solicitar_inventario_asignacion(request, asignacion_id: int):
     Solicita inventario para UNA asignación específica.
     - No crea inventario (el usuario lo sube), solo deja el sistema en modo "solicitado".
     - Registra log.
+    - ✅ Soporta AJAX: devuelve JSON para refrescar solo la celda.
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
     if request.method != "POST":
         raise Http404()
 
-    a = get_object_or_404(
-        HerramientaAsignacion.objects.select_related("herramienta", "asignado_a"),
-        pk=asignacion_id,
-    )
+    with transaction.atomic():
+        a = get_object_or_404(
+            HerramientaAsignacion.objects
+            .select_for_update()
+            .select_related("herramienta", "asignado_a"),
+            pk=asignacion_id,
+        )
 
-    # Si no está activa, igual puedes solicitar (depende de tu regla). Yo lo permito.
-    h = a.herramienta
+        h = (
+            Herramienta.objects
+            .select_for_update()
+            .get(pk=a.herramienta_id)
+        )
 
-    # ✅ Marca a nivel herramienta (mantienes tu infraestructura actual)
-    h.inventory_required = True
-    if not h.next_inventory_due:
-        h.mark_inventory_due_default()
-    h.updated_at = timezone.now()
-    h.save(update_fields=["inventory_required", "next_inventory_due", "updated_at"])
+        was_required = bool(h.inventory_required)
 
-    # ✅ Log asociado a la asignación
-    HerramientaAsignacionLog.objects.create(
-        asignacion=a,
-        accion="inventario_solicitado",
-        by_user=request.user,
-        cambios={
-            "inventory_required": {"from": False, "to": True},
-            "next_inventory_due": (h.next_inventory_due.strftime("%Y-%m-%d") if h.next_inventory_due else None),
-        },
-        nota=None,
-    )
+        h.inventory_required = True
+        if not h.next_inventory_due:
+            h.mark_inventory_due_default()
+        h.updated_at = timezone.now()
+        h.save(update_fields=["inventory_required", "next_inventory_due", "updated_at"])
+
+        HerramientaAsignacionLog.objects.create(
+            asignacion=a,
+            accion="inventario_solicitado",
+            by_user=request.user,
+            cambios={
+                "inventory_required": {"from": was_required, "to": True},
+                "next_inventory_due": (h.next_inventory_due.strftime("%Y-%m-%d") if h.next_inventory_due else None),
+            },
+            nota=None,
+        )
+
+        # refrescar referencia de herramienta en asignación (para prox_due)
+        a.herramienta = h
 
     messages.success(request, "📸 Inventario solicitado para esta asignación.")
+
+    if _is_ajax(request):
+        payload = _build_inventory_payload_for_asignacion(request, a)
+        payload["message"] = "Inventario solicitado."
+        return JsonResponse(payload)
 
     nxt = (request.GET.get("next") or "").strip()
     if nxt:

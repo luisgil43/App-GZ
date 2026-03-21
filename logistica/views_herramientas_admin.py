@@ -9,8 +9,10 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Q
-from django.http import Http404, HttpResponse, HttpResponseForbidden
+from django.http import (Http404, HttpResponse, HttpResponseForbidden,
+                         JsonResponse)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from usuarios.decoradores import rol_requerido
@@ -21,6 +23,56 @@ from .forms_herramientas import (BodegaForm, HerramientaAsignarForm,
 from .models import (Bodega, Herramienta, HerramientaAsignacion,
                      HerramientaInventario)
 
+
+def _is_ajax(request) -> bool:
+    return (request.headers.get("x-requested-with") or "").lower() == "xmlhttprequest"
+
+
+def _user_label(u) -> str:
+    if not u:
+        return ""
+    name = (u.get_full_name() or "").strip()
+    return name or (u.username or "")
+
+
+def _build_inventory_payload_for_asignacion(request, a: HerramientaAsignacion) -> dict:
+    """
+    Devuelve JSON para que el frontend reconstruya la celda Inventario sin template parcial.
+    """
+    # last_inv (por asignación)
+    last_inv = (
+        HerramientaInventario.objects
+        .filter(asignacion=a)
+        .select_related("revisado_por")
+        .order_by("-created_at", "-id")
+        .first()
+    )
+
+    inv = None
+    if last_inv:
+        inv = {
+            "id": last_inv.id,
+            "estado": last_inv.estado or "",
+            "motivo_rechazo": (last_inv.motivo_rechazo or ""),
+            "foto_url": (last_inv.foto.url if getattr(last_inv, "foto", None) else ""),
+            "puede_aprobar": (last_inv.estado == "pendiente"),
+            "aprobar_url": reverse("logistica:aprobar_inventario", args=[last_inv.id]),
+            "rechazar_url": reverse("logistica:rechazar_inventario", args=[last_inv.id]),
+        }
+
+    # reglas de “solicitar”
+    puede_solicitar = (not last_inv) or (last_inv.estado != "pendiente")
+
+    return {
+        "ok": True,
+        "asig_id": a.id,
+        "tool_id": a.herramienta_id,
+        "inv": inv,
+        "puede_solicitar": puede_solicitar,
+        "solicitar_url": reverse("logistica:solicitar_inventario_asignacion", args=[a.id]),
+        "historial_url": reverse("logistica:inventario_historial_asignacion_admin", args=[a.id]),
+        "prox_due": (a.herramienta.next_inventory_due.strftime("%d/%m/%Y") if a.herramienta.next_inventory_due else ""),
+    }
 
 def _can_admin_logistica(user) -> bool:
     # Admin (superuser) siempre
@@ -147,6 +199,12 @@ def herramientas_list(request):
 def exportar_herramientas_excel(request):
     """
     Exporta herramientas a Excel, respetando filtros (q, status).
+
+    ✅ Corregido para multi-asignación:
+    - Una herramienta puede tener múltiples asignaciones activas (con cantidades).
+    - Se exporta el detalle: "Asignaciones activas" => "Nombre (cantidad); Nombre (cantidad)"
+    - Se exporta total asignado activo y cantidad de asignaciones activas.
+    - El inventario "último" se toma a nivel herramienta (no solo desde asignaciones activas).
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
@@ -170,28 +228,51 @@ def exportar_herramientas_excel(request):
         qs = qs.filter(status=status)
 
     herramientas = list(qs[:20000])  # límite duro por seguridad
-
     tool_ids = [h.id for h in herramientas]
 
-    active_assignments = (
-        HerramientaAsignacion.objects
-        .filter(active=True, herramienta_id__in=tool_ids)
-        .select_related("asignado_a", "asignado_por", "herramienta")
-    )
-    by_tool = {a.herramienta_id: a for a in active_assignments}
+    # =========================
+    # Asignaciones activas (MULTI) por herramienta
+    # =========================
+    from collections import defaultdict
 
-    active_asig_ids = [a.id for a in active_assignments]
+    active_asigs_txt_by_tool = defaultdict(list)  # tool_id -> ["Nombre (2)", ...]
+    active_asigs_count_by_tool = defaultdict(int)  # tool_id -> count
+    active_asigs_qty_by_tool = defaultdict(int)  # tool_id -> total qty
+
+    if tool_ids:
+        active_asigs = (
+            HerramientaAsignacion.objects
+            .filter(active=True, herramienta_id__in=tool_ids)
+            .select_related("asignado_a", "asignado_por")
+            .order_by("herramienta_id", "-asignado_at", "-id")
+        )
+
+        for a in active_asigs:
+            active_asigs_count_by_tool[a.herramienta_id] += 1
+            qty = int(getattr(a, "cantidad_entregada", 0) or 0)
+            active_asigs_qty_by_tool[a.herramienta_id] += qty
+
+            u = a.asignado_a
+            nombre = (u.get_full_name() or u.username or "").strip()
+            if not nombre:
+                nombre = f"User#{u.id}"
+
+            active_asigs_txt_by_tool[a.herramienta_id].append(f"{nombre} ({qty})")
+
+    # =========================
+    # Último inventario por herramienta (GENERAL)
+    # =========================
     latest_inv_by_tool = {}
-    if active_asig_ids:
+    if tool_ids:
         invs = (
             HerramientaInventario.objects
-            .filter(asignacion_id__in=active_asig_ids)
+            .filter(herramienta_id__in=tool_ids)
+            .select_related("revisado_por", "asignacion", "asignacion__asignado_a")
             .order_by("-created_at", "-id")
         )
         for inv in invs:
-            hid = inv.herramienta_id
-            if hid not in latest_inv_by_tool:
-                latest_inv_by_tool[hid] = inv
+            if inv.herramienta_id not in latest_inv_by_tool:
+                latest_inv_by_tool[inv.herramienta_id] = inv
 
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
@@ -207,41 +288,50 @@ def exportar_herramientas_excel(request):
         "Valor comercial",
         "Bodega",
         "Estado herramienta",
-        "Asignada a",
-        "Asignación estado",
-        "Asignada por",
-        "Fecha asignación",
+
+        "Asignaciones activas",          # ✅ NUEVO
+        "Total asignado (activo)",       # ✅ NUEVO
+        "# Asignaciones activas",        # ✅ NUEVO
+
         "Inventario (último estado)",
         "Inventario (último enviado)",
+        "Inventario (asignado a)",       # ✅ NUEVO (quién envió el último)
         "Inventario (revisado por)",
         "Inventario (fecha revisión)",
         "Próx. fecha inventario",
+
         "Creada por",
         "Creada el",
     ]
     ws.append(headers)
 
     for h in herramientas:
-        a = by_tool.get(h.id)
-        last_inv = latest_inv_by_tool.get(h.id)
+        # multi-asignaciones
+        asigs_txt = "; ".join(active_asigs_txt_by_tool.get(h.id, []))
+        total_asig = int(active_asigs_qty_by_tool.get(h.id, 0) or 0)
+        count_asig = int(active_asigs_count_by_tool.get(h.id, 0) or 0)
 
-        asignada_a = ""
-        asignada_por = ""
-        asignada_at = ""
-        asignacion_estado = ""
-        if a:
-            asignada_a = a.asignado_a.get_full_name() or a.asignado_a.username
-            asignada_por = (a.asignado_por.get_full_name() if a.asignado_por else "") or (a.asignado_por.username if a and a.asignado_por else "")
-            asignada_at = timezone.localtime(a.asignado_at).strftime("%d/%m/%Y %H:%M") if a.asignado_at else ""
-            asignacion_estado = a.estado or ""
+        # inventario general
+        last_inv = latest_inv_by_tool.get(h.id)
 
         inv_estado = ""
         inv_enviado = ""
+        inv_asignado_a = ""
         inv_revisado_por = ""
         inv_revisado_at = ""
+
         if last_inv:
             inv_estado = last_inv.estado or ""
             inv_enviado = timezone.localtime(last_inv.created_at).strftime("%d/%m/%Y %H:%M") if last_inv.created_at else ""
+
+            # quien lo envió (si está asociado a una asignación)
+            try:
+                if last_inv.asignacion and last_inv.asignacion.asignado_a:
+                    u = last_inv.asignacion.asignado_a
+                    inv_asignado_a = (u.get_full_name() or u.username or "").strip()
+            except Exception:
+                inv_asignado_a = ""
+
             if last_inv.revisado_por:
                 inv_revisado_por = last_inv.revisado_por.get_full_name() or last_inv.revisado_por.username
             if last_inv.revisado_at:
@@ -258,21 +348,29 @@ def exportar_herramientas_excel(request):
             float(h.valor_comercial) if h.valor_comercial is not None else "",
             (h.bodega.nombre if h.bodega else ""),
             h.get_status_display() if hasattr(h, "get_status_display") else (h.status or ""),
-            asignada_a,
-            asignacion_estado,
-            asignada_por,
-            asignada_at,
+
+            asigs_txt,
+            total_asig,
+            count_asig,
+
             inv_estado,
             inv_enviado,
+            inv_asignado_a,
             inv_revisado_por,
             inv_revisado_at,
             prox_fecha,
+
             creada_por,
             creada_el,
         ])
 
     # anchos básicos
-    widths = [28, 18, 40, 16, 18, 18, 22, 16, 22, 18, 20, 20, 20, 20, 18, 20, 18]
+    widths = [
+        28, 18, 40, 16, 18, 18,
+        55, 18, 18,
+        20, 20, 26, 20, 20, 18,
+        20, 18
+    ]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -283,7 +381,6 @@ def exportar_herramientas_excel(request):
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     wb.save(resp)
     return resp
-
 
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
@@ -468,19 +565,35 @@ def solicitar_inventario(request, tool_id: int):
     messages.success(request, "📸 Inventario solicitado. Se habilitó el botón al usuario.")
     return redirect("logistica:herramientas_list")
 
-
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
 def aprobar_inventario(request, inv_id: int):
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
-
-    inv = get_object_or_404(HerramientaInventario, pk=inv_id)
     if request.method != "POST":
         raise Http404()
 
-    inv.approve(request.user)
+    with transaction.atomic():
+        inv = get_object_or_404(
+            HerramientaInventario.objects
+            .select_for_update()
+            .select_related("asignacion", "asignacion__herramienta"),
+            pk=inv_id
+        )
+
+        inv.approve(request.user)
+
+        a = inv.asignacion
+        # asegurar referencia herramienta (por prox_due)
+        if hasattr(inv, "asignacion") and hasattr(inv.asignacion, "herramienta"):
+            a.herramienta = inv.asignacion.herramienta
+
     messages.success(request, "✅ Inventario aprobado.")
+
+    if _is_ajax(request):
+        payload = _build_inventory_payload_for_asignacion(request, a)
+        payload["message"] = "Inventario aprobado."
+        return JsonResponse(payload)
 
     nxt = (request.GET.get("next") or "").strip()
     if nxt:
@@ -494,9 +607,33 @@ def rechazar_inventario(request, inv_id: int):
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
 
-    inv = get_object_or_404(HerramientaInventario, pk=inv_id)
+    inv = get_object_or_404(
+        HerramientaInventario.objects.select_related("asignacion", "asignacion__herramienta"),
+        pk=inv_id
+    )
     nxt = (request.GET.get("next") or "").strip()
 
+    # ✅ AJAX POST: rechaza directo con motivo y responde JSON para refrescar celda
+    if request.method == "POST" and _is_ajax(request):
+        motivo = (request.POST.get("motivo_rechazo") or "").strip()
+        if not motivo:
+            return JsonResponse({"ok": False, "error": "Debes indicar un motivo de rechazo."}, status=400)
+
+        with transaction.atomic():
+            inv = get_object_or_404(
+                HerramientaInventario.objects
+                .select_for_update()
+                .select_related("asignacion", "asignacion__herramienta"),
+                pk=inv_id
+            )
+            inv.reject(request.user, motivo)
+            a = inv.asignacion  # asignación actual
+
+        payload = _build_inventory_payload_for_asignacion(request, a)
+        payload["message"] = "Inventario rechazado."
+        return JsonResponse(payload)
+
+    # ✅ Flujo normal (pantalla con form)
     if request.method == "POST":
         form = InventarioReviewForm(request.POST)
         if form.is_valid():

@@ -6,6 +6,9 @@
 {% block dashboard_content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
+  {# ✅ si viene next, volvemos ahí. si no, volvemos a herramientas. #}
+  {% firstof request.GET.next "" as back_url %}
+
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
     <div>
       <h2 class="text-2xl font-bold text-gray-800">🗂 Historial de inventarios</h2>
@@ -15,10 +18,17 @@
       </p>
     </div>
 
-    <a href="{% url 'logistica:herramientas_list' %}"
-       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
-      ← Volver a herramientas
-    </a>
+    {% if back_url %}
+      <a href="{{ back_url|escape }}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        ← Volver
+      </a>
+    {% else %}
+      <a href="{% url 'logistica:herramientas_list' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
+        ← Volver a herramientas
+      </a>
+    {% endif %}
   </div>
 
   {% if not inventarios %}
@@ -114,20 +124,39 @@
 
             <td class="p-2 border">
               {% if inv.estado == "pendiente" %}
-                <div class="flex justify-center gap-2 flex-wrap">
-                  <form method="post" action="{% url 'logistica:aprobar_inventario' inv.id %}?next={{ request.path|urlencode }}">
-                    {% csrf_token %}
-                    <button type="submit"
-                            class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
-                      ✅ Aprobar
-                    </button>
-                  </form>
+                {% if back_url %}
+                  {% with next_q=back_url|urlencode %}
+                    <div class="flex justify-center gap-2 flex-wrap">
+                      <form method="post" action="{% url 'logistica:aprobar_inventario' inv.id %}?next={{ next_q }}">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                          ✅ Aprobar
+                        </button>
+                      </form>
 
-                  <a href="{% url 'logistica:rechazar_inventario' inv.id %}?next={{ request.path|urlencode }}"
-                     class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
-                    ❌ Rechazar
-                  </a>
-                </div>
+                      <a href="{% url 'logistica:rechazar_inventario' inv.id %}?next={{ next_q }}"
+                         class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                        ❌ Rechazar
+                      </a>
+                    </div>
+                  {% endwith %}
+                {% else %}
+                  <div class="flex justify-center gap-2 flex-wrap">
+                    <form method="post" action="{% url 'logistica:aprobar_inventario' inv.id %}?next={{ request.path|urlencode }}">
+                      {% csrf_token %}
+                      <button type="submit"
+                              class="px-3 py-1 text-xs rounded-full bg-emerald-600 text-white hover:bg-emerald-700">
+                        ✅ Aprobar
+                      </button>
+                    </form>
+
+                    <a href="{% url 'logistica:rechazar_inventario' inv.id %}?next={{ request.path|urlencode }}"
+                       class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
+                      ❌ Rechazar
+                    </a>
+                  </div>
+                {% endif %}
               {% else %}
                 <span class="text-xs text-gray-500">—</span>
               {% endif %}

@@ -4,10 +4,9 @@
 {% block dashboard_content %}
 
 <style>
-  /* Inputs PRO (fallback) */
   .campo{
     width:100%;
-    border:2px solid #e5e7eb; /* gray-200 */
+    border:2px solid #e5e7eb;
     border-radius:1rem;
     padding:.65rem .85rem;
     font-size:.95rem;
@@ -16,7 +15,7 @@
     outline:none;
   }
   .campo:focus{
-    border-color:#ef4444; /* red-500 */
+    border-color:#ef4444;
     box-shadow:0 0 0 3px rgba(239,68,68,.18);
   }
   .campo-error{
@@ -25,7 +24,14 @@
   }
 </style>
 
-<!-- ✅ MODAL (centrado) -->
+{# ✅ URL de regreso: si viene next => volver ahí; si no => herramientas_list #}
+{% if next %}
+  {% with back_url=next %}
+{% else %}
+  {% url 'logistica:herramientas_list' as back_url %}
+  {% with back_url=back_url %}
+{% endif %}
+
 <div id="rejectInvModal" class="fixed inset-0 z-50">
   <div class="absolute inset-0 bg-black/40"></div>
 
@@ -41,7 +47,7 @@
           </p>
         </div>
 
-        <a href="{% url 'logistica:herramientas_list' %}"
+        <a href="{{ back_url }}"
            class="shrink-0 px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50">
           ✕ Cerrar
         </a>
@@ -67,7 +73,8 @@
           {% endif %}
         </div>
 
-        <form method="post" class="space-y-3">
+        {# ✅ IMPORTANTE: mantener ?next=... también en el POST del form #}
+        <form method="post" class="space-y-3" action="?{% if next %}next={{ next|urlencode }}{% endif %}">
           {% csrf_token %}
 
           <div>
@@ -83,7 +90,7 @@
           </div>
 
           <div class="flex flex-col sm:flex-row justify-end gap-2 pt-2">
-            <a href="{% url 'logistica:herramientas_list' %}"
+            <a href="{{ back_url }}"
                class="px-5 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
               Cancelar
             </a>
@@ -105,7 +112,6 @@
 </div>
 
 <script>
-  // ✅ Estilo PRO al textarea si el widget no trae class
   (function(){
     const el = document.querySelector('textarea[name="motivo_rechazo"]');
     if(!el) return;
@@ -117,14 +123,13 @@
       el.classList.add('border','rounded-xl','px-3','py-2');
     }
 
-    // marcar error si hay errores visibles
     const err = el.closest('div')?.querySelector('.text-red-600');
     if(err) el.classList.add('campo-error');
   })();
 
-  // ✅ Cerrar con ESC + click fuera
+  // ✅ Cerrar con ESC + click fuera respetando back_url (next si existe)
   function closeRejectInvModal(){
-    window.location.href = "{% url 'logistica:herramientas_list' %}";
+    window.location.href = "{{ back_url|escapejs }}";
   }
 
   document.addEventListener('keydown', (e)=>{
@@ -136,4 +141,5 @@
   });
 </script>
 
+{% endwith %}
 {% endblock %}

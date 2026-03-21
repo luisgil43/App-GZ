@@ -6,58 +6,118 @@
 {% block dashboard_content %}
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
-  <div class="flex items-center justify-between gap-3 mb-4">
-    <h2 class="text-2xl font-bold text-gray-800">👤 Asignar cantidad</h2>
-    <a href="{% url 'logistica:herramientas_asignaciones_panel' %}"
-       class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
-      ← Volver
-    </a>
-  </div>
+  {# ✅ CONTENEDOR CENTRADO #}
+  <div class="max-w-4xl mx-auto w-full">
 
-  <div class="border rounded-2xl p-4 bg-gray-50 mb-4">
-    <div class="font-semibold text-gray-800">{{ herramienta.nombre }}</div>
-    <div class="text-sm text-gray-600">Serial: {{ herramienta.serial }}</div>
-    <div class="text-sm text-gray-600">Stock disponible: <b>{{ herramienta.cantidad }}</b></div>
-    <div class="text-sm text-gray-600">Bodega: {{ herramienta.bodega.nombre|default:"—" }}</div>
-  </div>
-
-  <form method="post" class="space-y-4">
-    {% csrf_token %}
-    {{ form.herramienta_id }}
-
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <div class="border rounded-2xl p-4 bg-white shadow-sm space-y-3">
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Asignar a</label>
-          <div class="mt-1">{{ form.asignado_a }}</div>
-          {% if form.asignado_a.errors %}<div class="text-sm text-red-600 mt-1">{{ form.asignado_a.errors }}</div>{% endif %}
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Cantidad a entregar</label>
-          <div class="mt-1">{{ form.cantidad_entregada }}</div>
-          {% if form.cantidad_entregada.errors %}<div class="text-sm text-red-600 mt-1">{{ form.cantidad_entregada.errors }}</div>{% endif %}
-        </div>
-
-        <div>
-          <label class="text-sm font-semibold text-gray-700">Fecha asignación</label>
-          <div class="mt-1">{{ form.asignado_at }}</div>
-          {% if form.asignado_at.errors %}<div class="text-sm text-red-600 mt-1">{{ form.asignado_at.errors }}</div>{% endif %}
-        </div>
-
-        <div class="flex items-center gap-2">
-          {{ form.solicitar_inventario }}
-          <span class="text-sm text-gray-700">Solicitar inventario al asignar</span>
-        </div>
-      </div>
-
-      <div class="border rounded-2xl p-4 bg-white shadow-sm">
-        <button type="submit"
-                class="px-5 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
-          ✅ Crear asignación
-        </button>
-      </div>
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h2 class="text-2xl font-bold text-gray-800">👤 Asignar cantidad</h2>
+      <a href="{% url 'logistica:herramientas_asignaciones_panel' %}"
+         class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+        ← Volver
+      </a>
     </div>
-  </form>
+
+    <div class="border rounded-2xl p-4 bg-gray-50 mb-4">
+      <div class="font-semibold text-gray-800">{{ herramienta.nombre }}</div>
+      <div class="text-sm text-gray-600">Serial: {{ herramienta.serial }}</div>
+      <div class="text-sm text-gray-600">Stock disponible: <b>{{ herramienta.cantidad }}</b></div>
+      <div class="text-sm text-gray-600">Bodega: {{ herramienta.bodega.nombre|default:"—" }}</div>
+    </div>
+
+    <form method="post" class="space-y-4" id="assignQtyForm">
+      {% csrf_token %}
+      {{ form.herramienta_id }}
+
+      <div class="border rounded-2xl p-5 bg-white shadow-sm space-y-4">
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Asignar a</label>
+            <div class="mt-1">{{ form.asignado_a }}</div>
+            {% if form.asignado_a.errors %}
+              <div class="text-sm text-red-600 mt-1">{{ form.asignado_a.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Cantidad a entregar</label>
+            <div class="mt-1">{{ form.cantidad_entregada }}</div>
+            {% if form.cantidad_entregada.errors %}
+              <div class="text-sm text-red-600 mt-1">{{ form.cantidad_entregada.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Fecha asignación</label>
+            <div class="mt-1">{{ form.asignado_at }}</div>
+            {% if form.asignado_at.errors %}
+              <div class="text-sm text-red-600 mt-1">{{ form.asignado_at.errors }}</div>
+            {% endif %}
+          </div>
+
+          <div class="flex items-center gap-2 mt-6 lg:mt-0">
+            {{ form.solicitar_inventario }}
+            <span class="text-sm text-gray-700">Solicitar inventario al asignar</span>
+          </div>
+        </div>
+
+        {# ✅ BOTÓN ABAJO Y CENTRADO #}
+        <div class="pt-2 flex justify-center">
+          <button type="submit"
+                  class="px-6 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+            ✅ Crear asignación
+          </button>
+        </div>
+
+      </div>
+    </form>
+
+  </div>
 </div>
+
+<script>
+/* =========================================
+   Estilo PRO a widgets Django sin clases
+   (inputs/select/textarea) + checkbox
+   ========================================= */
+(function(){
+  const form = document.getElementById('assignQtyForm');
+  if(!form) return;
+
+  const base =
+    ['w-full','border','border-gray-300','rounded-xl','px-3','py-2','text-sm',
+     'bg-white','outline-none','transition','focus:border-blue-500',
+     'focus:ring-2','focus:ring-blue-200'];
+
+  const elems = form.querySelectorAll('input, select, textarea');
+
+  elems.forEach(el => {
+    if (el.type === 'hidden') return;
+
+    // checkbox: no aplicar w-full/padding
+    if (el.type === 'checkbox') {
+      el.classList.add('h-4','w-4','rounded','border-gray-300','text-blue-600','focus:ring-blue-200');
+      return;
+    }
+
+    base.forEach(c => el.classList.add(c));
+
+    // input number: que no quede gigante
+    if (el.tagName === 'INPUT' && el.type === 'number') {
+      el.classList.add('max-w-[260px]');
+    }
+
+    // si hay error en ese bloque -> borde rojo
+    const hasError =
+      el.closest('div')?.parentElement?.querySelector('.text-red-600') ||
+      el.closest('div')?.querySelector('.text-red-600');
+
+    if (hasError) {
+      el.classList.remove('border-gray-300','focus:border-blue-500','focus:ring-blue-200');
+      el.classList.add('border-red-500','focus:border-red-500','focus:ring-red-200');
+    }
+  });
+})();
+</script>
+
 {% endblock %}
