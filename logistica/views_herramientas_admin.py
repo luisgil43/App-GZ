@@ -739,11 +739,13 @@ def herramientas_importar_plantilla(request):
     """
     Descarga plantilla Excel para importar herramientas con cantidad.
     Columnas:
-      nombre, serial(opcional), cantidad, valor_comercial, bodega, descripcion, status
+      nombre, serial(opcional), cantidad, valor_comercial, descripcion, status
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
 
+    from django.http import HttpResponse
+    from django.utils import timezone
     from openpyxl import Workbook
     from openpyxl.utils import get_column_letter
 
@@ -751,14 +753,15 @@ def herramientas_importar_plantilla(request):
     ws = wb.active
     ws.title = "Herramientas"
 
-    headers = ["nombre", "serial", "cantidad", "valor_comercial", "bodega", "descripcion", "status"]
+    headers = ["nombre", "serial", "cantidad", "valor_comercial", "descripcion", "status"]
     ws.append(headers)
 
-    # ejemplo (serial puede ir vacío)
-    ws.append(["Taladro percutor", "SN-AX12-8890", 3, 500000, "Bodega Central", "Marca Bosch, con maletín", "bodega"])
-    ws.append(["Guantes", "", 20, "", "Bodega Central", "Guantes talla M", "bodega"])
+    # Ejemplos (serial puede ir vacío)
+    ws.append(["Taladro percutor", "SN-AX12-8890", 3, 500000, "Marca Bosch, con maletín", "bodega"])
+    ws.append(["Guantes", "", 20, "", "Guantes talla M", "bodega"])
 
-    widths = [24, 22, 10, 16, 22, 40, 14]
+    # Anchos (deben calzar con cantidad de columnas)
+    widths = [28, 22, 12, 18, 45, 16]
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
@@ -768,28 +771,85 @@ def herramientas_importar_plantilla(request):
     wb.save(resp)
     return resp
 
+
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
 def herramientas_importar(request):
     """
     Importa herramientas desde Excel con PREVIEW + confirmación.
-    - Permite serial vacío: se genera AUTO-XXXX
-    - En preview muestra coincidencias (serial) y bodegas no encontradas
-    - En confirmación el usuario decide:
-        - modo = reemplazar  -> cantidad queda igual al Excel
-        - modo = sumar       -> cantidad se suma al stock actual
-    - Permite corregir bodega por fila desde un dropdown en el preview
+
+    ✅ Serial:
+      - Si viene vacío: intenta match por nombre (normalizado). Si existe usa su serial para no duplicar.
+      - Si no existe: genera AUTO-XXXX.
+
+    ✅ Bodega MASIVA (preview):
+      - bodega_default: bodega seleccionada arriba (para nuevas y opcionalmente existentes).
+      - aplicar_default_a_existentes: si viene marcado, sobreescribe bodega de existentes (si no se elige modo por fila).
+
+    ✅ Por fila (opcional, existentes):
+      - bodega_mode_i: keep / default / custom
+      - bodega_sel_i: id de bodega si mode=custom
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
-
     if request.method != "POST":
         raise Http404()
 
+    import re
+    import unicodedata
     from decimal import Decimal
     from uuid import uuid4
 
-    # ===== confirmación (2do POST) =====
+    from openpyxl import load_workbook
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    def _bool_post(v) -> bool:
+        v = (v or "").strip().lower()
+        return v in {"1", "true", "on", "yes", "si", "sí"}
+
+    def norm(s: str) -> str:
+        s = (s or "")
+        s = s.replace("\u00A0", " ").replace("\u2007", " ").replace("\u202F", " ")
+        s = s.strip().lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(c for c in s if not unicodedata.combining(c))
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def gen_serial_unico() -> str:
+        for _ in range(80):
+            s = f"AUTO-{uuid4().hex[:10].upper()}"
+            if not Herramienta.objects.filter(serial=s).exists():
+                return s
+        return f"AUTO-{uuid4().hex[:10].upper()}"
+
+    def to_int(v, default=1) -> int:
+        try:
+            if v is None:
+                return default
+            if isinstance(v, str) and not v.strip():
+                return default
+            n = int(v)
+            return n if n > 0 else default
+        except Exception:
+            return default
+
+    def to_decimal(v) -> Decimal:
+        try:
+            if v is None:
+                return Decimal("0")
+            if isinstance(v, str) and not v.strip():
+                return Decimal("0")
+            d = Decimal(str(v))
+            return d if d >= 0 else Decimal("0")
+        except Exception:
+            return Decimal("0")
+
+    # ============================================================
+    # CONFIRMACIÓN (2do POST)
+    # ============================================================
     confirmar = (request.POST.get("confirmar") or "").strip()
     if confirmar == "1":
         token = (request.POST.get("token") or "").strip()
@@ -808,8 +868,19 @@ def herramientas_importar(request):
             messages.error(request, "❌ No hay filas para importar.")
             return redirect("logistica:herramientas_list")
 
-        # bodegas válidas por id (para selección)
+        # bodegas por id
         bodegas_by_id = {str(b.id): b for b in Bodega.objects.all()}
+
+        # ✅ bodega masiva
+        bodega_default_id = (request.POST.get("bodega_default") or "").strip()
+        bodega_default = bodegas_by_id.get(bodega_default_id) if bodega_default_id else None
+
+        aplicar_default_a_existentes = _bool_post(request.POST.get("aplicar_default_a_existentes"))
+
+        # Si el usuario marcó aplicar a existentes, pero no eligió bodega masiva => error claro
+        if aplicar_default_a_existentes and not bodega_default:
+            messages.error(request, "❌ Debes seleccionar una bodega masiva si quieres aplicarla a existentes.")
+            return redirect("logistica:herramientas_list")
 
         created = 0
         updated = 0
@@ -819,38 +890,44 @@ def herramientas_importar(request):
             for i, r in enumerate(rows):
                 try:
                     nombre = (r.get("nombre") or "").strip()
-                    serial = (r.get("serial") or "").strip()
-                    if not nombre or not serial:
+                    if not nombre:
                         continue
 
-                    cantidad = int(r.get("cantidad") or 1)
-                    if cantidad <= 0:
-                        cantidad = 1
+                    serial_final = (r.get("serial") or "").strip()
+                    serial_excel = (r.get("serial_excel") or "").strip()
 
-                    valor = r.get("valor_comercial")
-                    try:
-                        valor = Decimal(str(valor)) if valor not in (None, "") else Decimal("0")
-                    except Exception:
-                        valor = Decimal("0")
-                    if valor < 0:
-                        valor = Decimal("0")
+                    if not serial_final:
+                        serial_final = gen_serial_unico()
 
+                    cantidad = to_int(r.get("cantidad"), default=1)
+                    valor = to_decimal(r.get("valor_comercial"))
                     descripcion = (r.get("descripcion") or "").strip() or None
+
                     status = (r.get("status") or "").strip() or None
                     if status and status not in dict(Herramienta.STATUS_CHOICES):
                         status = None
 
-                    # ✅ bodega seleccionada en preview
-                    bodega_sel = (request.POST.get(f"bodega_sel_{i}") or "").strip()
-                    bodega = bodegas_by_id.get(bodega_sel) if bodega_sel else None
+                    # ============================
+                    # Resolver bodega por fila
+                    # ============================
+                    bodega_mode = (request.POST.get(f"bodega_mode_{i}") or "").strip().lower()
+                    if bodega_mode not in {"keep", "default", "custom"}:
+                        bodega_mode = ""  # si no viene, usamos regla masiva checkbox
 
-                    obj = Herramienta.objects.filter(serial=serial).first()
+                    bodega_sel = (request.POST.get(f"bodega_sel_{i}") or "").strip()
+                    bodega_custom = bodegas_by_id.get(bodega_sel) if bodega_sel else None
+
+                    # ============================
+                    # Buscar herramienta (existente o nueva)
+                    # ============================
+                    obj = Herramienta.objects.filter(serial=serial_final).first()
+
                     if obj:
+                        # ---- EXISTENTE ----
                         obj.nombre = nombre
                         obj.valor_comercial = valor
                         obj.descripcion = descripcion
-                        if bodega is not None:
-                            obj.bodega = bodega
+
                         if status:
                             obj.status = status
 
@@ -859,16 +936,46 @@ def herramientas_importar(request):
                         else:
                             obj.cantidad = cantidad
 
+                        # ✅ BODEGA existente:
+                        # - custom => usa bodega_sel_i
+                        # - default => usa bodega_default (masiva)
+                        # - keep => no toca
+                        # - vacío => si checkbox está marcado, aplica bodega_default; si no, mantiene
+                        if bodega_mode == "custom":
+                            obj.bodega = bodega_custom  # puede ser None si elige "sin bodega"
+                        elif bodega_mode == "default":
+                            obj.bodega = bodega_default
+                        elif bodega_mode == "keep":
+                            pass
+                        else:
+                            if aplicar_default_a_existentes and bodega_default is not None:
+                                obj.bodega = bodega_default
+
+                        # si excel venía con serial explícito, respetarlo si no rompe unique
+                        if serial_excel and obj.serial != serial_excel:
+                            if not Herramienta.objects.exclude(pk=obj.pk).filter(serial=serial_excel).exists():
+                                obj.serial = serial_excel
+
                         obj.save()
                         updated += 1
+
                     else:
+                        # ---- NUEVA ----
+                        # ✅ BODEGA nueva:
+                        # - custom => bodega_sel_i
+                        # - default/empty => bodega_default
+                        if bodega_mode == "custom":
+                            bodega_final = bodega_custom
+                        else:
+                            bodega_final = bodega_default
+
                         obj = Herramienta.objects.create(
                             nombre=nombre,
-                            serial=serial,
+                            serial=serial_final,
                             cantidad=cantidad,
                             valor_comercial=valor,
                             descripcion=descripcion,
-                            bodega=bodega,
+                            bodega=bodega_final,
                             status=status or "bodega",
                             creada_por=request.user,
                         )
@@ -893,7 +1000,9 @@ def herramientas_importar(request):
         )
         return redirect("logistica:herramientas_list")
 
-    # ===== preview (1er POST) =====
+    # ============================================================
+    # PREVIEW (1er POST)
+    # ============================================================
     f = request.FILES.get("archivo")
     if not f:
         messages.error(request, "❌ Debes seleccionar un archivo.")
@@ -905,7 +1014,6 @@ def herramientas_importar(request):
         return redirect("logistica:herramientas_list")
 
     try:
-        from openpyxl import load_workbook
         wb = load_workbook(f, data_only=True)
         ws = wb.active
     except Exception as e:
@@ -918,7 +1026,7 @@ def herramientas_importar(request):
         return redirect("logistica:herramientas_list")
 
     header = [str(x or "").strip().lower() for x in rows_xl[0]]
-    required = {"nombre", "cantidad"}  # ✅ serial ahora es opcional
+    required = {"nombre", "cantidad"}
     if not required.issubset(set(header)):
         messages.error(request, "❌ La plantilla no corresponde. Debe incluir al menos: nombre, cantidad.")
         return redirect("logistica:herramientas_list")
@@ -931,22 +1039,32 @@ def herramientas_importar(request):
             return None
         return r[i] if i < len(r) else None
 
-    # bodegas por nombre (match por texto)
-    bodegas_by_name = {b.nombre.strip().lower(): b for b in Bodega.objects.all()}
+    existing_by_serial = {}
+    for h in (
+        Herramienta.objects
+        .filter(serial__isnull=False)
+        .exclude(serial="")
+        .only("id", "serial", "nombre", "bodega_id", "cantidad")
+        .select_related("bodega")
+    ):
+        s = (h.serial or "").strip()
+        if s and s not in existing_by_serial:
+            existing_by_serial[s] = h
 
-    # para detectar coincidencias por serial
-    existing_by_serial = {h.serial: h for h in Herramienta.objects.filter(serial__isnull=False).exclude(serial="")}
+    existing_by_name = {}
+    for h in (
+        Herramienta.objects
+        .all()
+        .only("id", "nombre", "serial", "bodega_id", "cantidad")
+        .select_related("bodega")
+        .order_by("-id")
+    ):
+        k = norm(h.nombre)
+        if k and k not in existing_by_name:
+            existing_by_name[k] = h
 
     preview_rows = []
-    bodegas_faltantes = 0
     coincidencias = 0
-
-    def gen_serial_unico() -> str:
-        for _ in range(40):
-            s = f"AUTO-{uuid4().hex[:10].upper()}"
-            if not Herramienta.objects.filter(serial=s).exists():
-                return s
-        return f"AUTO-{uuid4().hex[:10].upper()}"
 
     for r in rows_xl[1:]:
         try:
@@ -954,60 +1072,45 @@ def herramientas_importar(request):
             if not nombre:
                 continue
 
-            serial = str(get_cell(r, "serial") or "").strip()
-            if not serial:
-                serial = gen_serial_unico()
+            serial_excel = str(get_cell(r, "serial") or "").strip()
 
-            # cantidad
-            c_raw = get_cell(r, "cantidad")
-            try:
-                cantidad = int(c_raw) if c_raw is not None and str(c_raw).strip() != "" else 1
-            except Exception:
-                cantidad = 1
-            if cantidad <= 0:
-                cantidad = 1
-
-            # valor
-            v_raw = get_cell(r, "valor_comercial")
-            try:
-                valor = str(v_raw).strip() if v_raw is not None and str(v_raw).strip() != "" else "0"
-            except Exception:
-                valor = "0"
-
-            bodega_name = str(get_cell(r, "bodega") or "").strip()
-            bodega = None
-            bodega_ok = True
-            if bodega_name:
-                bodega = bodegas_by_name.get(bodega_name.lower())
-                if not bodega:
-                    bodega_ok = False
-                    bodegas_faltantes += 1
-            else:
-                # si viene vacío, lo marcamos como "sin bodega" pero no es error
-                bodega_ok = True
-
-            descripcion = str(get_cell(r, "descripcion") or "").strip() or None
+            cantidad = to_int(get_cell(r, "cantidad"), default=1)
+            valor = to_decimal(get_cell(r, "valor_comercial"))
+            descripcion = str(get_cell(r, "descripcion") or "").strip() or ""
             status = str(get_cell(r, "status") or "").strip() or ""
             if status and status not in dict(Herramienta.STATUS_CHOICES):
                 status = ""
 
-            existe = existing_by_serial.get(serial)
+            existe = None
+            serial_final = ""
+
+            if serial_excel:
+                existe = existing_by_serial.get(serial_excel)
+                serial_final = serial_excel
+            else:
+                cand = existing_by_name.get(norm(nombre))
+                if cand:
+                    existe = cand
+
+                if existe and (existe.serial or "").strip():
+                    serial_final = (existe.serial or "").strip()
+                else:
+                    serial_final = gen_serial_unico()
+
             if existe:
                 coincidencias += 1
 
             preview_rows.append({
                 "nombre": nombre,
-                "serial": serial,
+                "serial": serial_final,
+                "serial_excel": serial_excel,
                 "cantidad": cantidad,
-                "valor_comercial": valor,
-                "bodega_excel": bodega_name,
-                "bodega_id_detectada": str(bodega.id) if bodega else "",
-                "bodega_ok": bodega_ok,
-                "descripcion": descripcion or "",
+                "valor_comercial": str(valor),
+                "descripcion": descripcion,
                 "status": status,
                 "existe": bool(existe),
                 "existe_cantidad": int(existe.cantidad) if existe else 0,
-                "existe_bodega": (existe.bodega.nombre if (existe and existe.bodega) else ""),
+                "existe_bodega": (existe.bodega.nombre if (existe and getattr(existe, "bodega", None)) else ""),
             })
 
         except Exception:
@@ -1029,5 +1132,5 @@ def herramientas_importar(request):
         "preview_rows": preview_rows,
         "bodegas": bodegas,
         "coincidencias": coincidencias,
-        "bodegas_faltantes": bodegas_faltantes,
+        "bodegas_faltantes": 0,
     })
