@@ -515,8 +515,11 @@ class Herramienta(models.Model):
 
     serial = models.CharField(max_length=120, unique=True)
 
-    # ✅ NUEVO
-    cantidad = models.PositiveIntegerField(default=1, help_text="Cantidad disponible de esta herramienta/equipo.")
+    # ✅ Stock: ahora puede ser 0 (agotado)
+    cantidad = models.PositiveIntegerField(
+        default=1,
+        help_text="Cantidad disponible de esta herramienta/equipo.",
+    )
 
     valor_comercial = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
@@ -582,8 +585,11 @@ class Herramienta(models.Model):
         if self.valor_comercial is not None and self.valor_comercial < 0:
             raise ValidationError({"valor_comercial": "El valor comercial no puede ser negativo."})
 
-        if self.cantidad is not None and int(self.cantidad) <= 0:
-            raise ValidationError({"cantidad": "La cantidad debe ser mayor a 0."})
+        # ✅ Permitir stock 0 (agotado). Bloquear solo negativos.
+        if self.cantidad is None:
+            self.cantidad = 0
+        if int(self.cantidad) < 0:
+            raise ValidationError({"cantidad": "La cantidad no puede ser negativa."})
 
         if self.status in ("danada", "extraviada", "robada"):
             if not (self.status_justificacion or "").strip():

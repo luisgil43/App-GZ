@@ -531,64 +531,95 @@
   const inputs  = form.querySelectorAll('input[type="text"]');
   const selects = form.querySelectorAll('select');
 
-  const KEY = 'svc_sup_filtros_focus_v2';
+  const KEY = 'svc_sup_filtros_focus_v3';
 
-  function rememberCaret(el){
+  // ✅ Guardar SIEMPRE el último foco real (no el que hace blur)
+  function saveFocusState(el){
     try{
-      const pos = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value || '').length;
-      sessionStorage.setItem(KEY, JSON.stringify({name: el.name, pos}));
+      if (!el || !el.name) return;
+      const pos = (typeof el.selectionStart === 'number')
+        ? el.selectionStart
+        : (el.value || '').length;
+
+      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
     }catch(_){}
   }
-  function submitNow(fromEl){
-    rememberCaret(fromEl);
+
+  // ✅ submit sin pisar el foco (el foco ya lo guardó focusin)
+  function submitNow(){
     form.requestSubmit();
   }
+
+  // ✅ Captura el foco antes de que ocurra el blur del anterior (clave en móviles)
+  form.addEventListener('focusin', (e) => {
+    const el = e.target;
+    if (!el) return;
+    if (!form.contains(el)) return;
+    if (!el.name) return;
+    saveFocusState(el);
+  }, true);
 
   // TEXT INPUTS
   inputs.forEach(el => {
     if (isTouch) {
-      // móvil: al salir del input
-      el.addEventListener('blur', () => submitNow(el));
+      // móvil: submit al salir del input, pero SIN re-guardar foco como el que sale
+      el.addEventListener('blur', () => submitNow());
+
       el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); submitNow(el); }
+        if (e.key === 'Enter') { e.preventDefault(); submitNow(); }
       });
     } else {
       // desktop: debounce mientras escribes
       let t, composing = false;
+
       function doSubmit(){
         clearTimeout(t);
-        t = setTimeout(() => { if (!composing) submitNow(el); }, 500);
+        t = setTimeout(() => {
+          if (!composing) submitNow();
+        }, 500);
       }
+
       el.addEventListener('compositionstart', () => composing = true);
       el.addEventListener('compositionend',   () => { composing = false; doSubmit(); });
-      el.addEventListener('input',  doSubmit);
-      el.addEventListener('change', doSubmit);
+
+      el.addEventListener('input',  () => { saveFocusState(el); doSubmit(); });
+      el.addEventListener('change', () => { saveFocusState(el); doSubmit(); });
+
       el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); submitNow(el); }
+        if (e.key === 'Enter') { e.preventDefault(); submitNow(); }
       });
     }
   });
 
-  // SELECTS: enviar al cambiar
-  selects.forEach(el => el.addEventListener('change', () => submitNow(el)));
+  // SELECTS: guardar foco + enviar al cambiar
+  selects.forEach(el => el.addEventListener('change', () => {
+    saveFocusState(el);
+    submitNow();
+  }));
 
   // Restaurar foco/caret tras recargar
   function restoreCaret(){
     try{
       const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
       if (!data) return;
+
       const el = form.elements[data.name];
       if (!el) return;
+
       el.focus({ preventScroll: true });
+
       const len = (el.value || '').length;
       const p = Math.min((data.pos ?? len), len);
+
       if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
     }catch(_){}
   }
+
   window.addEventListener('DOMContentLoaded', restoreCaret);
   window.addEventListener('pageshow', restoreCaret);
 })();
 </script>
+
 
 <script>
 /* === Conservar scroll en "Servicios Cotizados - Supervisor" === */
