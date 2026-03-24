@@ -665,3 +665,253 @@ def solicitar_inventario_asignacion(request, asignacion_id: int):
     if nxt:
         return redirect(nxt)
     return redirect("logistica:herramientas_asignaciones_panel")
+
+
+@staff_member_required
+@rol_requerido("admin", "pm", "supervisor", "logistica")
+def herramientas_asignacion_masiva(request):
+    """
+    Vista tipo preview para asignación masiva (matriz):
+    - Se reciben herramientas por querystring: ?ids=1,2,3
+    - Se seleccionan trabajadores (multi-select)
+    - Se ingresan cantidades por celda
+    - Validación en vivo en frontend + validación dura en backend
+    - Al guardar: crea asignaciones y descuenta stock de Herramienta.cantidad
+
+    Inputs POST esperados:
+      users = [<user_id>, ...]
+      qty_<tool_id>_<user_id> = int
+    """
+    if not _can_admin_logistica(request.user):
+        return HttpResponseForbidden("No tienes permiso.")
+
+    def _parse_ids(raw: str) -> list[int]:
+        out = []
+        for part in (raw or "").split(","):
+            part = (part or "").strip()
+            if not part:
+                continue
+            try:
+                out.append(int(part))
+            except Exception:
+                continue
+        # únicos, orden estable
+        seen = set()
+        uniq = []
+        for x in out:
+            if x not in seen:
+                seen.add(x)
+                uniq.append(x)
+        return uniq
+
+    # =========================
+    # GET: construir preview
+    # =========================
+    if request.method == "GET":
+        ids = _parse_ids(request.GET.get("ids") or "")
+        if not ids:
+            messages.error(request, "❌ Debes seleccionar al menos una herramienta para asignación masiva.")
+            return redirect("logistica:herramientas_list")
+
+        herramientas = list(
+            Herramienta.objects
+            .filter(id__in=ids)
+            .select_related("bodega")
+            .order_by("nombre", "id")
+        )
+        if not herramientas:
+            messages.error(request, "❌ No se encontraron herramientas para asignar.")
+            return redirect("logistica:herramientas_list")
+
+        # usuarios disponibles
+        users_qs = list(
+            CustomUser.objects
+            .filter(is_active=True)
+            .order_by("first_name", "last_name", "username")
+        )
+
+        # para que el template tenga un json de stock / nombres
+        tools_payload = []
+        for h in herramientas:
+            tools_payload.append({
+                "id": h.id,
+                "nombre": h.nombre or "",
+                "serial": h.serial or "",
+                "stock": int(h.cantidad or 0),
+                "bodega": (h.bodega.nombre if h.bodega else ""),
+            })
+
+        users_payload = []
+        for u in users_qs:
+            users_payload.append({
+                "id": u.id,
+                "label": (u.get_full_name() or u.username or f"User#{u.id}").strip(),
+            })
+
+        return render(request, "logistica/admin_herramientas_asignacion_masiva.html", {
+            "tools": herramientas,
+            "tools_payload": tools_payload,
+            "users_qs": users_qs,
+            "users_payload": users_payload,
+            "ids_str": ",".join(str(x) for x in ids),
+        })
+
+    # =========================
+    # POST: guardar asignaciones
+    # =========================
+    ids = _parse_ids(request.POST.get("ids") or "")
+    if not ids:
+        messages.error(request, "❌ Faltan herramientas seleccionadas (ids).")
+        return redirect("logistica:herramientas_list")
+
+    user_ids_raw = request.POST.getlist("users")
+    user_ids = []
+    for x in user_ids_raw:
+        try:
+            user_ids.append(int(x))
+        except Exception:
+            continue
+    user_ids = list(dict.fromkeys(user_ids))  # unique preserve order
+
+    if not user_ids:
+        messages.error(request, "❌ Debes seleccionar al menos un trabajador.")
+        return redirect(f"{reverse('logistica:herramientas_asignacion_masiva')}?ids={','.join(str(i) for i in ids)}")
+
+    # cargar usuarios (y validar que existan)
+    users_by_id = {
+        u.id: u
+        for u in CustomUser.objects.filter(id__in=user_ids, is_active=True)
+    }
+    if len(users_by_id) != len(user_ids):
+        messages.error(request, "❌ Uno o más trabajadores no son válidos (o están inactivos).")
+        return redirect(f"{reverse('logistica:herramientas_asignacion_masiva')}?ids={','.join(str(i) for i in ids)}")
+
+    # matriz qty: tool_id -> user_id -> qty
+    def _to_int(v) -> int:
+        try:
+            if v is None:
+                return 0
+            v = str(v).strip()
+            if v == "":
+                return 0
+            n = int(v)
+            return n if n > 0 else 0
+        except Exception:
+            return 0
+
+    requested = {}  # tool_id -> {user_id: qty}
+    for tool_id in ids:
+        requested[tool_id] = {}
+        for uid in user_ids:
+            key = f"qty_{tool_id}_{uid}"
+            requested[tool_id][uid] = _to_int(request.POST.get(key))
+
+    # validación rápida (antes de lock)
+    # - si todas las celdas de un tool son 0, se ignora
+    any_qty = False
+    for tool_id in ids:
+        if sum(requested[tool_id].values()) > 0:
+            any_qty = True
+            break
+    if not any_qty:
+        messages.error(request, "❌ No ingresaste cantidades (todo quedó en 0/blanco).")
+        return redirect(f"{reverse('logistica:herramientas_asignacion_masiva')}?ids={','.join(str(i) for i in ids)}")
+
+    # =========================
+    # Persistencia: lock + descontar stock + crear asignaciones
+    # =========================
+    created = 0
+    errores = 0
+
+    try:
+        with transaction.atomic():
+            # bloquear herramientas
+            tools_locked = list(
+                Herramienta.objects
+                .select_for_update()
+                .filter(id__in=ids)
+            )
+            tools_by_id = {h.id: h for h in tools_locked}
+
+            # validar stocks con valores actuales (ya lockeados)
+            for tool_id in ids:
+                h = tools_by_id.get(tool_id)
+                if not h:
+                    raise ValidationError("Herramienta inválida en la asignación masiva.")
+
+                total = int(sum(requested[tool_id].values()) or 0)
+                if total <= 0:
+                    continue
+
+                stock = int(h.cantidad or 0)
+                if total > stock:
+                    raise ValidationError(
+                        f"No hay stock suficiente para '{h.nombre}'. "
+                        f"Stock: {stock} • Estás asignando: {total}."
+                    )
+
+            # aplicar cambios
+            for tool_id in ids:
+                h = tools_by_id.get(tool_id)
+                if not h:
+                    continue
+
+                total = int(sum(requested[tool_id].values()) or 0)
+                if total <= 0:
+                    continue
+
+                before_stock = int(h.cantidad or 0)
+                new_stock = before_stock - total
+
+                # crear asignaciones por usuario (solo si qty>0)
+                for uid in user_ids:
+                    qty = int(requested[tool_id].get(uid) or 0)
+                    if qty <= 0:
+                        continue
+
+                    to_user = users_by_id[uid]
+
+                    a = HerramientaAsignacion.objects.create(
+                        herramienta=h,
+                        asignado_a=to_user,
+                        asignado_por=request.user,
+                        asignado_at=timezone.now(),
+                        cantidad_entregada=qty,
+                        active=True,
+                        estado="pendiente",
+                    )
+                    created += 1
+
+                    HerramientaAsignacionLog.objects.create(
+                        asignacion=a,
+                        accion="create",
+                        by_user=request.user,
+                        cambios={
+                            "herramienta": str(h),
+                            "asignado_a": (to_user.get_full_name() or to_user.username),
+                            "cantidad_entregada": qty,
+                            "stock": {"from": before_stock, "to": new_stock},
+                            "massive": True,
+                        },
+                        nota="Asignación masiva",
+                    )
+
+                # descontar stock (una vez por herramienta)
+                h.cantidad = new_stock
+                if h.cantidad <= 0:
+                    h.status = "asignada"
+                h.updated_at = timezone.now()
+                h.save(update_fields=["cantidad", "status", "updated_at"])
+
+        messages.success(request, f"✅ Asignación masiva lista. Asignaciones creadas: {created}.")
+        return redirect("logistica:herramientas_asignaciones_panel")
+
+    except ValidationError as e:
+        errores += 1
+        messages.error(request, f"❌ {e}")
+        return redirect(f"{reverse('logistica:herramientas_asignacion_masiva')}?ids={','.join(str(i) for i in ids)}")
+
+    except Exception as e:
+        errores += 1
+        messages.error(request, f"❌ Error inesperado guardando asignación masiva: {e}")
+        return redirect(f"{reverse('logistica:herramientas_asignacion_masiva')}?ids={','.join(str(i) for i in ids)}")

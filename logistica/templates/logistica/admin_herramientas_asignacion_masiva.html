@@ -1,0 +1,335 @@
+{% extends "dashboard_admin/base.html" %}
+{% load custom_filters %}
+
+{% block title %}Asignación masiva{% endblock %}
+
+{% block dashboard_content %}
+<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+
+  <div class="max-w-6xl mx-auto w-full">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <div>
+        <h2 class="text-2xl font-bold text-gray-800">📦 Asignación masiva</h2>
+        <p class="text-sm text-gray-600 mt-1">
+          Selecciona trabajadores, luego asigna cantidades por herramienta. El sistema valida el stock al vuelo.
+        </p>
+      </div>
+
+      <div class="flex gap-2">
+        <a href="{% url 'logistica:herramientas_list' %}"
+           class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+          ← Volver a herramientas
+        </a>
+        <a href="{% url 'logistica:herramientas_asignaciones_panel' %}"
+           class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow-sm">
+          👤 Panel asignaciones
+        </a>
+      </div>
+    </div>
+
+    <form method="post" id="massAssignForm" class="space-y-4">
+      {% csrf_token %}
+      <input type="hidden" name="ids" value="{{ ids_str }}"/>
+
+      <!-- ✅ Trabajadores por CHECKBOX -->
+      <div class="border rounded-2xl p-4 bg-gray-50">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <label class="text-sm font-semibold text-gray-700">Trabajadores (puedes seleccionar varios)</label>
+            <div class="text-xs text-gray-500 mt-1">Marca uno o más. Al cambiar, se reconstruyen las columnas.</div>
+          </div>
+
+          <div class="flex gap-2">
+            <button type="button" id="usersAllBtn"
+                    class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+              Seleccionar todos
+            </button>
+            <button type="button" id="usersNoneBtn"
+                    class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+              Limpiar
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <input type="text" id="usersSearch"
+                 placeholder="Buscar trabajador..."
+                 class="w-full border rounded-xl px-3 py-2 text-sm bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                 autocomplete="off">
+        </div>
+
+        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[260px] overflow-auto pr-1"
+             id="usersBox">
+          {% for u in users_qs %}
+            <label class="flex items-center gap-2 bg-white border rounded-xl px-3 py-2 hover:bg-gray-50">
+              <input type="checkbox"
+                     class="userChk h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-200"
+                     name="users"
+                     value="{{ u.id }}"
+                     data-label="{{ u.get_full_name|default:u.username|lower }}">
+              <span class="text-sm text-gray-800">
+                {{ u.get_full_name|default:u.username }}
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+
+        <div class="text-xs text-gray-500 mt-2">
+          Tip: escribe en “Buscar trabajador” para filtrar rápido.
+        </div>
+      </div>
+
+      <div class="border rounded-2xl p-4 bg-white shadow-sm">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <div class="text-sm font-semibold text-gray-800">Matriz de asignación</div>
+          <div class="text-xs text-gray-500">
+            Herramientas seleccionadas: <b>{{ tools|length }}</b>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[900px]" id="matrixTable">
+            <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+              <tr>
+                <th class="p-2 border text-left min-w-[260px]">Herramienta</th>
+                <th class="p-2 border min-w-[130px]">Serial</th>
+                <th class="p-2 border min-w-[140px]">Total</th>
+                <th class="p-2 border min-w-[140px]">Stock actual</th>
+                {# columnas users se inyectan por JS #}
+              </tr>
+            </thead>
+
+            <tbody class="text-center" id="matrixBody">
+              {% for h in tools %}
+                <tr class="border-t hover:bg-gray-50"
+                    data-tool-id="{{ h.id }}"
+                    data-stock="{{ h.cantidad|default:0 }}">
+                  <td class="p-2 border text-left">
+                    <div class="font-semibold text-gray-800">{{ h.nombre }}</div>
+                    <div class="text-xs text-gray-500">
+                      Bodega: {{ h.bodega.nombre|default:"—" }}
+                    </div>
+                  </td>
+                  <td class="p-2 border">{{ h.serial }}</td>
+
+                  <td class="p-2 border">
+                    <div class="font-semibold" data-total-for="{{ h.id }}">0</div>
+                    <div class="text-xs text-red-600 hidden" data-error-for="{{ h.id }}"></div>
+                  </td>
+
+                  <td class="p-2 border">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs bg-gray-100 text-gray-800">
+                      {{ h.cantidad }}
+                    </span>
+                  </td>
+
+                  {# celdas users se inyectan por JS #}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-3">
+          <div class="text-sm text-gray-600">
+            <span class="inline-flex items-center gap-2">
+              <span class="inline-block w-3 h-3 rounded-full bg-red-500"></span>
+              Rojo = excede stock (no deja guardar)
+            </span>
+          </div>
+
+          <button type="submit" id="saveBtn"
+                  class="px-6 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow disabled:opacity-50 disabled:cursor-not-allowed">
+            ✅ Guardar asignación masiva
+          </button>
+        </div>
+
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function(){
+  const users = {{ users_payload|safe }};
+
+  const usersBox = document.getElementById('usersBox');
+  const usersSearch = document.getElementById('usersSearch');
+  const usersAllBtn = document.getElementById('usersAllBtn');
+  const usersNoneBtn = document.getElementById('usersNoneBtn');
+
+  const table = document.getElementById('matrixTable');
+  const body = document.getElementById('matrixBody');
+  const saveBtn = document.getElementById('saveBtn');
+
+  function selectedUserIds(){
+    return Array.from(document.querySelectorAll('.userChk:checked'))
+      .map(el => parseInt(el.value, 10))
+      .filter(Boolean);
+  }
+
+  function userLabel(uid){
+    const u = users.find(x => x.id === uid);
+    return u ? u.label : ("User#" + uid);
+  }
+
+  function clearUserColumns(){
+    const theadRow = table.querySelector('thead tr');
+    while (theadRow.children.length > 4) theadRow.removeChild(theadRow.lastElementChild);
+
+    body.querySelectorAll('tr').forEach(tr => {
+      while (tr.children.length > 4) tr.removeChild(tr.lastElementChild);
+    });
+  }
+
+  function buildUserColumns(){
+    clearUserColumns();
+
+    const uids = selectedUserIds();
+    const theadRow = table.querySelector('thead tr');
+
+    uids.forEach(uid => {
+      const th = document.createElement('th');
+      th.className = 'p-2 border min-w-[180px]';
+      th.textContent = userLabel(uid);
+      theadRow.appendChild(th);
+    });
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const toolId = parseInt(tr.dataset.toolId, 10);
+
+      uids.forEach(uid => {
+        const td = document.createElement('td');
+        td.className = 'p-2 border';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'flex flex-col items-center gap-1';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.placeholder = '0';
+        input.className =
+          'w-[120px] border rounded-xl px-3 py-2 text-sm text-center outline-none ' +
+          'focus:border-blue-500 focus:ring-2 focus:ring-blue-200';
+        input.name = `qty_${toolId}_${uid}`;
+        input.dataset.toolId = String(toolId);
+        input.dataset.uid = String(uid);
+
+        const msg = document.createElement('div');
+        msg.className = 'text-[11px] text-red-600 hidden';
+        msg.textContent = '';
+
+        wrap.appendChild(input);
+        wrap.appendChild(msg);
+        td.appendChild(wrap);
+
+        tr.appendChild(td);
+      });
+    });
+
+    body.querySelectorAll('input[type="number"]').forEach(inp => {
+      inp.addEventListener('input', recomputeAll);
+      inp.addEventListener('change', recomputeAll);
+    });
+
+    recomputeAll();
+  }
+
+  function recomputeAll(){
+    let hasAnyError = false;
+
+    body.querySelectorAll('tr').forEach(tr => {
+      const toolId = parseInt(tr.dataset.toolId, 10);
+      const stock = parseInt(tr.dataset.stock || '0', 10);
+
+      const inputs = Array.from(tr.querySelectorAll('input[type="number"]'));
+
+      // normalizar valores
+      const vals = inputs.map(inp => {
+        const v = (inp.value || '').trim();
+        const n = v === '' ? 0 : Math.max(parseInt(v, 10) || 0, 0);
+        return n;
+      });
+
+      const total = vals.reduce((a,b) => a+b, 0);
+
+      const totalEl = tr.querySelector(`[data-total-for="${toolId}"]`);
+      const errEl = tr.querySelector(`[data-error-for="${toolId}"]`);
+
+      totalEl.textContent = String(total);
+
+      // ✅ Error solo si total > stock
+      if (total > stock){
+        hasAnyError = true;
+        tr.classList.add('bg-red-50');
+        errEl.classList.remove('hidden');
+        errEl.textContent = `Excede stock (${stock})`;
+      } else {
+        tr.classList.remove('bg-red-50');
+        errEl.classList.add('hidden');
+        errEl.textContent = '';
+      }
+
+      // ✅ Validación por celda:
+      // Mostrar mensaje SOLO en la celda que está “pasándose”
+      inputs.forEach((inp, idx) => {
+        const cellMsg = inp.parentElement.querySelector('div.text-red-600');
+        if (!cellMsg) return;
+
+        const thisVal = vals[idx];
+        const others = total - thisVal;
+        const allowedHere = Math.max(stock - others, 0);
+
+        // si la celda supera lo permitido, marcar error en esa celda
+        if (thisVal > allowedHere) {
+          cellMsg.classList.remove('hidden');
+          cellMsg.textContent = `Máx: ${allowedHere}`;
+          inp.classList.add('border-red-500');
+          inp.classList.remove('border-gray-300');
+        } else {
+          cellMsg.classList.add('hidden');
+          cellMsg.textContent = '';
+          inp.classList.remove('border-red-500');
+        }
+      });
+    });
+
+    // si no hay trabajadores seleccionados, no dejar guardar
+    if (selectedUserIds().length === 0) hasAnyError = true;
+
+    saveBtn.disabled = hasAnyError;
+  }
+
+  // ====== eventos selección trabajadores (checkbox) ======
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('userChk')) {
+      buildUserColumns();
+    }
+  });
+
+  usersAllBtn?.addEventListener('click', () => {
+    document.querySelectorAll('.userChk').forEach(c => c.checked = true);
+    buildUserColumns();
+  });
+
+  usersNoneBtn?.addEventListener('click', () => {
+    document.querySelectorAll('.userChk').forEach(c => c.checked = false);
+    buildUserColumns();
+  });
+
+  usersSearch?.addEventListener('input', () => {
+    const q = (usersSearch.value || '').trim().toLowerCase();
+    usersBox.querySelectorAll('label').forEach(lbl => {
+      const chk = lbl.querySelector('input.userChk');
+      const key = (chk?.dataset.label || '').toLowerCase();
+      const show = !q || key.includes(q);
+      lbl.style.display = show ? '' : 'none';
+    });
+  });
+
+  // init
+  buildUserColumns();
+})();
+</script>
+{% endblock %}

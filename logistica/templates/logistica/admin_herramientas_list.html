@@ -30,7 +30,7 @@
   }
   .tabla-responsive table{
     white-space: nowrap;
-    min-width: 1400px; /* ✅ bajó porque se quitó la columna "Asignación" */
+    min-width: 1500px; /* ✅ sube por columna checkbox */
   }
 
   .line-clamp-2{
@@ -46,6 +46,14 @@
     <h2 class="text-2xl font-bold text-gray-800">🧰 Herramientas</h2>
 
     <div class="flex gap-2 flex-wrap">
+      <!-- ✅ Asignación masiva -->
+      <button type="button"
+              id="bulkAssignBtn"
+              disabled
+              class="px-4 py-2 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow disabled:opacity-50 disabled:cursor-not-allowed">
+        📦 Asignación masiva
+      </button>
+
       <a href="{% url 'logistica:bodegas_manage' %}"
          class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
         🏬 Bodegas
@@ -115,16 +123,19 @@
         </label>
 
         <div class="space-y-1 text-sm">
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span>Herramienta</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Serial</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Cantidad</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Valor</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Bodega</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>Asignada a</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Estado herramienta</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Justificación</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Inventario</span></label>
-          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>Acciones</span></label>
+          <!-- ✅ NUEVA COLUMNA 0: checkbox -->
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="0" checked><span>✔</span></label>
+
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="1" checked><span>Herramienta</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="2" checked><span>Serial</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="3" checked><span>Cantidad</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="4" checked><span>Valor</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="5" checked><span>Bodega</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="6" checked><span>Asignada a</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="7" checked><span>Estado herramienta</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="8" checked><span>Justificación</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="9" checked><span>Inventario</span></label>
+          <label class="flex items-center gap-2"><input type="checkbox" class="col-toggle" data-col="10" checked><span>Acciones</span></label>
         </div>
       </div>
     </details>
@@ -139,6 +150,13 @@
       <table class="w-full text-sm" data-columns-table="herramientas-admin">
         <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
           <tr>
+            <!-- ✅ Select all -->
+            <th class="p-2 border">
+              <input type="checkbox"
+                     id="chkAll"
+                     class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-200">
+            </th>
+
             <th class="p-2 border text-left">Herramienta</th>
             <th class="p-2 border">Serial</th>
             <th class="p-2 border">Cantidad</th>
@@ -155,6 +173,13 @@
         <tbody class="text-center">
           {% for h in pagina %}
             <tr class="border-t hover:bg-gray-50">
+
+              <!-- ✅ Checkbox fila -->
+              <td class="p-2 border">
+                <input type="checkbox"
+                       class="rowChk h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-200"
+                       value="{{ h.id }}">
+              </td>
 
               <!-- Herramienta -->
               <td class="p-2 border text-left">
@@ -310,6 +335,48 @@
 
   {% endif %}
 </div>
+
+<!-- ✅ Asignación masiva: selección + botón -->
+<script>
+(function(){
+  const btn = document.getElementById('bulkAssignBtn');
+  const chkAll = document.getElementById('chkAll');
+
+  function getChecks(){ return Array.from(document.querySelectorAll('.rowChk')); }
+  function selectedIds(){ return getChecks().filter(c => c.checked).map(c => c.value); }
+
+  function refreshBtn(){
+    const ids = selectedIds();
+    btn.disabled = (ids.length === 0);
+    btn.textContent = ids.length ? `📦 Asignación masiva (${ids.length})` : '📦 Asignación masiva';
+  }
+
+  chkAll?.addEventListener('change', () => {
+    const v = chkAll.checked;
+    getChecks().forEach(c => c.checked = v);
+    refreshBtn();
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('rowChk')) {
+      const all = getChecks();
+      const allChecked = all.length && all.every(c => c.checked);
+      if (chkAll) chkAll.checked = allChecked;
+      refreshBtn();
+    }
+  });
+
+  btn?.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+
+    const url = "{% url 'logistica:herramientas_asignacion_masiva' %}" + "?ids=" + encodeURIComponent(ids.join(','));
+    window.location.href = url;
+  });
+
+  refreshBtn();
+})();
+</script>
 
 <!-- ===== Auto filtros mientras escribes + mantener caret ===== -->
 <script>

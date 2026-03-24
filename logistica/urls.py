@@ -89,4 +89,10 @@ path("herramientas/asignaciones/<int:asignacion_id>/eliminar/", views_herramient
 
 path("herramientas/asignaciones/<int:asignacion_id>/inventario/historial/",views_herramientas_asignaciones_admin.inventario_historial_asignacion_admin,name="inventario_historial_asignacion_admin"),
 
+# ✅ NUEVO: asignación masiva (vista tipo preview)
+path("herramientas/asignacion-masiva/",views_herramientas_asignaciones_admin.herramientas_asignacion_masiva,name="herramientas_asignacion_masiva",),
+
+
+
+
 ]
