@@ -4,11 +4,12 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
+from django.db import IntegrityError, connection, transaction
 from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
-from .models import (FlotaAlertaEnviada, FlotaCronDiarioEjecutado, Vehicle,
+from .models import (FlotaAlertaEnviada, FlotaCronDiarioEjecutado,
                      VehicleNotificationSettings, VehicleService,
                      VehicleServiceType)
 
@@ -38,47 +39,83 @@ def _latest_service_for_type(vehicle_id: int, st_type: VehicleServiceType):
     )
 
 
-def _already_sent_pre(vehicle_id: int, type_id: int, base_service_id: int, mode: str, threshold: int) -> bool:
-    return FlotaAlertaEnviada.objects.filter(
-        vehicle_id=vehicle_id,
-        service_type_id=type_id,
-        base_service_id=base_service_id,
-        mode=mode,
-        threshold=threshold,
-    ).exists()
+def _try_pg_advisory_lock(lock_key: int) -> bool:
+    """
+    Lock global cross-process sin migraciones (solo Postgres).
+    Retorna True si tomó el lock; False si ya hay otro proceso corriendo.
+    """
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_try_advisory_lock(%s);", [lock_key])
+        row = cur.fetchone()
+        return bool(row and row[0])
 
 
-def _mark_sent_pre(vehicle_id: int, type_id: int, base_service_id: int, mode: str, threshold: int):
-    FlotaAlertaEnviada.objects.create(
-        vehicle_id=vehicle_id,
-        service_type_id=type_id,
-        base_service_id=base_service_id,
-        mode=mode,
-        threshold=threshold,
-        sent_on=None,  # pre = una sola vez por base_service
-    )
+def _pg_advisory_unlock(lock_key: int) -> None:
+    if connection.vendor != "postgresql":
+        return
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s);", [lock_key])
+    except Exception:
+        logger.exception("CRON flota: fallo liberando advisory lock")
 
 
-def _already_sent_overdue_today(vehicle_id: int, type_id: int, base_service_id: int, mode: str, today) -> bool:
-    return FlotaAlertaEnviada.objects.filter(
-        vehicle_id=vehicle_id,
-        service_type_id=type_id,
-        base_service_id=base_service_id,
-        mode=mode,
-        threshold=0,
-        sent_on=today,
-    ).exists()
+def _mark_sent_pre_safe(vehicle_id: int, type_id: int, base_service_id: int, threshold: int) -> bool:
+    """
+    PRE KM: una vez por base_service + threshold.
+    Devuelve True si se creó (o sea, NO estaba enviada).
+    """
+    try:
+        _obj, created = FlotaAlertaEnviada.objects.get_or_create(
+            vehicle_id=vehicle_id,
+            service_type_id=type_id,
+            base_service_id=base_service_id,
+            mode="pre_km",
+            threshold=int(threshold),
+            defaults={"sent_on": None},
+        )
+        return created
+    except IntegrityError:
+        return False
 
 
-def _mark_sent_overdue_today(vehicle_id: int, type_id: int, base_service_id: int, mode: str, today):
-    FlotaAlertaEnviada.objects.create(
-        vehicle_id=vehicle_id,
-        service_type_id=type_id,
-        base_service_id=base_service_id,
-        mode=mode,
-        threshold=0,
-        sent_on=today,  # overdue = una vez por día
-    )
+def _mark_sent_pre_days_safe(vehicle_id: int, type_id: int, base_service_id: int, threshold: int) -> bool:
+    """
+    PRE DAYS: una vez por base_service + threshold.
+    """
+    try:
+        _obj, created = FlotaAlertaEnviada.objects.get_or_create(
+            vehicle_id=vehicle_id,
+            service_type_id=type_id,
+            base_service_id=base_service_id,
+            mode="pre_days",
+            threshold=int(threshold),
+            defaults={"sent_on": None},
+        )
+        return created
+    except IntegrityError:
+        return False
+
+
+def _mark_sent_overdue_today_safe(vehicle_id: int, type_id: int, base_service_id: int, mode: str, today) -> bool:
+    """
+    OVERDUE: una vez por día (sent_on = hoy).
+    Devuelve True si se creó (o sea, NO estaba enviada hoy).
+    """
+    try:
+        _obj, created = FlotaAlertaEnviada.objects.get_or_create(
+            vehicle_id=vehicle_id,
+            service_type_id=type_id,
+            base_service_id=base_service_id,
+            mode=mode,
+            threshold=0,
+            sent_on=today,
+        )
+        return created
+    except IntegrityError:
+        return False
 
 
 def _send_email(
@@ -104,60 +141,64 @@ def _send_email(
 @require_http_methods(["GET", "HEAD"])
 def cron_flota_mantenciones(request):
     """
-    CRON Flota (similar RRHH):
+    CRON Flota:
     - Token ?token=...
-    - Solo una vez por día (lock DB); si falla, libera lock para reintentar.
-    - Nunca antes de las 08:00 (hora local).
-    - Revisa vehículos con VehicleNotificationSettings.enabled=True
-    - Para cada VehicleServiceType activo con frecuencia (KM y/o días):
-        * Busca último servicio (VehicleService con service_type_obj)
-        * Calcula vencimiento por KM y/o días
-        * PRE: dispara cuando remaining <= step (1000/500/100 etc) UNA sola vez por base_service
-        * OVERDUE: si notify_on_overdue=True, dispara TODOS los días (una vez/día) hasta nuevo servicio
+    - Solo una vez por día (lock DB)
+    - Nunca antes de las 08:00 (hora local), salvo force=1
+    - PRE: una sola vez por base_service+threshold
+    - OVERDUE: una vez al día (si notify_on_overdue)
+    - ✅ Anti-spam: nunca borramos el lock diario automáticamente
+    - ✅ Anti-concurrencia: advisory lock por día (Postgres)
     """
-
-    # 1) Seguridad token
-    token_recibido = request.GET.get("token")
-    token_esperado = getattr(settings, "FLOTA_CRON_TOKEN", "")
+    token_recibido = (request.GET.get("token") or "").strip()
+    token_esperado = (getattr(settings, "FLOTA_CRON_TOKEN", "") or "").strip()
     if not token_esperado or token_recibido != token_esperado:
         return HttpResponseForbidden("Forbidden")
 
     ahora = timezone.localtime()
     hoy = ahora.date()
+    force_run = (request.GET.get("force") or "").strip() == "1"
 
-    # 2) No ejecutar antes de las 08:00
-    if ahora.hour < 8:
-        return JsonResponse(
-            {"status": "before-8am", "detail": "Aún no son las 08:00"},
-            status=200,
-        )
+    # ✅ permite pruebas antes de las 08:00 con force=1
+    if ahora.hour < 8 and not force_run:
+        return JsonResponse({"status": "before-8am", "detail": "Aún no son las 08:00"}, status=200)
 
-    # 3) Lock diario
+    # ✅ advisory lock por día (evita que corra en paralelo si alguien deja monitor directo a flota)
+    lock_key = abs(hash(f"flota_mantenciones:{hoy.isoformat()}")) % 2147483647
+    if not _try_pg_advisory_lock(lock_key):
+        return JsonResponse({"status": "already-running", "detail": "Otro proceso ya está ejecutando"}, status=200)
+
     job_name = "flota_mantenciones"
-    cron_obj, created = FlotaCronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
-    if not created:
-        return JsonResponse(
-            {"status": "already-run", "detail": "Ya se ejecutó hoy"},
-            status=200,
-        )
-
-    enviados = 0
-    saltados = 0
-    errores_envio = 0
-    ultimo_error = None
-    success = False
-
-    logo_url = _get_logo_url()
 
     try:
-        # Vehículos con notificaciones activas
+        # ✅ force: resetea lock diario para permitir re-ejecutar hoy
+        if force_run:
+            FlotaCronDiarioEjecutado.objects.filter(nombre=job_name, fecha=hoy).delete()
+
+        # Lock diario robusto contra concurrencia
+        try:
+            with transaction.atomic():
+                _cron_obj, created = FlotaCronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
+        except IntegrityError:
+            created = False
+
+        if not created and not force_run:
+            return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
+
+        enviados = 0
+        saltados = 0
+        errores_envio = 0
+        errores_logica = 0
+        ultimo_error = None
+
+        logo_url = _get_logo_url()
+
         cfgs = (
             VehicleNotificationSettings.objects
             .select_related("vehicle")
             .filter(enabled=True)
         )
 
-        # Tipos con frecuencia (KM o días)
         tipos = (
             VehicleServiceType.objects
             .filter(is_active=True)
@@ -168,7 +209,6 @@ def cron_flota_mantenciones(request):
             v = cfg.vehicle
             to_emails, cc_emails = _build_recipients(cfg)
 
-            # Si no hay a quién enviar, saltamos
             if not to_emails and not cc_emails:
                 saltados += 1
                 continue
@@ -176,7 +216,6 @@ def cron_flota_mantenciones(request):
             km_actual = int(v.kilometraje_actual or 0)
 
             for t in tipos:
-                # Solo tipos con frecuencia real
                 has_km = bool((t.interval_km or 0) > 0)
                 has_days = bool((t.interval_days or 0) > 0)
                 if not has_km and not has_days:
@@ -184,24 +223,20 @@ def cron_flota_mantenciones(request):
 
                 last = _latest_service_for_type(v.id, t)
                 if not last:
-                    # sin base -> no podemos calcular
                     continue
 
                 # -----------------------
-                #  A) ALERTAS POR KM
+                # A) ALERTAS POR KM
                 # -----------------------
-                if has_km:
-                    if last.kilometraje_declarado is None:
-                        # sin KM base, no podemos calcular por KM
-                        pass
-                    else:
+                if has_km and last.kilometraje_declarado is not None:
+                    try:
                         due_km = int(last.kilometraje_declarado) + int(t.interval_km)
                         remaining_km = due_km - km_actual
 
-                        # Overdue por KM
+                        # Overdue KM (una vez al día)
                         if remaining_km <= 0:
                             if t.notify_on_overdue:
-                                if not _already_sent_overdue_today(v.id, t.id, last.id, "overdue_km", hoy):
+                                if _mark_sent_overdue_today_safe(v.id, t.id, last.id, "overdue_km", hoy):
                                     subject = f"[GZ Services] Mantención vencida (KM) - {t.name} - {v.patente}"
                                     text_body = (
                                         "Hola,\n\n"
@@ -224,9 +259,6 @@ def cron_flota_mantenciones(request):
       <img src="{logo_url}" alt="Logo Planix" style="max-width:180px;height:auto;">
     </div>
     <h2 style="font-size:20px;margin:0 0 10px;color:#111827;">⚠️ Mantención vencida (por KM)</h2>
-    <p style="font-size:14px;color:#374151;margin:0 0 12px;">
-      El vehículo <strong>{v.patente}</strong> tiene una mantención vencida.
-    </p>
     <div style="background:#f9fafb;border-radius:10px;padding:14px 18px;font-size:13px;color:#374151;">
       <ul style="margin:0;padding-left:18px;">
         <li><strong>Vehículo:</strong> {v.marca} {v.modelo} ({v.patente})</li>
@@ -247,7 +279,7 @@ def cron_flota_mantenciones(request):
                                     try:
                                         _send_email(
                                             subject=subject,
-                                            to_emails=to_emails or cc_emails,  # si TO vacío, usamos CC como fallback
+                                            to_emails=to_emails or cc_emails,
                                             cc_emails=cc_emails if to_emails else [],
                                             text_body=text_body,
                                             html_body=html_body,
@@ -257,16 +289,15 @@ def cron_flota_mantenciones(request):
                                         ultimo_error = e.__class__.__name__
                                         logger.exception("Fallo envío flota overdue_km veh=%s tipo=%s", v.id, t.id)
                                     else:
-                                        _mark_sent_overdue_today(v.id, t.id, last.id, "overdue_km", hoy)
                                         enviados += 1
                             continue
 
-                        # Pre-alertas por KM (1000/500/100...)
+                        # Pre-alertas KM
                         steps = t.alert_km_steps_list
                         if steps:
                             for threshold in steps:
                                 if remaining_km <= int(threshold):
-                                    if not _already_sent_pre(v.id, t.id, last.id, "pre_km", int(threshold)):
+                                    if _mark_sent_pre_safe(v.id, t.id, last.id, int(threshold)):
                                         subject = f"[GZ Services] Mantención próxima (KM) - {t.name} - {v.patente}"
                                         text_body = (
                                             "Hola,\n\n"
@@ -290,9 +321,6 @@ def cron_flota_mantenciones(request):
       <img src="{logo_url}" alt="Logo Planix" style="max-width:180px;height:auto;">
     </div>
     <h2 style="font-size:20px;margin:0 0 10px;color:#111827;">🔔 Mantención próxima (por KM)</h2>
-    <p style="font-size:14px;color:#374151;margin:0 0 12px;">
-      El vehículo <strong>{v.patente}</strong> está próximo a vencimiento.
-    </p>
     <div style="background:#f9fafb;border-radius:10px;padding:14px 18px;font-size:13px;color:#374151;">
       <ul style="margin:0;padding-left:18px;">
         <li><strong>Vehículo:</strong> {v.marca} {v.modelo} ({v.patente})</li>
@@ -324,33 +352,36 @@ def cron_flota_mantenciones(request):
                                             ultimo_error = e.__class__.__name__
                                             logger.exception("Fallo envío flota pre_km veh=%s tipo=%s", v.id, t.id)
                                         else:
-                                            _mark_sent_pre(v.id, t.id, last.id, "pre_km", int(threshold))
                                             enviados += 1
-
-                                    # si ya entró en un umbral, no forzamos a mandar todos a la vez
                                     break
 
+                    except Exception as e:
+                        errores_logica += 1
+                        ultimo_error = e.__class__.__name__
+                        logger.exception("Error lógica flota km veh=%s tipo=%s", v.id, t.id)
+
                 # -----------------------
-                #  B) ALERTAS POR DÍAS
+                # B) ALERTAS POR DÍAS
                 # -----------------------
                 if has_days:
-                    due_date = last.service_date + timedelta(days=int(t.interval_days))
-                    remaining_days = (due_date - hoy).days
+                    try:
+                        due_date = last.service_date + timedelta(days=int(t.interval_days))
+                        remaining_days = (due_date - hoy).days
 
-                    # Overdue por días
-                    if remaining_days <= 0:
-                        if t.notify_on_overdue:
-                            if not _already_sent_overdue_today(v.id, t.id, last.id, "overdue_days", hoy):
-                                subject = f"[GZ Services] Mantención vencida (días) - {t.name} - {v.patente}"
-                                text_body = (
-                                    "Hola,\n\n"
-                                    f"El vehículo {v.patente} tiene una mantención vencida.\n"
-                                    f"Tipo: {t.name}\n"
-                                    f"Vencía el: {due_date:%Y-%m-%d}\n\n"
-                                    "Este mensaje fue generado automáticamente por el sistema Planix.\n"
-                                )
+                        # Overdue days (una vez por día)
+                        if remaining_days <= 0:
+                            if t.notify_on_overdue:
+                                if _mark_sent_overdue_today_safe(v.id, t.id, last.id, "overdue_days", hoy):
+                                    subject = f"[GZ Services] Mantención vencida (días) - {t.name} - {v.patente}"
+                                    text_body = (
+                                        "Hola,\n\n"
+                                        f"El vehículo {v.patente} tiene una mantención vencida.\n"
+                                        f"Tipo: {t.name}\n"
+                                        f"Vencía el: {due_date:%Y-%m-%d}\n\n"
+                                        "Este mensaje fue generado automáticamente por el sistema Planix.\n"
+                                    )
 
-                                html_body = f"""\
+                                    html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"></head>
@@ -362,9 +393,6 @@ def cron_flota_mantenciones(request):
       <img src="{logo_url}" alt="Logo Planix" style="max-width:180px;height:auto;">
     </div>
     <h2 style="font-size:20px;margin:0 0 10px;color:#111827;">⚠️ Mantención vencida (por días)</h2>
-    <p style="font-size:14px;color:#374151;margin:0 0 12px;">
-      El vehículo <strong>{v.patente}</strong> tiene una mantención vencida.
-    </p>
     <div style="background:#f9fafb;border-radius:10px;padding:14px 18px;font-size:13px;color:#374151;">
       <ul style="margin:0;padding-left:18px;">
         <li><strong>Vehículo:</strong> {v.marca} {v.modelo} ({v.patente})</li>
@@ -380,41 +408,39 @@ def cron_flota_mantenciones(request):
 </body>
 </html>
 """
+                                    try:
+                                        _send_email(
+                                            subject=subject,
+                                            to_emails=to_emails or cc_emails,
+                                            cc_emails=cc_emails if to_emails else [],
+                                            text_body=text_body,
+                                            html_body=html_body,
+                                        )
+                                    except Exception as e:
+                                        errores_envio += 1
+                                        ultimo_error = e.__class__.__name__
+                                        logger.exception("Fallo envío flota overdue_days veh=%s tipo=%s", v.id, t.id)
+                                    else:
+                                        enviados += 1
+                            continue
 
-                                try:
-                                    _send_email(
-                                        subject=subject,
-                                        to_emails=to_emails or cc_emails,
-                                        cc_emails=cc_emails if to_emails else [],
-                                        text_body=text_body,
-                                        html_body=html_body,
-                                    )
-                                except Exception as e:
-                                    errores_envio += 1
-                                    ultimo_error = e.__class__.__name__
-                                    logger.exception("Fallo envío flota overdue_days veh=%s tipo=%s", v.id, t.id)
-                                else:
-                                    _mark_sent_overdue_today(v.id, t.id, last.id, "overdue_days", hoy)
-                                    enviados += 1
-                        continue
+                        # Pre-alertas por días
+                        steps_days = t.alert_days_steps_list
+                        if steps_days:
+                            for threshold in steps_days:
+                                if remaining_days <= int(threshold):
+                                    if _mark_sent_pre_days_safe(v.id, t.id, last.id, int(threshold)):
+                                        subject = f"[GZ Services] Mantención próxima (días) - {t.name} - {v.patente}"
+                                        text_body = (
+                                            "Hola,\n\n"
+                                            f"El vehículo {v.patente} tiene una mantención próxima.\n"
+                                            f"Tipo: {t.name}\n"
+                                            f"Vence el: {due_date:%Y-%m-%d}\n"
+                                            f"Faltan: {remaining_days} día(s)\n\n"
+                                            "Este mensaje fue generado automáticamente por el sistema Planix.\n"
+                                        )
 
-                    # Pre-alertas por días
-                    steps_days = t.alert_days_steps_list
-                    if steps_days:
-                        for threshold in steps_days:
-                            if remaining_days <= int(threshold):
-                                if not _already_sent_pre(v.id, t.id, last.id, "pre_days", int(threshold)):
-                                    subject = f"[GZ Services] Mantención próxima (días) - {t.name} - {v.patente}"
-                                    text_body = (
-                                        "Hola,\n\n"
-                                        f"El vehículo {v.patente} tiene una mantención próxima.\n"
-                                        f"Tipo: {t.name}\n"
-                                        f"Vence el: {due_date:%Y-%m-%d}\n"
-                                        f"Faltan: {remaining_days} día(s)\n\n"
-                                        "Este mensaje fue generado automáticamente por el sistema Planix.\n"
-                                    )
-
-                                    html_body = f"""\
+                                        html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
 <head><meta charset="UTF-8"></head>
@@ -426,9 +452,6 @@ def cron_flota_mantenciones(request):
       <img src="{logo_url}" alt="Logo Planix" style="max-width:180px;height:auto;">
     </div>
     <h2 style="font-size:20px;margin:0 0 10px;color:#111827;">🔔 Mantención próxima (por días)</h2>
-    <p style="font-size:14px;color:#374151;margin:0 0 12px;">
-      El vehículo <strong>{v.patente}</strong> está próximo a vencimiento.
-    </p>
     <div style="background:#f9fafb;border-radius:10px;padding:14px 18px;font-size:13px;color:#374151;">
       <ul style="margin:0;padding-left:18px;">
         <li><strong>Vehículo:</strong> {v.marca} {v.modelo} ({v.patente})</li>
@@ -445,41 +468,43 @@ def cron_flota_mantenciones(request):
 </body>
 </html>
 """
+                                        try:
+                                            _send_email(
+                                                subject=subject,
+                                                to_emails=to_emails or cc_emails,
+                                                cc_emails=cc_emails if to_emails else [],
+                                                text_body=text_body,
+                                                html_body=html_body,
+                                            )
+                                        except Exception as e:
+                                            errores_envio += 1
+                                            ultimo_error = e.__class__.__name__
+                                            logger.exception("Fallo envío flota pre_days veh=%s tipo=%s", v.id, t.id)
+                                        else:
+                                            enviados += 1
+                                    break
 
-                                    try:
-                                        _send_email(
-                                            subject=subject,
-                                            to_emails=to_emails or cc_emails,
-                                            cc_emails=cc_emails if to_emails else [],
-                                            text_body=text_body,
-                                            html_body=html_body,
-                                        )
-                                    except Exception as e:
-                                        errores_envio += 1
-                                        ultimo_error = e.__class__.__name__
-                                        logger.exception("Fallo envío flota pre_days veh=%s tipo=%s", v.id, t.id)
-                                    else:
-                                        _mark_sent_pre(v.id, t.id, last.id, "pre_days", int(threshold))
-                                        enviados += 1
+                    except Exception as e:
+                        errores_logica += 1
+                        ultimo_error = e.__class__.__name__
+                        logger.exception("Error lógica flota days veh=%s tipo=%s", v.id, t.id)
 
-                                break
+        ok = (errores_envio == 0 and errores_logica == 0)
 
-        success = (errores_envio == 0)
+        return JsonResponse(
+            {
+                "status": "ok" if ok else "partial-error",
+                "date": str(hoy),
+                "method": request.method,
+                "force": force_run,
+                "sent": enviados,
+                "skipped": saltados,
+                "send_errors": errores_envio,
+                "logic_errors": errores_logica,
+                "last_error": ultimo_error,
+            },
+            status=200,
+        )
 
     finally:
-        # Si hubo problemas, liberamos lock para reintentar hoy
-        if not success:
-            FlotaCronDiarioEjecutado.objects.filter(pk=cron_obj.pk).delete()
-
-    return JsonResponse(
-        {
-            "status": "ok" if success else "retry-enabled",
-            "date": str(hoy),
-            "method": request.method,
-            "sent": enviados,
-            "skipped": saltados,
-            "send_errors": errores_envio,
-            "last_error": ultimo_error,
-        },
-        status=200,
-    )
+        _pg_advisory_unlock(lock_key)

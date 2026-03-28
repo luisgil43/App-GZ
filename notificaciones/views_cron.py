@@ -1,9 +1,11 @@
+# notificaciones/views_cron.py
 from __future__ import annotations
 
 import json
 import logging
 
 from django.conf import settings
+from django.db import IntegrityError, connection
 from django.http import HttpResponseForbidden, JsonResponse
 from django.test.client import RequestFactory
 from django.utils import timezone
@@ -36,95 +38,143 @@ def _response_to_dict(response, default_name: str) -> dict:
     }
 
 
+def _token_or_general(setting_name: str) -> str:
+    """
+    Permite que uses SOLO CRON_GENERAL_TOKEN si quieres.
+    Si el token específico no está seteado, cae al general.
+    """
+    specific = (getattr(settings, setting_name, "") or "").strip()
+    if specific:
+        return specific
+    return (getattr(settings, "CRON_GENERAL_TOKEN", "") or "").strip()
+
+
+def _safe_call(name: str, fn, rf: RequestFactory, path: str, params: dict) -> dict:
+    """
+    Ejecuta un sub-cron y nunca deja que rompa el cron general.
+    Importante: captura IntegrityError (race de get_or_create).
+    """
+    try:
+        req = rf.get(path, data=params)
+        resp = fn(req)
+        return _response_to_dict(resp, name)
+    except IntegrityError:
+        # Esto pasa típicamente por carrera en get_or_create del lock diario.
+        logger.exception("CRON general: IntegrityError en sub-cron %s", name)
+        return {
+            "http_status": 200,
+            "status": "already-run-race",
+            "detail": f"{name}: IntegrityError (race) en lock diario; tratar como ya ejecutado",
+        }
+    except Exception as e:
+        logger.exception("CRON general: fallo inesperado en sub-cron %s", name)
+        return {
+            "http_status": 200,
+            "status": "error",
+            "detail": e.__class__.__name__,
+        }
+
+
+def _try_pg_advisory_lock(lock_key: int) -> bool:
+    """
+    Lock global cross-process sin migraciones (solo Postgres).
+    Retorna True si tomó el lock; False si ya hay otro proceso corriendo.
+    """
+    if connection.vendor != "postgresql":
+        return True  # en dev (sqlite) no hay advisory locks; seguimos
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_try_advisory_lock(%s);", [lock_key])
+        row = cur.fetchone()
+        return bool(row and row[0])
+
+
+def _pg_advisory_unlock(lock_key: int) -> None:
+    if connection.vendor != "postgresql":
+        return
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s);", [lock_key])
+    except Exception:
+        # no queremos romper el response por unlock
+        logger.exception("CRON general: fallo liberando advisory lock")
+
+
 @require_http_methods(["GET", "HEAD"])
 def cron_diario_general(request):
     """
     Cron central:
-    - Vive en app notificaciones.
-    - Protegido por ?token=...
-    - Dispara internamente:
-        * RRHH
-        * Flota
-        * Prevención
-    - No cambia la lógica interna de cada cron existente.
+    - Token ?token=... (ideal: CRON_GENERAL_TOKEN)
+    - Dispara internamente RRHH / Flota / Prevención
+    - Nunca responde 500 (para evitar reintentos agresivos del monitor)
+    - Lock global (Postgres advisory lock) para evitar concurrencia
     """
 
     token_recibido = (request.GET.get("token") or "").strip()
-    token_esperado = (
-        getattr(settings, "CRON_GENERAL_TOKEN", "")
-        or getattr(settings, "PREVENCION_CRON_TOKEN", "")
-        or ""
-    ).strip()
+    token_esperado = (getattr(settings, "CRON_GENERAL_TOKEN", "") or "").strip()
 
     if not token_esperado or token_recibido != token_esperado:
         return HttpResponseForbidden("Forbidden")
 
     ahora = timezone.localtime()
+    hoy = ahora.date()
     force_run = (request.GET.get("force") or "").strip() == "1"
 
-    rf = RequestFactory()
+    # Lock global por día (evita que BetterStack / reintentos ejecuten en paralelo)
+    # key estable por fecha
+    lock_key = abs(hash(f"cron_diario_general:{hoy.isoformat()}")) % 2147483647
 
+    if not _try_pg_advisory_lock(lock_key):
+        # Otro proceso ya está corriendo esto (o acaba de correr y aún no soltó)
+        return JsonResponse(
+            {
+                "status": "already-running",
+                "date": str(hoy),
+                "time": ahora.strftime("%H:%M:%S"),
+                "force": force_run,
+            },
+            status=200,
+        )
+
+    rf = RequestFactory()
     resultados = {}
 
     try:
         # =========================
         # RRHH
         # =========================
-        rrhh_params = {
-            "token": getattr(settings, "CONTRATOS_CRON_TOKEN", "") or "",
-        }
+        rrhh_params = {"token": _token_or_general("CONTRATOS_CRON_TOKEN")}
         if force_run:
             rrhh_params["force"] = "1"
-
-        rrhh_request = rf.get("/rrhh/cron/contratos/", data=rrhh_params)
-        rrhh_response = cron_contratos_por_vencer(rrhh_request)
-        resultados["rrhh"] = _response_to_dict(rrhh_response, "rrhh")
+        resultados["rrhh"] = _safe_call("rrhh", cron_contratos_por_vencer, rf, "/rrhh/cron/contratos/", rrhh_params)
 
         # =========================
         # Flota
         # =========================
-        flota_params = {
-            "token": getattr(settings, "FLOTA_CRON_TOKEN", "") or "",
-        }
+        flota_params = {"token": _token_or_general("FLOTA_CRON_TOKEN")}
         if force_run:
             flota_params["force"] = "1"
-
-        flota_request = rf.get("/flota/cron/mantenciones/", data=flota_params)
-        flota_response = cron_flota_mantenciones(flota_request)
-        resultados["flota"] = _response_to_dict(flota_response, "flota")
+        resultados["flota"] = _safe_call("flota", cron_flota_mantenciones, rf, "/flota/cron/mantenciones/", flota_params)
 
         # =========================
         # Prevención
         # =========================
-        prevencion_params = {
-            "token": getattr(settings, "PREVENCION_CRON_TOKEN", "") or "",
-        }
+        prev_params = {"token": _token_or_general("PREVENCION_CRON_TOKEN")}
         if force_run:
-            prevencion_params["force"] = "1"
+            prev_params["force"] = "1"
+        resultados["prevencion"] = _safe_call("prevencion", cron_prevencion_documentos, rf, "/prevencion/cron/documentos/", prev_params)
 
-        prevencion_request = rf.get("/prevencion/cron/documentos/", data=prevencion_params)
-        prevencion_response = cron_prevencion_documentos(prevencion_request)
-        resultados["prevencion"] = _response_to_dict(prevencion_response, "prevencion")
+    finally:
+        _pg_advisory_unlock(lock_key)
 
-    except Exception as e:
-        logger.exception("Fallo cron central diario")
-        return JsonResponse(
-            {
-                "status": "error",
-                "detail": e.__class__.__name__,
-                "date": str(ahora.date()),
-            },
-            status=500,
-        )
-
+    # Nunca 500: el monitor no debe reintentar como loco
     overall_status = "ok"
-    if any(v.get("http_status", 200) >= 400 for v in resultados.values()):
+    if any(v.get("status") in ("error", "invalid-json") for v in resultados.values()):
         overall_status = "partial-error"
 
     return JsonResponse(
         {
             "status": overall_status,
-            "date": str(ahora.date()),
+            "date": str(hoy),
             "time": ahora.strftime("%H:%M:%S"),
             "force": force_run,
             "results": resultados,
