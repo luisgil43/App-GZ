@@ -148,7 +148,7 @@ def cron_flota_mantenciones(request):
     - PRE: una sola vez por base_service+threshold
     - OVERDUE: una vez al día (si notify_on_overdue)
     - ✅ Anti-spam: nunca borramos el lock diario automáticamente
-    - ✅ Anti-concurrencia: advisory lock por día (Postgres)
+    - ✅ Anti-concurrencia: advisory lock por día (Postgres) **ESTABLE**
     """
     token_recibido = (request.GET.get("token") or "").strip()
     token_esperado = (getattr(settings, "FLOTA_CRON_TOKEN", "") or "").strip()
@@ -163,8 +163,10 @@ def cron_flota_mantenciones(request):
     if ahora.hour < 8 and not force_run:
         return JsonResponse({"status": "before-8am", "detail": "Aún no son las 08:00"}, status=200)
 
-    # ✅ advisory lock por día (evita que corra en paralelo si alguien deja monitor directo a flota)
-    lock_key = abs(hash(f"flota_mantenciones:{hoy.isoformat()}")) % 2147483647
+    # ✅ advisory lock por día (ESTABLE: no usamos hash() de Python)
+    import zlib
+    lock_key = zlib.crc32(f"flota_mantenciones:{hoy.isoformat()}".encode("utf-8"))
+
     if not _try_pg_advisory_lock(lock_key):
         return JsonResponse({"status": "already-running", "detail": "Otro proceso ya está ejecutando"}, status=200)
 
@@ -368,7 +370,6 @@ def cron_flota_mantenciones(request):
                         due_date = last.service_date + timedelta(days=int(t.interval_days))
                         remaining_days = (due_date - hoy).days
 
-                        # Overdue days (una vez por día)
                         if remaining_days <= 0:
                             if t.notify_on_overdue:
                                 if _mark_sent_overdue_today_safe(v.id, t.id, last.id, "overdue_days", hoy):
@@ -380,7 +381,6 @@ def cron_flota_mantenciones(request):
                                         f"Vencía el: {due_date:%Y-%m-%d}\n\n"
                                         "Este mensaje fue generado automáticamente por el sistema Planix.\n"
                                     )
-
                                     html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
@@ -424,7 +424,6 @@ def cron_flota_mantenciones(request):
                                         enviados += 1
                             continue
 
-                        # Pre-alertas por días
                         steps_days = t.alert_days_steps_list
                         if steps_days:
                             for threshold in steps_days:
@@ -439,7 +438,6 @@ def cron_flota_mantenciones(request):
                                             f"Faltan: {remaining_days} día(s)\n\n"
                                             "Este mensaje fue generado automáticamente por el sistema Planix.\n"
                                         )
-
                                         html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
