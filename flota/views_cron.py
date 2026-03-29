@@ -143,12 +143,13 @@ def cron_flota_mantenciones(request):
     """
     CRON Flota:
     - Token ?token=...
-    - Solo una vez por día (lock DB)
+    - Una vez por día (lock DB)
     - Nunca antes de las 08:00 (hora local), salvo force=1
-    - PRE: una sola vez por base_service+threshold
-    - OVERDUE: una vez al día (si notify_on_overdue)
-    - ✅ Anti-spam: nunca borramos el lock diario automáticamente
-    - ✅ Anti-concurrencia: advisory lock por día (Postgres) **ESTABLE**
+    - PRE: una sola vez por base_service+threshold (sent_on NULL)
+    - OVERDUE: una vez al día (sent_on = hoy) si notify_on_overdue=True
+    - ✅ Anti-concurrencia: advisory lock por día (Postgres)
+    - ✅ Anti-bug: si lock existe pero hoy NO hay alertas marcadas, re-ejecuta (recovery) sin force
+    - ✅ Marca "enviada" SOLO después de enviar el correo OK
     """
     token_recibido = (request.GET.get("token") or "").strip()
     token_esperado = (getattr(settings, "FLOTA_CRON_TOKEN", "") or "").strip()
@@ -159,11 +160,10 @@ def cron_flota_mantenciones(request):
     hoy = ahora.date()
     force_run = (request.GET.get("force") or "").strip() == "1"
 
-    # ✅ permite pruebas antes de las 08:00 con force=1
     if ahora.hour < 8 and not force_run:
         return JsonResponse({"status": "before-8am", "detail": "Aún no son las 08:00"}, status=200)
 
-    # ✅ advisory lock por día (ESTABLE: no usamos hash() de Python)
+    # ✅ advisory lock estable (NO usar hash())
     import zlib
     lock_key = zlib.crc32(f"flota_mantenciones:{hoy.isoformat()}".encode("utf-8"))
 
@@ -173,19 +173,24 @@ def cron_flota_mantenciones(request):
     job_name = "flota_mantenciones"
 
     try:
-        # ✅ force: resetea lock diario para permitir re-ejecutar hoy
         if force_run:
             FlotaCronDiarioEjecutado.objects.filter(nombre=job_name, fecha=hoy).delete()
 
-        # Lock diario robusto contra concurrencia
+        # Creamos/obtenemos lock diario
         try:
             with transaction.atomic():
                 _cron_obj, created = FlotaCronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
         except IntegrityError:
             created = False
 
+        # ✅ Recovery mode:
+        # Si ya existe lock pero NO hay ninguna alerta de hoy marcada, NO nos salimos.
+        # Esto arregla el caso "marcado como ejecutado pero no envió nada".
         if not created and not force_run:
-            return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
+            alerts_today = FlotaAlertaEnviada.objects.filter(sent_on=hoy).count()
+            if alerts_today > 0:
+                return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
+            # si alerts_today == 0 => seguimos y re-evaluamos (sin borrar lock)
 
         enviados = 0
         saltados = 0
@@ -238,7 +243,16 @@ def cron_flota_mantenciones(request):
                         # Overdue KM (una vez al día)
                         if remaining_km <= 0:
                             if t.notify_on_overdue:
-                                if _mark_sent_overdue_today_safe(v.id, t.id, last.id, "overdue_km", hoy):
+                                already = FlotaAlertaEnviada.objects.filter(
+                                    vehicle_id=v.id,
+                                    service_type_id=t.id,
+                                    base_service_id=last.id,
+                                    mode="overdue_km",
+                                    threshold=0,
+                                    sent_on=hoy,
+                                ).exists()
+
+                                if not already:
                                     subject = f"[GZ Services] Mantención vencida (KM) - {t.name} - {v.patente}"
                                     text_body = (
                                         "Hola,\n\n"
@@ -291,15 +305,35 @@ def cron_flota_mantenciones(request):
                                         ultimo_error = e.__class__.__name__
                                         logger.exception("Fallo envío flota overdue_km veh=%s tipo=%s", v.id, t.id)
                                     else:
+                                        # ✅ marcar SOLO si el envío fue OK
+                                        try:
+                                            FlotaAlertaEnviada.objects.get_or_create(
+                                                vehicle_id=v.id,
+                                                service_type_id=t.id,
+                                                base_service_id=last.id,
+                                                mode="overdue_km",
+                                                threshold=0,
+                                                sent_on=hoy,
+                                            )
+                                        except IntegrityError:
+                                            pass
                                         enviados += 1
                             continue
 
-                        # Pre-alertas KM
+                        # Pre-alertas KM (una sola vez por threshold)
                         steps = t.alert_km_steps_list
                         if steps:
                             for threshold in steps:
                                 if remaining_km <= int(threshold):
-                                    if _mark_sent_pre_safe(v.id, t.id, last.id, int(threshold)):
+                                    already = FlotaAlertaEnviada.objects.filter(
+                                        vehicle_id=v.id,
+                                        service_type_id=t.id,
+                                        base_service_id=last.id,
+                                        mode="pre_km",
+                                        threshold=int(threshold),
+                                    ).exists()
+
+                                    if not already:
                                         subject = f"[GZ Services] Mantención próxima (KM) - {t.name} - {v.patente}"
                                         text_body = (
                                             "Hola,\n\n"
@@ -354,7 +388,19 @@ def cron_flota_mantenciones(request):
                                             ultimo_error = e.__class__.__name__
                                             logger.exception("Fallo envío flota pre_km veh=%s tipo=%s", v.id, t.id)
                                         else:
+                                            try:
+                                                FlotaAlertaEnviada.objects.get_or_create(
+                                                    vehicle_id=v.id,
+                                                    service_type_id=t.id,
+                                                    base_service_id=last.id,
+                                                    mode="pre_km",
+                                                    threshold=int(threshold),
+                                                    defaults={"sent_on": None},
+                                                )
+                                            except IntegrityError:
+                                                pass
                                             enviados += 1
+
                                     break
 
                     except Exception as e:
@@ -372,7 +418,16 @@ def cron_flota_mantenciones(request):
 
                         if remaining_days <= 0:
                             if t.notify_on_overdue:
-                                if _mark_sent_overdue_today_safe(v.id, t.id, last.id, "overdue_days", hoy):
+                                already = FlotaAlertaEnviada.objects.filter(
+                                    vehicle_id=v.id,
+                                    service_type_id=t.id,
+                                    base_service_id=last.id,
+                                    mode="overdue_days",
+                                    threshold=0,
+                                    sent_on=hoy,
+                                ).exists()
+
+                                if not already:
                                     subject = f"[GZ Services] Mantención vencida (días) - {t.name} - {v.patente}"
                                     text_body = (
                                         "Hola,\n\n"
@@ -381,6 +436,7 @@ def cron_flota_mantenciones(request):
                                         f"Vencía el: {due_date:%Y-%m-%d}\n\n"
                                         "Este mensaje fue generado automáticamente por el sistema Planix.\n"
                                     )
+
                                     html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
@@ -421,6 +477,17 @@ def cron_flota_mantenciones(request):
                                         ultimo_error = e.__class__.__name__
                                         logger.exception("Fallo envío flota overdue_days veh=%s tipo=%s", v.id, t.id)
                                     else:
+                                        try:
+                                            FlotaAlertaEnviada.objects.get_or_create(
+                                                vehicle_id=v.id,
+                                                service_type_id=t.id,
+                                                base_service_id=last.id,
+                                                mode="overdue_days",
+                                                threshold=0,
+                                                sent_on=hoy,
+                                            )
+                                        except IntegrityError:
+                                            pass
                                         enviados += 1
                             continue
 
@@ -428,7 +495,15 @@ def cron_flota_mantenciones(request):
                         if steps_days:
                             for threshold in steps_days:
                                 if remaining_days <= int(threshold):
-                                    if _mark_sent_pre_days_safe(v.id, t.id, last.id, int(threshold)):
+                                    already = FlotaAlertaEnviada.objects.filter(
+                                        vehicle_id=v.id,
+                                        service_type_id=t.id,
+                                        base_service_id=last.id,
+                                        mode="pre_days",
+                                        threshold=int(threshold),
+                                    ).exists()
+
+                                    if not already:
                                         subject = f"[GZ Services] Mantención próxima (días) - {t.name} - {v.patente}"
                                         text_body = (
                                             "Hola,\n\n"
@@ -438,6 +513,7 @@ def cron_flota_mantenciones(request):
                                             f"Faltan: {remaining_days} día(s)\n\n"
                                             "Este mensaje fue generado automáticamente por el sistema Planix.\n"
                                         )
+
                                         html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
@@ -479,7 +555,19 @@ def cron_flota_mantenciones(request):
                                             ultimo_error = e.__class__.__name__
                                             logger.exception("Fallo envío flota pre_days veh=%s tipo=%s", v.id, t.id)
                                         else:
+                                            try:
+                                                FlotaAlertaEnviada.objects.get_or_create(
+                                                    vehicle_id=v.id,
+                                                    service_type_id=t.id,
+                                                    base_service_id=last.id,
+                                                    mode="pre_days",
+                                                    threshold=int(threshold),
+                                                    defaults={"sent_on": None},
+                                                )
+                                            except IntegrityError:
+                                                pass
                                             enviados += 1
+
                                     break
 
                     except Exception as e:
