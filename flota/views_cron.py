@@ -187,10 +187,7 @@ def cron_flota_mantenciones(request):
         # Si ya existe lock pero NO hay ninguna alerta de hoy marcada, NO nos salimos.
         # Esto arregla el caso "marcado como ejecutado pero no envió nada".
         if not created and not force_run:
-            alerts_today = FlotaAlertaEnviada.objects.filter(sent_on=hoy).count()
-            if alerts_today > 0:
-                return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
-            # si alerts_today == 0 => seguimos y re-evaluamos (sin borrar lock)
+            return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
 
         enviados = 0
         saltados = 0
