@@ -119,12 +119,11 @@ def cron_diario_general(request):
     hoy = ahora.date()
     force_run = (request.GET.get("force") or "").strip() == "1"
 
-    # Lock global por día (evita que BetterStack / reintentos ejecuten en paralelo)
-    # key estable por fecha
-    lock_key = abs(hash(f"cron_diario_general:{hoy.isoformat()}")) % 2147483647
+    # ✅ Lock global por día (ESTABLE: no usamos hash() de Python)
+    import zlib
+    lock_key = zlib.crc32(f"cron_diario_general:{hoy.isoformat()}".encode("utf-8"))
 
     if not _try_pg_advisory_lock(lock_key):
-        # Otro proceso ya está corriendo esto (o acaba de correr y aún no soltó)
         return JsonResponse(
             {
                 "status": "already-running",
@@ -145,7 +144,13 @@ def cron_diario_general(request):
         rrhh_params = {"token": _token_or_general("CONTRATOS_CRON_TOKEN")}
         if force_run:
             rrhh_params["force"] = "1"
-        resultados["rrhh"] = _safe_call("rrhh", cron_contratos_por_vencer, rf, "/rrhh/cron/contratos/", rrhh_params)
+        resultados["rrhh"] = _safe_call(
+            "rrhh",
+            cron_contratos_por_vencer,
+            rf,
+            "/rrhh/cron/contratos/",
+            rrhh_params,
+        )
 
         # =========================
         # Flota
@@ -153,7 +158,13 @@ def cron_diario_general(request):
         flota_params = {"token": _token_or_general("FLOTA_CRON_TOKEN")}
         if force_run:
             flota_params["force"] = "1"
-        resultados["flota"] = _safe_call("flota", cron_flota_mantenciones, rf, "/flota/cron/mantenciones/", flota_params)
+        resultados["flota"] = _safe_call(
+            "flota",
+            cron_flota_mantenciones,
+            rf,
+            "/flota/cron/mantenciones/",
+            flota_params,
+        )
 
         # =========================
         # Prevención
@@ -161,14 +172,44 @@ def cron_diario_general(request):
         prev_params = {"token": _token_or_general("PREVENCION_CRON_TOKEN")}
         if force_run:
             prev_params["force"] = "1"
-        resultados["prevencion"] = _safe_call("prevencion", cron_prevencion_documentos, rf, "/prevencion/cron/documentos/", prev_params)
+        resultados["prevencion"] = _safe_call(
+            "prevencion",
+            cron_prevencion_documentos,
+            rf,
+            "/prevencion/cron/documentos/",
+            prev_params,
+        )
+
+        # ✅ Diagnóstico extra para tu caso (sin reintentar / sin spam)
+        # Si flota dice already-run pero hoy no hay alertas, lo marcamos en el JSON para debug.
+        try:
+            from flota.models import (FlotaAlertaEnviada,
+                                      FlotaCronDiarioEjecutado)
+
+            flota_status = (resultados.get("flota") or {}).get("status")
+            if flota_status in ("already-run", "already-run-race"):
+                lock_exists = FlotaCronDiarioEjecutado.objects.filter(
+                    nombre="flota_mantenciones",
+                    fecha=hoy,
+                ).exists()
+                alerts_today = FlotaAlertaEnviada.objects.filter(sent_on=hoy).count()
+                resultados["flota_debug"] = {
+                    "lock_exists": bool(lock_exists),
+                    "alerts_today_count": int(alerts_today),
+                    "note": (
+                        "Si lock_exists=True y alerts_today_count=0 "
+                        "pero hay servicios overdue, entonces hoy quedó marcado como ejecutado sin enviar."
+                    ),
+                }
+        except Exception:
+            logger.exception("CRON general: fallo agregando flota_debug")
+            resultados["flota_debug"] = {"error": "debug_failed"}
 
     finally:
         _pg_advisory_unlock(lock_key)
 
-    # Nunca 500: el monitor no debe reintentar como loco
     overall_status = "ok"
-    if any(v.get("status") in ("error", "invalid-json") for v in resultados.values()):
+    if any(v.get("status") in ("error", "invalid-json") for v in resultados.values() if isinstance(v, dict)):
         overall_status = "partial-error"
 
     return JsonResponse(
