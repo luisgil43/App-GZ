@@ -82,20 +82,48 @@ def _has_valid_trusted_device(request, user) -> bool:
     un TrustedDevice válido para este usuario.
     """
     token = request.COOKIES.get(TRUSTED_DEVICE_COOKIE_NAME)
+
+    logger.info(
+        "2FA_COOKIE_CHECK user=%s cookie_name=%s token_present=%s",
+        getattr(user, "pk", None),
+        TRUSTED_DEVICE_COOKIE_NAME,
+        bool(token),
+    )
+
     if not token:
         return False
 
     try:
         device = TrustedDevice.objects.get(user=user, token=token)
+        logger.info(
+            "2FA_DEVICE_FOUND user=%s device_id=%s expires_at=%s now=%s",
+            user.pk,
+            device.pk,
+            device.expires_at,
+            timezone.now(),
+        )
     except TrustedDevice.DoesNotExist:
+        logger.warning(
+            "2FA_DEVICE_NOT_FOUND user=%s token=%s",
+            user.pk,
+            token,
+        )
         return False
 
     if not device.is_valid():
+        logger.warning(
+            "2FA_DEVICE_EXPIRED user=%s device_id=%s expires_at=%s now=%s",
+            user.pk,
+            device.pk,
+            device.expires_at,
+            timezone.now(),
+        )
         return False
 
-    # Actualizamos último uso
     device.last_used_at = timezone.now()
     device.save(update_fields=["last_used_at"])
+
+    logger.info("2FA_DEVICE_VALID user=%s device_id=%s", user.pk, device.pk)
     return True
 
 
@@ -105,6 +133,7 @@ def _create_trusted_device(request, user) -> TrustedDevice:
     La cookie se setea en la vista two_factor_verify.
     """
     import secrets
+
     token = secrets.token_urlsafe(32)
     expires_at = timezone.now() + timedelta(days=TRUSTED_DEVICE_DAYS)
     device = TrustedDevice.objects.create(
@@ -114,6 +143,15 @@ def _create_trusted_device(request, user) -> TrustedDevice:
         user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
         ip_address=(request.META.get("REMOTE_ADDR") or None),
     )
+
+    logger.info(
+        "2FA_DEVICE_CREATED user=%s device_id=%s token=%s expires_at=%s",
+        user.pk,
+        device.pk,
+        device.token,
+        device.expires_at,
+    )
+
     return device
 
 
@@ -165,12 +203,10 @@ def two_factor_verify(request):
     if not pending_user_id:
         messages.error(
             request,
-            "Tu sesión de verificación ha expirado. Por favor, inicia sesión de nuevo."
+            "Tu sesión de verificación ha expirado. Por favor, inicia sesión de nuevo.",
         )
         return redirect("usuarios:login_unificado")
 
-    # Usar el modelo de usuario configurado (CustomUser)
-    from django.contrib.auth import get_user_model
     UserModel = get_user_model()
     user = get_object_or_404(UserModel, pk=pending_user_id)
 
@@ -180,8 +216,7 @@ def two_factor_verify(request):
 
         if not _verify_totp_code(user, code):
             messages.error(
-                request,
-                "El código de verificación no es válido. Inténtalo nuevamente."
+                request, "El código de verificación no es válido. Inténtalo nuevamente."
             )
             return render(
                 request,
@@ -189,7 +224,6 @@ def two_factor_verify(request):
                 {"user": user},
             )
 
-        # Código correcto → recuperamos backend y limpiamos sesión temporal
         backend_path = request.session.pop("pending_2fa_backend", None)
         next_url = request.session.pop("pending_2fa_next", None)
         request.session.pop("pending_2fa_user_id", None)
@@ -197,15 +231,17 @@ def two_factor_verify(request):
         if not backend_path:
             backend_path = settings.AUTHENTICATION_BACKENDS[0]
 
-        # Login definitivo
         login(request, user, backend=backend_path)
 
-        # Crear dispositivo confiable si corresponde
-        from django.shortcuts import redirect as _redirect
+        # Definir primero el redirect final
+        if next_url:
+            response = redirect(next_url)
+        else:
+            response = _redirect_after_login(request, user)
 
+        # Luego setear la cookie sobre ese mismo response
         if remember_device:
             device = _create_trusted_device(request, user)
-            response = _redirect_after_login(request, user)
             max_age = TRUSTED_DEVICE_DAYS * 24 * 60 * 60
             response.set_cookie(
                 TRUSTED_DEVICE_COOKIE_NAME,
@@ -214,17 +250,11 @@ def two_factor_verify(request):
                 secure=not settings.DEBUG,
                 httponly=True,
                 samesite="Lax",
+                path="/",
             )
-        else:
-            response = _redirect_after_login(request, user)
-
-        # Si había un next explícito, lo respetamos
-        if next_url:
-            response = _redirect(next_url)
 
         return response
 
-    # GET → mostramos formulario para ingresar código 2FA
     return render(
         request,
         "usuarios/two_factor_verify.html",
@@ -310,7 +340,6 @@ def two_factor_setup(request):
         "devices": devices,
     }
     return render(request, "usuarios/two_factor_setup.html", context)
-
 
 
 @requires_csrf_token

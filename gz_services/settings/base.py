@@ -1,4 +1,4 @@
-#setting_base
+# setting_base
 
 import mimetypes
 import os
@@ -32,14 +32,12 @@ PLANIX_LOGO_URL = os.getenv(
 )
 
 
-
 def is_env_var_set(key: str) -> bool:
     v = os.environ.get(key)
     return bool(v and v.strip().lower() != "none")
 
 
 CSRF_TRUSTED_ORIGINS = ["https://app-gz.onrender.com"]
-
 
 
 # ===============================
@@ -68,7 +66,6 @@ TRUSTED_DEVICE_COOKIE_NAME = "gz_trusted_device"
 # 2FA
 TRUSTED_DEVICE_DAYS = 90
 TWO_FACTOR_ENFORCE_DATE = None
-
 
 
 # ===============================
@@ -135,20 +132,16 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-
     "usuarios.middleware.ChileTimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-
-    # ✅ NUEVO: switch user/admin por sesión (redirige /dashboard/ <-> /dashboard_admin/index/)
-    "usuarios.middleware.UIModeRedirectMiddleware",
-
-    "axes.middleware.AxesMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "usuarios.middleware.UIModeRedirectMiddleware",
     "usuarios.middleware.Enforce2FAMiddleware",
     "usuarios.middleware.SessionExpiryMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "axes.middleware.AxesMiddleware",
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -277,7 +270,6 @@ CONTRATOS_ALERT_EMAILS = os.environ.get("CONTRATOS_ALERT_EMAILS", "")
 FLOTA_CRON_TOKEN = os.environ.get("FLOTA_CRON_TOKEN", "")
 PREVENCION_CRON_TOKEN = os.environ.get("PREVENCION_CRON_TOKEN", "")
 CRON_GENERAL_TOKEN = os.environ.get("CRON_GENERAL_TOKEN", "")
-
 
 
 # ===============================

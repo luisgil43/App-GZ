@@ -14,15 +14,9 @@ from django.utils.deprecation import MiddlewareMixin
 
 
 class SessionExpiryMiddleware:
-    """
-    - Cierra sesión por INACTIVIDAD si se supera SESSION_IDLE_TIMEOUT (segundos).
-    - (Opcional) Cierra sesión por tiempo ABSOLUTO si se supera SESSION_ABSOLUTE_TIMEOUT (segundos).
-    Guarda marcas de tiempo en la sesión: 'last_activity' y 'login_time'.
-    """
-
     def __init__(self, get_response):
         self.get_response = get_response
-        self.idle_timeout = int(getattr(settings, "SESSION_IDLE_TIMEOUT", 15 * 60))
+        self.idle_timeout = int(getattr(settings, "IDLE_TIMEOUT_SECONDS", 15 * 60))
         self.absolute_timeout = getattr(settings, "SESSION_ABSOLUTE_TIMEOUT", None)
 
     def __call__(self, request):
@@ -32,7 +26,7 @@ class SessionExpiryMiddleware:
 
         excluded_paths = set()
         try:
-            excluded_paths.add(reverse("usuarios:login"))
+            excluded_paths.add(reverse("usuarios:login_unificado"))
         except Exception:
             pass
         try:
@@ -52,12 +46,18 @@ class SessionExpiryMiddleware:
             session["login_time"] = now
 
         if self.idle_timeout and (now - session["last_activity"] > self.idle_timeout):
-            self._logout_and_redirect(request, reason="Tu sesión fue cerrada por inactividad.")
-            return redirect("usuarios:login")
+            self._logout_and_redirect(
+                request, reason="Tu sesión fue cerrada por inactividad."
+            )
+            return redirect("usuarios:login_unificado")
 
-        if self.absolute_timeout and (now - session["login_time"] > int(self.absolute_timeout)):
-            self._logout_and_redirect(request, reason="Tu sesión expiró por tiempo máximo de sesión.")
-            return redirect("usuarios:login")
+        if self.absolute_timeout and (
+            now - session["login_time"] > int(self.absolute_timeout)
+        ):
+            self._logout_and_redirect(
+                request, reason="Tu sesión expiró por tiempo máximo de sesión."
+            )
+            return redirect("usuarios:login_unificado")
 
         session["last_activity"] = now
         return self.get_response(request)
