@@ -59,7 +59,7 @@ urlpatterns = [
     path("select2/", include("django_select2.urls")),
     # Contratos de trabajos
     path('rrhh/', include('rrhh.urls', namespace='rrhh')),
-    path('admin/', admin.site.urls),
+   
     path('dashboard_admin/login/',
          RedirectView.as_view(url='/usuarios/login/', permanent=False)),
     path('logistica/', include('logistica.urls', namespace='logistica')),

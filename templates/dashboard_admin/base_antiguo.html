@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+{% load static %}
+{% load humanize %}
+
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <meta name="csrf-token" content="{{ csrf_token }}">
+
+
+<!-- iOS / Apple Touch Icons -->
+<link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
+<link rel="apple-touch-icon" sizes="120x120" href="{% static 'icons/apple-touch-icon-120x120.png' %}">
+<link rel="apple-touch-icon" sizes="180x180" href="{% static 'icons/apple-touch-icon-180x180.png' %}">
+
+<!-- Favicon clásico -->
+<link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32x32.png' %}">
+<link rel="icon" type="image/png" sizes="16x16" href="{% static 'icons/favicon-16x16.png' %}">
+<link rel="icon" href="{% static 'icons/favicon.ico' %}" sizes="any">
+
+<!-- PWA (opcional pero recomendado) -->
+<link rel="manifest" href="{% static 'icons/site.webmanifest' %}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Miltel">
+
+
+    <script src="https://cdn.tailwindcss.com"></script>
+<style>
+  .rotate-90 {
+    transform: rotate(90deg);
+  }
+
+  /* ====== DESKTOP (>=768px) ====== */
+  @media (min-width: 768px) {
+    /* Cuando hay sidebar, empujamos el contenido 18rem (w-72) */
+    .content-wrapper.with-sidebar #main-content {
+      margin-left: 18rem;
+    }
+
+    /* Cuando se oculta, el contenido ocupa todo el ancho */
+    .content-wrapper.no-sidebar #main-content {
+      margin-left: 0;
+    }
+
+    /* Nav colapsado: lo movemos fuera de pantalla */
+    #side-nav.collapsed {
+      transform: translateX(-100%) !important;
+    }
+  }
+
+  /* ====== MÓVIL (<768px) ======
+     En móvil el sidebar es off-canvas, así que el contenido NO debe quedar corrido. */
+  @media (max-width: 767px) {
+    #main-content {
+      margin-left: 0 !important;
+    }
+  }
+
+  /* === Texto oscuro dentro del panel de notificaciones === */
+  #notification-panel,
+  #notification-panel * {
+    color: #111827 !important;
+  }
+
+  #notification-panel .text-xs {
+    color: #6b7280 !important;
+  }
+</style>
+</head>
+
+<body class="bg-gray-100 text-gray-900 min-h-screen">
+
+<!-- Header fijo -->
+<header class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2">
+  <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+
+    <!-- Campanita SIEMPRE arriba a la derecha -->
+    <div class="absolute top-2 right-4 z-50">
+      <button onclick="toggleNotifications()" class="relative text-gray-700">
+        <i data-lucide="bell" class="w-6 h-6"></i>
+        {% if notificaciones_no_leidas > 0 %}
+          <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {{ notificaciones_no_leidas }}
+          </span>
+        {% endif %}
+      </button>
+
+      <!-- Panel de notificaciones -->
+      <div id="notification-panel"
+           class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
+        <div class="p-2 max-h-80 overflow-y-auto">
+          {% for n in notificaciones_recientes %}
+            <div id="notificacion-{{ n.id }}">
+              <a href="{% url 'usuarios:leer_notificacion' n.id %}"
+                 class="block p-2 text-sm border-b w-full text-left {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
+                <div class="flex flex-col">
+                  <span>{{ n.mensaje }}</span>
+                  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
+                </div>
+              </a>
+            </div>
+          {% empty %}
+            <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Contenido del header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full pr-16 gap-2 sm:gap-0 mt-[-8px]">
+
+      <!-- Izquierda: Logo -->
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
+        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
+        <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
+      </div>
+
+<!-- Derecha: Nombre + switch + cerrar sesión -->
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-3 items-start text-sm md:text-base text-right leading-tight">
+  <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
+    {{ request.user.get_full_name|default:request.user.username }}
+  </span>
+
+{# ✅ Botón SOLO si tiene rol usuario + rol admin #}
+{% if request.user.is_authenticated and request.user.es_usuario %}
+  {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
+    <form method="post" action="{% url 'usuarios:switch_mode' %}" class="inline-block">
+      {% csrf_token %}
+      <button type="submit"
+              class="px-3 py-1 rounded-full text-xs border bg-white hover:bg-gray-50 text-gray-800 whitespace-nowrap">
+        🔁 Cambiar a Usuario
+      </button>
+    </form>
+  {% endif %}
+{% endif %}
+
+  <form method="post" action="{% url 'dashboard_admin:logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
+      Cerrar Sesión
+    </button>
+  </form>
+</div>
+
+    </div>
+  </div>
+</header>
+
+
+
+    <!-- Contenedor principal -->
+    <div id="app-wrapper" class="flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+
+  <!-- Menú lateral con animación -->
+    <nav id="side-nav"
+      class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
+      <h2 class="text-2xl font-bold mb-8">Menú</h2>
+      <ul class="space-y-4 text-base">
+        <li>
+          <a href="{% url 'dashboard_admin:inicio_admin' %}" class="font-bold flex items-center hover:text-emerald-400">🏠 Inicio</a>
+        </li>
+                {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">🛠 Operaciones</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+
+                        
+                        <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
+<li><a href="{% url 'operaciones:listar_sitios' %}" class="hover:text-emerald-400">Lista Sitios Móviles</a></li>
+<li><a href="{% url 'operaciones:produccion_admin' %}" class="hover:text-emerald-400">Producciones</a></li>
+<li><a href="{% url 'operaciones:vista_rendiciones' %}" class="hover:text-emerald-400">Rendiciones</a></li>
+<li><a href="{% url 'operaciones:listar_servicios_pm' %}" class="hover:text-emerald-400">Crear Servicios</a></li>
+<li><a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="hover:text-emerald-400">Realizar Asignación</a></li>
+<li><a href="{% url 'operaciones:resumen_operativo' %}" class="hover:text-emerald-400">Resumen Operativo</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+
+      {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🦺 Prevención</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'prevencion:dashboard' %}" class="hover:text-emerald-400">
+        Documentos
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:document_create' %}" class="hover:text-emerald-400">
+        Crear documento
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:notifications_edit' %}" class="hover:text-emerald-400">
+        Notificaciones
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'prevencion:type_manage' %}" class="hover:text-emerald-400">
+        Tipos de documento
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+
+{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🚗 Flota</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'flota:vehicle_list' %}" class="hover:text-emerald-400">
+        Lista de vehículos
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'flota:assignment_list' %}" class="hover:text-emerald-400">
+        Asignaciones
+      </a>
+    </li>
+
+    <li>
+      <a href="{% url 'flota:service_list' %}" class="hover:text-emerald-400">
+        Servicios
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+{% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🧑‍💼 RR.HH</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+      <li><a href="{% url 'liquidaciones:admin_lista' %}" class="hover:text-emerald-400">Liquidaciones</a></li>
+      <li><a href="{% url 'rrhh:contratos_trabajo' %}" class="hover:text-emerald-400">Contratos de trabajo</a></li>
+    {% endif %}
+
+    {% if request.user.es_supervisor %}
+      <li><a href="{% url 'rrhh:revisar_supervisor' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_pm %}
+      <li><a href="{% url 'rrhh:revisar_pm' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_rrhh %}
+      <li><a href="{% url 'rrhh:revisar_rrhh' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% elif request.user.es_admin_general %}
+      <li><a href="{% url 'rrhh:revisar_todas_vacaciones' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
+    {% endif %}
+
+    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+      <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas de ingresos</a></li>
+      <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos trabajadores</a></li>
+      <li><a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">Cronograma de pago</a></li>
+      <li><a href="{% url 'rrhh:listar_adelanto_admin' %}" class="hover:text-emerald-400">Avances de sueldos</a></li>
+      <li><a href="{% url 'dashboard_admin:listar_feriados' %}" class="hover:text-emerald-400">Feriados</a></li>
+      <li><a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de firmas</a></li>
+      <li><a href="{% url 'usuarios:subir_firma_representante' %}" class="hover:text-emerald-400">Subir Firma Representante Legal</a></li>
+    {% endif %}
+  </ul>
+</li>
+{% endif %}
+
+		{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
+<li class="group">
+    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
+        <span class="flex items-center gap-2">🤝 Subcontrato</span>
+        <span class="flecha transition-transform duration-200">▶</span>
+    </div>
+    <ul class="ml-4 submenu space-y-1 hidden">
+        <li><a href="#" class="hover:text-emerald-400">Contratos de servicios</a></li>
+<li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
+<li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
+<li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li> 
+   <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
+        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>     
+    </ul>
+</li>
+{% endif %}
+
+                {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">📦 Logística</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+<li><a href="{% url 'logistica:herramientas_list' %}" class="hover:text-emerald-400">Equipos y Herramientas </a></li>
+<li><a href="{% url 'logistica:herramientas_asignaciones_panel' %}" class="hover:text-emerald-400">Asignaciones de Herramientas</a></li>
+<li><a href="{% url 'logistica:importar_certificado' %}" class="hover:text-emerald-400">Cargar Certificado Digital</a></li>
+<li><a href="#" class="hover:text-emerald-400">Devolución de Materiales</a></li>
+<li><a href="#" class="hover:text-emerald-400">Importador de CAF</a></li>
+ <li><a href="#' %}" class="hover:text-emerald-400">Salida de Materiales</a></li>
+<li><a href="#" class="hover:text-emerald-400">Traspaso de Materiales</a></li>
+                        <li><a href="{% url 'logistica:listar_ingresos' %}" class="hover:text-emerald-400">Ingreso de Materiales</a></li>   
+			
+                    </ul>
+                </li>
+                {% endif %}
+
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">📑 Finanzas</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+                        <li><a href="{% url 'facturacion:listar_oc_facturacion' %}" class="hover:text-emerald-400">Lista de OC</a></li>
+<li><a href="{% url 'facturacion:listar_facturas' %}" class="hover:text-emerald-400">Lista de Facturas</a></li>
+                    
+<li>
+    <a href="{% url 'facturacion:listar_cartola' %}" class="hover:text-emerald-400">Cartola de Movimientos</a></li>
+<a href="{% url 'facturacion:listar_saldos_usuarios' %}" class="hover:text-emerald-400">Saldos Disponibles</a></li>
+<li><a href="{% url 'facturacion:facturacion_resumen' %}" class="hover:text-emerald-400">Resumen Finanzas</a></li>
+
+
+</ul></li>
+                {% endif %}
+
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">🎁 Beneficios</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+                        <li><a href="#" class="hover:text-emerald-400">Convenios disponibles</a></li>
+                    </ul>
+                </li>
+{% endif %}
+
+{% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">📷 Cámara GPS</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'geo_cam:capture' %}?next={{ request.get_full_path|urlencode }}"
+         class="hover:text-emerald-400">Cámara</a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+
+{% if request.user.es_admin_general %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🤖 Bot GZ</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'bot_gz:training_dashboard' %}"
+         class="hover:text-emerald-400">
+        Entrenamiento del bot
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+
+{% if request.user.is_authenticated and request.user.is_staff %}
+<li class="group">
+  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+       onclick="toggleMenu(this)">
+    <span class="flex items-center gap-2">🔐 Seguridad</span>
+    <span class="flecha transition-transform duration-200">▶</span>
+  </div>
+  <ul class="ml-4 submenu space-y-1 hidden">
+    <li>
+      <a href="{% url 'usuarios:two_factor_setup' %}" class="hover:text-emerald-400">
+        Autenticación en dos pasos & dispositivos
+      </a>
+    </li>
+  </ul>
+</li>
+{% endif %}
+
+
+
+                {% if request.user.es_admin_general %}
+                <li class="group">
+                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
+                        onclick="toggleMenu(this)">
+                        <span class="flex items-center gap-2">👤 Administración de Usuarios</span>
+                        <span class="flecha transition-transform duration-200">▶</span>
+                    </div>
+                    <ul class="ml-4 submenu space-y-1 hidden">
+                        <li><a href="#" class="hover:text-emerald-400">Grupos</a></li>
+                        <li><a href="{% url 'dashboard_admin:listar_usuarios' %}"
+                                class="hover:text-emerald-400">Usuarios</a></li>
+                    </ul>
+                </li>
+                {% endif %}
+            </ul>
+<!-- Contenedor inferior del menú -->
+<div class="mt-10 text-center text-gray-400 text-xs">
+  <p class="mb-1">Desarrollado por</p>
+  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-12 mx-auto max-w-[100px] object-contain">
+</div>
+        </nav>
+
+        <!-- Contenido -->
+       <main id="main-content" class="flex-1 p-6">
+{% block dashboard_content %}{% endblock %}
+        </main>
+    </div>
+    <!-- Scripts -->
+   <script>
+  // Clave distinta solo para el admin
+  const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
+
+  function applySidebarState() {
+    const nav     = document.getElementById('side-nav');
+    const wrapper = document.querySelector('.content-wrapper');
+    if (!nav || !wrapper) return;
+
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+    const raw = localStorage.getItem(ADMIN_SIDEBAR_KEY);
+    // Si no hay nada guardado -> false (abierto)
+    const savedCollapsed = raw === '1';
+
+    if (isDesktop) {
+      // En escritorio: respetamos lo último que hizo el usuario
+      nav.classList.toggle('collapsed', savedCollapsed);
+      wrapper.classList.toggle('no-sidebar', savedCollapsed);
+      wrapper.classList.toggle('with-sidebar', !savedCollapsed);
+      // En desktop no usamos -translate-x-full
+      nav.classList.remove('-translate-x-full');
+    } else {
+      // En móvil el menú empieza oculto
+      nav.classList.add('-translate-x-full');
+      nav.classList.remove('collapsed');
+      wrapper.classList.remove('no-sidebar');
+      wrapper.classList.add('with-sidebar');
+    }
+  }
+
+  function toggleSidebar() {
+    const nav     = document.getElementById('side-nav');
+    const wrapper = document.querySelector('.content-wrapper');
+    if (!nav || !wrapper) return;
+
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+
+    if (isDesktop) {
+      // Colapsar / expandir en escritorio
+      const willCollapse = !nav.classList.contains('collapsed');
+      nav.classList.toggle('collapsed', willCollapse);
+      wrapper.classList.toggle('no-sidebar', willCollapse);
+      wrapper.classList.toggle('with-sidebar', !willCollapse);
+
+      // Guardar preferencia solo del ADMIN
+      localStorage.setItem(ADMIN_SIDEBAR_KEY, willCollapse ? '1' : '0');
+    } else {
+      // En móvil es off-canvas
+      nav.classList.toggle('-translate-x-full');
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', applySidebarState);
+  window.addEventListener('resize', applySidebarState);
+</script>
+
+ <!-- Mensajes emergentes -->
+    {% if messages %}
+<div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
+  {% for message in messages %}
+    <div class="flex items-center justify-between p-4 rounded-md shadow text-white
+      {% if message.tags == 'success' %}bg-green-600
+      {% elif message.tags == 'error' %}bg-red-600
+      {% elif message.tags == 'warning' %}bg-yellow-500
+      {% else %}bg-blue-600{% endif %}">
+      <span>{{ message }}</span>
+      <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
+    </div>
+  {% endfor %}
+</div>
+
+<script>
+  setTimeout(() => {
+    const mensajes = document.getElementById('mensajes');
+    if (mensajes) mensajes.remove();
+  }, 10000);
+</script>
+{% endif %}
+
+
+<script>
+// Marcar notificación como leída y redirigir
+function leerNotificacion(id, urlDestino) {
+  fetch(`/usuarios/notificacion/${id}/leer/`)
+    .then(response => {
+      if (response.ok) {
+        // Eliminar la notificación del DOM
+        const item = document.getElementById(`notificacion-${id}`);
+        if (item) item.remove();
+
+        // Actualizar contador del badge
+        const badge = document.querySelector('.relative .bg-red-500');
+        if (badge) {
+          let count = parseInt(badge.innerText);
+          if (count > 1) {
+            badge.innerText = count - 1;
+          } else {
+            badge.remove();
+          }
+        }
+
+        // Redirigir a la URL de la notificación
+        window.location.href = urlDestino;
+      }
+    });
+}
+
+// Mostrar u ocultar el panel de notificaciones
+function toggleNotifications() {
+  const panel = document.getElementById('notification-panel');
+  if (panel) {
+    panel.classList.toggle('hidden');
+  }
+}
+</script>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script>
+  lucide.createIcons();
+</script>
+
+<script>
+  // Abrir/cerrar submenús del sidebar
+  function toggleMenu(el) {
+    const submenu = el.nextElementSibling;        // <ul class="submenu">
+    const flecha  = el.querySelector('.flecha');  // <span class="flecha">▶</span>
+
+    if (!submenu) return;
+
+    const isHidden = submenu.classList.contains('hidden') || submenu.style.display === 'none';
+
+    if (isHidden) {
+      submenu.classList.remove('hidden');
+      submenu.style.display = 'block';
+      if (flecha) flecha.classList.add('rotate-90');
+    } else {
+      submenu.classList.add('hidden');
+      submenu.style.display = 'none';
+      if (flecha) flecha.classList.remove('rotate-90');
+    }
+  }
+</script>
+
+<script>
+  (function () {
+    function applyHeaderOffset(){
+      const header = document.querySelector('header');
+      const wrapper = document.getElementById('app-wrapper');
+      if (!header || !wrapper) return;
+
+      const h = Math.ceil(header.getBoundingClientRect().height || 0);
+      wrapper.style.paddingTop = h + 'px';
+
+      // Mantener el sidebar pegado justo debajo del header
+      const nav = document.getElementById('side-nav');
+      if (nav) {
+        nav.style.top = h + 'px';
+        nav.style.height = `calc(100vh - ${h}px)`;
+      }
+    }
+
+    window.addEventListener('load', applyHeaderOffset);
+    window.addEventListener('resize', applyHeaderOffset);
+
+    // Por si el header cambia al cargar fuentes/iconos
+    setTimeout(applyHeaderOffset, 50);
+    setTimeout(applyHeaderOffset, 250);
+  })();
+</script>
+</body>
+</html>
+

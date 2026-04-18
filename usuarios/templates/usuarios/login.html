@@ -3,248 +3,434 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Iniciar Sesión - ADMINISTRACIÓN GZ</title>
+  <title>Iniciar Sesión - PLATAFORMA DE MILTEL</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     * { box-sizing: border-box; }
 
-    body {
+    html, body {
       margin: 0;
       padding: 0;
-      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      font-family: "Segoe UI", sans-serif;
+    }
 
-      /* ✅ Fondo con imagen (imagenew.png) + overlay para que el login se lea perfecto */
+    body {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
       background:
-        linear-gradient(135deg, rgba(6, 12, 22, 0.78), rgba(10, 32, 46, 0.62)),
-        url("{% static 'images/imagenew.png' %}?v=2");
+        linear-gradient(135deg, rgba(6, 12, 22, 0.26), rgba(9, 28, 42, 0.18)),
+        url("{% static 'images/futurista.png' %}?v=2");
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
       background-attachment: fixed;
+    }
 
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 14% 18%, rgba(255, 88, 88, 0.05), transparent 18%),
+        radial-gradient(circle at 84% 78%, rgba(255, 120, 0, 0.05), transparent 20%),
+        linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+      background-size: auto, auto, 42px 42px, 42px 42px;
+      opacity: .24;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 60%, rgba(0,0,0,0.07) 100%);
+    }
+
+    .login-shell {
+      width: 100%;
+      max-width: 430px;
+      position: relative;
+      z-index: 2;
     }
 
     .login-container {
-      background-color: rgba(255, 255, 255, 0.98);
-      padding: 2rem;
-
-      /* ✅ Igual que Hyperlink */
-      border-radius: 18px;
-
-      /* ✅ MISMO TAMAÑO (ancho) que Hyperlink */
-      max-width: 360px;
-
+      position: relative;
       width: 100%;
       text-align: center;
-
-      border: 1px solid rgba(30, 115, 190, 0.25);
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.90);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.42);
       box-shadow:
-        0 18px 45px rgba(0, 0, 0, 0.28),
-        0 0 0 6px rgba(30, 115, 190, 0.06);
+        0 28px 60px rgba(0, 0, 0, 0.24),
+        0 10px 20px rgba(0, 0, 0, 0.10),
+        inset 0 1px 0 rgba(255,255,255,0.50);
+      padding: 0 28px 28px;
+      animation: fadeUp .38s ease;
     }
 
-    /* Logo enmarcado */
+    /* Franja superior */
+    .login-container::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 100%;
+      height: 210px;
+      background: linear-gradient(90deg, #f6a623 0%, #ff7a45 52%, #ff5a47 100%);
+      clip-path: ellipse(80% 100% at 100% 0%);
+      z-index: 0;
+      opacity: 0.95;
+    }
+
+  
+
+    .login-content {
+      position: relative;
+      z-index: 2;
+    }
+
     .logo-box {
-      display: inline-block;
-      padding: 10px;
-      background: #f0f4ff;
-      border: 2px solid #d0d8f0;
-      border-radius: 12px;
-      margin-bottom: 1rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 22px;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.97);
+      border-radius: 18px;
+      box-shadow:
+        0 12px 26px rgba(0, 0, 0, 0.10),
+        0 0 0 1px rgba(255,255,255,0.55);
     }
+
     .logo-box img {
-      max-width: 160px;
+      width: 150px;
+      max-width: 100%;
       height: auto;
+      display: block;
     }
 
-    /* Texto Plataforma */
-    .login-container h2 {
-      margin: 0 0 8px 0;
+    .brand {
+      text-align: center;
+      margin-bottom: 34px;
+    }
 
-      /* ✅ Letras más “pro” sin cambiar HTML */
-      font-size: 1.55rem;
-      font-weight: 800;
-      letter-spacing: 0.08em;
+    .brand h2 {
+      margin: 0 0 6px 0;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0.03em;
       text-transform: uppercase;
-
-      /* azul más nítido */
-      color: #1a73e8;
-
-      /* profundidad suave */
-      text-shadow: 0 1px 0 rgba(255,255,255,0.65), 0 6px 18px rgba(26,115,232,0.18);
+      color: #454d5b;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.65);
+      line-height: 1.05;
     }
 
-    .login-container p.subtexto {
-      font-size: 0.9rem;
-      color: #666;
-      margin-bottom: 1.5rem;
+    .brand p.subtexto {
+      margin: 0;
+      font-size: 1rem;
+      color: #6b7280;
+      font-weight: 600;
+    }
+
+    .brand p.subtexto strong {
+      color: #4f5663;
+      font-weight: 800;
     }
 
     .errorlist {
-      color: red;
+      color: #d93025;
       list-style: none;
       padding: 0;
-      margin-bottom: 10px;
+      margin: 0 0 12px;
       text-align: left;
+      font-size: .92rem;
     }
 
     .message-box {
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      font-size: 0.9rem;
+      padding: 11px 12px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      font-size: 0.92rem;
       text-align: left;
       opacity: 1;
       transition: opacity 0.5s ease-out;
+      box-shadow: 0 6px 16px rgba(0,0,0,.05);
     }
 
-    .message-box.error { background-color: #fdecea; color: #d93025; }
-    .message-box.success { background-color: #e6ffed; color: #188038; }
-    .message-box.info { background-color: #e8f0fe; color: #1a73e8; }
+    .message-box.error {
+      background-color: #fdecea;
+      color: #d93025;
+    }
 
-    form { text-align: left; }
-    form p { margin-bottom: 15px; }
-    form label { font-weight: bold; display: block; margin-bottom: 5px; }
+    .message-box.success {
+      background-color: #e6ffed;
+      color: #188038;
+    }
 
-    /* Inputs iguales */
-    form input[type="text"],
-    form input[type="password"] {
-      width: 100%;
-      padding: 10px;
-      border: 2px solid #ccc;
-      border-radius: 8px;
+    .message-box.info {
+      background-color: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    form {
+      text-align: left;
+      margin-top: 4px;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 7px;
       font-size: 1rem;
-      box-sizing: border-box;
+      font-weight: 800;
+      color: #596170;
     }
 
-    /* Campo con ojito */
+    .input-wrap,
     .password-wrapper {
       position: relative;
     }
+
+    form input[type="text"],
+    form input[type="password"] {
+      width: 100%;
+      height: 48px;
+      border: none;
+      outline: none;
+      border-radius: 999px;
+      background: #ececf1;
+      padding: 0 48px 0 56px;
+      font-size: 1rem;
+      color: #374151;
+      box-shadow:
+        inset 0 2px 5px rgba(0,0,0,.05),
+        0 2px 8px rgba(0,0,0,.04);
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    form input[type="text"]:focus,
+    form input[type="password"]:focus {
+      background: #ffffff;
+      box-shadow:
+        inset 0 0 0 2px rgba(255, 90, 71, .16),
+        0 10px 20px rgba(255, 90, 71, .10);
+      transform: translateY(-1px);
+    }
+
+    .input-icon {
+      position: absolute;
+      left: -2px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      color: #fff;
+      background: linear-gradient(135deg, #ff5a47, #f6a623);
+      box-shadow: 0 10px 20px rgba(255,90,71,.22);
+      z-index: 2;
+    }
+
     .toggle-password {
       position: absolute;
-      right: 12px;
+      right: 14px;
       top: 50%;
       transform: translateY(-50%);
       cursor: pointer;
-      font-size: 1.3rem;
-      color: #888;
+      font-size: 1rem;
+      color: #7a7f89;
       user-select: none;
+      line-height: 1;
+    }
+
+    .forgot-password {
+      margin-top: 4px;
+      margin-bottom: 18px;
+      text-align: center;
+    }
+
+    .forgot-password a {
+      color: #7a6679;
+      text-decoration: none;
+      font-size: 0.96rem;
+      font-weight: 500;
+    }
+
+    .forgot-password a:hover {
+      text-decoration: underline;
     }
 
     button {
       width: 100%;
-      padding: 12px;
-
-      /* ✅ Botón más nítido con degradado + difuminado */
-      background: linear-gradient(135deg, #1a73e8, #1e73be);
-      border: 1px solid rgba(10, 60, 130, 0.25);
-
+      padding: 14px 16px;
+      border: none;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 1.05rem;
       color: white;
-      border-radius: 10px;
-      font-weight: 800;
-      font-size: 1rem;
       cursor: pointer;
-      margin-top: 5px;
-
+      margin-top: 4px;
+      background: linear-gradient(90deg, #ff4b4b 0%, #ff7445 48%, #f6b13a 100%);
       box-shadow:
-        0 14px 28px rgba(26, 115, 232, 0.30),
-        0 6px 14px rgba(0, 0, 0, 0.10);
-      transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        0 16px 30px rgba(255, 90, 71, 0.22),
+        0 6px 14px rgba(0, 0, 0, 0.08);
+      transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
     }
+
     button:hover {
-      filter: saturate(1.12) brightness(1.05);
-      box-shadow:
-        0 18px 38px rgba(26, 115, 232, 0.38),
-        0 10px 20px rgba(0, 0, 0, 0.14);
       transform: translateY(-1px);
+      filter: brightness(1.02);
+      box-shadow:
+        0 20px 34px rgba(255, 90, 71, 0.28),
+        0 10px 18px rgba(0, 0, 0, 0.12);
     }
-
-    .forgot-password { margin-top: 15px; text-align: center; }
-    .forgot-password a { color: #1e73be; text-decoration: none; font-size: 0.9rem; }
-    .forgot-password a:hover { text-decoration: underline; }
 
     .footer {
       text-align: center;
-      font-size: 0.75rem;
-      color: #999;
-      margin-top: 2px;
+      font-size: 0.84rem;
+      color: rgba(255,255,255,0.96);
+      margin-top: 14px;
+      font-weight: 600;
+      position: relative;
+      z-index: 2;
     }
-    .footer img { height: 60px; vertical-align: middle; }
 
-    @media (max-width: 500px) {
-      .login-container { padding: 1.5rem; margin: 0 1rem; }
-      .logo-box img { width: 120px; }
+    .footer img {
+      height: 42px;
+      vertical-align: middle;
+      margin-left: 4px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,.35));
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(18px) scale(.985);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 18px;
+      }
+
+      .login-container {
+        padding: 0 20px 22px;
+        border-radius: 22px;
+      }
+
+      .login-container::before {
+        height: 190px;
+      }
+
+ 
+
+      .logo-box img {
+        width: 128px;
+      }
+
+      .brand h2 {
+        font-size: 1.5rem;
+      }
+
+      .brand p.subtexto {
+        font-size: .92rem;
+      }
+
+      form input[type="text"],
+      form input[type="password"] {
+        height: 46px;
+      }
     }
   </style>
 </head>
 <body>
 
-  <div class="login-container">
-    <!-- Logo enmarcado -->
-    <div class="logo-box">
-      <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+  <div class="login-shell">
+    <div class="login-container">
+      <div class="login-content">
+        <div class="logo-box">
+          <img src="{% static 'images/logo.png' %}" alt="Logo GZ Services">
+        </div>
+
+        <div class="brand">
+          <h2>PLATAFORMA DE MILTEL</h2>
+          <p class="subtexto">Potenciada por <strong>Planix</strong></p>
+        </div>
+
+        {% if messages %}
+          {% for message in messages %}
+            <div class="message-box {{ message.tags }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <ul class="errorlist">
+          {% for error in form.non_field_errors %}
+          <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="field">
+            <label for="{{ form.username.id_for_label }}">Nombre de usuario</label>
+            <div class="input-wrap">
+              <span class="input-icon">👤</span>
+              {{ form.username }}
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="{{ form.password.id_for_label }}">Contraseña</label>
+            <div class="password-wrapper">
+              <span class="input-icon">🔑</span>
+              {{ form.password }}
+              <span class="toggle-password" onclick="togglePassword()">👁️</span>
+            </div>
+          </div>
+
+          <div class="forgot-password">
+            <a href="{% url 'usuarios:recuperar_contraseña' %}">¿Olvidaste tu contraseña?</a>
+          </div>
+
+          <button type="submit">Iniciar sesión</button>
+        </form>
+      </div>
     </div>
 
-    <!-- Título -->
-    <h2>PLATAFORMA DE MILTEL</h2>
-    <p class="subtexto">Potenciada por <strong>Planix</strong></p>
-
-    <!-- Mensajes del sistema -->
-    {% if messages %}
-      {% for message in messages %}
-        <div class="message-box {{ message.tags }}">
-          {{ message }}
-        </div>
-      {% endfor %}
-    {% endif %}
-
-    <!-- Errores -->
-    {% if form.non_field_errors %}
-    <ul class="errorlist">
-      {% for error in form.non_field_errors %}
-      <li>{{ error }}</li>
-      {% endfor %}
-    </ul>
-    {% endif %}
-
-
-
-    <!-- Formulario -->
-    <form method="post">
-      {% csrf_token %}
-      <p>
-        <label for="{{ form.username.id_for_label }}">Nombre de usuario:</label>
-        {{ form.username }}
-      </p>
-      <p>
-        <label for="{{ form.password.id_for_label }}">Contraseña:</label>
-        <div class="password-wrapper">
-          {{ form.password }}
-          <span class="toggle-password" onclick="togglePassword()">👁️</span>
-        </div>
-      </p>
-      <button type="submit">Iniciar sesión</button>
-    </form>
-
-    <!-- Enlace recuperación -->
-    <div class="forgot-password">
-      <a href="{% url 'usuarios:recuperar_contraseña' %}">¿Olvidaste tu contraseña?</a>
+    <div class="footer">
+      Desarrollado por
+      <img src="{% static 'images/planixl.png' %}" alt="Planix">
     </div>
   </div>
 
-  <!-- Footer fuera del contenedor -->
-  <div class="footer">
-    Desarrollado por
-    <img src="{% static 'images/planixl.png' %}" alt="Planix">
-  </div>
-
-  <!-- JS para ocultar mensajes y toggle -->
   <script>
     function togglePassword() {
       const passwordField = document.querySelector('input[name="{{ form.password.name }}"]');

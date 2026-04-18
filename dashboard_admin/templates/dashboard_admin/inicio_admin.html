@@ -3,30 +3,93 @@
 {% block title %}Inicio - Panel Admin{% endblock %}
 
 {% block dashboard_content %}
-<div class="text-center mt-10">
-    <h1 class="text-3xl font-bold text-gray-800 mb-4">
-        ¡Hola {{ request.user.get_full_name }}!
-    </h1>
-    <p class="text-xl text-gray-600 mb-6">
-        ¿Qué deseas gestionar hoy?
-    </p>
+<div class="max-w-6xl mx-auto px-2 sm:px-4 py-6">
 
-    <div class="flex justify-center gap-6 flex-wrap">
-        <a href="{% url 'liquidaciones:admin_lista' %}" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
-            📄 Cargar Liquidaciones
-        </a>
-
-        <a href="#" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
-            🏗️ Cargar Producciones
-        </a>
-
-        <a href="{% url 'rrhh:contratos_trabajo' %}" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
-            📑 Cargar Contratos
-        </a>
-
-        <a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-6 rounded-lg shadow transition">
-            🧾 Cargar Fichas de Ingreso
-        </a>
+  <!-- Bienvenida -->
+  <div class="bg-white rounded-3xl shadow-sm border border-gray-200 p-6 sm:p-8 mb-8 text-center">
+    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4
+                bg-gradient-to-r from-red-400 via-orange-400 to-amber-400 text-white text-3xl shadow-md">
+      👋
     </div>
+
+    <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-800 mb-3">
+      ¡Hola {{ request.user.get_full_name|default:request.user.username }}!
+    </h1>
+
+    <p class="text-base sm:text-lg text-gray-500 max-w-2xl mx-auto">
+      Bienvenido al panel administrativo de <span class="font-semibold text-gray-700">Plataforma de Miltel</span>.
+      Desde aquí puedes gestionar las tareas principales del sistema.
+    </p>
+  </div>
+
+  <!-- Accesos rápidos -->
+  <div class="mb-4">
+    <h2 class="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
+      Accesos rápidos
+    </h2>
+    <p class="text-sm sm:text-base text-gray-500 mb-6">
+      Selecciona una acción para continuar.
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+
+    <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
+       class="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 p-5 hover:-translate-y-1">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl text-white mb-4
+                  bg-gradient-to-r from-red-500 to-orange-400 shadow-md">
+        🛠️
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 mb-1 group-hover:text-red-600 transition">
+        Realizar Asignación
+      </h3>
+      <p class="text-sm text-gray-500">
+        Gestiona y asigna servicios al personal correspondiente.
+      </p>
+    </a>
+
+    <a href="{% url 'operaciones:listar_servicios_pm' %}"
+       class="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 p-5 hover:-translate-y-1">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl text-white mb-4
+                  bg-gradient-to-r from-orange-500 to-amber-400 shadow-md">
+        📝
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 mb-1 group-hover:text-orange-600 transition">
+        Realizar Cotización
+      </h3>
+      <p class="text-sm text-gray-500">
+        Crea y administra cotizaciones operativas del sistema.
+      </p>
+    </a>
+
+    <a href="{% url 'liquidaciones:admin_lista' %}"
+       class="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 p-5 hover:-translate-y-1">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl text-white mb-4
+                  bg-gradient-to-r from-red-400 to-amber-400 shadow-md">
+        📄
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 mb-1 group-hover:text-red-500 transition">
+        Cargar Liquidaciones
+      </h3>
+      <p class="text-sm text-gray-500">
+        Administra y revisa liquidaciones del personal.
+      </p>
+    </a>
+
+    <a href="{% url 'operaciones:resumen_operativo' %}"
+       class="group bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-200 p-5 hover:-translate-y-1">
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-2xl text-white mb-4
+                  bg-gradient-to-r from-orange-400 to-yellow-400 shadow-md">
+        📊
+      </div>
+      <h3 class="text-lg font-bold text-gray-800 mb-1 group-hover:text-amber-600 transition">
+        Resumen Operativo
+      </h3>
+      <p class="text-sm text-gray-500">
+        Visualiza el estado general de la operación y su seguimiento.
+      </p>
+    </a>
+
+  </div>
 </div>
 {% endblock %}
