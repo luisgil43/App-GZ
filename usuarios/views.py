@@ -77,61 +77,24 @@ def _user_requires_2fa(user) -> bool:
 
 
 def _has_valid_trusted_device(request, user) -> bool:
-    """
-    Revisa si la cookie de dispositivo confiable corresponde a
-    un TrustedDevice válido para este usuario.
-    """
     token = request.COOKIES.get(TRUSTED_DEVICE_COOKIE_NAME)
-
-    logger.info(
-        "2FA_COOKIE_CHECK user=%s cookie_name=%s token_present=%s",
-        getattr(user, "pk", None),
-        TRUSTED_DEVICE_COOKIE_NAME,
-        bool(token),
-    )
-
     if not token:
         return False
 
     try:
         device = TrustedDevice.objects.get(user=user, token=token)
-        logger.info(
-            "2FA_DEVICE_FOUND user=%s device_id=%s expires_at=%s now=%s",
-            user.pk,
-            device.pk,
-            device.expires_at,
-            timezone.now(),
-        )
     except TrustedDevice.DoesNotExist:
-        logger.warning(
-            "2FA_DEVICE_NOT_FOUND user=%s token=%s",
-            user.pk,
-            token,
-        )
         return False
 
     if not device.is_valid():
-        logger.warning(
-            "2FA_DEVICE_EXPIRED user=%s device_id=%s expires_at=%s now=%s",
-            user.pk,
-            device.pk,
-            device.expires_at,
-            timezone.now(),
-        )
         return False
 
     device.last_used_at = timezone.now()
     device.save(update_fields=["last_used_at"])
-
-    logger.info("2FA_DEVICE_VALID user=%s device_id=%s", user.pk, device.pk)
     return True
 
 
 def _create_trusted_device(request, user) -> TrustedDevice:
-    """
-    Crea un TrustedDevice para el usuario y retorna la instancia.
-    La cookie se setea en la vista two_factor_verify.
-    """
     import secrets
 
     token = secrets.token_urlsafe(32)
@@ -143,15 +106,6 @@ def _create_trusted_device(request, user) -> TrustedDevice:
         user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
         ip_address=(request.META.get("REMOTE_ADDR") or None),
     )
-
-    logger.info(
-        "2FA_DEVICE_CREATED user=%s device_id=%s token=%s expires_at=%s",
-        user.pk,
-        device.pk,
-        device.token,
-        device.expires_at,
-    )
-
     return device
 
 
