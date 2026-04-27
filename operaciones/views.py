@@ -165,9 +165,6 @@ def _sincronizar_asignaciones_sesion(servicio, tecnicos_actuales_ids, reset_para
     return sesion, existentes
 
 
-
-
-
 logger = logging.getLogger(__name__)
 
 @login_required
@@ -350,76 +347,386 @@ def importar_sitios_excel(request):
 
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion')
+
+@rol_requerido("pm", "admin", "facturacion")
+
 def listar_servicios_pm(request):
+
+    """
+
+    Vista PM con filtros tipo Excel globales por columna.
+
+    Importante:
+
+    - Los filtros Excel se aplican antes de paginar.
+
+    - excel_global_json se construye sobre todo el queryset filtrado, no solo sobre la página.
+
+    - La tabla se recarga por AJAX reemplazando solo #zonaTabla.
+
+    """
+
+    import json
+    from urllib.parse import urlencode
+
+    from django.core.paginator import Paginator
+    from django.db.models import Case, IntegerField, Value, When
+
     # prioridad para PM
+
     estado_prioridad = Case(
-        When(estado='cotizado', then=Value(1)),
-        When(estado='en_ejecucion', then=Value(2)),
-        # pendiente por asignar
-        When(estado='aprobado_pendiente', then=Value(3)),
+
+        When(estado="cotizado", then=Value(1)),
+
+        When(estado="en_ejecucion", then=Value(2)),
+
+        When(estado="aprobado_pendiente", then=Value(3)),
+
         default=Value(4),
-        output_field=IntegerField()
+
+        output_field=IntegerField(),
+
     )
 
     # queryset base (excluye bonos/adelantos/descuentos)
+
     servicios = (
+
         ServicioCotizado.objects
-        .exclude(estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'])
+
+        .exclude(estado__in=["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"])
+
         .annotate(prioridad=estado_prioridad)
-        .order_by('prioridad', '-fecha_creacion')
+
+        .order_by("prioridad", "-fecha_creacion")
+
     )
 
-    # Filtros
-    du = request.GET.get('du', '')
-    id_claro = request.GET.get('id_claro', '')
-    id_new = request.GET.get('id_new', '')
-    mes_produccion = request.GET.get('mes_produccion', '')
-    estado = request.GET.get('estado', '')
+    # ---------------- Filtros rápidos normales por URL ----------------
+
+    # Se mantienen para compatibilidad con links existentes.
+
+    du_raw = (request.GET.get("du") or "").strip()
+
+    id_claro = (request.GET.get("id_claro") or "").strip()
+
+    id_new = (request.GET.get("id_new") or "").strip()
+
+    mes_produccion = (request.GET.get("mes_produccion") or "").strip()
+
+    estado = (request.GET.get("estado") or "").strip()
+
+    du = du_raw
 
     if du:
+
         du = du.strip().upper().replace("DU", "")
+
         servicios = servicios.filter(du__iexact=du)
+
     if id_claro:
+
         servicios = servicios.filter(id_claro__icontains=id_claro)
-    if mes_produccion:
-        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+
     if id_new:
+
         servicios = servicios.filter(id_new__icontains=id_new)
+
+    if mes_produccion:
+
+        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+
     if estado:
-        # si piden un estado de ajuste, no aparecerá por el exclude del queryset base
+
         servicios = servicios.filter(estado=estado)
 
-   # ========= Paginación (máx. 100) =========
+    servicios = servicios.distinct()
+
+    # ---------------- Helpers Excel ----------------
+
+    def money_clp_label(n):
+
+        try:
+
+            return f"$ {int(n or 0):,} CLP".replace(",", ".")
+
+        except Exception:
+
+            return "$ 0 CLP"
+
+    def uf_label(n):
+
+        try:
+
+            val = float(n or 0)
+
+            if val.is_integer():
+
+                return f"UF {int(val):,}".replace(",", ".")
+
+            return f"UF {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        except Exception:
+
+            return "UF 0"
+
+    def status_label(servicio):
+
+        if servicio.estado == "cotizado":
+
+            return "Cotizado (pendiente aprobación)"
+
+        if servicio.estado == "aprobado_pendiente":
+
+            return "Aprobado por PM"
+
+        if servicio.estado == "asignado":
+
+            return "Asignado por Supervisor"
+
+        if servicio.estado == "en_progreso":
+
+            return "En ejecución"
+
+        if servicio.estado in ["finalizado_trabajador", "en_revision_supervisor"]:
+
+            return "Pendiente revisión supervisor"
+
+        if servicio.estado == "rechazado_supervisor":
+
+            return "Rechazado por Supervisor"
+
+        if servicio.estado == "aprobado_supervisor":
+
+            return "Aprobado por Supervisor"
+
+        if servicio.estado == "informe_subido":
+
+            return "Informe cargado"
+
+        if servicio.estado == "finalizado":
+
+            return "Finalizado"
+
+        if servicio.estado == "ajuste_bono":
+
+            return "Bono"
+
+        if servicio.estado == "ajuste_adelanto":
+
+            return "Adelanto"
+
+        if servicio.estado == "ajuste_descuento":
+
+            return "Descuento"
+
+        return str(servicio.estado or "—")
+
+    def excel_value_for_servicio(servicio, col):
+
+        col = str(col)
+
+        if col == "0":
+
+            return f"DU{servicio.du}" if servicio.du is not None else "—"
+
+        if col == "1":
+
+            return str(servicio.id_claro or "—")
+
+        if col == "2":
+
+            return str(servicio.region or "—")
+
+        if col == "3":
+
+            return str(servicio.mes_produccion or "—")
+
+        if col == "4":
+
+            return str(servicio.id_new or "—")
+
+        if col == "5":
+
+            return str(servicio.detalle_tarea or "—")
+
+        if col == "6":
+
+            return uf_label(servicio.monto_cotizado)
+
+        if col == "7":
+
+            return money_clp_label(servicio.monto_mmoo)
+
+        if col == "8":
+
+            return status_label(servicio)
+
+        if col == "9":
+
+            return "Acciones"
+
+        return ""
+
+    # ---------------- Filtros Excel globales ----------------
+
+    excel_filters_raw = (request.GET.get("excel_filters") or "").strip()
+
+    try:
+
+        excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
+
+    except json.JSONDecodeError:
+
+        excel_filters = {}
+
+    servicios_list = list(servicios)
+
+    if excel_filters:
+
+        filtered_list = []
+
+        for servicio in servicios_list:
+
+            ok = True
+
+            for col, values in excel_filters.items():
+
+                values_set = set(values or [])
+
+                if not values_set:
+
+                    continue
+
+                label = excel_value_for_servicio(servicio, col)
+
+                if label not in values_set:
+
+                    ok = False
+
+                    break
+
+            if ok:
+
+                filtered_list.append(servicio)
+
+        servicios_list = filtered_list
+
+    # ---------------- Globales para panel Excel ----------------
+
+    excel_global = {}
+
+    for col in range(10):
+
+        vals = set()
+
+        for servicio in servicios_list:
+
+            vals.add(excel_value_for_servicio(servicio, str(col)) or "(Vacías)")
+
+        excel_global[col] = sorted(vals)
+
+    excel_global_json = json.dumps(excel_global)
+
+    # ---------------- Paginación ----------------
+
     cantidad_param = request.GET.get("cantidad", "10")
 
     if cantidad_param == "todos":
-        # "todos" se interpreta como máximo 100
-        per_page = 100
-    else:
-        try:
-            # mínimo 5, máximo 100
-            per_page = max(5, min(int(cantidad_param), 100))
-        except ValueError:
-            per_page = 10
-            cantidad_param = "10"
 
-    paginator = Paginator(servicios, per_page)
+        per_page = 100
+
+        cantidad = "100"
+
+    else:
+
+        try:
+
+            per_page = max(5, min(int(cantidad_param), 100))
+
+            cantidad = str(per_page)
+
+        except ValueError:
+
+            per_page = 10
+
+            cantidad = "10"
+
+    paginator = Paginator(servicios_list, per_page)
+
     page_number = request.GET.get("page") or 1
+
     pagina = paginator.get_page(page_number)
 
-    return render(request, 'operaciones/listar_servicios_pm.html', {
-        'pagina': pagina,
-        'cantidad': request.GET.get("cantidad", "10"),
-        'filtros': {
-            'du': du,
-            'id_claro': id_claro,
-            'mes_produccion': mes_produccion,
-            'id_new': id_new,
-            'estado': estado,
+    # ---------------- Mantener parámetros ----------------
+
+    keep_params = {}
+
+    if cantidad:
+
+        keep_params["cantidad"] = cantidad
+
+    if du_raw:
+
+        keep_params["du"] = du_raw
+
+    if id_claro:
+
+        keep_params["id_claro"] = id_claro
+
+    if id_new:
+
+        keep_params["id_new"] = id_new
+
+    if mes_produccion:
+
+        keep_params["mes_produccion"] = mes_produccion
+
+    if estado:
+
+        keep_params["estado"] = estado
+
+    if excel_filters_raw:
+
+        keep_params["excel_filters"] = excel_filters_raw
+
+    qs_keep = urlencode(keep_params)
+
+    return render(
+
+        request,
+
+        "operaciones/listar_servicios_pm.html",
+
+        {
+
+            "pagina": pagina,
+
+            "cantidad": cantidad,
+
+            "filtros": {
+
+                "du": du_raw,
+
+                "id_claro": id_claro,
+
+                "mes_produccion": mes_produccion,
+
+                "id_new": id_new,
+
+                "estado": estado,
+
+            },
+
+            "estado_choices": ServicioCotizado.ESTADOS,
+
+            "excel_global_json": excel_global_json,
+
+            "qs_keep": qs_keep,
+
         },
-        'estado_choices': ServicioCotizado.ESTADOS
-    })
+
+    )
 
 
 @login_required
@@ -681,79 +988,255 @@ def advertencia_cotizaciones_omitidas(request):
     })
 
 
+
 @login_required
-@rol_requerido('supervisor', 'admin', 'facturacion', 'pm')
+@rol_requerido("supervisor", "admin", "facturacion", "pm")
 def listar_servicios_supervisor(request):
+    """
+    Vista supervisor con filtros tipo Excel globales por columna.
+
+    Importante:
+    - Los filtros Excel se aplican antes de paginar.
+    - excel_global_json se construye sobre todo el queryset filtrado, no solo sobre la página.
+    - La tabla se recarga por AJAX reemplazando solo #zonaTabla.
+    """
+    import json
+    from urllib.parse import urlencode
+
+    from django.core.paginator import Paginator
+    from django.db.models import Case, IntegerField, Prefetch, Q, Value, When
+
     estado_prioridad = Case(
-        When(estado='aprobado_pendiente', then=Value(1)),
-        When(estado__in=['asignado', 'en_progreso'], then=Value(2)),
-        When(estado__in=['en_revision_supervisor', 'finalizado_trabajador'], then=Value(3)),
-        When(estado__in=['informe_subido', 'finalizado', 'aprobado_supervisor', 'rechazado_supervisor'], then=Value(4)),
+        When(estado="aprobado_pendiente", then=Value(1)),
+        When(estado__in=["asignado", "en_progreso"], then=Value(2)),
+        When(
+            estado__in=["en_revision_supervisor", "finalizado_trabajador"],
+            then=Value(3),
+        ),
+        When(
+            estado__in=[
+                "informe_subido",
+                "finalizado",
+                "aprobado_supervisor",
+                "rechazado_supervisor",
+            ],
+            then=Value(4),
+        ),
         default=Value(5),
-        output_field=IntegerField()
+        output_field=IntegerField(),
     )
 
     servicios = (
-        ServicioCotizado.objects
-        .filter(estado__in=[
-            'aprobado_pendiente',
-            'asignado',
-            'en_progreso',
-            'finalizado_trabajador',
-            'en_revision_supervisor',
-            'aprobado_supervisor',
-            'rechazado_supervisor',
-            'informe_subido',
-            'finalizado',
-        ])
-        .exclude(estado__in=['ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'])
+        ServicioCotizado.objects.filter(
+            estado__in=[
+                "aprobado_pendiente",
+                "asignado",
+                "en_progreso",
+                "finalizado_trabajador",
+                "en_revision_supervisor",
+                "aprobado_supervisor",
+                "rechazado_supervisor",
+                "informe_subido",
+                "finalizado",
+            ]
+        )
+        .exclude(estado__in=["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"])
         .prefetch_related(
-            'trabajadores_asignados',
-            'sesion_fotos__asignaciones__tecnico',
+            "trabajadores_asignados",
+            "sesion_fotos__asignaciones__tecnico",
         )
         .annotate(prioridad=estado_prioridad)
-        .order_by('prioridad', '-du')
+        .order_by("prioridad", "-du")
     )
 
-    du = request.GET.get('du', '')
-    id_claro = request.GET.get('id_claro', '')
-    id_new = request.GET.get('id_new', '')
-    mes_produccion = request.GET.get('mes_produccion', '')
-    estado = request.GET.get('estado', '')
+    # ---------------- Filtros rápidos normales ----------------
+    du_raw = (request.GET.get("du") or "").strip()
+    id_claro = (request.GET.get("id_claro") or "").strip()
+    id_new = (request.GET.get("id_new") or "").strip()
+    mes_produccion = (request.GET.get("mes_produccion") or "").strip()
+    estado = (request.GET.get("estado") or "").strip()
+
+    du = du_raw
 
     if du:
-        du = du.strip().upper().replace('DU', '')
+        du = du.strip().upper().replace("DU", "")
         servicios = servicios.filter(du__iexact=du)
+
     if id_claro:
         servicios = servicios.filter(id_claro__icontains=id_claro)
+
     if id_new:
         servicios = servicios.filter(id_new__icontains=id_new)
+
     if mes_produccion:
         servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+
     if estado:
         servicios = servicios.filter(estado=estado)
 
+    servicios = servicios.distinct()
+
+    # ---------------- Helpers Excel ----------------
+    def money_label(n):
+        try:
+            return f"$ {int(n or 0):,} CLP".replace(",", ".")
+        except Exception:
+            return "$ 0 CLP"
+
+    def asignados_label(servicio):
+        vals = []
+        try:
+            for tecnico in servicio.trabajadores_asignados.all():
+                nombre = tecnico.get_full_name() or tecnico.username
+                if nombre:
+                    vals.append(nombre)
+        except Exception:
+            pass
+        return ", ".join(vals) if vals else "Sin asignar"
+
+    def fecha_fin_label(servicio):
+        try:
+            if (
+                servicio.estado == "aprobado_supervisor"
+                and servicio.fecha_aprobacion_supervisor
+            ):
+                return servicio.fecha_aprobacion_supervisor.strftime("%d/%m/%Y %H:%M")
+            if servicio.fecha_fin:
+                return servicio.fecha_fin.strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            pass
+        return "—"
+
+    def status_label(servicio):
+        if servicio.estado == "aprobado_pendiente":
+            return "Aprobado por PM"
+        if servicio.estado == "asignado":
+            return "Asignado"
+        if servicio.estado == "en_progreso":
+            return "En ejecución"
+        if servicio.estado in ["en_revision_supervisor", "finalizado_trabajador"]:
+            return "Pendiente revisión supervisor"
+        if servicio.estado == "rechazado_supervisor":
+            return "Rechazado por Supervisor"
+        if servicio.estado == "aprobado_supervisor":
+            return "Aprobado por Supervisor"
+        if servicio.estado == "ajuste_bono":
+            return "Bono"
+        if servicio.estado == "ajuste_adelanto":
+            return "Adelanto"
+        if servicio.estado == "ajuste_descuento":
+            return "Descuento"
+        return str(servicio.estado or "—")
+
+    def excel_value_for_servicio(servicio, col):
+        col = str(col)
+
+        if col == "0":
+            return f"DU{servicio.du}" if servicio.du is not None else "—"
+
+        if col == "1":
+            return str(servicio.id_claro or "—")
+
+        if col == "2":
+            return str(servicio.region or "—")
+
+        if col == "3":
+            return str(servicio.mes_produccion or "—")
+
+        if col == "4":
+            return str(servicio.id_new or "—")
+
+        if col == "5":
+            return str(servicio.detalle_tarea or "—")
+
+        if col == "6":
+            return money_label(servicio.monto_mmoo)
+
+        if col == "7":
+            return asignados_label(servicio)
+
+        if col == "8":
+            return fecha_fin_label(servicio)
+
+        if col == "9":
+            return status_label(servicio)
+
+        if col == "10":
+            return "Acciones"
+
+        return ""
+
+    # ---------------- Filtros Excel globales ----------------
+    excel_filters_raw = (request.GET.get("excel_filters") or "").strip()
+
+    try:
+        excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
+    except json.JSONDecodeError:
+        excel_filters = {}
+
+    servicios_list = list(servicios)
+
+    if excel_filters:
+        filtered_list = []
+
+        for servicio in servicios_list:
+            ok = True
+
+            for col, values in excel_filters.items():
+                values_set = set(values or [])
+                if not values_set:
+                    continue
+
+                label = excel_value_for_servicio(servicio, col)
+
+                if label not in values_set:
+                    ok = False
+                    break
+
+            if ok:
+                filtered_list.append(servicio)
+
+        servicios_list = filtered_list
+
+    # ---------------- Globales para panel Excel ----------------
+    excel_global = {}
+
+    for col in range(11):
+        vals = set()
+
+        for servicio in servicios_list:
+            vals.add(excel_value_for_servicio(servicio, str(col)) or "(Vacías)")
+
+        excel_global[col] = sorted(vals)
+
+    excel_global_json = json.dumps(excel_global)
+
+    # ---------------- Paginación ----------------
     cantidad_param = request.GET.get("cantidad", "10")
 
     if cantidad_param == "todos":
         per_page = 100
+        cantidad = "100"
     else:
         try:
             per_page = max(5, min(int(cantidad_param), 100))
+            cantidad = str(per_page)
         except ValueError:
             per_page = 10
-            cantidad_param = "10"
+            cantidad = "10"
 
-    paginator = Paginator(servicios, per_page)
+    paginator = Paginator(servicios_list, per_page)
     page_number = request.GET.get("page") or 1
     pagina = paginator.get_page(page_number)
 
+    # ---------------- Info por fila ----------------
     pagina_info = []
+
     estados_aceptados = {
-        'en_proceso',
-        'en_revision_supervisor',
-        'aprobado_supervisor',
-        'aprobado_pm',
+        "en_proceso",
+        "en_revision_supervisor",
+        "aprobado_supervisor",
+        "aprobado_pm",
     }
 
     for servicio in pagina:
@@ -771,40 +1254,73 @@ def listar_servicios_supervisor(request):
         asignaciones = list(sesion.asignaciones.all()) if sesion else []
 
         asignaciones_map = {
-            a.tecnico_id: a
-            for a in asignaciones
-            if a.tecnico_id in asignados_ids
+            a.tecnico_id: a for a in asignaciones if a.tecnico_id in asignados_ids
         }
 
         for tecnico in asignados:
             asg = asignaciones_map.get(tecnico.id)
+
             if asg and asg.estado in estados_aceptados:
                 aceptados.append(tecnico)
             else:
                 pendientes.append(tecnico)
 
-        pagina_info.append({
-            'servicio': servicio,
-            'aceptados_lista': aceptados,
-            'pendientes_lista': pendientes,
-            'aceptados_count': len(aceptados),
-            'pendientes_count': len(pendientes),
-            'total_count': len(asignados),
-        })
+        pagina_info.append(
+            {
+                "servicio": servicio,
+                "aceptados_lista": aceptados,
+                "pendientes_lista": pendientes,
+                "aceptados_count": len(aceptados),
+                "pendientes_count": len(pendientes),
+                "total_count": len(asignados),
+            }
+        )
 
-    return render(request, 'operaciones/listar_servicios_supervisor.html', {
-        'pagina_info': pagina_info,
-        'pagina': pagina,
-        'cantidad': request.GET.get("cantidad", "10"),
-        'filtros': {
-            'du': du,
-            'id_claro': id_claro,
-            'id_new': id_new,
-            'mes_produccion': mes_produccion,
-            'estado': estado,
+    # ---------------- Mantener parámetros ----------------
+    keep_params = {}
+
+    if cantidad:
+        keep_params["cantidad"] = cantidad
+
+    if du_raw:
+        keep_params["du"] = du_raw
+
+    if id_claro:
+        keep_params["id_claro"] = id_claro
+
+    if id_new:
+        keep_params["id_new"] = id_new
+
+    if mes_produccion:
+        keep_params["mes_produccion"] = mes_produccion
+
+    if estado:
+        keep_params["estado"] = estado
+
+    if excel_filters_raw:
+        keep_params["excel_filters"] = excel_filters_raw
+
+    qs_keep = urlencode(keep_params)
+
+    return render(
+        request,
+        "operaciones/listar_servicios_supervisor.html",
+        {
+            "pagina_info": pagina_info,
+            "pagina": pagina,
+            "cantidad": cantidad,
+            "filtros": {
+                "du": du_raw,
+                "id_claro": id_claro,
+                "id_new": id_new,
+                "mes_produccion": mes_produccion,
+                "estado": estado,
+            },
+            "estado_choices": ServicioCotizado.ESTADOS,
+            "excel_global_json": excel_global_json,
+            "qs_keep": qs_keep,
         },
-        'estado_choices': ServicioCotizado.ESTADOS
-    })
+    )
 
 
 @login_required
@@ -2608,8 +3124,6 @@ def eliminar_rendicion(request, pk):
 # ==========================================================
 # Supervisor / PM / Finanzas
 # ==========================================================
-
-
 
 
 @login_required

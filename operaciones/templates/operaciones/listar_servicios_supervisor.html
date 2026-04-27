@@ -17,138 +17,122 @@
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
+
   .campo-filtro:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
-  .filtros-compactos .campo-filtro { 
-    width: auto; 
+
+  .filtros-compactos .campo-filtro {
+    width: auto;
     min-width: 8.5rem;
     max-width: 12rem;
   }
+
   @media (max-width: 640px) {
-    .filtros-compactos .campo-filtro { max-width: 10.5rem; }
+    .filtros-compactos .campo-filtro {
+      max-width: 10.5rem;
+    }
   }
+
   .tabla-responsive{
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     width: 100%;
     max-width: 100%;
   }
+
   .tabla-responsive table{
     white-space: nowrap;
     min-width: 1100px;
   }
+
   .modal-copy{
     overflow-wrap: anywhere;
     word-break: break-word;
     hyphens: auto;
   }
+
+  .excel-header-btn{
+    width:100%;
+    justify-content:center;
+    font-size:0.875rem;
+  }
+
+  .excel-header-btn .excel-arrow{
+    font-size:0.65rem;
+    margin-left:2px;
+  }
+
+  .excel-panel{
+    position:fixed;
+    z-index:50;
+    width:260px;
+    background:#fff;
+    border-radius:0.75rem;
+    border:1px solid #d1d5db;
+    box-shadow:0 10px 30px rgba(0,0,0,.15);
+    padding:0.75rem;
+    font-size:0.8rem;
+  }
+
+  .excel-panel h3{
+    font-weight:600;
+    margin-bottom:0.5rem;
+  }
+
+  .excel-panel small{
+    font-size:0.7rem;
+    color:#6b7280;
+  }
+
+  .excel-panel .excel-options{
+    max-height:180px;
+    overflow-y:auto;
+    border:1px solid #e5e7eb;
+    border-radius:0.5rem;
+    padding:0.25rem 0.5rem;
+    margin-top:0.25rem;
+    background:#f9fafb;
+  }
+
+  .excel-col-filtered .excel-header-btn{
+    background:#e0f2fe;
+    border-radius:999px;
+  }
+
+  .excel-col-filtered .excel-arrow{
+    color:#2563eb !important;
+  }
 </style>
 
 <div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-4 sm:gap-4">
   <h2 class="text-2xl font-bold text-gray-800">📋 Servicios Cotizados - Supervisor</h2>
-  <a href="{% url 'operaciones:exportar_servicios_supervisor' %}" class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-amber-600 transition">
+
+  <a href="{% url 'operaciones:exportar_servicios_supervisor' %}"
+     class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-amber-600 transition">
     📤 Exportar a Excel
   </a>
 </div>
 
-<!-- Filtros -->
-<form id="form-filtros"
-      method="get"
-      class="mb-3 text-base">
-
-  <div class="inline-flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-
-    <div class="w-full sm:w-44">
-      <label class="text-xs text-gray-600">DU</label>
-      <input type="text"
-             name="du"
-             value="{{ filtros.du }}"
-             placeholder="Filtrar por DU"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">ID CLARO</label>
-      <input type="text"
-             name="id_claro"
-             value="{{ filtros.id_claro }}"
-             placeholder="Filtrar por ID CLARO"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">ID NEW</label>
-      <input type="text"
-             name="id_new"
-             value="{{ filtros.id_new }}"
-             placeholder="Filtrar por ID NEW"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-52">
-      <label class="text-xs text-gray-600">Mes producción</label>
-      <input type="text"
-             name="mes_produccion"
-             value="{{ filtros.mes_produccion }}"
-             placeholder="Mes producción"
-             class="border rounded-lg px-3 py-2 w-full"
-             autocomplete="off">
-    </div>
-
-    <div class="w-full sm:w-56">
-      <label class="text-xs text-gray-600">Estado</label>
-      <select name="estado"
-              class="border rounded-lg px-3 py-2 w-full">
-        <option value="">Todos los estados</option>
-        {% for codigo, nombre in estado_choices %}
-          <option value="{{ codigo }}" {% if filtros.estado == codigo %}selected{% endif %}>
-            {{ nombre }}
-          </option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
-      <button type="submit"
-              class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium whitespace-nowrap shadow">
-        🔍 Filtrar
-      </button>
-
-      <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-         class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 font-medium whitespace-nowrap shadow">
-        ❌ Limpiar
-      </a>
-    </div>
-
-    <!-- Mantener cantidad actual -->
-    <input type="hidden" name="cantidad" value="{{ cantidad }}">
-  </div>
-</form>
 
 
+<!-- Selector columnas -->
 <div class="flex justify-start mb-2">
   <details class="relative">
-    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-      ⚙️ Columns
-    </summary>
+  <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+  ⚙️ Columnas
+</summary>
 
-    <!-- 👇 IMPORTANTE: mismo id que usa el script -->
     <div id="columnToggles" class="absolute left-0 mt-1 w-56 bg-white border rounded-xl shadow-lg p-3 z-10">
-      <p class="text-xs text-gray-500 mb-2">Show / hide columns</p>
+      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
-      <!-- ✅ Master checkbox -->
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
         <input type="checkbox" id="col-toggle-all" checked>
-        <span class="font-semibold text-xs">Show all columns</span>
+        <span class="font-semibold text-xs">Mostrar todas las columnas</span>
       </label>
 
-      <!-- ✅ Una línea por columna (0-based) -->
       <div class="space-y-1 text-sm">
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="0" checked>
@@ -197,7 +181,7 @@
 
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>STATUS</span>
+          <span>ESTADO</span>
         </label>
 
         <label class="flex items-center gap-2">
@@ -209,416 +193,507 @@
   </details>
 </div>
 
-<!-- Tabla -->
- <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
-    <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-      <tr>
-        <th class="p-2">DU</th>
-        <th class="p-2">ID CLARO</th>
-        <th class="p-2">REGIÓN</th>
-        <th class="p-2">MES PRODUCCIÓN</th>
-        <th class="p-2">ID NEW</th>
-        <th class="p-2">DETALLE TAREA</th>
-        <th class="p-2">MONTO MMOO</th>
-        <th class="p-2">ASIGNADOS</th>
-        <th class="p-2">FECHA FIN</th>
-        <th class="p-2">STATUS</th>
-        <th class="p-2">ACCIONES</th>
-      </tr>
-    </thead>
-    <tbody class="text-center">
-      {% for row in pagina_info %}
-      {% with servicio=row.servicio %}
-      <tr class="border-t">
-        <td class="p-2 font-mono">DU{{ servicio.du }}</td>
-        <td class="p-2">{{ servicio.id_claro }}</td>
-        <td class="p-2">{{ servicio.region }}</td>
-        <td class="p-2">{{ servicio.mes_produccion }}</td>
-        <td class="p-2">{{ servicio.id_new }}</td>
-        <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">{{ servicio.detalle_tarea }}</td>
-        <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">$ {{ servicio.monto_mmoo|miles }} CLP</td>
-        <td class="p-2 text-left">
-          {% for tecnico in servicio.trabajadores_asignados.all %}
-            <div>- {{ tecnico.get_full_name }}</div>
-          {% empty %}
-            <span class="italic text-gray-400">Sin asignar</span>
-          {% endfor %}
-        </td>
-        <td class="p-2">
-          {% if servicio.estado == 'aprobado_supervisor' and servicio.fecha_aprobacion_supervisor %}
-            {{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}
-          {% elif servicio.fecha_fin %}
-            {{ servicio.fecha_fin|date:"d/m/Y H:i" }}
-          {% else %}—{% endif %}
-        </td>
+<!-- Clear filtros Excel -->
+<div class="flex justify-start mb-2">
+<button type="button"
+        id="btnExcelClearAll"
+        class="px-3 py-1 text-xs border rounded-full bg-white hover:bg-blue-50">
+  ❌ Limpiar filtros
+</button>
+</div>
 
- <!-- ====== STATUS (badge) ====== -->
-<td class="p-2 text-sm">
-  <div class="flex flex-col gap-1 text-left">
+<!-- Panel filtros Excel -->
+<div id="excelFilterPanel" class="excel-panel hidden">
 
-    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
-      {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-      {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-      {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-      {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
-      {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-      {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-      {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
-      {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-      {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
-      {% else %}bg-gray-100 text-gray-800{% endif %}">
+  <h3 id="excelPanelTitle">Columna</h3>
 
-      {% if servicio.estado == 'aprobado_pendiente' %}
-        ✅ Aprobado por PM:
-        {% if servicio.pm_aprueba %}{{ servicio.pm_aprueba.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+  <small>Filtrar valores</small>
 
-      {% elif servicio.estado == 'asignado' %}
-        👥 Asignado por Supervisor:
-        {% if servicio.supervisor_asigna %}{{ servicio.supervisor_asigna.get_full_name }}{% else %}<span class="italic text-gray-400">Sin asignar</span>{% endif %}
+  <div class="mt-2">
 
-      {% elif servicio.estado == 'en_progreso' %}
-        🕓 En ejecución
+    <input id="excelFilterSearch"
 
-      {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
-        ✔ Finalizado por {% if servicio.tecnico_finalizo %}{{ servicio.tecnico_finalizo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+           type="text"
 
-      {% elif servicio.estado == 'rechazado_supervisor' %}
-        ❌ Rechazado por Supervisor {% if servicio.supervisor_rechazo %}{{ servicio.supervisor_rechazo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+           placeholder="Buscar..."
 
-      {% elif servicio.estado == 'aprobado_supervisor' %}
-        ✅ Aprobado por Supervisor: {% if servicio.supervisor_aprobo %}{{ servicio.supervisor_aprobo.get_full_name }}{% else %}<span class="italic text-gray-400">—</span>{% endif %}
+           class="w-full border border-gray-300 rounded-md px-2 py-1 text-xs">
 
-      {% elif servicio.estado == 'ajuste_bono' %}
-        🎁 Bono
-
-      {% elif servicio.estado == 'ajuste_adelanto' %}
-        ⏩ Adelanto
-
-      {% elif servicio.estado == 'ajuste_descuento' %}
-        ➖ Descuento
-
-      {% else %}
-        {{ servicio.estado }}
-      {% endif %}
-    </div>
-
-    {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
-      <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-        📝 Pendiente revisión del supervisor
-      </div>
-    {% endif %}
-
-    {% if servicio.estado == 'asignado' or servicio.estado == 'en_progreso' %}
-      <div class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-        <div class="text-[11px] font-semibold text-gray-700">
-          Aceptaciones: {{ row.aceptados_count }}/{{ row.total_count }}
-        </div>
-
-        {% if row.aceptados_lista %}
-          <div class="mt-1">
-            <div class="text-[11px] font-medium text-emerald-700">✅ Aceptaron</div>
-            <div class="mt-1 space-y-0.5">
-              {% for tec in row.aceptados_lista %}
-                <div class="text-[11px] text-emerald-700 leading-4">
-                  {{ tec.get_full_name }}
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-        {% endif %}
-
-        {% if row.pendientes_lista %}
-          <div class="mt-2">
-            <div class="text-[11px] font-medium text-amber-700">⏳ Pendientes</div>
-            <div class="mt-1 space-y-0.5">
-              {% for tec in row.pendientes_lista %}
-                <div class="text-[11px] text-amber-700 leading-4">
-                  {{ tec.get_full_name }}
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-        {% endif %}
-      </div>
-    {% endif %}
   </div>
 
-  {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-    <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
-      <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
-    </div>
-  {% endif %}
-</td>
+  <div class="mt-2 excel-options" id="excelFilterOptions"></div>
 
-        <!-- ====== ACCIONES ====== -->
-<td class="p-2 space-y-1">
-  {% if servicio.estado == 'aprobado_pendiente' %}
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
-       class="text-blue-600 hover:underline block">
-      👥 Asignar
-    </a>
-
-  {% elif servicio.estado == 'ajuste_bono' or servicio.estado == 'ajuste_adelanto' or servicio.estado == 'ajuste_descuento' %}
-    <span class="text-gray-400 italic">Sin acciones</span>
-
-  {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' or servicio.estado == 'rechazado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}?next={{ request.get_full_path|urlencode }}"
-       class="text-sky-700 hover:underline block">
-      📋 Requerimientos fotos
-    </a>
-
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
-       class="text-emerald-700 hover:underline block">
-      🔎 Revisión
-    </a>
-
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
-       class="text-indigo-600 hover:underline block">
-      🔁 Reasignar
-    </a>
-
-    <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=agregar"
-       class="text-amber-700 hover:underline block">
-      ➕ Agregar más técnicos
-    </a>
-
-    {% if servicio.motivo_rechazo %}
-      <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
-        <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
-      </div>
-    {% endif %}
-
-  {% elif servicio.estado == 'aprobado_supervisor' %}
-    <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
-       class="text-emerald-700 hover:underline block">
-      🔎 Revisar
-    </a>
+  <div class="mt-3 flex justify-end gap-2">
 
     <button type="button"
-            class="text-red-600 hover:underline block"
-            onclick="abrirModalReabrir('{{ servicio.id }}')">
-      🔓 Reabrir servicio
+
+            id="excelFilterClearAll"
+
+            class="px-2 py-1 border rounded-md text-xs">
+
+      Limpiar
+
     </button>
 
-    <div id="modal-reabrir-{{ servicio.id }}"
-         class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
-      <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
-        <div class="px-5 py-4 border-b flex items-center justify-between">
-          <h3 class="text-lg font-semibold text-gray-800">Reabrir servicio</h3>
-          <button type="button"
-                  class="text-gray-500 hover:text-gray-700"
-                  onclick="cerrarModalReabrir('{{ servicio.id }}')">
-            ✕
-          </button>
-        </div>
+    <button type="button"
 
-        <form method="post"
-              action="{% url 'operaciones:reabrir_servicio' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
-              class="px-5 pt-4 pb-5 space-y-3">
-          {% csrf_token %}
-          <p class="text-sm text-gray-600 leading-relaxed modal-copy">
-            Indica el motivo por el cual se reabre la asignación.
-          </p>
+            id="excelFilterApply"
 
-          <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
-          <textarea name="motivo"
-                    rows="4"
-                    required
-                    pattern=".*\S.*"
-                    oninput="this.value = this.value.replace(/^\s+/, '')"
-                    class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs">
 
-          <div class="flex items-center justify-end gap-2 pt-2">
-            <button type="button"
-                    class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
-                    onclick="cerrarModalReabrir('{{ servicio.id }}')">
-              Cancelar
+      Aplicar
+
+    </button>
+
+  </div>
+
+</div>
+
+<!-- Zona recargable -->
+<div id="zonaTabla" data-excel-global='{{ excel_global_json|safe }}'>
+
+  <!-- Tabla -->
+  <div class="overflow-x-auto">
+    <table id="servicios-supervisor-table"
+           data-columns-table="servicios-supervisor"
+           data-columns-offset="0"
+           class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+           style="white-space: nowrap;">
+
+      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+        <tr>
+          <th class="p-2" data-excel-col data-excel-key="0">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>DU</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
-            <button type="submit"
-                    class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
-              Reabrir servicio
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="1">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ID CLARO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
-          </div>
-        </form>
-      </div>
-    </div>
+          </th>
 
-  {% else %}
-    <span class="text-gray-400 italic">Sin acciones</span>
-  {% endif %}
-</td>
+          <th class="p-2" data-excel-col data-excel-key="2">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>REGIÓN</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
 
+          <th class="p-2" data-excel-col data-excel-key="3">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>MES PRODUCCIÓN</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
 
+          <th class="p-2" data-excel-col data-excel-key="4">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ID NEW</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="5">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>DETALLE TAREA</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="6">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="7">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ASIGNADOS</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="8">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>FECHA FIN</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="9">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ESTADO</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="p-2" data-excel-col data-excel-key="10">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ACCIONES</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+        </tr>
+      </thead>
+
+      <tbody class="text-center">
+        {% for row in pagina_info %}
+          {% with servicio=row.servicio %}
+            <tr class="border-t">
+              <td class="p-2 font-mono">DU{{ servicio.du }}</td>
+              <td class="p-2">{{ servicio.id_claro }}</td>
+              <td class="p-2">{{ servicio.region }}</td>
+              <td class="p-2">{{ servicio.mes_produccion }}</td>
+              <td class="p-2">{{ servicio.id_new }}</td>
+
+              <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
+                {{ servicio.detalle_tarea }}
+              </td>
+
+              <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
+                $ {{ servicio.monto_mmoo|miles }} CLP
+              </td>
+
+              <td class="p-2 text-left">
+                {% for tecnico in servicio.trabajadores_asignados.all %}
+                  <div>- {{ tecnico.get_full_name }}</div>
+                {% empty %}
+                  <span class="italic text-gray-400">Sin asignar</span>
+                {% endfor %}
+              </td>
+
+              <td class="p-2">
+                {% if servicio.estado == 'aprobado_supervisor' and servicio.fecha_aprobacion_supervisor %}
+                  {{ servicio.fecha_aprobacion_supervisor|date:"d/m/Y H:i" }}
+                {% elif servicio.fecha_fin %}
+                  {{ servicio.fecha_fin|date:"d/m/Y H:i" }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+
+              <!-- ====== STATUS ====== -->
+              <td class="p-2 text-sm">
+                <div class="flex flex-col gap-1 text-left">
+
+                  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
+                    {% if servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
+                    {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
+                    {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
+                    {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}bg-yellow-100 text-emerald-800
+                    {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
+                    {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
+                    {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
+                    {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
+                    {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
+                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+
+                    {% if servicio.estado == 'aprobado_pendiente' %}
+                      ✅ Aprobado por PM:
+                      {% if servicio.pm_aprueba %}
+                        {{ servicio.pm_aprueba.get_full_name }}
+                      {% else %}
+                        <span class="italic text-gray-400">Sin asignar</span>
+                      {% endif %}
+
+                    {% elif servicio.estado == 'asignado' %}
+                      👥 Asignado por Supervisor:
+                      {% if servicio.supervisor_asigna %}
+                        {{ servicio.supervisor_asigna.get_full_name }}
+                      {% else %}
+                        <span class="italic text-gray-400">Sin asignar</span>
+                      {% endif %}
+
+                    {% elif servicio.estado == 'en_progreso' %}
+                      🕓 En ejecución
+
+                    {% elif servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+                      ✔ Finalizado por
+                      {% if servicio.tecnico_finalizo %}
+                        {{ servicio.tecnico_finalizo.get_full_name }}
+                      {% else %}
+                        <span class="italic text-gray-400">—</span>
+                      {% endif %}
+
+                    {% elif servicio.estado == 'rechazado_supervisor' %}
+                      ❌ Rechazado por Supervisor
+                      {% if servicio.supervisor_rechazo %}
+                        {{ servicio.supervisor_rechazo.get_full_name }}
+                      {% else %}
+                        <span class="italic text-gray-400">—</span>
+                      {% endif %}
+
+                    {% elif servicio.estado == 'aprobado_supervisor' %}
+                      ✅ Aprobado por Supervisor:
+                      {% if servicio.supervisor_aprobo %}
+                        {{ servicio.supervisor_aprobo.get_full_name }}
+                      {% else %}
+                        <span class="italic text-gray-400">—</span>
+                      {% endif %}
+
+                    {% elif servicio.estado == 'ajuste_bono' %}
+                      🎁 Bono
+
+                    {% elif servicio.estado == 'ajuste_adelanto' %}
+                      ⏩ Adelanto
+
+                    {% elif servicio.estado == 'ajuste_descuento' %}
+                      ➖ Descuento
+
+                    {% else %}
+                      {{ servicio.estado }}
+                    {% endif %}
+                  </div>
+
+                  {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
+                    <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      📝 Pendiente revisión del supervisor
+                    </div>
+                  {% endif %}
+
+                  {% if servicio.estado == 'asignado' or servicio.estado == 'en_progreso' %}
+                    <div class="mt-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div class="text-[11px] font-semibold text-gray-700">
+                        Aceptaciones: {{ row.aceptados_count }}/{{ row.total_count }}
+                      </div>
+
+                      {% if row.aceptados_lista %}
+                        <div class="mt-1">
+                          <div class="text-[11px] font-medium text-emerald-700">✅ Aceptaron</div>
+                          <div class="mt-1 space-y-0.5">
+                            {% for tec in row.aceptados_lista %}
+                              <div class="text-[11px] text-emerald-700 leading-4">
+                                {{ tec.get_full_name }}
+                              </div>
+                            {% endfor %}
+                          </div>
+                        </div>
+                      {% endif %}
+
+                      {% if row.pendientes_lista %}
+                        <div class="mt-2">
+                          <div class="text-[11px] font-medium text-amber-700">⏳ Pendientes</div>
+                          <div class="mt-1 space-y-0.5">
+                            {% for tec in row.pendientes_lista %}
+                              <div class="text-[11px] text-amber-700 leading-4">
+                                {{ tec.get_full_name }}
+                              </div>
+                            {% endfor %}
+                          </div>
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+
+                {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
+                  <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words editable-motivo" data-id="{{ servicio.id }}">
+                    <strong>Motivo:</strong> <span class="motivo-text">{{ servicio.motivo_rechazo }}</span>
+                  </div>
+                {% endif %}
+              </td>
+
+              <!-- ====== ACCIONES ====== -->
+              <td class="p-2 space-y-1">
+                {% if servicio.estado == 'aprobado_pendiente' %}
+                  <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
+                     class="text-blue-600 hover:underline block">
+                    👥 Asignar
+                  </a>
+
+                {% elif servicio.estado == 'ajuste_bono' or servicio.estado == 'ajuste_adelanto' or servicio.estado == 'ajuste_descuento' %}
+                  <span class="text-gray-400 italic">Sin acciones</span>
+
+                {% elif servicio.estado == 'asignado' or servicio.estado == 'en_progreso' or servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' or servicio.estado == 'rechazado_supervisor' %}
+                  <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+                     class="text-sky-700 hover:underline block">
+                    📋 Requerimientos fotos
+                  </a>
+
+                  <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+                     class="text-emerald-700 hover:underline block">
+                    🔎 Revisión
+                  </a>
+
+                  <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=reasignar"
+                     class="text-indigo-600 hover:underline block">
+                    🔁 Reasignar
+                  </a>
+
+                  <a href="{% url 'operaciones:asignar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}&modo=agregar"
+                     class="text-amber-700 hover:underline block">
+                    ➕ Agregar más técnicos
+                  </a>
+
+                  {% if servicio.motivo_rechazo %}
+                    <div class="mt-1 text-xs text-amber-700 whitespace-pre-wrap break-words">
+                      <strong>Motivo reapertura:</strong> {{ servicio.motivo_rechazo }}
+                    </div>
+                  {% endif %}
+
+                {% elif servicio.estado == 'aprobado_supervisor' %}
+                  <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.id %}?next={{ request.get_full_path|urlencode }}"
+                     class="text-emerald-700 hover:underline block">
+                    🔎 Revisar
+                  </a>
+
+                  <button type="button"
+                          class="text-red-600 hover:underline block"
+                          onclick="abrirModalReabrir('{{ servicio.id }}')">
+                    🔓 Reabrir servicio
+                  </button>
+
+                  <div id="modal-reabrir-{{ servicio.id }}"
+                       class="fixed inset-0 bg-black/40 hidden z-50 flex items-center justify-center px-4">
+                    <div class="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden">
+                      <div class="px-5 py-4 border-b flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-800">Reabrir servicio</h3>
+
+                        <button type="button"
+                                class="text-gray-500 hover:text-gray-700"
+                                onclick="cerrarModalReabrir('{{ servicio.id }}')">
+                          ✕
+                        </button>
+                      </div>
+
+                      <form method="post"
+                            action="{% url 'operaciones:reabrir_servicio' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+                            class="px-5 pt-4 pb-5 space-y-3">
+                        {% csrf_token %}
+
+                        <p class="text-sm text-gray-600 leading-relaxed modal-copy">
+                          Indica el motivo por el cual se reabre la asignación.
+                        </p>
+
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Motivo</label>
+                        <textarea name="motivo"
+                                  rows="4"
+                                  required
+                                  pattern=".*\S.*"
+                                  oninput="this.value = this.value.replace(/^\s+/, '')"
+                                  class="w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+
+                        <div class="flex items-center justify-end gap-2 pt-2">
+                          <button type="button"
+                                  class="px-4 py-2 rounded-full text-sm bg-gray-100 hover:bg-gray-200 text-gray-700"
+                                  onclick="cerrarModalReabrir('{{ servicio.id }}')">
+                            Cancelar
+                          </button>
+
+                          <button type="submit"
+                                  class="px-4 py-2 rounded-full text-sm bg-red-600 hover:bg-red-700 text-white">
+                            Reabrir servicio
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+
+                {% else %}
+                  <span class="text-gray-400 italic">Sin acciones</span>
+                {% endif %}
+              </td>
             </tr>
-      {% endwith %}
-      {% endfor %}
-    </tbody>
-  </table>
+          {% endwith %}
+        {% empty %}
+          <tr>
+            <td colspan="11" class="p-4 text-center text-gray-500">
+              No hay servicios para mostrar.
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Selector cantidad -->
+  <form method="get" class="mt-4 flex items-center gap-2">
+    <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+
+    <select name="cantidad"
+            id="cantidad"
+            class="border rounded-lg px-3 py-1">
+      <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
+      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+    </select>
+
+    <input type="hidden" name="du" value="{{ filtros.du }}">
+    <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
+    <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
+    <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
+    <input type="hidden" name="estado" value="{{ filtros.estado }}">
+  </form>
+
+  <!-- Paginación -->
+  <div id="pager" class="mt-4 flex justify-center gap-2 text-sm">
+    {% if pagina.has_previous %}
+      <a href="?page=1&{{ qs_keep }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+        « Primero
+      </a>
+
+      <a href="?page={{ pagina.previous_page_number }}&{{ qs_keep }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+        ‹ Anterior
+      </a>
+    {% endif %}
+
+    <span class="px-3 py-1">
+      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+    </span>
+
+    {% if pagina.has_next %}
+      <a href="?page={{ pagina.next_page_number }}&{{ qs_keep }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+        Siguiente ›
+      </a>
+
+      <a href="?page={{ pagina.paginator.num_pages }}&{{ qs_keep }}"
+         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+        Último »
+      </a>
+    {% endif %}
+  </div>
 </div>
-
-<!-- Selector cantidad -->
-<form method="get" class="mt-4 flex items-center gap-2">
-  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
-    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-  </select>
-
-  <input type="hidden" name="du" value="{{ filtros.du }}">
-  <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
-  <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
-  <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
-  <input type="hidden" name="estado" value="{{ filtros.estado }}">
-</form>
-
-<!-- Paginación -->
-<div class="mt-4 flex justify-center gap-2 text-sm">
-  {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-  {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
-  {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-  {% endif %}
-</div>
-
 
 <script>
   function abrirModalReabrir(id) {
     const modal = document.getElementById('modal-reabrir-' + id);
     if (!modal) return;
+
     modal.classList.remove('hidden');
     document.body.classList.add('overflow-hidden');
+
     setTimeout(() => {
       const ta = modal.querySelector('textarea[name="motivo"]');
       if (ta) ta.focus();
     }, 30);
   }
+
   function cerrarModalReabrir(id) {
     const modal = document.getElementById('modal-reabrir-' + id);
     if (!modal) return;
+
     modal.classList.add('hidden');
     document.body.classList.remove('overflow-hidden');
   }
+
   document.addEventListener('click', (e) => {
     const modal = e.target.closest('[id^="modal-reabrir-"]');
+
     if (modal && e.target === modal) {
       modal.classList.add('hidden');
       document.body.classList.remove('overflow-hidden');
     }
   });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       document.querySelectorAll('[id^="modal-reabrir-"]:not(.hidden)')
         .forEach(m => m.classList.add('hidden'));
+
       document.body.classList.remove('overflow-hidden');
     }
   });
 </script>
 
-<script>
-(function () {
-  const form = document.getElementById('form-filtros');
-  if (!form) return;
-
-  const isTouch = matchMedia('(pointer:coarse)').matches;
-  const inputs  = form.querySelectorAll('input[type="text"]');
-  const selects = form.querySelectorAll('select');
-
-  const KEY = 'svc_sup_filtros_focus_v3';
-
-  // ✅ Guardar SIEMPRE el último foco real (no el que hace blur)
-  function saveFocusState(el){
-    try{
-      if (!el || !el.name) return;
-      const pos = (typeof el.selectionStart === 'number')
-        ? el.selectionStart
-        : (el.value || '').length;
-
-      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
-    }catch(_){}
-  }
-
-  // ✅ submit sin pisar el foco (el foco ya lo guardó focusin)
-  function submitNow(){
-    form.requestSubmit();
-  }
-
-  // ✅ Captura el foco antes de que ocurra el blur del anterior (clave en móviles)
-  form.addEventListener('focusin', (e) => {
-    const el = e.target;
-    if (!el) return;
-    if (!form.contains(el)) return;
-    if (!el.name) return;
-    saveFocusState(el);
-  }, true);
-
-  // TEXT INPUTS
-  inputs.forEach(el => {
-    if (isTouch) {
-      // móvil: submit al salir del input, pero SIN re-guardar foco como el que sale
-      el.addEventListener('blur', () => submitNow());
-
-      el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); submitNow(); }
-      });
-    } else {
-      // desktop: debounce mientras escribes
-      let t, composing = false;
-
-      function doSubmit(){
-        clearTimeout(t);
-        t = setTimeout(() => {
-          if (!composing) submitNow();
-        }, 500);
-      }
-
-      el.addEventListener('compositionstart', () => composing = true);
-      el.addEventListener('compositionend',   () => { composing = false; doSubmit(); });
-
-      el.addEventListener('input',  () => { saveFocusState(el); doSubmit(); });
-      el.addEventListener('change', () => { saveFocusState(el); doSubmit(); });
-
-      el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') { e.preventDefault(); submitNow(); }
-      });
-    }
-  });
-
-  // SELECTS: guardar foco + enviar al cambiar
-  selects.forEach(el => el.addEventListener('change', () => {
-    saveFocusState(el);
-    submitNow();
-  }));
-
-  // Restaurar foco/caret tras recargar
-  function restoreCaret(){
-    try{
-      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-      if (!data) return;
-
-      const el = form.elements[data.name];
-      if (!el) return;
-
-      el.focus({ preventScroll: true });
-
-      const len = (el.value || '').length;
-      const p = Math.min((data.pos ?? len), len);
-
-      if (typeof el.setSelectionRange === 'function') el.setSelectionRange(p, p);
-    }catch(_){}
-  }
-
-  window.addEventListener('DOMContentLoaded', restoreCaret);
-  window.addEventListener('pageshow', restoreCaret);
-})();
-</script>
 
 
 <script>
@@ -627,12 +702,13 @@
   const KEY = 'svc-cotizados-supervisor-scroll:' + location.pathname;
 
   function zone() {
-    return document.querySelector('.tabla-responsive');
+    return document.querySelector('#zonaTabla .overflow-x-auto');
   }
 
   function saveScroll() {
     try {
       const z = zone();
+
       sessionStorage.setItem(KEY, JSON.stringify({
         winX: window.scrollX || window.pageXOffset || 0,
         winY: window.scrollY || window.pageYOffset || 0,
@@ -646,8 +722,13 @@
     try {
       const s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
       if (!s) return;
-      requestAnimationFrame(() => window.scrollTo(s.winX || 0, s.winY || 0));
+
+      requestAnimationFrame(() => {
+        window.scrollTo(s.winX || 0, s.winY || 0);
+      });
+
       const z = zone();
+
       if (z) {
         z.scrollLeft = s.zoneX || 0;
         z.scrollTop  = s.zoneY || 0;
@@ -656,43 +737,59 @@
   }
 
   document.addEventListener('DOMContentLoaded', restoreScroll);
-  window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
+
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) restoreScroll();
+  });
+
   window.addEventListener('beforeunload', saveScroll);
 
-  // Guardar al enviar filtros o selector de cantidad
   document.addEventListener('submit', (e) => {
     if (e.target && e.target.matches('form')) saveScroll();
   });
 
-  // Guardar al navegar por paginación
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href*="page="]');
     if (a) saveScroll();
   });
+
+  window.serviciosSupervisorSaveScroll = saveScroll;
+  window.serviciosSupervisorRestoreScroll = restoreScroll;
 })();
 </script>
 
 <script>
 (function () {
-  // Panel de columnas
   const panel = document.getElementById('columnToggles');
   if (!panel) return;
 
-  // Tabla asociada: usa la que tenga data-columns-table
-  const table =
-    document.querySelector('[data-columns-table]') ||
-    document.querySelector('table');
-  if (!table) return;
+  function getTable() {
+    return document.getElementById('servicios-supervisor-table');
+  }
 
-  // Clave para recordar las columnas por vista/tabla
-  const tableId = table.dataset.columnsTable || location.pathname;
-  const STORAGE_KEY = 'cols:' + tableId;
+  function getOffset() {
+    const table = getTable();
+    if (!table) return 0;
+
+    return parseInt(table.dataset.columnsOffset || '0', 10);
+  }
+
+  function getStorageKey() {
+    const table = getTable();
+    if (!table) return 'cols:servicios-supervisor';
+
+    const tableId = table.dataset.columnsTable || 'servicios-supervisor';
+
+    return 'cols:' + tableId;
+  }
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(getStorageKey());
       if (!raw) return {};
+
       const obj = JSON.parse(raw);
+
       return obj && typeof obj === 'object' ? obj : {};
     } catch (e) {
       return {};
@@ -701,38 +798,58 @@
 
   function saveState(state) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(getStorageKey(), JSON.stringify(state));
     } catch (e) {}
   }
 
   function applyVisibility() {
-    const state = loadState(); // {0: true, 1: false, ...}
+    const table = getTable();
+    if (!table) return;
 
-    // Encabezados
+    const offset = getOffset();
+    const state = loadState();
+
     const theadCells = table.querySelectorAll('thead tr th');
-    theadCells.forEach((th, idx) => {
-      const visible = state[idx] !== false; // por defecto visible
+
+    theadCells.forEach((th, realIdx) => {
+      if (realIdx < offset) {
+        th.style.display = '';
+        return;
+      }
+
+      const logicalIdx = realIdx - offset;
+      const visible = state[logicalIdx] !== false;
+
       th.style.display = visible ? '' : 'none';
     });
 
-    // Celdas
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const tds = tr.querySelectorAll('td');
-      tds.forEach((td, idx) => {
-        const visible = state[idx] !== false;
+
+      tds.forEach((td, realIdx) => {
+        if (realIdx < offset) {
+          td.style.display = '';
+          return;
+        }
+
+        const logicalIdx = realIdx - offset;
+        const visible = state[logicalIdx] !== false;
+
         td.style.display = visible ? '' : 'none';
       });
     });
 
-    // Sincronizar checkboxes + master
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
+
     let allOn = true;
 
     checks.forEach((cb) => {
-      const idx = parseInt(cb.dataset.col || '0', 10);
-      const visible = state[idx] !== false;
+      const logicalIdx = parseInt(cb.dataset.col || '0', 10);
+      const visible = state[logicalIdx] !== false;
+
       cb.checked = visible;
+
       if (!visible) allOn = false;
     });
 
@@ -745,27 +862,28 @@
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
 
-    // Individuales
     checks.forEach((cb) => {
       cb.addEventListener('change', () => {
-        const idx = parseInt(cb.dataset.col || '0', 10);
+        const logicalIdx = parseInt(cb.dataset.col || '0', 10);
         const state = loadState();
-        state[idx] = cb.checked;
+
+        state[logicalIdx] = cb.checked;
+
         saveState(state);
         applyVisibility();
       });
     });
 
-    // Master "Show all columns"
     if (master) {
       master.addEventListener('change', () => {
         const val = master.checked;
         const state = loadState();
 
         checks.forEach((cb) => {
-          const idx = parseInt(cb.dataset.col || '0', 10);
+          const logicalIdx = parseInt(cb.dataset.col || '0', 10);
+
           cb.checked = val;
-          state[idx] = val;
+          state[logicalIdx] = val;
         });
 
         saveState(state);
@@ -774,7 +892,6 @@
     }
   }
 
-  // Cerrar el <details> al hacer clic fuera
   function bindOutsideClickToClose() {
     const details = panel.closest('details');
     if (!details) return;
@@ -782,19 +899,453 @@
     document.addEventListener('click', (e) => {
       if (!details.open) return;
       if (details.contains(e.target)) return;
+
       details.open = false;
     });
   }
 
-  // Inicializar
   bindToggles();
   applyVisibility();
   bindOutsideClickToClose();
+
+  window.applyServiciosSupervisorColumnsVisibility = applyVisibility;
 })();
 </script>
 
+<script>
+(function(){
+  const zona = document.getElementById('zonaTabla');
+  if(!zona) return;
 
+  const panel = document.getElementById('excelFilterPanel');
+  const titleEl = document.getElementById('excelPanelTitle');
+  const searchInput = document.getElementById('excelFilterSearch');
+  const optionsBox = document.getElementById('excelFilterOptions');
+  const btnApply = document.getElementById('excelFilterApply');
+  const btnClear = document.getElementById('excelFilterClearAll');
+  const btnClearAll = document.getElementById('btnExcelClearAll');
 
+  let currentKey = null;
+  let activeFilters = loadFilters();
+
+  function loadFilters(){
+    try{
+      const raw = sessionStorage.getItem('excelFiltersServiciosSupervisor:' + location.pathname);
+      if(!raw) return {};
+
+      const obj = JSON.parse(raw);
+      const out = {};
+
+      Object.entries(obj).forEach(([k,v]) => {
+        out[k] = new Set(v);
+      });
+
+      return out;
+    }catch(_){
+      return {};
+    }
+  }
+
+  function saveFilters(){
+    const plain = {};
+
+    Object.entries(activeFilters).forEach(([k,v]) => {
+      plain[k] = Array.from(v);
+    });
+
+    sessionStorage.setItem(
+      'excelFiltersServiciosSupervisor:' + location.pathname,
+      JSON.stringify(plain)
+    );
+  }
+
+  function getExcelGlobal(){
+    try{
+      return JSON.parse(zona.dataset.excelGlobal || '{}');
+    }catch(_){
+      return {};
+    }
+  }
+
+  function updateHeaderStates(){
+    activeFilters = loadFilters();
+
+    zona.querySelectorAll('th[data-excel-col]').forEach(th => {
+      const key = th.dataset.excelKey;
+      const has = activeFilters[key] && activeFilters[key].size > 0;
+
+      th.classList.toggle('excel-col-filtered', !!has);
+    });
+  }
+
+  function escapeHtml(s){
+    return String(s || '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  function renderOptions(key){
+    const globalVals = getExcelGlobal();
+    const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
+    const selected = activeFilters[key];
+
+    optionsBox.innerHTML = '';
+
+    const allWrap = document.createElement('label');
+    allWrap.className = 'flex items-center gap-2 mb-2';
+    allWrap.innerHTML = `<input type="checkbox" id="excel-select-all"> <span>(Seleccionar todo)</span>`;
+
+    optionsBox.appendChild(allWrap);
+
+    values.forEach(val => {
+      const label = document.createElement('label');
+
+      label.className = 'flex items-center gap-2 text-xs mt-1';
+      label.dataset.optionLabel = "1";
+
+      const checked = !selected || selected.has(val);
+
+      label.innerHTML = `
+        <input type="checkbox" class="excel-opt" data-value="${escapeHtml(val)}" ${checked ? 'checked' : ''}>
+        <span>${escapeHtml(val)}</span>
+      `;
+
+      optionsBox.appendChild(label);
+    });
+
+    const selectAll = document.getElementById('excel-select-all');
+    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
+
+    selectAll.checked = !selected || selected.size === values.length;
+
+    selectAll.addEventListener('change', () => {
+      opts.forEach(o => {
+        const row = o.closest('[data-option-label]');
+
+        if (row && row.style.display === 'none' && searchInput.value.trim()) return;
+
+        o.checked = selectAll.checked;
+      });
+    });
+  }
+
+  function filterOptionList(q){
+    const query = (q || '').trim().toLowerCase();
+    let visible = 0;
+
+    optionsBox.querySelectorAll('[data-option-label]').forEach(lbl => {
+      const txt = lbl.textContent.toLowerCase();
+      const show = !query || txt.includes(query);
+
+      lbl.style.display = show ? '' : 'none';
+
+      if(show) visible++;
+    });
+
+    btnApply.disabled = !!query && visible === 0;
+    btnApply.classList.toggle('opacity-50', btnApply.disabled);
+    btnApply.classList.toggle('cursor-not-allowed', btnApply.disabled);
+  }
+
+  function openPanel(th){
+    currentKey = th.dataset.excelKey;
+    titleEl.textContent = th.innerText.trim();
+
+    activeFilters = loadFilters();
+    renderOptions(currentKey);
+
+    const scrollBox = zona.querySelector('.overflow-x-auto') || zona;
+    const thRect = th.getBoundingClientRect();
+    const boxRect = scrollBox.getBoundingClientRect();
+
+    panel.classList.remove('hidden');
+
+    const panelWidth = panel.offsetWidth || 260;
+    const panelHeight = panel.offsetHeight || 220;
+
+    let left = thRect.left;
+    let top  = thRect.bottom + 4;
+
+    const minLeft = boxRect.left + 8;
+    const maxLeft = boxRect.right - panelWidth - 8;
+
+    if (left < minLeft) left = minLeft;
+    if (left > maxLeft) left = maxLeft;
+
+    const maxTop = window.innerHeight - panelHeight - 8;
+
+    if (top > maxTop) top = maxTop;
+
+    panel.style.left = left + 'px';
+    panel.style.top  = top + 'px';
+
+    searchInput.value = '';
+    filterOptionList('');
+    searchInput.focus();
+  }
+
+  function buildParams(resetPage=true){
+    const p = new URLSearchParams(location.search);
+
+    if (resetPage) p.set('page', '1');
+
+    const cantidadSelect = document.getElementById('cantidad');
+
+    if (cantidadSelect && cantidadSelect.value) {
+      p.set('cantidad', cantidadSelect.value);
+    }
+
+    const plain = {};
+
+    Object.entries(activeFilters).forEach(([k,v]) => {
+      if(v && v.size) plain[k] = Array.from(v);
+    });
+
+    if(Object.keys(plain).length){
+      p.set('excel_filters', JSON.stringify(plain));
+    }else{
+      p.delete('excel_filters');
+    }
+
+    return p;
+  }
+
+  async function reloadWithParams(params){
+    const url = `${location.pathname}?${params.toString()}`;
+
+    if (window.serviciosSupervisorSaveScroll) {
+      window.serviciosSupervisorSaveScroll();
+    }
+
+    history.replaceState(null, '', url);
+
+    const resp = await fetch(url, {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    const nuevaZona = doc.getElementById('zonaTabla');
+
+    if(!nuevaZona) {
+      location.href = url;
+      return;
+    }
+
+    zona.innerHTML = nuevaZona.innerHTML;
+    zona.dataset.excelGlobal = nuevaZona.dataset.excelGlobal || '{}';
+
+    bindHeaders();
+    updateHeaderStates();
+
+    if (window.applyServiciosSupervisorColumnsVisibility) {
+      window.applyServiciosSupervisorColumnsVisibility();
+    }
+
+    if (window.serviciosSupervisorRestoreScroll) {
+      window.serviciosSupervisorRestoreScroll();
+    }
+  }
+
+  function bindHeaders(){
+    zona.querySelectorAll('th[data-excel-col] .excel-header-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+
+        openPanel(btn.closest('th[data-excel-col]'));
+      });
+    });
+  }
+
+  bindHeaders();
+  updateHeaderStates();
+
+  searchInput.addEventListener('input', () => {
+    filterOptionList(searchInput.value);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+
+    e.preventDefault();
+
+    if (btnApply.disabled || currentKey == null) return;
+
+    btnApply.click();
+  });
+
+  btnApply.addEventListener('click', async () => {
+    if(currentKey == null) return;
+
+    const selected = new Set();
+
+    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+      const row = opt.closest('[data-option-label]');
+
+      if(searchInput.value.trim() && row.style.display === 'none') return;
+
+      if(opt.checked) selected.add(opt.dataset.value);
+    });
+
+    const total = new Set(getExcelGlobal()[currentKey] || []);
+
+    if(selected.size === 0 || selected.size === total.size){
+      delete activeFilters[currentKey];
+    }else{
+      activeFilters[currentKey] = selected;
+    }
+
+    saveFilters();
+    updateHeaderStates();
+
+    panel.classList.add('hidden');
+
+    await reloadWithParams(buildParams(true));
+  });
+
+  btnClear.addEventListener('click', async () => {
+    if(currentKey == null) return;
+
+    delete activeFilters[currentKey];
+
+    saveFilters();
+    updateHeaderStates();
+
+    panel.classList.add('hidden');
+
+    await reloadWithParams(buildParams(true));
+  });
+
+  btnClearAll?.addEventListener('click', async () => {
+    activeFilters = {};
+
+    saveFilters();
+    updateHeaderStates();
+
+    panel.classList.add('hidden');
+
+    await reloadWithParams(buildParams(true));
+  });
+
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest('#pager a[href]');
+
+    if (a) {
+      e.preventDefault();
+
+      if (window.serviciosSupervisorSaveScroll) {
+        window.serviciosSupervisorSaveScroll();
+      }
+
+      const url = new URL(a.href, location.origin);
+
+      history.replaceState(null, '', url.toString());
+
+      const resp = await fetch(url.toString(), {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const html = await resp.text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+
+      const nuevaZona = doc.getElementById('zonaTabla');
+
+      if(!nuevaZona){
+        location.href = url.toString();
+        return;
+      }
+
+      zona.innerHTML = nuevaZona.innerHTML;
+      zona.dataset.excelGlobal = nuevaZona.dataset.excelGlobal || '{}';
+
+      bindHeaders();
+      updateHeaderStates();
+
+      if (window.applyServiciosSupervisorColumnsVisibility) {
+        window.applyServiciosSupervisorColumnsVisibility();
+      }
+
+      if (window.serviciosSupervisorRestoreScroll) {
+        window.serviciosSupervisorRestoreScroll();
+      }
+
+      return;
+    }
+
+    if(panel.classList.contains('hidden')) return;
+    if(panel.contains(e.target)) return;
+    if(e.target.closest('.excel-header-btn')) return;
+
+    panel.classList.add('hidden');
+  });
+
+  window.serviciosSupervisorExcelRebindHeaders = bindHeaders;
+  window.serviciosSupervisorExcelUpdateHeaderStates = updateHeaderStates;
+})();
+</script>
+
+<script>
+(function () {
+  document.addEventListener('change', async function (e) {
+    const select = e.target.closest('#cantidad');
+    if (!select) return;
+
+    if (window.serviciosSupervisorSaveScroll) {
+      window.serviciosSupervisorSaveScroll();
+    }
+
+    const url = new URL(window.location.href);
+
+    url.searchParams.set('cantidad', select.value);
+    url.searchParams.set('page', '1');
+
+    history.replaceState(null, '', url.toString());
+
+    const resp = await fetch(url.toString(), {
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+
+    const zona = document.getElementById('zonaTabla');
+    const nuevaZona = doc.getElementById('zonaTabla');
+
+    if (!zona || !nuevaZona) {
+      location.href = url.toString();
+      return;
+    }
+
+    zona.innerHTML = nuevaZona.innerHTML;
+    zona.dataset.excelGlobal = nuevaZona.dataset.excelGlobal || '{}';
+
+    if (window.serviciosSupervisorExcelRebindHeaders) {
+      window.serviciosSupervisorExcelRebindHeaders();
+    }
+
+    if (window.serviciosSupervisorExcelUpdateHeaderStates) {
+      window.serviciosSupervisorExcelUpdateHeaderStates();
+    }
+
+    if (window.applyServiciosSupervisorColumnsVisibility) {
+      window.applyServiciosSupervisorColumnsVisibility();
+    }
+
+    if (window.serviciosSupervisorRestoreScroll) {
+      window.serviciosSupervisorRestoreScroll();
+    }
+  });
+})();
+</script>
 
 </div>
 {% endblock %}
