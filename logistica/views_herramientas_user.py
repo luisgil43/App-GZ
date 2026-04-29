@@ -109,8 +109,9 @@ def aceptar_herramientas(request):
         return HttpResponseForbidden("No tienes permiso.")
 
     if not getattr(request.user, "firma_digital", None):
+        next_url = (request.POST.get("next") or reverse("logistica:mis_herramientas")).strip()
         messages.error(request, "Debes registrar tu firma digital para aceptar herramientas.")
-        return redirect(f"{reverse('dashboard:registrar_firma_usuario')}?next={reverse('logistica:mis_herramientas')}")
+        return redirect(f"{reverse('dashboard:registrar_firma_usuario')}?next={next_url}")
 
     ids = request.POST.getlist("asignaciones")
     if not ids:

@@ -10,6 +10,7 @@ from django.http import Http404, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
@@ -18,6 +19,77 @@ from .forms_herramientas_asignaciones import (
     HerramientaAsignacionCantidadForm, HerramientaAsignacionCerrarForm)
 from .models import (Bodega, Herramienta, HerramientaAsignacion,
                      HerramientaAsignacionLog, HerramientaInventario)
+
+
+def _parse_ids_from_post(request) -> list[int]:
+    ids = []
+
+    for raw in request.POST.getlist("asignaciones"):
+        try:
+            ids.append(int(raw))
+        except Exception:
+            continue
+
+    raw_csv = (request.POST.get("ids") or "").strip()
+    if raw_csv:
+        for part in raw_csv.split(","):
+            try:
+                ids.append(int(part.strip()))
+            except Exception:
+                continue
+
+    return list(dict.fromkeys(ids))
+
+
+def _close_asignacion_locked(
+    a: HerramientaAsignacion,
+    request_user,
+    dev: int,
+    comentario: str | None,
+    just: str | None,
+):
+    """
+    Cierra una asignación ya bloqueada y devuelve stock.
+    Reutilizable para cierre individual y cierre masivo.
+    """
+    h = Herramienta.objects.select_for_update().get(pk=a.herramienta_id)
+
+    before_stock = int(h.cantidad or 0)
+
+    a.cantidad_devuelta = dev
+    a.comentario_cierre = comentario
+    a.justificacion_diferencia = just
+    a.closed_at = timezone.now()
+    a.closed_by = request_user
+    a.active = False
+    a.estado = "terminada"
+
+    a.full_clean()
+    a.save()
+
+    if dev > 0:
+        h.cantidad = int(h.cantidad or 0) + dev
+        h.updated_at = timezone.now()
+
+        if h.status == "asignada" and h.cantidad > 0:
+            h.status = "bodega"
+
+        h.save(update_fields=["cantidad", "status", "updated_at"])
+
+    HerramientaAsignacionLog.objects.create(
+        asignacion=a,
+        accion="close",
+        by_user=request_user,
+        cambios={
+            "cantidad_devuelta": dev,
+            "comentario_cierre": comentario or "",
+            "justificacion_diferencia": just or "",
+            "stock": {"from": before_stock, "to": int(h.cantidad or 0)},
+        },
+        nota=None,
+    )
+
+    return a
 
 
 def _is_ajax(request) -> bool:
@@ -274,74 +346,255 @@ def cerrar_asignacion(request, asignacion_id: int):
     - solicita cantidad devuelta
     - suma devuelta al stock
     - deja registro de cierre/justificación
-    - Registra log (close)
+    - registra log close
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
 
     a = get_object_or_404(HerramientaAsignacion, pk=asignacion_id)
 
+    nxt = (request.POST.get("next") or request.GET.get("next") or "").strip()
+
     if request.method == "POST":
         form = HerramientaAsignacionCerrarForm(request.POST, asignacion=a)
         if form.is_valid():
             dev = int(form.cleaned_data["cantidad_devuelta"])
-            comentario = (form.cleaned_data.get("comentario_cierre") or "").strip() or None
-            just = (form.cleaned_data.get("justificacion_diferencia") or "").strip() or None
+            comentario = (
+                form.cleaned_data.get("comentario_cierre") or ""
+            ).strip() or None
+            just = (
+                form.cleaned_data.get("justificacion_diferencia") or ""
+            ).strip() or None
 
-            with transaction.atomic():
-                a = HerramientaAsignacion.objects.select_for_update().select_related("herramienta").get(pk=a.pk)
-                h = Herramienta.objects.select_for_update().get(pk=a.herramienta_id)
+            try:
+                with transaction.atomic():
+                    a = (
+                        HerramientaAsignacion.objects.select_for_update()
+                        .select_related("herramienta")
+                        .get(pk=a.pk)
+                    )
 
-                before_stock = int(h.cantidad)
+                    _close_asignacion_locked(
+                        a=a,
+                        request_user=request.user,
+                        dev=dev,
+                        comentario=comentario,
+                        just=just,
+                    )
 
-                # set campos cierre
-                a.cantidad_devuelta = dev
-                a.comentario_cierre = comentario
-                a.justificacion_diferencia = just
-                a.closed_at = timezone.now()
-                a.closed_by = request.user
-                a.active = False
-                a.estado = "terminada"
-
-                # validación modelo
-                a.full_clean()
-                a.save()
-
-                # devolver al stock lo devuelto
-                if dev > 0:
-                    h.cantidad = int(h.cantidad) + dev
-                    h.updated_at = timezone.now()
-
-                    if h.status == "asignada" and h.cantidad > 0:
-                        h.status = "bodega"
-
-                    h.save(update_fields=["cantidad", "status", "updated_at"])
-
-                # ✅ log close
-                HerramientaAsignacionLog.objects.create(
-                    asignacion=a,
-                    accion="close",
-                    by_user=request.user,
-                    cambios={
-                        "cantidad_devuelta": dev,
-                        "comentario_cierre": comentario or "",
-                        "justificacion_diferencia": just or "",
-                        "stock": {"from": before_stock, "to": int(h.cantidad)},
-                    },
-                    nota=None,
+                messages.success(
+                    request, "✅ Asignación terminada y stock actualizado."
                 )
 
-            messages.success(request, "✅ Asignación terminada y stock actualizado.")
-            return redirect("logistica:herramientas_asignaciones_panel")
+                if nxt:
+                    return redirect(nxt)
 
-        messages.error(request, "❌ Revisa los campos del cierre.")
+                return redirect("logistica:herramientas_asignaciones_panel")
+
+            except ValidationError as e:
+                messages.error(request, f"❌ {e}")
+
+        else:
+            messages.error(request, "❌ Revisa los campos del cierre.")
     else:
         form = HerramientaAsignacionCerrarForm(asignacion=a)
 
-    return render(request, "logistica/admin_herramientas_asignacion_cerrar.html", {
-        "asignacion": a,
-        "form": form,
-    })
+    return render(
+        request,
+        "logistica/admin_herramientas_asignacion_cerrar.html",
+        {
+            "asignacion": a,
+            "form": form,
+            "next": nxt,
+        },
+    )
+
+
+@staff_member_required
+@rol_requerido("admin", "pm", "supervisor", "logistica")
+@require_POST
+def solicitar_inventario_asignaciones_masivo(request):
+    """
+    Solicita inventario para varias asignaciones activas.
+    No crea inventario; solo habilita inventory_required en cada herramienta.
+    """
+    if not _can_admin_logistica(request.user):
+        return HttpResponseForbidden("No tienes permiso.")
+
+    ids = _parse_ids_from_post(request)
+    if not ids:
+        return JsonResponse(
+            {"ok": False, "error": "Debes seleccionar al menos una asignación."},
+            status=400,
+        )
+
+    total = 0
+    omitidas = 0
+
+    with transaction.atomic():
+        asignaciones = list(
+            HerramientaAsignacion.objects.select_for_update()
+            .select_related("herramienta", "asignado_a")
+            .filter(pk__in=ids, active=True)
+            .order_by("id")
+        )
+
+        for a in asignaciones:
+            h = Herramienta.objects.select_for_update().get(pk=a.herramienta_id)
+
+            was_required = bool(h.inventory_required)
+
+            h.inventory_required = True
+            if not h.next_inventory_due:
+                h.mark_inventory_due_default()
+
+            h.updated_at = timezone.now()
+            h.save(
+                update_fields=["inventory_required", "next_inventory_due", "updated_at"]
+            )
+
+            HerramientaAsignacionLog.objects.create(
+                asignacion=a,
+                accion="inventario_solicitado",
+                by_user=request.user,
+                cambios={
+                    "inventory_required": {"from": was_required, "to": True},
+                    "next_inventory_due": (
+                        h.next_inventory_due.strftime("%Y-%m-%d")
+                        if h.next_inventory_due
+                        else None
+                    ),
+                    "masivo": True,
+                },
+                nota="Solicitud masiva de inventario",
+            )
+
+            total += 1
+
+        omitidas = len(ids) - total
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"📸 Inventario solicitado para {total} asignación(es).",
+            "total": total,
+            "omitidas": omitidas,
+            "reload": True,
+        }
+    )
+
+
+@staff_member_required
+@rol_requerido("admin", "pm", "supervisor", "logistica")
+@require_POST
+def cerrar_asignaciones_masivo(request):
+    """
+    Cierra varias asignaciones activas.
+    Cada asignación recibe su propia cantidad devuelta, comentario y justificación.
+    """
+    if not _can_admin_logistica(request.user):
+        return HttpResponseForbidden("No tienes permiso.")
+
+    ids = _parse_ids_from_post(request)
+    if not ids:
+        return JsonResponse(
+            {"ok": False, "error": "Debes seleccionar al menos una asignación."},
+            status=400,
+        )
+
+    cerradas = 0
+    errores = []
+
+    try:
+        with transaction.atomic():
+            asignaciones = list(
+                HerramientaAsignacion.objects.select_for_update()
+                .select_related("herramienta", "asignado_a")
+                .filter(pk__in=ids, active=True)
+                .order_by("id")
+            )
+
+            asignaciones_by_id = {a.id: a for a in asignaciones}
+
+            for asig_id in ids:
+                a = asignaciones_by_id.get(asig_id)
+                if not a:
+                    errores.append(
+                        f"Asignación #{asig_id}: no está activa o no existe."
+                    )
+                    continue
+
+                dev_raw = (request.POST.get(f"dev_{asig_id}") or "").strip()
+                comentario = (
+                    request.POST.get(f"comentario_{asig_id}") or ""
+                ).strip() or None
+                just = (
+                    request.POST.get(f"justificacion_{asig_id}") or ""
+                ).strip() or None
+
+                try:
+                    dev = int(dev_raw)
+                except Exception:
+                    errores.append(
+                        f"{a.herramienta.nombre}: cantidad devuelta inválida."
+                    )
+                    continue
+
+                ent = int(a.cantidad_entregada or 0)
+
+                if dev < 0:
+                    errores.append(
+                        f"{a.herramienta.nombre}: la cantidad devuelta no puede ser negativa."
+                    )
+                    continue
+
+                if dev > ent:
+                    errores.append(
+                        f"{a.herramienta.nombre}: la cantidad devuelta no puede ser mayor que la entregada."
+                    )
+                    continue
+
+                if dev < ent and not just:
+                    errores.append(
+                        f"{a.herramienta.nombre}: debes justificar la diferencia."
+                    )
+                    continue
+
+                if dev == 0 and not comentario:
+                    errores.append(
+                        f"{a.herramienta.nombre}: si devuelve 0, debes indicar comentario."
+                    )
+                    continue
+
+                _close_asignacion_locked(
+                    a=a,
+                    request_user=request.user,
+                    dev=dev,
+                    comentario=comentario,
+                    just=just,
+                )
+                cerradas += 1
+
+            if errores:
+                raise ValidationError(" | ".join(errores))
+
+    except ValidationError as e:
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": str(e),
+            },
+            status=400,
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"✅ Se terminaron {cerradas} asignación(es).",
+            "total": cerradas,
+            "reload": True,
+        }
+    )
 
 
 @staff_member_required

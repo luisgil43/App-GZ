@@ -105,6 +105,10 @@ class Enforce2FAMiddleware(MiddlewareMixin):
     """
     Si la fecha de obligatoriedad ya pasó y el usuario staff
     NO tiene 2FA activado, lo fuerza a ir a la pantalla de setup 2FA.
+
+    Importante:
+    - Permite cerrar sesión aunque el usuario no tenga 2FA configurado.
+    - Permite acceder a login, verificación 2FA, setup 2FA, static/media.
     """
 
     def process_view(self, request, view_func, view_args, view_kwargs):
@@ -113,6 +117,27 @@ class Enforce2FAMiddleware(MiddlewareMixin):
         if not user or not user.is_authenticated:
             return None
 
+        path = request.path or ""
+
+        static_url = getattr(settings, "STATIC_URL", "/static/")
+        media_url = getattr(settings, "MEDIA_URL", "/media/")
+
+        # Archivos estáticos/media siempre permitidos
+        if path.startswith(static_url) or path.startswith(media_url):
+            return None
+
+        # Rutas por path que deben poder ejecutarse aunque 2FA esté pendiente
+        allowed_path_prefixes = (
+            "/admin/logout/",
+            "/logout/",
+            "/usuarios/logout/",
+            "/dashboard_admin/logout/",
+        )
+
+        if path.startswith(allowed_path_prefixes):
+            return None
+
+        # Solo exigir a staff
         if not user.is_staff:
             return None
 
@@ -124,29 +149,35 @@ class Enforce2FAMiddleware(MiddlewareMixin):
         if today < enforce_date:
             return None
 
+        # Si ya tiene 2FA activo, continúa normal
         if getattr(user, "two_factor_enabled", False):
             return None
 
         try:
-            match = resolve(request.path)
-            full_name = f"{match.namespace}:{match.url_name}" if match.namespace else match.url_name
+            match = resolve(request.path_info)
+            full_name = (
+                f"{match.namespace}:{match.url_name}"
+                if match.namespace
+                else match.url_name
+            )
+            url_name = match.url_name
         except Resolver404:
             full_name = None
+            url_name = None
 
         allowed_names = {
             "usuarios:two_factor_setup",
             "usuarios:two_factor_verify",
             "usuarios:login_unificado",
             "usuarios:logout",
+            "dashboard_admin:logout",
+            "logout",
+            "two_factor_setup",
+            "two_factor_verify",
+            "login_unificado",
         }
 
-        static_url = getattr(settings, "STATIC_URL", "/static/")
-        media_url = getattr(settings, "MEDIA_URL", "/media/")
-
-        if request.path.startswith(static_url) or request.path.startswith(media_url):
-            return None
-
-        if full_name in allowed_names:
+        if full_name in allowed_names or url_name in allowed_names:
             return None
 
         messages.warning(
@@ -218,6 +249,8 @@ class UIModeRedirectMiddleware:
             or path.startswith("/usuarios/login")
             or path.startswith("/usuarios/ui/")
             or path.startswith("/logout")
+            or path.startswith("/usuarios/logout/")
+            or path.startswith("/dashboard_admin/logout/")
         ):
             return self.get_response(request)
 

@@ -108,7 +108,10 @@
 
     <!-- ✅ POST (aceptar masivo) separado del GET -->
     <form method="post" action="{% url 'logistica:aceptar_herramientas' %}" id="massAcceptForm">
-      {% csrf_token %}
+
+  {% csrf_token %}
+
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
 
       <div class="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="text-sm text-gray-600">

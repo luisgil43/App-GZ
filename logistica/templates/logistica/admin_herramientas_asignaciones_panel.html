@@ -39,7 +39,7 @@
     <div class="space-y-3">
       {% for uid in user_ids_sorted %}
         {% with u=users|dictget:uid %}
-        <details class="border rounded-2xl overflow-hidden">
+        <details class="border rounded-2xl overflow-hidden js-user-details" data-user-id="{{ uid }}">
           <summary class="cursor-pointer px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between">
             <div class="font-semibold text-gray-800">
               {{ u.get_full_name|default:u.username }}
@@ -51,15 +51,41 @@
           </summary>
 
           <div class="p-4">
+            <div class="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-gray-50 border rounded-xl px-3 py-2">
+              <div class="text-sm text-gray-700">
+                <span class="font-semibold">Acciones masivas:</span>
+                selecciona una o más herramientas de este trabajador.
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button type="button"
+                        class="px-3 py-1.5 text-xs rounded-full bg-blue-600 text-white hover:bg-blue-700"
+                        onclick="openBulkInventoryConfirmModal('{{ uid }}')">
+                  📸 Solicitar inventario seleccionadas
+                </button>
+
+                <button type="button"
+                        class="px-3 py-1.5 text-xs rounded-full bg-red-600 text-white hover:bg-red-700"
+                        onclick="openBulkCloseModal('{{ uid }}')">
+                  ✅ Terminar seleccionadas
+                </button>
+              </div>
+            </div>
+
             <div class="overflow-x-auto">
               <table class="w-full text-sm min-w-[1200px]">
                 <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
                   <tr>
+                    <th class="p-2 border text-center w-[48px]">
+                      <input type="checkbox"
+                             class="js-check-all"
+                             data-user-id="{{ uid }}">
+                    </th>
                     <th class="p-2 border text-left">Herramienta</th>
                     <th class="p-2 border">Serial</th>
                     <th class="p-2 border">Cantidad</th>
                     <th class="p-2 border">Bodega</th>
-                    <th class="p-2 border">Estado</th>
+                    <th class="p-2 border">Estado asignación</th>
                     <th class="p-2 border">Asignada por</th>
                     <th class="p-2 border">Fecha</th>
                     <th class="p-2 border">Inventario</th>
@@ -70,6 +96,19 @@
                 <tbody>
                   {% for a in grouped|dictget:uid %}
                     <tr class="border-t hover:bg-gray-50 text-center">
+                      <td class="p-2 border text-center">
+                        {% if a.active %}
+                          <input type="checkbox"
+                                 class="js-asig-check"
+                                 data-user-id="{{ uid }}"
+                                 data-asig-id="{{ a.id }}"
+                                 data-tool-name="{{ a.herramienta.nombre|escape }}"
+                                 data-serial="{{ a.herramienta.serial|escape }}"
+                                 data-cantidad="{{ a.cantidad_entregada }}">
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
 
                       <!-- Herramienta -->
                       <td class="p-2 border text-left">
@@ -162,22 +201,56 @@
 
                       <td class="p-2 border">{{ a.herramienta.bodega.nombre|default:"—" }}</td>
 
-                  <td class="p-2 border">
-  <div id="estadoCell-{{ a.id }}">
-    {% if a.active %}
-      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-        Activa • {{ a.get_estado_display }}
-      </span>
-    {% else %}
-      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-        Terminada
-      </span>
-      {% if a.closed_at %}
-        <div class="text-[11px] text-gray-500 mt-1">{{ a.closed_at|date:"d/m/Y H:i" }}</div>
-      {% endif %}
-    {% endif %}
-  </div>
-</td>
+                      <td class="p-2 border">
+                        <div id="estadoCell-{{ a.id }}" class="flex flex-col items-center gap-1">
+
+                          {% if not a.active %}
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800 border border-gray-200">
+                              Terminada
+                            </span>
+
+                            {% if a.closed_at %}
+                              <div class="text-[11px] text-gray-500 mt-1">
+                                {{ a.closed_at|date:"d/m/Y H:i" }}
+                              </div>
+                            {% endif %}
+
+                          {% elif a.estado == "aceptada" %}
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              Aceptada por trabajador
+                            </span>
+
+                            {% if a.aceptado_at %}
+                              <div class="text-[11px] text-emerald-700 mt-1">
+                                {{ a.aceptado_at|date:"d/m/Y H:i" }}
+                              </div>
+                            {% endif %}
+
+                          {% elif a.estado == "rechazada" %}
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                              Rechazada por trabajador
+                            </span>
+
+                            {% if a.rechazado_at %}
+                              <div class="text-[11px] text-red-700 mt-1">
+                                {{ a.rechazado_at|date:"d/m/Y H:i" }}
+                              </div>
+                            {% endif %}
+
+                            {% if a.comentario_rechazo %}
+                              <div class="text-[11px] text-gray-600 mt-1 max-w-[220px] whitespace-normal text-left">
+                                <b>Motivo:</b> {{ a.comentario_rechazo }}
+                              </div>
+                            {% endif %}
+
+                          {% else %}
+                            <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
+                              Pendiente aceptación trabajador
+                            </span>
+                          {% endif %}
+
+                        </div>
+                      </td>
 
                       <td class="p-2 border">
                         {{ a.asignado_por.get_full_name|default:a.asignado_por.username|default:"—" }}
@@ -187,7 +260,6 @@
 
                       <!-- Inventario (por asignación) -->
                       <td class="p-2 border">
-                        {# ✅ IMPORTANTE: envolver en un contenedor con id para re-render AJAX #}
                         <div id="invCell-{{ a.id }}"
                              data-asig-id="{{ a.id }}"
                              data-next="{{ request.get_full_path|urlencode }}"
@@ -195,7 +267,7 @@
 
                           {% if a.last_inv %}
                             {% if a.last_inv.estado == "pendiente" %}
-                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
                                 Pendiente revisión
                               </span>
 
@@ -207,7 +279,6 @@
                                   </a>
                                 {% endif %}
 
-                                {# ✅ AJAX: form con clase js-ajax-inv #}
                                 <form method="post"
                                       class="js-ajax-inv"
                                       data-kind="aprobar"
@@ -219,7 +290,6 @@
                                   </button>
                                 </form>
 
-                                {# Rechazar (normal, abre pantalla) #}
                                 <a href="{% url 'logistica:rechazar_inventario' a.last_inv.id %}?next={{ request.get_full_path|urlencode }}"
                                    class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
                                   ❌ Rechazar
@@ -227,8 +297,8 @@
                               </div>
 
                             {% elif a.last_inv.estado == "rechazado" %}
-                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Rechazado
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+                                Inventario rechazado
                               </span>
 
                               {% if a.last_inv.motivo_rechazo %}
@@ -238,17 +308,22 @@
                               {% endif %}
 
                             {% else %}
-                              <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                OK
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Inventario aprobado
                               </span>
                             {% endif %}
                           {% else %}
-                            <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              —
-                            </span>
+                            {% if a.herramienta.inventory_required %}
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                                Solicitado
+                              </span>
+                            {% else %}
+                              <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                                No solicitado
+                              </span>
+                            {% endif %}
                           {% endif %}
 
-                          {# solicitar inventario #}
                           {% if not a.last_inv or a.last_inv.estado != "pendiente" %}
                             <form method="post"
                                   class="js-ajax-inv"
@@ -278,21 +353,21 @@
                         <div class="flex justify-center gap-2 flex-wrap">
 
                           {% if a.active %}
-                            <a href="{% url 'logistica:herramientas_asignacion_cerrar' a.id %}"
+                            <a href="{% url 'logistica:herramientas_asignacion_cerrar' a.id %}?next={{ request.get_full_path|urlencode }}"
                                class="px-3 py-1 text-xs rounded-full bg-red-600 text-white hover:bg-red-700">
                               ✅ Terminar
                             </a>
 
                             <form method="post"
-      class="js-ajax-reset"
-      data-asig-id="{{ a.id }}"
-      action="{% url 'logistica:herramientas_asignacion_reiniciar' a.id %}">
-  {% csrf_token %}
-  <button type="submit"
-          class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
-    🔄 Reiniciar estado
-  </button>
-</form>
+                                  class="js-ajax-reset"
+                                  data-asig-id="{{ a.id }}"
+                                  action="{% url 'logistica:herramientas_asignacion_reiniciar' a.id %}">
+                              {% csrf_token %}
+                              <button type="submit"
+                                      class="px-3 py-1 text-xs rounded-full bg-white border hover:bg-gray-50">
+                                🔄 Reiniciar estado
+                              </button>
+                            </form>
                           {% else %}
                             <button type="button"
                                     class="px-3 py-1 text-xs rounded-full bg-white border opacity-60 cursor-not-allowed">
@@ -362,6 +437,58 @@
 </div>
 
 <!-- ===================== -->
+<!-- MODAL CONFIRMACIÓN MASIVA INVENTARIO -->
+<!-- ===================== -->
+<div id="bulkInventoryConfirmModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border">
+      <div class="px-5 py-4 border-b flex items-start gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl shrink-0">
+          📸
+        </div>
+
+        <div class="flex-1">
+          <h3 class="text-lg font-bold text-gray-800">
+            Solicitar inventario
+          </h3>
+          <p class="text-sm text-gray-500 mt-1" id="bulkInventoryConfirmText">
+            ¿Deseas solicitar inventario para las asignaciones seleccionadas?
+          </p>
+        </div>
+
+        <button type="button"
+                class="text-gray-400 hover:text-gray-700 text-xl leading-none"
+                onclick="closeBulkInventoryConfirmModal()">
+          ×
+        </button>
+      </div>
+
+      <div class="px-5 py-4">
+        <div class="rounded-xl bg-gray-50 border px-4 py-3 text-sm text-gray-700">
+          Esta acción habilitará la solicitud de inventario para cada herramienta seleccionada.
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t bg-gray-50 flex justify-end gap-2">
+        <button type="button"
+                class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-100"
+                onclick="closeBulkInventoryConfirmModal()">
+          Cancelar
+        </button>
+
+        <button type="button"
+                id="bulkInventoryConfirmBtn"
+                class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+          Sí, solicitar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== -->
 <!-- MODAL HISTORIAL CAMBIOS -->
 <!-- ===================== -->
 <div id="logsModal" class="fixed inset-0 hidden z-50">
@@ -380,6 +507,52 @@
         </button>
       </div>
       <div class="p-5 max-h-[70vh] overflow-y-auto" id="logsBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== -->
+<!-- MODAL TERMINAR MASIVO -->
+<!-- ===================== -->
+<div id="bulkCloseModal" class="fixed inset-0 hidden z-50">
+  <div class="absolute inset-0 bg-black/40"></div>
+
+  <div class="relative min-h-full flex items-center justify-center p-4">
+    <div class="bg-white w-full max-w-4xl rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-5 py-4 border-b flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-lg font-bold text-gray-800">✅ Terminar asignaciones seleccionadas</h3>
+          <p class="text-sm text-gray-500 mt-1">
+            Ingresa la cantidad devuelta por cada herramienta. Si devuelve menos, debes justificar.
+          </p>
+        </div>
+
+        <button type="button"
+                class="px-3 py-1.5 rounded-full text-sm border bg-white hover:bg-gray-50"
+                onclick="closeBulkCloseModal()">
+          ✕ Cerrar
+        </button>
+      </div>
+
+      <form id="bulkCloseForm" method="post" class="p-5 space-y-4"
+            action="{% url 'logistica:herramientas_asignaciones_cerrar_masivo' %}">
+        {% csrf_token %}
+
+        <div id="bulkCloseRows" class="space-y-3 max-h-[65vh] overflow-y-auto"></div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t">
+          <button type="button"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50"
+                  onclick="closeBulkCloseModal()">
+            Cancelar
+          </button>
+
+          <button type="submit"
+                  class="px-4 py-2 rounded-full text-sm bg-red-600 text-white hover:bg-red-700">
+            Terminar seleccionadas
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -564,7 +737,7 @@ function escHtml(s){
 }
 
 function buildInvHtml(data, nextUrlEncoded){
-  const inv = data.inv; // puede ser null
+  const inv = data.inv;
   const prox = data.prox_due || '';
   const nextPart = nextUrlEncoded ? `?next=${encodeURIComponent(decodeURIComponent(nextUrlEncoded))}` : '';
 
@@ -573,7 +746,7 @@ function buildInvHtml(data, nextUrlEncoded){
   if(inv){
     if(inv.estado === 'pendiente'){
       html += `
-        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800 border border-yellow-200">
           Pendiente revisión
         </span>
         <div class="flex flex-wrap justify-center gap-2">
@@ -596,8 +769,8 @@ function buildInvHtml(data, nextUrlEncoded){
       `;
     } else if(inv.estado === 'rechazado'){
       html += `
-        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          Rechazado
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200">
+          Inventario rechazado
         </span>
         ${inv.motivo_rechazo ? `
           <div class="text-[11px] text-gray-600 text-left max-w-[260px] whitespace-normal">
@@ -606,15 +779,15 @@ function buildInvHtml(data, nextUrlEncoded){
       `;
     } else {
       html += `
-        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-          OK
+        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+          Inventario aprobado
         </span>
       `;
     }
   } else {
     html += `
-      <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-        —
+      <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+        Solicitado
       </span>
     `;
   }
@@ -648,15 +821,8 @@ async function ajaxPostForm(form){
   const cell = form.closest('[id^="invCell-"]');
   const nextUrlEncoded = cell?.dataset?.next || '';
 
-  // CSRF por cookie (Django)
   const csrftoken = getCookie('csrftoken');
-
   const fd = new FormData(form);
-
-  // asegura CSRF si no viene por input (igual viene por template, pero por seguridad)
-  if (!fd.has('csrfmiddlewaretoken')) {
-    // no inventamos, solo dejamos cookie header
-  }
 
   const res = await fetch(form.action, {
     method: 'POST',
@@ -686,7 +852,6 @@ async function ajaxPostForm(form){
   showAjaxToast(data.message || 'Listo', true);
 }
 
-// Delegación: intercepta TODOS los forms AJAX inventario
 document.addEventListener('submit', (e) => {
   const form = e.target;
   if(form && form.classList && form.classList.contains('js-ajax-inv')){
@@ -695,6 +860,7 @@ document.addEventListener('submit', (e) => {
   }
 });
 </script>
+
 <script>
 /* =========================
    AJAX Reiniciar estado
@@ -704,9 +870,7 @@ document.addEventListener('submit', (e) => {
   if (form && form.classList && form.classList.contains('js-ajax-reset')) {
     e.preventDefault();
 
-    const asigId = form.dataset.asigId;
-    const csrftoken = getCookie('csrftoken'); // ya la tienes definida arriba
-
+    const csrftoken = getCookie('csrftoken');
     const fd = new FormData(form);
 
     fetch(form.action, {
@@ -724,7 +888,7 @@ document.addEventListener('submit', (e) => {
 
       if (!res.ok || !data || data.ok !== true) {
         const err = (data && (data.error || data.detail)) ? (data.error || data.detail) : 'Error al reiniciar estado.';
-        showAjaxToast(err, false); // tu toast existente
+        showAjaxToast(err, false);
         return;
       }
 
@@ -736,6 +900,347 @@ document.addEventListener('submit', (e) => {
       showAjaxToast(data.message || 'Listo', true);
     })
     .catch(() => showAjaxToast('Error de red.', false));
+  }
+});
+</script>
+
+<script>
+/* =========================
+   Mantener abierto el trabajador después de recargar/navegar
+   ========================= */
+const DETAILS_STORAGE_KEY = 'logisticaHerramientasAsignacionesOpenUsers';
+
+function getOpenUsers(){
+  try {
+    return JSON.parse(localStorage.getItem(DETAILS_STORAGE_KEY) || '[]');
+  } catch(e) {
+    return [];
+  }
+}
+
+function setOpenUsers(ids){
+  localStorage.setItem(DETAILS_STORAGE_KEY, JSON.stringify(ids || []));
+}
+
+function rememberDetailsState(){
+  const openIds = [];
+  document.querySelectorAll('.js-user-details').forEach((d) => {
+    if (d.open && d.dataset.userId) {
+      openIds.push(String(d.dataset.userId));
+    }
+  });
+  setOpenUsers(openIds);
+}
+
+function restoreDetailsState(){
+  const openIds = getOpenUsers().map(String);
+  document.querySelectorAll('.js-user-details').forEach((d) => {
+    if (openIds.includes(String(d.dataset.userId))) {
+      d.open = true;
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  restoreDetailsState();
+
+  document.querySelectorAll('.js-user-details').forEach((d) => {
+    d.addEventListener('toggle', rememberDetailsState);
+  });
+});
+
+window.addEventListener('beforeunload', rememberDetailsState);
+</script>
+
+<script>
+/* =========================
+   Selección masiva por trabajador
+   ========================= */
+
+function getSelectedAssignments(userId){
+  return Array.from(
+    document.querySelectorAll(`.js-asig-check[data-user-id="${userId}"]:checked`)
+  ).map((el) => ({
+    id: el.dataset.asigId,
+    toolName: el.dataset.toolName || '',
+    serial: el.dataset.serial || '',
+    cantidad: parseInt(el.dataset.cantidad || '1', 10) || 1,
+  }));
+}
+
+function toggleUserChecks(userId, checked){
+  document.querySelectorAll(`.js-asig-check[data-user-id="${userId}"]`).forEach((el) => {
+    el.checked = !!checked;
+  });
+}
+
+function syncUserCheckAll(userId){
+  const allChecks = Array.from(
+    document.querySelectorAll(`.js-asig-check[data-user-id="${userId}"]`)
+  );
+
+  const checkAll = document.querySelector(`.js-check-all[data-user-id="${userId}"]`);
+
+  if (!checkAll) return;
+
+  if (!allChecks.length) {
+    checkAll.checked = false;
+    checkAll.indeterminate = false;
+    return;
+  }
+
+  const checkedCount = allChecks.filter((el) => el.checked).length;
+
+  checkAll.checked = checkedCount === allChecks.length;
+  checkAll.indeterminate = checkedCount > 0 && checkedCount < allChecks.length;
+}
+
+document.addEventListener('change', (e) => {
+  const el = e.target;
+
+  if (el && el.classList && el.classList.contains('js-asig-check')) {
+    const userId = el.dataset.userId;
+    syncUserCheckAll(userId);
+  }
+
+  if (el && el.classList && el.classList.contains('js-check-all')) {
+    const userId = el.dataset.userId;
+    toggleUserChecks(userId, el.checked);
+    syncUserCheckAll(userId);
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.js-check-all').forEach((el) => {
+    if (el.dataset.userId) {
+      syncUserCheckAll(el.dataset.userId);
+    }
+  });
+});
+</script>
+
+<script>
+/* =========================
+   Confirmación bonita para inventario masivo
+   ========================= */
+let bulkInventoryUserId = null;
+
+function openBulkInventoryConfirmModal(userId){
+  const selected = getSelectedAssignments(userId);
+
+  if (!selected.length) {
+    showAjaxToast('Debes seleccionar al menos una herramienta.', false);
+    return;
+  }
+
+  bulkInventoryUserId = userId;
+  rememberDetailsState();
+
+  const modal = document.getElementById('bulkInventoryConfirmModal');
+  const text = document.getElementById('bulkInventoryConfirmText');
+
+  if (text) {
+    text.textContent = `¿Deseas solicitar inventario para ${selected.length} asignación(es)?`;
+  }
+
+  modal?.classList.remove('hidden');
+}
+
+function closeBulkInventoryConfirmModal(){
+  document.getElementById('bulkInventoryConfirmModal')?.classList.add('hidden');
+  bulkInventoryUserId = null;
+}
+
+async function executeBulkRequestInventory(){
+  const userId = bulkInventoryUserId;
+  const selected = getSelectedAssignments(userId);
+
+  if (!selected.length) {
+    closeBulkInventoryConfirmModal();
+    showAjaxToast('Debes seleccionar al menos una herramienta.', false);
+    return;
+  }
+
+  rememberDetailsState();
+
+  const btn = document.getElementById('bulkInventoryConfirmBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-60', 'cursor-not-allowed');
+    btn.textContent = 'Solicitando...';
+  }
+
+  const fd = new FormData();
+  selected.forEach((item) => fd.append('asignaciones', item.id));
+
+  const csrftoken = getCookie('csrftoken');
+
+  try {
+    const res = await fetch("{% url 'logistica:solicitar_inventario_asignaciones_masivo' %}", {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken,
+      },
+      body: fd,
+      credentials: 'same-origin',
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
+
+    if (!res.ok || !data || data.ok !== true) {
+      showAjaxToast((data && data.error) ? data.error : 'Error al solicitar inventario.', false);
+      return;
+    }
+
+    closeBulkInventoryConfirmModal();
+    showAjaxToast(data.message || 'Inventario solicitado.', true);
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 700);
+
+  } catch(e) {
+    showAjaxToast('Error de red.', false);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      btn.textContent = 'Sí, solicitar';
+    }
+  }
+}
+
+document.getElementById('bulkInventoryConfirmBtn')?.addEventListener('click', executeBulkRequestInventory);
+
+document.getElementById('bulkInventoryConfirmModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'bulkInventoryConfirmModal') {
+    closeBulkInventoryConfirmModal();
+  }
+});
+</script>
+
+<script>
+/* =========================
+   Terminar masivo
+   ========================= */
+let bulkCloseUserId = null;
+
+function openBulkCloseModal(userId){
+  const selected = getSelectedAssignments(userId);
+
+  if (!selected.length) {
+    showAjaxToast('Debes seleccionar al menos una herramienta.', false);
+    return;
+  }
+
+  bulkCloseUserId = userId;
+  rememberDetailsState();
+
+  const rows = document.getElementById('bulkCloseRows');
+  const modal = document.getElementById('bulkCloseModal');
+
+  if (!rows || !modal) return;
+
+  rows.innerHTML = selected.map((item) => {
+    const safeName = escHtml(item.toolName);
+    const safeSerial = escHtml(item.serial);
+    const id = escHtml(item.id);
+    const cantidad = item.cantidad || 1;
+
+    return `
+      <div class="border rounded-2xl p-4 bg-gray-50">
+        <input type="hidden" name="asignaciones" value="${id}">
+
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+          <div class="min-w-[220px]">
+            <div class="font-semibold text-gray-800">${safeName}</div>
+            <div class="text-xs text-gray-500">Serial: ${safeSerial || '—'}</div>
+            <div class="text-xs text-gray-500">Cantidad entregada: ${cantidad}</div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1">
+            <div>
+              <label class="text-xs font-semibold text-gray-700">Cantidad devuelta</label>
+              <input type="number"
+                     min="0"
+                     max="${cantidad}"
+                     name="dev_${id}"
+                     value="${cantidad}"
+                     class="w-full mt-1 border rounded-xl px-3 py-2 text-sm">
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold text-gray-700">Comentario</label>
+              <textarea name="comentario_${id}"
+                        rows="2"
+                        class="w-full mt-1 border rounded-xl px-3 py-2 text-sm"
+                        placeholder="Comentario de cierre..."></textarea>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold text-gray-700">Justificación si devuelve menos</label>
+              <textarea name="justificacion_${id}"
+                        rows="2"
+                        class="w-full mt-1 border rounded-xl px-3 py-2 text-sm"
+                        placeholder="Faltante / daño / pérdida..."></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  modal.classList.remove('hidden');
+}
+
+function closeBulkCloseModal(){
+  document.getElementById('bulkCloseModal')?.classList.add('hidden');
+  bulkCloseUserId = null;
+}
+
+document.getElementById('bulkCloseModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'bulkCloseModal') closeBulkCloseModal();
+});
+
+document.getElementById('bulkCloseForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const form = e.target;
+  const fd = new FormData(form);
+  const csrftoken = getCookie('csrftoken');
+
+  rememberDetailsState();
+
+  try {
+    const res = await fetch(form.action, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrftoken,
+      },
+      body: fd,
+      credentials: 'same-origin',
+    });
+
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
+
+    if (!res.ok || !data || data.ok !== true) {
+      showAjaxToast((data && data.error) ? data.error : 'Error al terminar asignaciones.', false);
+      return;
+    }
+
+    closeBulkCloseModal();
+    showAjaxToast(data.message || 'Asignaciones terminadas.', true);
+
+    setTimeout(() => {
+      window.location.reload();
+    }, 700);
+
+  } catch(e) {
+    showAjaxToast('Error de red.', false);
   }
 });
 </script>

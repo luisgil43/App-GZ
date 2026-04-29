@@ -19,23 +19,74 @@
   </div>
 
   <div class="border rounded-2xl p-4">
-    <form method="post" enctype="multipart/form-data" class="space-y-4">
+    <form method="post" enctype="multipart/form-data" class="space-y-4" id="inventoryForm">
       {% csrf_token %}
 
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Foto (obligatoria)</label>
-        {{ form.foto }}
+        <label class="block text-sm font-medium text-gray-700 mb-2">
+          Foto de inventario <span class="text-red-600">*</span>
+        </label>
+
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button type="button"
+                  onclick="openCameraInput()"
+                  class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700 shadow">
+            📷 Tomar foto
+          </button>
+
+          <button type="button"
+                  onclick="openGalleryInput()"
+                  class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50 shadow">
+            🖼️ Elegir desde galería
+          </button>
+        </div>
+
+        {# Input cámara: en móvil abre cámara trasera cuando el navegador lo permite #}
+        <input type="file"
+               id="cameraInput"
+               name="foto"
+               accept="image/*"
+               capture="environment"
+               class="hidden">
+
+        {# Input galería: permite elegir una imagen existente #}
+        <input type="file"
+               id="galleryInput"
+               name="foto"
+               accept="image/*"
+               class="hidden">
+
+        <div id="selectedFileBox" class="hidden mt-3 rounded-xl border bg-gray-50 p-3">
+          <div class="text-sm text-gray-700">
+            <span class="font-semibold">Archivo seleccionado:</span>
+            <span id="selectedFileName">—</span>
+          </div>
+
+          <div class="mt-3">
+            <img id="previewImage"
+                 src=""
+                 alt="Vista previa"
+                 class="hidden max-h-[320px] rounded-xl border bg-white object-contain">
+          </div>
+        </div>
+
         {% if form.foto.errors %}
-          <div class="text-sm text-red-600 mt-1">{{ form.foto.errors }}</div>
+          <div class="text-sm text-red-600 mt-2">{{ form.foto.errors }}</div>
         {% endif %}
+
+        <div class="text-xs text-gray-500 mt-2">
+          En teléfono, usa “Tomar foto” para abrir la cámara. En computador, puedes elegir una imagen desde tus archivos.
+        </div>
       </div>
 
-      <div class="flex gap-2">
+      <div class="flex flex-wrap gap-2 pt-2">
         <a href="{% url 'logistica:mis_herramientas' %}"
            class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
           ← Volver
         </a>
+
         <button type="submit"
+                id="submitInventoryBtn"
                 class="px-4 py-2 rounded-full text-sm bg-blue-600 text-white hover:bg-blue-700">
           📤 Enviar inventario
         </button>
@@ -43,4 +94,82 @@
     </form>
   </div>
 </div>
+
+<script>
+(function(){
+  const cameraInput = document.getElementById('cameraInput');
+  const galleryInput = document.getElementById('galleryInput');
+  const selectedFileBox = document.getElementById('selectedFileBox');
+  const selectedFileName = document.getElementById('selectedFileName');
+  const previewImage = document.getElementById('previewImage');
+  const form = document.getElementById('inventoryForm');
+
+  window.openCameraInput = function(){
+    if (galleryInput) galleryInput.value = '';
+    cameraInput?.click();
+  }
+
+  window.openGalleryInput = function(){
+    if (cameraInput) cameraInput.value = '';
+    galleryInput?.click();
+  }
+
+  function handleSelectedFile(input){
+    const file = input?.files && input.files[0] ? input.files[0] : null;
+
+    if (!file) {
+      selectedFileBox?.classList.add('hidden');
+      if (selectedFileName) selectedFileName.textContent = '—';
+      if (previewImage) {
+        previewImage.src = '';
+        previewImage.classList.add('hidden');
+      }
+      return;
+    }
+
+    if (selectedFileBox) selectedFileBox.classList.remove('hidden');
+    if (selectedFileName) selectedFileName.textContent = file.name || 'foto.jpg';
+
+    if (file.type && file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      if (previewImage) {
+        previewImage.src = url;
+        previewImage.classList.remove('hidden');
+      }
+    }
+  }
+
+  cameraInput?.addEventListener('change', function(){
+    if (this.files && this.files.length) {
+      if (galleryInput) galleryInput.value = '';
+    }
+    handleSelectedFile(this);
+  });
+
+  galleryInput?.addEventListener('change', function(){
+    if (this.files && this.files.length) {
+      if (cameraInput) cameraInput.value = '';
+    }
+    handleSelectedFile(this);
+  });
+
+  form?.addEventListener('submit', function(e){
+    const hasCameraFile = cameraInput?.files && cameraInput.files.length > 0;
+    const hasGalleryFile = galleryInput?.files && galleryInput.files.length > 0;
+
+    if (!hasCameraFile && !hasGalleryFile) {
+      e.preventDefault();
+      alert('Debes tomar o seleccionar una foto antes de enviar.');
+      return;
+    }
+
+    const btn = document.getElementById('submitInventoryBtn');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+      btn.textContent = 'Enviando...';
+    }
+  });
+})();
+</script>
 {% endblock %}
