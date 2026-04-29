@@ -24,7 +24,6 @@ from usuarios.models import CustomUser
 _gz_storage = GZWasabiStorage()
 
 
-
 def ruta_ingreso_material(instance, filename):
     now = datetime.now()
     mes = now.strftime('%B')
@@ -783,16 +782,19 @@ class HerramientaInventario(models.Model):
         h.inventory_required = True
         h.save(update_fields=["inventory_required", "updated_at"])
 
+
 class HerramientaAsignacionLog(models.Model):
     """
     Historial/auditoría de cambios en asignaciones de herramientas.
     """
+
     ACCION_CHOICES = [
         ("create", "Creada"),
         ("update", "Editada"),
         ("close", "Cerrada"),
         ("reset", "Reiniciada"),
         ("delete", "Eliminada"),
+        ("inventario_solicitado", "Inventario solicitado"),
     ]
 
     asignacion = models.ForeignKey(
@@ -800,7 +802,12 @@ class HerramientaAsignacionLog(models.Model):
         on_delete=models.CASCADE,
         related_name="logs",
     )
-    accion = models.CharField(max_length=20, choices=ACCION_CHOICES)
+
+    accion = models.CharField(
+        max_length=40,
+        choices=ACCION_CHOICES,
+    )
+
     by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -808,10 +815,9 @@ class HerramientaAsignacionLog(models.Model):
         blank=True,
         related_name="herramientas_asignaciones_logs",
     )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # JSON con resumen de cambios. Ej:
-    # {"cantidad_entregada": {"from": 2, "to": 3}, "asignado_at": {"from": "...", "to": "..."}}
     cambios = models.JSONField(default=dict, blank=True)
 
     nota = models.TextField(blank=True, null=True)

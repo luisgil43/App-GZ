@@ -604,6 +604,7 @@ def inventario_historial_asignacion_admin(request, asignacion_id: int):
         "inventarios": list(inventarios),
     })
 
+
 @staff_member_required
 @rol_requerido("admin", "pm", "supervisor", "logistica")
 def solicitar_inventario_asignacion(request, asignacion_id: int):
@@ -611,32 +612,30 @@ def solicitar_inventario_asignacion(request, asignacion_id: int):
     Solicita inventario para UNA asignación específica.
     - No crea inventario (el usuario lo sube), solo deja el sistema en modo "solicitado".
     - Registra log.
-    - ✅ Soporta AJAX: devuelve JSON para refrescar solo la celda.
+    - Soporta AJAX: devuelve JSON para refrescar solo la celda.
     """
     if not _can_admin_logistica(request.user):
         return HttpResponseForbidden("No tienes permiso.")
+
     if request.method != "POST":
         raise Http404()
 
     with transaction.atomic():
         a = get_object_or_404(
-            HerramientaAsignacion.objects
-            .select_for_update()
-            .select_related("herramienta", "asignado_a"),
+            HerramientaAsignacion.objects.select_for_update().select_related(
+                "herramienta", "asignado_a"
+            ),
             pk=asignacion_id,
         )
 
-        h = (
-            Herramienta.objects
-            .select_for_update()
-            .get(pk=a.herramienta_id)
-        )
+        h = Herramienta.objects.select_for_update().get(pk=a.herramienta_id)
 
         was_required = bool(h.inventory_required)
 
         h.inventory_required = True
         if not h.next_inventory_due:
             h.mark_inventory_due_default()
+
         h.updated_at = timezone.now()
         h.save(update_fields=["inventory_required", "next_inventory_due", "updated_at"])
 
@@ -646,24 +645,32 @@ def solicitar_inventario_asignacion(request, asignacion_id: int):
             by_user=request.user,
             cambios={
                 "inventory_required": {"from": was_required, "to": True},
-                "next_inventory_due": (h.next_inventory_due.strftime("%Y-%m-%d") if h.next_inventory_due else None),
+                "next_inventory_due": (
+                    h.next_inventory_due.strftime("%Y-%m-%d")
+                    if h.next_inventory_due
+                    else None
+                ),
             },
             nota=None,
         )
 
-        # refrescar referencia de herramienta en asignación (para prox_due)
+        # Refrescar referencia de herramienta en asignación para prox_due
         a.herramienta = h
 
-    messages.success(request, "📸 Inventario solicitado para esta asignación.")
-
+    # AJAX: NO guardar mensaje Django en sesión.
+    # Así evitamos que aparezca duplicado al actualizar o navegar.
     if _is_ajax(request):
         payload = _build_inventory_payload_for_asignacion(request, a)
         payload["message"] = "Inventario solicitado."
         return JsonResponse(payload)
 
+    # Flujo normal sin AJAX
+    messages.success(request, "📸 Inventario solicitado para esta asignación.")
+
     nxt = (request.GET.get("next") or "").strip()
     if nxt:
         return redirect(nxt)
+
     return redirect("logistica:herramientas_asignaciones_panel")
 
 
