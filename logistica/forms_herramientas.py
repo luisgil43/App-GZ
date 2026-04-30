@@ -91,27 +91,49 @@ class HerramientaForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # ✅ CLAVE: que serial NO sea requerido por el field
+        # ✅ Serial no requerido por el field.
         self.fields["serial"].required = False
+
+        # ✅ Detecta si es creación o edición.
+        self.is_create = not bool(self.instance and self.instance.pk)
+
+        # ✅ En creación, cantidad debe partir mínimo en 1.
+        # ✅ En edición, permite 0.
+        self.fields["cantidad"].widget.attrs["min"] = "1" if self.is_create else "0"
 
     def clean_valor_comercial(self):
         v = self.cleaned_data.get("valor_comercial")
         if v is None:
             return v
+
         if v < 0:
             raise ValidationError("El valor comercial no puede ser negativo.")
+
         return v
 
     def clean_cantidad(self):
         c = self.cleaned_data.get("cantidad")
+
         if c is None:
-            return c
+            # En creación no puede quedar vacía.
+            if self.is_create:
+                raise ValidationError("La cantidad es obligatoria.")
+            return 0
+
         try:
             c = int(c)
         except Exception:
             raise ValidationError("Cantidad inválida.")
-        if c <= 0:
+
+        # ✅ Nunca permitir negativos.
+        if c < 0:
+            raise ValidationError("La cantidad no puede ser negativa.")
+
+        # ✅ Solo al crear debe ser mayor a 0.
+        if self.is_create and c <= 0:
             raise ValidationError("La cantidad debe ser mayor a 0.")
+
+        # ✅ Al editar se permite 0.
         return c
 
     def _gen_serial_unico(self) -> str:
@@ -119,31 +141,43 @@ class HerramientaForm(forms.ModelForm):
             gen = f"AUTO-{uuid4().hex[:10].upper()}"
             if not Herramienta.objects.filter(serial=gen).exists():
                 return gen
-        raise ValidationError("No se pudo generar un serial automático. Intenta de nuevo.")
+
+        raise ValidationError(
+            "No se pudo generar un serial automático. Intenta de nuevo."
+        )
 
     def clean(self):
         cleaned = super().clean()
 
-        # ✅ acá YA están todos los campos, incluido sin_serial
         sin_serial = bool(cleaned.get("sin_serial"))
         serial = (cleaned.get("serial") or "").strip()
 
         if sin_serial:
-            # Si es edición y ya existe serial, lo respetamos
-            if self.instance and self.instance.pk and (self.instance.serial or "").strip():
+            # Si es edición y ya existe serial, lo respetamos.
+            if (
+                self.instance
+                and self.instance.pk
+                and (self.instance.serial or "").strip()
+            ):
                 cleaned["serial"] = self.instance.serial
             else:
                 cleaned["serial"] = self._gen_serial_unico()
         else:
             if not serial:
-                self.add_error("serial", "Completa este campo o marca 'Sin serial (no aplica)'.")
+                self.add_error(
+                    "serial", "Completa este campo o marca 'Sin serial (no aplica)'."
+                )
             else:
                 cleaned["serial"] = serial
 
         status = (cleaned.get("status") or "").strip()
         just = (cleaned.get("status_justificacion") or "").strip()
+
         if status in ("danada", "extraviada", "robada") and not just:
-            self.add_error("status_justificacion", "Debes indicar una justificación para este estado.")
+            self.add_error(
+                "status_justificacion",
+                "Debes indicar una justificación para este estado.",
+            )
 
         return cleaned
 
