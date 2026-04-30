@@ -5,10 +5,19 @@
 <html lang="es">
 
 <head>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('admin-sidebar-collapsed') === '1') {
+            document.documentElement.classList.add('admin-sidebar-collapsed-init');
+          }
+        } catch (e) {}
+      })();
+    </script>
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
- <meta name="csrf-token" content="{{ csrf_token }}">
-
+    <meta name="csrf-token" content="{{ csrf_token }}">
 
 <!-- iOS / Apple Touch Icons -->
 <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
@@ -24,7 +33,6 @@
 <link rel="manifest" href="{% static 'icons/site.webmanifest' %}">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Miltel">
-
 
     <script src="https://cdn.tailwindcss.com"></script>
 <style>
@@ -45,6 +53,20 @@
     --sidebar-hover: rgba(255,255,255,0.10);
     --sidebar-hover-strong: rgba(255,255,255,0.16);
     --sidebar-border: rgba(255,255,255,0.10);
+  }
+
+  /*
+    Evita el parpadeo del sidebar al recargar:
+    si el usuario lo dejó cerrado, lo ocultamos desde el primer pintado.
+  */
+  @media (min-width: 768px) {
+    html.admin-sidebar-collapsed-init #side-nav {
+      transform: translateX(-100%) !important;
+    }
+
+    html.admin-sidebar-collapsed-init .content-wrapper #main-content {
+      margin-left: 0 !important;
+    }
   }
 
   @media (min-width: 768px) {
@@ -559,7 +581,6 @@
 
     const isDesktop = window.matchMedia('(min-width: 768px)').matches;
     const raw = localStorage.getItem(ADMIN_SIDEBAR_KEY);
-    // Si no hay nada guardado -> false (abierto)
     const savedCollapsed = raw === '1';
 
     if (isDesktop) {
@@ -576,6 +597,8 @@
       wrapper.classList.remove('no-sidebar');
       wrapper.classList.add('with-sidebar');
     }
+
+    document.documentElement.classList.remove('admin-sidebar-collapsed-init');
   }
 
   function toggleSidebar() {
@@ -719,4 +742,3 @@ function toggleNotifications() {
 </script>
 </body>
 </html>
-

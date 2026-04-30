@@ -48,11 +48,11 @@
     <div class="flex gap-2 flex-wrap">
       <!-- ✅ Asignación masiva -->
       <button type="button"
-              id="bulkAssignBtn"
-              disabled
-              class="px-4 py-2 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow disabled:opacity-50 disabled:cursor-not-allowed">
-        📦 Asignación masiva
-      </button>
+        id="bulkAssignBtn"
+        disabled
+        class="px-4 py-2 rounded-full text-sm bg-indigo-600 text-white hover:bg-indigo-700 shadow disabled:opacity-50 disabled:cursor-not-allowed">
+  📦 Asignación masiva (<span id="bulkAssignCount">0</span>)
+</button>
 
       <a href="{% url 'logistica:bodegas_manage' %}"
          class="px-4 py-2 rounded-full text-sm border bg-white hover:bg-gray-50">
@@ -96,10 +96,15 @@
       </div>
 
       <div class="w-full sm:w-auto flex items-center gap-2 mt-2 sm:mt-0">
-        <a href="{% url 'logistica:herramientas_list' %}"
-           class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow whitespace-nowrap">
-          ❌ Limpiar
-        </a>
+    <a href="{% url 'logistica:herramientas_list' %}"
+
+   onclick="return limpiarFiltrosYSeleccionHerramientas(event, this.href);"
+
+   class="bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium px-4 py-2 rounded-full shadow whitespace-nowrap">
+
+  ❌ Limpiar
+
+</a>
       </div>
 
       <!-- mantener cantidad actual -->
@@ -177,8 +182,9 @@
               <!-- ✅ Checkbox fila -->
               <td class="p-2 border">
                 <input type="checkbox"
-                       class="rowChk h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-200"
-                       value="{{ h.id }}">
+       class="rowChk h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-200"
+       value="{{ h.id }}"
+       data-tool-id="{{ h.id }}">
               </td>
 
               <!-- Herramienta -->
@@ -336,45 +342,190 @@
   {% endif %}
 </div>
 
-<!-- ✅ Asignación masiva: selección + botón -->
+<!-- ✅ Asignación masiva: selección persistente + botón -->
 <script>
 (function(){
+  const STORAGE_KEY = 'logisticaHerramientasSeleccionadasAsignacionMasiva';
   const btn = document.getElementById('bulkAssignBtn');
+  const countEl = document.getElementById('bulkAssignCount');
   const chkAll = document.getElementById('chkAll');
 
-  function getChecks(){ return Array.from(document.querySelectorAll('.rowChk')); }
-  function selectedIds(){ return getChecks().filter(c => c.checked).map(c => c.value); }
+  // ✅ bandera para evitar que beforeunload vuelva a guardar checks al limpiar
+  window.__CLEARING_TOOL_MASS_SELECTION__ = false;
+
+  function readSelectedIds(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY) || '[]';
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.map(String).filter(Boolean) : [];
+    } catch(e) {
+      return [];
+    }
+  }
+
+  function writeSelectedIds(ids){
+    try {
+      const unique = Array.from(new Set((ids || []).map(String).filter(Boolean)));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(unique));
+    } catch(e) {}
+  }
+
+  function clearSelectedIds(){
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch(e) {}
+
+    getChecks().forEach(chk => {
+      chk.checked = false;
+    });
+
+    if (chkAll) {
+      chkAll.checked = false;
+      chkAll.indeterminate = false;
+    }
+
+    refreshBtn();
+  }
+
+  function getChecks(){
+    return Array.from(document.querySelectorAll('.rowChk[data-tool-id]'));
+  }
+
+  function getToolIdFromCheck(chk){
+    return String(chk?.dataset?.toolId || chk?.value || '').trim();
+  }
+
+  function saveCheck(chk){
+    const toolId = getToolIdFromCheck(chk);
+    if (!toolId) return;
+
+    let ids = readSelectedIds();
+
+    if (chk.checked) {
+      if (!ids.includes(toolId)) {
+        ids.push(toolId);
+      }
+    } else {
+      ids = ids.filter(id => id !== toolId);
+    }
+
+    writeSelectedIds(ids);
+  }
+
+  function saveVisibleChecks(){
+    // ✅ si se está limpiando, NO volver a guardar
+    if (window.__CLEARING_TOOL_MASS_SELECTION__) return;
+
+    getChecks().forEach(saveCheck);
+  }
+
+  function restoreVisibleChecks(){
+    const ids = readSelectedIds();
+
+    getChecks().forEach(chk => {
+      const toolId = getToolIdFromCheck(chk);
+      chk.checked = ids.includes(toolId);
+    });
+
+    syncChkAll();
+    refreshBtn();
+  }
+
+  function selectedIds(){
+    return readSelectedIds();
+  }
 
   function refreshBtn(){
+    if (!btn) return;
+
     const ids = selectedIds();
-    btn.disabled = (ids.length === 0);
-    btn.textContent = ids.length ? `📦 Asignación masiva (${ids.length})` : '📦 Asignación masiva';
+    const total = ids.length;
+
+    btn.disabled = total === 0;
+
+    if (countEl) {
+      countEl.textContent = total;
+    } else {
+      btn.textContent = total ? `📦 Asignación masiva (${total})` : '📦 Asignación masiva (0)';
+    }
+  }
+
+  function syncChkAll(){
+    if (!chkAll) return;
+
+    const checks = getChecks();
+
+    if (!checks.length) {
+      chkAll.checked = false;
+      chkAll.indeterminate = false;
+      return;
+    }
+
+    const checkedCount = checks.filter(c => c.checked).length;
+
+    chkAll.checked = checkedCount === checks.length;
+    chkAll.indeterminate = checkedCount > 0 && checkedCount < checks.length;
   }
 
   chkAll?.addEventListener('change', () => {
-    const v = chkAll.checked;
-    getChecks().forEach(c => c.checked = v);
+    const checked = chkAll.checked;
+
+    getChecks().forEach(chk => {
+      chk.checked = checked;
+      saveCheck(chk);
+    });
+
+    syncChkAll();
     refreshBtn();
   });
 
   document.addEventListener('change', (e) => {
-    if (e.target && e.target.classList && e.target.classList.contains('rowChk')) {
-      const all = getChecks();
-      const allChecked = all.length && all.every(c => c.checked);
-      if (chkAll) chkAll.checked = allChecked;
+    const el = e.target;
+
+    if (el && el.classList && el.classList.contains('rowChk')) {
+      saveCheck(el);
+      syncChkAll();
       refreshBtn();
     }
   });
 
   btn?.addEventListener('click', () => {
     const ids = selectedIds();
+
     if (!ids.length) return;
 
     const url = "{% url 'logistica:herramientas_asignacion_masiva' %}" + "?ids=" + encodeURIComponent(ids.join(','));
     window.location.href = url;
   });
 
-  refreshBtn();
+  document.addEventListener('DOMContentLoaded', restoreVisibleChecks);
+
+  window.addEventListener('pageshow', restoreVisibleChecks);
+
+  window.addEventListener('beforeunload', () => {
+    if (window.__CLEARING_TOOL_MASS_SELECTION__) return;
+    saveVisibleChecks();
+  });
+
+  window.saveToolMassSelectionBeforeFilter = saveVisibleChecks;
+
+  // ✅ función usada por el botón Limpiar
+  window.limpiarFiltrosYSeleccionHerramientas = function(event, url){
+    if (event) {
+      event.preventDefault();
+    }
+
+    window.__CLEARING_TOOL_MASS_SELECTION__ = true;
+
+    clearSelectedIds();
+
+    try {
+      sessionStorage.removeItem('tools_filtros_focus');
+    } catch(e) {}
+
+    window.location.href = url;
+    return false;
+  };
 })();
 </script>
 
@@ -422,11 +573,22 @@
 
   let t;
   function submitDebounced(el) {
-    rememberCaret(el);
-    ensureCantidadHidden();
-    clearTimeout(t);
-    t = setTimeout(() => form.requestSubmit(), 450);
+
+  rememberCaret(el);
+
+  ensureCantidadHidden();
+
+  if (typeof window.saveToolMassSelectionBeforeFilter === 'function') {
+
+    window.saveToolMassSelectionBeforeFilter();
+
   }
+
+  clearTimeout(t);
+
+  t = setTimeout(() => form.requestSubmit(), 450);
+
+}
 
   inputs.forEach(el => {
     el.addEventListener('input',  () => submitDebounced(el));
@@ -437,10 +599,20 @@
   });
 
   selects.forEach(el => el.addEventListener('change', () => {
-    rememberCaret(el);
-    ensureCantidadHidden();
-    form.requestSubmit();
-  }));
+
+  rememberCaret(el);
+
+  ensureCantidadHidden();
+
+  if (typeof window.saveToolMassSelectionBeforeFilter === 'function') {
+
+    window.saveToolMassSelectionBeforeFilter();
+
+  }
+
+  form.requestSubmit();
+
+}));
 
   window.addEventListener('DOMContentLoaded', restoreCaret);
 })();

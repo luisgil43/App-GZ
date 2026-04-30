@@ -4,11 +4,19 @@
 <html lang="es">
 
 <head>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('user-sidebar-collapsed') === '1') {
+          document.documentElement.classList.add('user-sidebar-collapsed-init');
+        }
+      } catch (e) {}
+    })();
+  </script>
+
   <meta charset="UTF-8">
   <title>{% block title %}Dashboard{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-
 
 <!-- iOS / Apple Touch Icons -->
 <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
@@ -51,6 +59,20 @@
     --sidebar-hover: rgba(255,255,255,0.10);
     --sidebar-hover-strong: rgba(255,255,255,0.16);
     --sidebar-border: rgba(255,255,255,0.10);
+  }
+
+  /*
+    Evita el parpadeo del sidebar al recargar:
+    si el usuario lo dejó cerrado, se oculta desde el primer pintado.
+  */
+  @media (min-width: 768px) {
+    html.user-sidebar-collapsed-init #side-nav {
+      transform: translateX(-100%) !important;
+    }
+
+    html.user-sidebar-collapsed-init .content-wrapper #main-content {
+      margin-left: 0 !important;
+    }
   }
 
   /* === COLAPSAR MENÚ EN PC (>=768px) === */
@@ -411,40 +433,74 @@
 
   <!-- Submenús y mensajes -->
   <script>
+    const USER_SIDEBAR_KEY = 'user-sidebar-collapsed';
+
+    function applySidebarState() {
+      const nav = document.getElementById('side-nav');
+      const wrapper = document.querySelector('.content-wrapper');
+      if (!nav || !wrapper) return;
+
+      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      const savedCollapsed = localStorage.getItem(USER_SIDEBAR_KEY) === '1';
+
+      if (isDesktop) {
+        nav.classList.toggle('collapsed', savedCollapsed);
+        wrapper.classList.toggle('no-sidebar', savedCollapsed);
+        wrapper.classList.toggle('with-sidebar', !savedCollapsed);
+
+        nav.classList.remove('-translate-x-full');
+      } else {
+        nav.classList.add('-translate-x-full');
+        nav.classList.remove('collapsed');
+
+        wrapper.classList.remove('no-sidebar');
+        wrapper.classList.add('with-sidebar');
+      }
+
+      document.documentElement.classList.remove('user-sidebar-collapsed-init');
+    }
+
     function toggleMenu(el) {
       const submenu = el.nextElementSibling;
       const flecha = el.querySelector(".arrow");
+
       if (submenu) {
         const isHidden = submenu.style.display === "none" || submenu.classList.contains("hidden");
+
         if (isHidden) {
           submenu.classList.remove("hidden");
           submenu.style.display = "block";
-          flecha.classList.add("rotate-90");
+          if (flecha) flecha.classList.add("rotate-90");
         } else {
           submenu.classList.add("hidden");
           submenu.style.display = "none";
-          flecha.classList.remove("rotate-90");
+          if (flecha) flecha.classList.remove("rotate-90");
         }
       }
     }
 
     function toggleSidebar() {
-  const nav = document.getElementById('side-nav');
-  const wrapper = document.querySelector('.content-wrapper');
-  if (!nav || !wrapper) return;
+      const nav = document.getElementById('side-nav');
+      const wrapper = document.querySelector('.content-wrapper');
+      if (!nav || !wrapper) return;
 
-  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
 
-  if (isDesktop) {
-    // En desktop: colapsar/expandir menú y ajustar ancho del contenido
-    const collapsed = nav.classList.toggle('collapsed');
-    wrapper.classList.toggle('no-sidebar', collapsed);
-    wrapper.classList.toggle('with-sidebar', !collapsed);
-  } else {
-    // En móvil: off-canvas clásico
-    nav.classList.toggle('-translate-x-full');
-  }
-}
+      if (isDesktop) {
+        const willCollapse = !nav.classList.contains('collapsed');
+
+        nav.classList.toggle('collapsed', willCollapse);
+        wrapper.classList.toggle('no-sidebar', willCollapse);
+        wrapper.classList.toggle('with-sidebar', !willCollapse);
+
+        localStorage.setItem(USER_SIDEBAR_KEY, willCollapse ? '1' : '0');
+      } else {
+        nav.classList.toggle('-translate-x-full');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', applySidebarState);
+    window.addEventListener('resize', applySidebarState);
   </script>
 
   {% if messages %}
