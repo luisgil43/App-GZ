@@ -1,0 +1,270 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block dashboard_content %}
+<div class="min-h-[calc(100vh-90px)] bg-slate-50 -mx-3 sm:mx-0 px-3 py-5 sm:px-6 sm:py-6">
+
+  <!-- Header -->
+  <div class="max-w-7xl mx-auto mb-5">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full bg-blue-50 border border-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 mb-3">
+          <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+          RR.HH · Configuración documental
+        </div>
+
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          Tipos de documentos laborales
+        </h1>
+
+        <p class="text-sm sm:text-base text-slate-500 mt-1 max-w-3xl">
+          Crea tipos como contrato, anexo, finiquito, acuerdo o condiciones de arriendo. Cada tipo define cómo se comporta dentro del módulo laboral.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <a href="{% url 'rrhh:crear_contrato' %}"
+           class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm text-sm font-bold">
+          ➕ Crear documento
+        </a>
+
+        <a href="{% url 'rrhh:contratos_trabajo' %}"
+           class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm text-sm font-semibold">
+          ← Volver al listado
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-7xl mx-auto grid grid-cols-1 xl:grid-cols-12 gap-5">
+
+    <!-- Formulario -->
+    <section class="xl:col-span-5">
+      <form method="post" class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        {% csrf_token %}
+
+        <div class="p-5 sm:p-6 border-b border-slate-100">
+          <h2 class="text-lg font-bold text-slate-900">
+            {% if editando %}
+              Editar tipo de documento
+            {% else %}
+              Crear nuevo tipo
+            {% endif %}
+          </h2>
+          <p class="text-sm text-slate-500 mt-1">
+            Configura el comportamiento del documento laboral.
+          </p>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="mx-5 mt-5 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <div class="p-5 sm:p-6 space-y-5">
+
+          <!-- Nombre -->
+          <div>
+            <label for="id_nombre" class="block text-sm font-bold text-slate-700 mb-2">
+              Nombre del tipo
+            </label>
+            {{ form.nombre }}
+            {% if form.nombre.errors %}
+              <p class="mt-1 text-sm text-red-600">{{ form.nombre.errors.0 }}</p>
+            {% endif %}
+            <p class="mt-2 text-xs text-slate-500">
+              Ejemplo: Anexo de contrato, Finiquito, Acuerdo, Condiciones de arriendo.
+            </p>
+          </div>
+
+          <!-- Opciones -->
+          <div class="space-y-3">
+
+            <label class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100">
+              {{ form.afecta_vigencia }}
+              <div>
+                <p class="text-sm font-bold text-slate-800">Afecta vigencia laboral</p>
+                <p class="text-xs text-slate-500">
+                  Úsalo para contratos o anexos que reemplazan o controlan una vigencia.
+                </p>
+                {% if form.afecta_vigencia.errors %}
+                  <p class="mt-1 text-sm text-red-600">{{ form.afecta_vigencia.errors.0 }}</p>
+                {% endif %}
+              </div>
+            </label>
+
+            <label class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100">
+              {{ form.cierra_relacion_laboral }}
+              <div>
+                <p class="text-sm font-bold text-slate-800">Cierra relación laboral</p>
+                <p class="text-xs text-slate-500">
+                  Úsalo para finiquitos. Al crear uno, se podrán apagar alertas anteriores.
+                </p>
+                {% if form.cierra_relacion_laboral.errors %}
+                  <p class="mt-1 text-sm text-red-600">{{ form.cierra_relacion_laboral.errors.0 }}</p>
+                {% endif %}
+              </div>
+            </label>
+
+            <label class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100">
+              {{ form.genera_alerta_vencimiento }}
+              <div>
+                <p class="text-sm font-bold text-slate-800">Genera alerta de vencimiento</p>
+                <p class="text-xs text-slate-500">
+                  Úsalo para contratos o anexos con fecha de término.
+                </p>
+                {% if form.genera_alerta_vencimiento.errors %}
+                  <p class="mt-1 text-sm text-red-600">{{ form.genera_alerta_vencimiento.errors.0 }}</p>
+                {% endif %}
+              </div>
+            </label>
+
+            <label class="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100">
+              {{ form.activo }}
+              <div>
+                <p class="text-sm font-bold text-slate-800">Tipo activo</p>
+                <p class="text-xs text-slate-500">
+                  Si está desactivado, no aparecerá al crear nuevos documentos.
+                </p>
+                {% if form.activo.errors %}
+                  <p class="mt-1 text-sm text-red-600">{{ form.activo.errors.0 }}</p>
+                {% endif %}
+              </div>
+            </label>
+
+          </div>
+        </div>
+
+        <div class="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {% if editando %}
+            <a href="{% url 'rrhh:crear_tipo_documento_laboral' %}"
+               class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-sm font-semibold">
+              Cancelar edición
+            </a>
+          {% else %}
+            <span class="text-xs text-slate-500">
+              Estos tipos se usarán en documentos laborales.
+            </span>
+          {% endif %}
+
+          <button type="submit"
+                  class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-sm text-sm font-bold">
+            💾 Guardar tipo
+          </button>
+        </div>
+
+      </form>
+    </section>
+
+    <!-- Listado -->
+    <section class="xl:col-span-7">
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900">
+              Tipos creados
+            </h2>
+            <p class="text-sm text-slate-500">
+              Configuración actual disponible para documentos laborales.
+            </p>
+          </div>
+
+          <span class="inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-semibold">
+            {{ tipos|length }} tipo(s)
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
+              <tr>
+                <th class="px-4 py-3 text-left">Nombre</th>
+                <th class="px-4 py-3 text-left">Vigencia</th>
+                <th class="px-4 py-3 text-left">Cierra relación</th>
+                <th class="px-4 py-3 text-left">Alertas</th>
+                <th class="px-4 py-3 text-left">Estado</th>
+                <th class="px-4 py-3 text-right">Acción</th>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-100">
+              {% for tipo in tipos %}
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3">
+                    <div class="font-bold text-slate-800">{{ tipo.nombre }}</div>
+                    <div class="text-xs text-slate-400">
+                      Creado: {{ tipo.creado_en|date:"Y-m-d H:i" }}
+                    </div>
+                  </td>
+
+                  <td class="px-4 py-3">
+                    {% if tipo.afecta_vigencia %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
+                        Sí
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        No
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <td class="px-4 py-3">
+                    {% if tipo.cierra_relacion_laboral %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold">
+                        Sí
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        No
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <td class="px-4 py-3">
+                    {% if tipo.genera_alerta_vencimiento %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold">
+                        Sí
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        No
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <td class="px-4 py-3">
+                    {% if tipo.activo %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold">
+                        Activo
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        Inactivo
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <td class="px-4 py-3 text-right">
+                    <a href="?editar={{ tipo.id }}"
+                       class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-blue-600 hover:bg-blue-50 text-xs font-bold">
+                      ✏️ Editar
+                    </a>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="6" class="px-4 py-8 text-center text-slate-500">
+                    No hay tipos de documentos laborales creados.
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+{% endblock %}

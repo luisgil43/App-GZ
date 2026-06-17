@@ -1,82 +1,292 @@
 {% extends "dashboard_admin/base.html" %}
 
 {% block dashboard_content %}
-<div class="p-6 max-w-2xl mx-auto">
-  <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-    ➕ Crear Contrato de Trabajo
-  </h2>
+<div class="min-h-[calc(100vh-90px)] bg-slate-50 -mx-3 sm:mx-0 px-3 py-5 sm:px-6 sm:py-6">
 
-  <form method="POST" enctype="multipart/form-data" class="space-y-6 bg-white p-6 rounded-xl shadow">
-    {% csrf_token %}
-    {{ form.non_field_errors }}
+  <!-- Header -->
+  <div class="max-w-6xl mx-auto mb-5">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <div>
+        <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 mb-3">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          RR.HH · Documentos laborales
+        </div>
 
-    <!-- Técnico -->
-    <div>
-      <label for="id_tecnico" class="block font-medium text-gray-700 mb-1">Técnico</label>
-      {{ form.tecnico }}
-      {% if form.tecnico.errors %}
-        <p class="mt-1 text-sm text-red-600">{{ form.tecnico.errors.0 }}</p>
-      {% endif %}
-    </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+          Crear documento laboral
+        </h1>
 
-    <!-- Fecha inicio -->
-    <div>
-      <label for="id_fecha_inicio" class="block font-medium text-gray-700 mb-1">Fecha de Inicio</label>
-      {{ form.fecha_inicio }}
-      {% if form.fecha_inicio.errors %}
-        <p class="mt-1 text-sm text-red-600">{{ form.fecha_inicio.errors.0 }}</p>
-      {% endif %}
-    </div>
-
-    <!-- Fecha término + indefinido -->
-    <div>
-      <label for="id_fecha_termino" class="block font-medium text-gray-700 mb-1">Fecha de Término</label>
-      <div class="flex items-center gap-4">
-        {{ form.fecha_termino }}
-        {% if form.fecha_termino.errors %}
-          <p class="mt-1 text-sm text-red-600">{{ form.fecha_termino.errors.0 }}</p>
-        {% endif %}
-
-        <label class="inline-flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="indefinido"
-            name="indefinido-check"
-            class="form-checkbox rounded text-emerald-600"
-          >
-          <span class="text-sm text-gray-600">Indefinido</span>
-        </label>
+        <p class="text-sm sm:text-base text-slate-500 mt-1 max-w-2xl">
+          Carga contratos, anexos, finiquitos, acuerdos u otros documentos laborales manteniendo la ruta histórica de contratos del trabajador.
+        </p>
       </div>
-    </div>
 
-    <!-- Archivo PDF -->
-    <div>
-      <label for="id_archivo" class="block font-medium text-gray-700 mb-1">
-        Archivo PDF del Contrato
-      </label>
-      {{ form.archivo }}
-      {% if form.archivo.errors %}
-        <p class="mt-1 text-sm text-red-600">{{ form.archivo.errors.0 }}</p>
-      {% endif %}
-    </div>
-
-    <!-- Checkbox reemplazar_archivo no es necesario en crear, pero si lo quieres: -->
-    {# {{ form.reemplazar_archivo }} se puede ocultar o no usar en crear #}
-
-    <!-- Botones -->
-    <div class="flex flex-col sm:flex-row gap-4">
-      <button
-        type="submit"
-        class="bg-emerald-600 text-white px-4 py-2 rounded hover:bg-emerald-700 w-full sm:w-auto">
-        💾 Guardar Contrato
-      </button>
-      <a
-        href="{% url 'rrhh:contratos_trabajo' %}"
-        class="bg-gray-300 text-gray-800 px-4 py-2 rounded hover:bg-gray-400 text-center w-full sm:w-auto">
-        🔙 Volver
+      <a href="{% url 'rrhh:contratos_trabajo' %}"
+         class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm text-sm font-semibold">
+        ← Volver al listado
       </a>
     </div>
-  </form>
+  </div>
+
+  <div class="max-w-6xl mx-auto grid grid-cols-1 xl:grid-cols-12 gap-5">
+
+    <!-- Columna izquierda: información -->
+    <aside class="xl:col-span-4">
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="p-5 border-b border-slate-100 bg-gradient-to-br from-slate-900 to-slate-700">
+          <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-2xl mb-4">
+            📄
+          </div>
+          <h2 class="text-white font-bold text-lg">
+            Nuevo documento
+          </h2>
+          <p class="text-slate-300 text-sm mt-1">
+            Este archivo quedará asociado al trabajador seleccionado.
+          </p>
+        </div>
+
+        <div class="p-5 space-y-4 text-sm">
+          <div class="flex gap-3">
+            <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-700 font-bold">
+              1
+            </div>
+            <div>
+              <p class="font-semibold text-slate-800">Selecciona el trabajador</p>
+              <p class="text-slate-500">El documento se guardará en su carpeta actual de contratos.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <div class="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-700 font-bold">
+              2
+            </div>
+            <div>
+              <p class="font-semibold text-slate-800">Define el tipo</p>
+              <p class="text-slate-500">Por defecto existe “Contrato de trabajo”. Luego podrás crear anexos, finiquitos y otros tipos.</p>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center text-amber-700 font-bold">
+              3
+            </div>
+            <div>
+              <p class="font-semibold text-slate-800">Carga el PDF</p>
+              <p class="text-slate-500">Solo se aceptan archivos PDF. No se cambia la ruta histórica.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mx-5 mb-5 rounded-2xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+            Ruta de guardado
+          </p>
+          <p class="text-sm text-slate-700 leading-relaxed">
+            Los archivos seguirán usando:
+          </p>
+          <code class="mt-2 block text-xs bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-600 break-all">
+            media/Contratos_trabajo/RUT/
+          </code>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Columna derecha: formulario -->
+    <section class="xl:col-span-8">
+      <form method="POST"
+            enctype="multipart/form-data"
+            class="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+          <div class="m-5 rounded-2xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+            {{ form.non_field_errors }}
+          </div>
+        {% endif %}
+
+        <!-- Bloque: Datos principales -->
+        <div class="p-5 sm:p-6 border-b border-slate-100">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900">
+                Datos principales
+              </h3>
+              <p class="text-sm text-slate-500">
+                Información base del documento laboral.
+              </p>
+            </div>
+            <span class="hidden sm:inline-flex items-center rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-semibold">
+              Obligatorio
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+            <!-- Trabajador -->
+            <div class="lg:col-span-2">
+              <label for="id_tecnico" class="block text-sm font-bold text-slate-700 mb-2">
+                Trabajador
+              </label>
+              <div class="relative">
+                {{ form.tecnico }}
+              </div>
+              {% if form.tecnico.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.tecnico.errors.0 }}</p>
+              {% endif %}
+            </div>
+
+            <!-- Tipo documento -->
+            <div class="lg:col-span-2">
+              <label for="id_tipo_documento_laboral" class="block text-sm font-bold text-slate-700 mb-2">
+                Tipo de documento laboral
+              </label>
+              {{ form.tipo_documento_laboral }}
+              {% if form.tipo_documento_laboral.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.tipo_documento_laboral.errors.0 }}</p>
+              {% endif %}
+              <p class="mt-2 text-xs text-slate-500">
+                El tipo define si el documento será contrato, anexo, finiquito, acuerdo u otro documento laboral.
+              </p>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Bloque: Vigencia -->
+        <div class="p-5 sm:p-6 border-b border-slate-100">
+          <div class="mb-5">
+            <h3 class="text-lg font-bold text-slate-900">
+              Vigencia
+            </h3>
+            <p class="text-sm text-slate-500">
+              Fechas usadas para control interno y alertas de vencimiento.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+            <!-- Fecha inicio -->
+            <div>
+              <label for="id_fecha_inicio" class="block text-sm font-bold text-slate-700 mb-2">
+                Fecha de inicio
+              </label>
+              {{ form.fecha_inicio }}
+              {% if form.fecha_inicio.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ form.fecha_inicio.errors.0 }}</p>
+              {% endif %}
+            </div>
+
+            <!-- Fecha término -->
+            <div>
+              <label for="id_fecha_termino" class="block text-sm font-bold text-slate-700 mb-2">
+                Fecha de término
+              </label>
+
+              <div class="flex flex-col sm:flex-row gap-3">
+                <div class="flex-1">
+                  {{ form.fecha_termino }}
+                  {% if form.fecha_termino.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ form.fecha_termino.errors.0 }}</p>
+                  {% endif %}
+                </div>
+
+                <label class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    id="indefinido"
+                    name="indefinido-check"
+                    class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  >
+                  <span class="text-sm font-semibold">Indefinido</span>
+                </label>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Bloque: Archivo -->
+        <div class="p-5 sm:p-6 border-b border-slate-100">
+          <div class="mb-5">
+            <h3 class="text-lg font-bold text-slate-900">
+              Archivo PDF
+            </h3>
+            <p class="text-sm text-slate-500">
+              Adjunta el documento firmado o preparado para el trabajador.
+            </p>
+          </div>
+
+          <label for="id_archivo"
+                 class="block rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-slate-100 transition px-5 py-6 cursor-pointer">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-2xl shadow-sm">
+                ⬆️
+              </div>
+              <div class="flex-1">
+                <p class="font-bold text-slate-800">
+                  Selecciona un archivo PDF
+                </p>
+                <p class="text-sm text-slate-500">
+                  El archivo se guardará en la misma carpeta actual del trabajador.
+                </p>
+              </div>
+              <span class="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold shadow-sm">
+                Buscar archivo
+              </span>
+            </div>
+
+            <div class="mt-4">
+              {{ form.archivo }}
+            </div>
+          </label>
+
+          {% if form.archivo.errors %}
+            <p class="mt-2 text-sm text-red-600">{{ form.archivo.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <!-- Bloque: Observación -->
+        <div class="p-5 sm:p-6">
+          <div class="mb-5">
+            <h3 class="text-lg font-bold text-slate-900">
+              Observación interna
+            </h3>
+            <p class="text-sm text-slate-500">
+              Campo opcional para dejar comentarios internos de RR.HH.
+            </p>
+          </div>
+
+          {{ form.observacion }}
+
+          {% if form.observacion.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ form.observacion.errors.0 }}</p>
+          {% endif %}
+        </div>
+
+        <!-- Footer acciones -->
+        <div class="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p class="text-xs text-slate-500">
+            Al guardar, el documento quedará asociado al trabajador seleccionado.
+          </p>
+
+          <div class="flex flex-col sm:flex-row gap-3">
+            <a href="{% url 'rrhh:contratos_trabajo' %}"
+               class="inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 text-sm font-semibold">
+              Cancelar
+            </a>
+
+            <button type="submit"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm text-sm font-bold">
+              💾 Guardar documento
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </section>
+
+  </div>
 </div>
 
 <script>
@@ -84,18 +294,22 @@
   const fechaTerminoInput  = document.getElementById('id_fecha_termino');
 
   function toggleFechaTermino() {
-    if (!fechaTerminoInput) return;
+    if (!fechaTerminoInput || !indefinidoCheckbox) return;
+
     if (indefinidoCheckbox.checked) {
       fechaTerminoInput.disabled = true;
       fechaTerminoInput.value = '';
+      fechaTerminoInput.classList.add('bg-slate-100', 'text-slate-400');
     } else {
       fechaTerminoInput.disabled = false;
+      fechaTerminoInput.classList.remove('bg-slate-100', 'text-slate-400');
     }
   }
 
   if (indefinidoCheckbox) {
     indefinidoCheckbox.addEventListener('change', toggleFechaTermino);
   }
+
   window.addEventListener('DOMContentLoaded', toggleFechaTermino);
 </script>
 {% endblock %}

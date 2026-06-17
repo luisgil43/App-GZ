@@ -12,84 +12,135 @@ from rrhh.models import CronogramaPago, SolicitudAdelanto
 from rrhh.utils import calcular_dias_habiles
 
 from .models import (ContratoTrabajo, CronogramaPago, DocumentoTrabajador,
-                     Feriado, FichaIngreso, SolicitudVacaciones, TipoDocumento)
+                     Feriado, FichaIngreso, SolicitudVacaciones, TipoDocumento,
+                     TipoDocumentoLaboral)
 
 
 class ContratoTrabajoForm(forms.ModelForm):
     reemplazar_archivo = forms.BooleanField(
         required=False,
-        label='Reemplazar archivo existente',
-        widget=forms.CheckboxInput(attrs={
-            'class': 'form-checkbox rounded text-emerald-600'
-        })
+        label="Reemplazar archivo existente",
+        widget=forms.CheckboxInput(
+            attrs={"class": "form-checkbox rounded text-emerald-600"}
+        ),
     )
 
     def __init__(self, *args, **kwargs):
         # 👇 viene desde la vista según el checkbox "indefinido-check"
-        self.indefinido = kwargs.pop('indefinido', False)
+        self.indefinido = kwargs.pop("indefinido", False)
         super().__init__(*args, **kwargs)
 
+        # ✅ Asegura que exista el tipo base sin romper producción/local.
+        # Esto ayuda si en algún ambiente aún no se creó por migración de datos.
+        tipo_contrato, _ = TipoDocumentoLaboral.objects.get_or_create(
+            nombre="Contrato de trabajo",
+            defaults={
+                "afecta_vigencia": True,
+                "cierra_relacion_laboral": False,
+                "genera_alerta_vencimiento": True,
+                "activo": True,
+            },
+        )
+
+        # Mostrar solo tipos activos
+        self.fields["tipo_documento_laboral"].queryset = (
+            TipoDocumentoLaboral.objects.filter(activo=True).order_by("nombre")
+        )
+
+        # Si es creación y no viene valor, seleccionar Contrato de trabajo por defecto
+        if not self.instance or not self.instance.pk:
+            self.fields["tipo_documento_laboral"].initial = tipo_contrato
+
         # ---- requisitos básicos ----
-        self.fields['fecha_termino'].required = False  # la controlamos nosotros
+        self.fields["fecha_termino"].required = False  # la controlamos nosotros
+        self.fields["observacion"].required = False
+        self.fields["tipo_documento_laboral"].required = True
 
         # En edición el archivo NO es obligatorio, en creación sí
         if self.instance and self.instance.pk:
-            self.fields['archivo'].required = False
+            self.fields["archivo"].required = False
         else:
-            self.fields['archivo'].required = True
+            self.fields["archivo"].required = True
 
         # Formatos para <input type="date">
-        self.fields['fecha_inicio'].input_formats = ['%Y-%m-%d']
-        self.fields['fecha_termino'].input_formats = ['%Y-%m-%d']
+        self.fields["fecha_inicio"].input_formats = ["%Y-%m-%d"]
+        self.fields["fecha_termino"].input_formats = ["%Y-%m-%d"]
 
         # Mensajes de "campo obligatorio" más claros
-        self.fields['fecha_inicio'].error_messages['required'] = (
-            'Debes ingresar una fecha de inicio.'
-        )
-        self.fields['fecha_termino'].error_messages['required'] = (
-            'Debes ingresar una fecha de término.'
-        )
-        self.fields['archivo'].error_messages['required'] = (
-            'Debes subir el archivo del contrato (PDF).'
-        )
+        self.fields["tipo_documento_laboral"].error_messages[
+            "required"
+        ] = "Debes seleccionar el tipo de documento laboral."
+        self.fields["fecha_inicio"].error_messages[
+            "required"
+        ] = "Debes ingresar una fecha de inicio."
+        self.fields["fecha_termino"].error_messages[
+            "required"
+        ] = "Debes ingresar una fecha de término."
+        self.fields["archivo"].error_messages[
+            "required"
+        ] = "Debes subir el archivo del documento laboral en PDF."
 
     class Meta:
         model = ContratoTrabajo
-        fields = ['tecnico', 'fecha_inicio', 'fecha_termino', 'archivo']
+        fields = [
+            "tecnico",
+            "tipo_documento_laboral",
+            "fecha_inicio",
+            "fecha_termino",
+            "archivo",
+            "observacion",
+        ]
         widgets = {
-            'tecnico': forms.Select(attrs={
-                'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
-            }),
-            'fecha_inicio': forms.DateInput(
-                format='%Y-%m-%d',
+            "tecnico": forms.Select(
                 attrs={
-                    'type': 'date',
-                    'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500"
                 }
             ),
-            'fecha_termino': forms.DateInput(
-                format='%Y-%m-%d',
+            "tipo_documento_laboral": forms.Select(
                 attrs={
-                    'type': 'date',
-                    'class': 'w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500'
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500"
                 }
             ),
-            'archivo': forms.ClearableFileInput(attrs={
-                'class': 'w-full border-gray-300 rounded-xl px-4 py-2 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500'
-            }),
+            "fecha_inicio": forms.DateInput(
+                format="%Y-%m-%d",
+                attrs={
+                    "type": "date",
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500",
+                },
+            ),
+            "fecha_termino": forms.DateInput(
+                format="%Y-%m-%d",
+                attrs={
+                    "type": "date",
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500",
+                },
+            ),
+            "archivo": forms.ClearableFileInput(
+                attrs={
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500",
+                    "accept": "application/pdf",
+                }
+            ),
+            "observacion": forms.Textarea(
+                attrs={
+                    "rows": 3,
+                    "class": "w-full border-gray-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500",
+                    "placeholder": "Observación interna opcional",
+                }
+            ),
         }
 
     # ===== Validaciones campo a campo =====
 
     def clean_fecha_termino(self):
         """
-        Si el contrato NO es indefinido, la fecha_termino es obligatoria.
+        Si el documento NO es indefinido, la fecha_termino es obligatoria.
         """
-        fecha_termino = self.cleaned_data.get('fecha_termino')
+        fecha_termino = self.cleaned_data.get("fecha_termino")
 
         if not self.indefinido and not fecha_termino:
             raise forms.ValidationError(
-                "Debes ingresar una fecha de término o marcar el contrato como indefinido."
+                "Debes ingresar una fecha de término o marcar el documento como indefinido."
             )
 
         return fecha_termino
@@ -101,13 +152,13 @@ class ContratoTrabajoForm(forms.ModelForm):
             * si no se sube nada nuevo, se deja el archivo existente.
             * si se sube uno nuevo, se valida extensión/MIME.
         """
-        archivo = self.cleaned_data.get('archivo')
+        archivo = self.cleaned_data.get("archivo")
         es_creacion = not self.instance or not self.instance.pk
 
         # En creación SIEMPRE debe haber archivo
         if es_creacion and not archivo:
             raise forms.ValidationError(
-                "Debes subir el archivo del contrato (PDF)."
+                "Debes subir el archivo del documento laboral en PDF."
             )
 
         # En edición y sin archivo nuevo → dejamos el existente
@@ -117,20 +168,95 @@ class ContratoTrabajoForm(forms.ModelForm):
         # Si es un archivo subido en ESTE request, lo validamos.
         # (Para el FieldFile ya guardado no revisamos content_type.)
         if isinstance(archivo, UploadedFile):
-            nombre = (archivo.name or '').lower()
-            if not nombre.endswith('.pdf'):
-                raise forms.ValidationError(
-                    "Solo se permiten archivos en formato PDF."
-                )
+            nombre = (archivo.name or "").lower()
+            if not nombre.endswith(".pdf"):
+                raise forms.ValidationError("Solo se permiten archivos en formato PDF.")
 
-            content_type = getattr(archivo, 'content_type', '') or ''
-            if content_type != 'application/pdf':
-                raise forms.ValidationError(
-                    "El archivo debe ser un PDF válido."
-                )
+            content_type = getattr(archivo, "content_type", "") or ""
+            if content_type != "application/pdf":
+                raise forms.ValidationError("El archivo debe ser un PDF válido.")
 
         return archivo
-    
+
+
+class TipoDocumentoLaboralForm(forms.ModelForm):
+    class Meta:
+        model = TipoDocumentoLaboral
+        fields = [
+            "nombre",
+            "afecta_vigencia",
+            "cierra_relacion_laboral",
+            "genera_alerta_vencimiento",
+            "activo",
+        ]
+        widgets = {
+            "nombre": forms.TextInput(
+                attrs={
+                    "class": "w-full border-slate-300 rounded-xl px-4 py-2 shadow-sm focus:ring-2 focus:ring-emerald-500",
+                    "placeholder": "Ej. Anexo de contrato, Finiquito, Acuerdo",
+                }
+            ),
+            "afecta_vigencia": forms.CheckboxInput(
+                attrs={
+                    "class": "rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                }
+            ),
+            "cierra_relacion_laboral": forms.CheckboxInput(
+                attrs={
+                    "class": "rounded border-slate-300 text-red-600 focus:ring-red-500"
+                }
+            ),
+            "genera_alerta_vencimiento": forms.CheckboxInput(
+                attrs={
+                    "class": "rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                }
+            ),
+            "activo": forms.CheckboxInput(
+                attrs={
+                    "class": "rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                }
+            ),
+        }
+        labels = {
+            "nombre": "Nombre del tipo de documento",
+            "afecta_vigencia": "Afecta vigencia laboral",
+            "cierra_relacion_laboral": "Cierra relación laboral",
+            "genera_alerta_vencimiento": "Genera alerta de vencimiento",
+            "activo": "Tipo activo",
+        }
+
+    def clean_nombre(self):
+        nombre = (self.cleaned_data.get("nombre") or "").strip()
+
+        if not nombre:
+            raise forms.ValidationError("Debes ingresar un nombre.")
+
+        qs = TipoDocumentoLaboral.objects.filter(nombre__iexact=nombre)
+
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise forms.ValidationError(
+                "Ya existe un tipo de documento laboral con ese nombre."
+            )
+
+        return nombre
+
+    def clean(self):
+        cleaned_data = super().clean()
+        cierra = cleaned_data.get("cierra_relacion_laboral")
+        genera_alerta = cleaned_data.get("genera_alerta_vencimiento")
+
+        if cierra and genera_alerta:
+            self.add_error(
+                "genera_alerta_vencimiento",
+                "Un documento que cierra la relación laboral no debería generar alerta de vencimiento.",
+            )
+
+        return cleaned_data
+
+
 
 class FichaIngresoForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):

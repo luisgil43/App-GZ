@@ -1,4 +1,4 @@
-#models_rrhh
+# models_rrhh
 
 from datetime import date, timedelta
 
@@ -20,16 +20,13 @@ def ruta_contrato_trabajo(instance, filename):
 
 
 class ContratoTrabajo(models.Model):
-    tecnico = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE
-    )
+    tecnico = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     fecha_inicio = models.DateField()
     fecha_termino = models.DateField(null=True, blank=True)
     archivo = models.FileField(
         upload_to=ruta_contrato_trabajo,
         storage=cloudinary_storage,
-        verbose_name="Archivo del contrato"
+        verbose_name="Archivo del contrato",
     )
     # 🔔 Nuevo: permitir apagar/encender alertas por contrato
     notificar_vencimiento = models.BooleanField(
@@ -38,6 +35,76 @@ class ContratoTrabajo(models.Model):
             "Si está desmarcado, no se enviarán correos de alerta "
             "para este contrato."
         ),
+    )
+
+    # ==========================================================
+    # ✅ NUEVOS CAMPOS — DOCUMENTOS LABORALES / HISTORIAL
+    # IMPORTANTE:
+    # - No eliminan ni modifican nada existente.
+    # - Todos permiten null/blank o tienen default.
+    # - Son seguros para producción.
+    # - El archivo sigue usando la misma ruta actual:
+    #   ruta_contrato_trabajo -> media/Contratos_trabajo/RUT/
+    # ==========================================================
+
+    tipo_documento_laboral = models.ForeignKey(
+        "TipoDocumentoLaboral",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="contratos_trabajo",
+        verbose_name="Tipo de documento laboral",
+        help_text=(
+            "Tipo de documento laboral: contrato, anexo, finiquito, acuerdo, "
+            "condiciones de arriendo u otro."
+        ),
+    )
+
+    activo = models.BooleanField(
+        default=True,
+        help_text=(
+            "Indica si este documento laboral está activo para efectos de "
+            "vigencia y alertas."
+        ),
+    )
+
+    reemplazado_por = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="documentos_reemplazados",
+        help_text=(
+            "Documento laboral que reemplazó a este documento. "
+            "Ejemplo: un nuevo contrato o anexo."
+        ),
+    )
+
+    cerrado_por = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="documentos_cerrados",
+        help_text=(
+            "Documento laboral que cerró este documento. " "Ejemplo: un finiquito."
+        ),
+    )
+
+    motivo_cierre = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text=(
+            "Motivo por el cual este documento dejó de estar activo. "
+            "Ejemplo: reemplazado por anexo, cerrado por finiquito."
+        ),
+    )
+
+    observacion = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Observación interna asociada al documento laboral.",
     )
 
     def __str__(self):
@@ -51,9 +118,10 @@ class ContratoTrabajo(models.Model):
             old = None
 
         if (
-            old and
-            old.archivo and self.archivo and
-            old.archivo.name != self.archivo.name
+            old
+            and old.archivo
+            and self.archivo
+            and old.archivo.name != self.archivo.name
         ):
             if old.archivo.storage.exists(old.archivo.name):
                 old.archivo.delete(save=False)
@@ -109,6 +177,46 @@ class ContratoTrabajo(models.Model):
             "vencido": "Vencido",
         }
         return mapping.get(self.status_code, self.status_code)
+
+
+class TipoDocumentoLaboral(models.Model):
+    nombre = models.CharField(max_length=100, unique=True)
+
+    afecta_vigencia = models.BooleanField(
+        default=True,
+        help_text=(
+            "Si está activo, este tipo de documento afecta la vigencia laboral "
+            "del trabajador."
+        ),
+    )
+
+    cierra_relacion_laboral = models.BooleanField(
+        default=False,
+        help_text=(
+            "Si está activo, este tipo de documento cierra la relación laboral. "
+            "Ejemplo: finiquito."
+        ),
+    )
+
+    genera_alerta_vencimiento = models.BooleanField(
+        default=True,
+        help_text=(
+            "Si está activo, los documentos de este tipo pueden generar alertas "
+            "de vencimiento."
+        ),
+    )
+
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Tipo de documento laboral"
+        verbose_name_plural = "Tipos de documentos laborales"
+        ordering = ["nombre"]
+
+    def __str__(self):
+        return self.nombre
 
 
 def ruta_ficha_ingreso(instance, filename):
@@ -527,7 +635,7 @@ class SolicitudAdelanto(models.Model):
 
     def ruta_cloudinary(self):
         return self.carpeta_consecutiva()
-    
+
 
 class ContratoAlertaEnviada(models.Model):
     """

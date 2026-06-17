@@ -1,355 +1,671 @@
 {% extends "dashboard_admin/base.html" %}
 
 {% block dashboard_content %}
-<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+<div class="bg-slate-50 min-h-[calc(100vh-90px)] -mx-3 sm:mx-0 px-3 py-4 sm:p-6">
 
   <!-- Header -->
-  <div class="flex flex-col sm:flex-row sm:items-center mb-4 gap-3">
-    <h2 class="text-2xl font-bold text-gray-800">
-      📑 Contratos de Trabajo
-    </h2>
+  <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden mb-5">
+    <div class="p-5 sm:p-6">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-    <div class="flex flex-wrap gap-3">
-      <a href="{% url 'rrhh:crear_contrato' %}"
-         class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-center">
-        ➕ Añadir Contrato de Trabajo
-      </a>
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 mb-3">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            RR.HH · Documentos laborales
+          </div>
+
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Contratos de Trabajo
+          </h1>
+
+          <p class="text-sm sm:text-base text-slate-500 mt-1 max-w-4xl">
+            Administra contratos, anexos, finiquitos y documentos laborales asociados a cada trabajador.
+          </p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+          <a href="{% url 'rrhh:crear_contrato' %}"
+             class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm text-sm font-bold">
+            ➕ Añadir Documento Laboral
+          </a>
+
+          <a href="{% url 'rrhh:crear_tipo_documento_laboral' %}"
+             class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm text-sm font-semibold">
+            ⚙️ Crear Tipo de Documento
+          </a>
+        </div>
+
+      </div>
     </div>
   </div>
 
-    <!-- Filtros (tipo Excel, auto-submit) -->
-  <form id="form-filtros"
-        method="get"
-        class="mb-3 text-sm">
-
-    <div class="flex flex-wrap items-end gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-
-      <!-- RUT -->
-      <div class="w-full sm:flex-1 sm:min-w-[140px]">
-        <label class="text-xs text-gray-600">RUT</label>
-        <input type="text"
-               name="identidad"
-               value="{{ filtros.identidad }}"
-               placeholder="Filtrar por RUT"
-               class="border rounded-lg px-3 py-2 w-full"
-               autocomplete="off">
-      </div>
-
-      <!-- Nombre -->
-      <div class="w-full sm:flex-1 sm:min-w-[180px]">
-        <label class="text-xs text-gray-600">Nombre</label>
-        <input type="text"
-               name="nombre"
-               value="{{ filtros.nombre }}"
-               placeholder="Nombre o apellido"
-               class="border rounded-lg px-3 py-2 w-full"
-               autocomplete="off">
-      </div>
- <!-- Fecha inicio (rango) -->
-      <div class="w-full sm:flex-none sm:w-[320px]">
-        <label class="text-xs text-gray-600">Fecha inicio</label>
-        <div class="flex items-center gap-2">
-          <input type="date"
-                 name="fi_desde"
-                 value="{{ filtros.fi_desde }}"
-                 class="border rounded-lg px-2 py-2 w-36">
-          <span class="text-xs text-gray-400">a</span>
-          <input type="date"
-                 name="fi_hasta"
-                 value="{{ filtros.fi_hasta }}"
-                 class="border rounded-lg px-2 py-2 w-36">
+  <!-- Filtros -->
+  <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden mb-5">
+    <div class="px-5 sm:px-6 py-4 border-b border-slate-100">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">
+            Filtros de búsqueda
+          </h2>
+          <p class="text-sm text-slate-500">
+            Los filtros se aplican automáticamente.
+          </p>
         </div>
-      </div>
 
-      <!-- Fecha término (rango) -->
-      <div class="w-full sm:flex-none sm:w-[320px]">
-        <label class="text-xs text-gray-600">Fecha término</label>
-        <div class="flex items-center gap-2">
-          <input type="date"
-                 name="ft_desde"
-                 value="{{ filtros.ft_desde }}"
-                 class="border rounded-lg px-2 py-2 w-36">
-          <span class="text-xs text-gray-400">a</span>
-          <input type="date"
-                 name="ft_hasta"
-                 value="{{ filtros.ft_hasta }}"
-                 class="border rounded-lg px-2 py-2 w-36">
-        </div>
-      </div>
-      
-      <!-- Status -->
-      <div class="w-full sm:w-44 sm:flex-none">
-        <label class="text-xs text-gray-600">Status</label>
-        <select name="status"
-                class="border rounded-lg px-3 py-2 w-full">
-          <option value="">Todos</option>
-          {% for code, label in STATUS_CHOICES %}
-            <option value="{{ code }}" {% if filtros.status == code %}selected{% endif %}>
-              {{ label }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <!-- Botón solo de limpiar (no submit automático) -->
-      <div class="w-full sm:w-auto sm:flex-none flex items-center gap-2">
         <a href="{% url 'rrhh:contratos_trabajo' %}"
-           class="px-4 py-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 text-sm font-medium whitespace-nowrap shadow">
-          ❌ Limpiar
+           class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-bold border border-red-100 w-full sm:w-auto">
+          ✕ Limpiar filtros
         </a>
       </div>
-
-      <!-- Mantener cantidad actual -->
-      <input type="hidden" name="cantidad" value="{{ cantidad }}">
     </div>
-  </form>
 
-  <!-- Tabla -->
-  <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-full sm:min-w-[900px]" style="white-space: nowrap;">
-      <thead class="bg-gray-100 text-gray-800 font-semibold text-left">
-        <tr>
-          <th class="p-2">RUT</th>
-          <th class="p-2">Nombre</th>
-          <th class="p-2">Fecha inicio</th>
-          <th class="p-2">Fecha término</th>
-          <th class="p-2">Status</th>
-          <th class="p-2">Alertas</th>
-          <th class="p-2">Contrato</th>
-          <th class="p-2">Acciones</th>
-        </tr>
-      </thead>
+    <form id="form-filtros"
+          method="get"
+          class="p-5 sm:p-6 text-sm">
 
-      <tbody class="text-left">
-        {% for contrato in pagina %}
-        <tr class="border-t hover:bg-gray-50">
-          <td class="p-2">{{ contrato.tecnico.identidad }}</td>
-          <td class="p-2">{{ contrato.tecnico.get_full_name }}</td>
-          <td class="p-2">
-            {{ contrato.fecha_inicio|date:"Y-m-d" }}
-          </td>
-          <td class="p-2">
-            {% if contrato.fecha_termino %}
-              {{ contrato.fecha_termino|date:"Y-m-d" }}
-            {% else %}
-              Indefinido
-            {% endif %}
-          </td>
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-12 gap-4 items-end">
 
-          <!-- STATUS -->
-          <td class="px-4 py-2">
-            {% if contrato.status_code == 'vencido' %}
-              <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-semibold">
-                Vencido
-              </span>
-            {% elif contrato.status_code == 'por_vencer' %}
-              <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
-                Por vencer
-              </span>
-            {% elif contrato.status_code == 'vigente' %}
-              <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-                Vigente
-              </span>
-            {% else %}
-              <span class="inline-flex items-center px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
-                Indefinido
-              </span>
-            {% endif %}
-          </td>
+        <!-- RUT -->
+        <div class="xl:col-span-2">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            RUT
+          </label>
+          <input type="text"
+                 name="identidad"
+                 value="{{ filtros.identidad }}"
+                 placeholder="Filtrar por RUT"
+                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                 autocomplete="off">
+        </div>
 
-          <!-- ALERTAS ON/OFF -->
-          <td class="p-2">
-            <form method="post"
-                  action="{% url 'rrhh:toggle_notificacion_contrato' contrato.id %}"
-                  class="inline-flex items-center gap-1 text-xs">
-              {% csrf_token %}
-              <label class="inline-flex items-center gap-1 cursor-pointer">
-                <input type="checkbox"
-                       name="notificar"
-                       value="1"
-                       class="rounded border-gray-300"
-                       onchange="this.form.submit()"
-                       {% if contrato.notificar_vencimiento %}checked{% endif %}>
-                {% if contrato.notificar_vencimiento %}
-                  <span class="text-emerald-700">Alertar</span>
-                {% else %}
-                  <span class="text-gray-500">Detenido</span>
-                {% endif %}
-              </label>
-            </form>
-          </td>
+        <!-- Nombre -->
+        <div class="xl:col-span-3">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            Nombre
+          </label>
+          <input type="text"
+                 name="nombre"
+                 value="{{ filtros.nombre }}"
+                 placeholder="Nombre o apellido"
+                 class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                 autocomplete="off">
+        </div>
 
-          <!-- CONTRATO -->
-          <td class="p-2">
-            {% if contrato.archivo %}
-              <a href="{% url 'rrhh:ver_contrato' contrato.id %}"
-                 class="text-blue-600 hover:underline"
-                 target="_blank">
-                📄 Ver contrato
-              </a>
-            {% else %}
-              <span class="text-gray-400 italic">No disponible</span>
-            {% endif %}
-          </td>
+        <!-- Fecha inicio -->
+        <div class="xl:col-span-3">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            Fecha inicio
+          </label>
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <input type="date"
+                   name="fi_desde"
+                   value="{{ filtros.fi_desde }}"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            <span class="text-xs text-slate-400 font-semibold">a</span>
+            <input type="date"
+                   name="fi_hasta"
+                   value="{{ filtros.fi_hasta }}"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+          </div>
+        </div>
 
-          <!-- ACCIONES -->
-          <td class="p-2 space-x-2">
-            <a href="{% url 'rrhh:editar_contrato' contrato.id %}"
-               class="text-blue-600 hover:underline">
-              ✏️ Editar
-            </a>
-            <a href="{% url 'rrhh:eliminar_contrato' contrato.id %}"
-               class="text-red-600 hover:underline">
-              🗑️ Eliminar
-            </a>
-          </td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="8" class="p-4 text-center text-gray-500">
-            No se encontraron contratos.
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        <!-- Fecha término -->
+        <div class="xl:col-span-3">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            Fecha término
+          </label>
+          <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <input type="date"
+                   name="ft_desde"
+                   value="{{ filtros.ft_desde }}"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            <span class="text-xs text-slate-400 font-semibold">a</span>
+            <input type="date"
+                   name="ft_hasta"
+                   value="{{ filtros.ft_hasta }}"
+                   class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div class="xl:col-span-1">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-2">
+            Status
+          </label>
+          <select name="status"
+                  class="w-full border border-slate-300 rounded-xl px-3 py-2.5 shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            <option value="">Todos</option>
+            {% for code, label in STATUS_CHOICES %}
+              <option value="{{ code }}" {% if filtros.status == code %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Mantener cantidad actual -->
+        <input type="hidden" name="cantidad" value="{{ cantidad }}">
+      </div>
+    </form>
   </div>
 
-  <!-- Selector de cantidad -->
-  <form method="get" class="mt-4 flex flex-wrap items-center gap-2">
-    <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-    <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
-      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-    </select>
+  <!-- Tabla -->
+  <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden">
 
-    <!-- mantener filtros al cambiar cantidad -->
-    <input type="hidden" name="identidad" value="{{ filtros.identidad }}">
-    <input type="hidden" name="nombre" value="{{ filtros.nombre }}">
-    <input type="hidden" name="status" value="{{ filtros.status }}">
-    <input type="hidden" name="fi_desde" value="{{ filtros.fi_desde }}">
-    <input type="hidden" name="fi_hasta" value="{{ filtros.fi_hasta }}">
-    <input type="hidden" name="ft_desde" value="{{ filtros.ft_desde }}">
-    <input type="hidden" name="ft_hasta" value="{{ filtros.ft_hasta }}">
-  </form>
+    <div class="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <h2 class="text-base font-bold text-slate-900">
+          Trabajadores con documentos laborales
+        </h2>
+        <p class="text-sm text-slate-500">
+          Se muestra el documento principal vigente y el historial desplegable por trabajador.
+        </p>
+      </div>
 
-  <!-- Paginación -->
-  <div class="mt-3 flex justify-center gap-2 text-sm">
-    {% if pagina.has_previous %}
-      <a href="?page=1&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-      <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
-    {% endif %}
+      <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-600 px-3 py-1 text-xs font-semibold w-fit">
+        Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+      </div>
+    </div>
 
-    <span class="px-3 py-1">
-      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
-    </span>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm min-w-[1200px]" style="white-space: nowrap;">
+        <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
+          <tr>
+            <th class="px-4 py-3 text-left w-12"></th>
+            <th class="px-4 py-3 text-left">RUT</th>
+            <th class="px-4 py-3 text-left">Trabajador</th>
+            <th class="px-4 py-3 text-left">Documento principal</th>
+            <th class="px-4 py-3 text-left">Fecha inicio</th>
+            <th class="px-4 py-3 text-left">Fecha término</th>
+            <th class="px-4 py-3 text-left">Status</th>
+            <th class="px-4 py-3 text-left">Alertas</th>
+            <th class="px-4 py-3 text-left">Documento</th>
+            <th class="px-4 py-3 text-right">Acciones</th>
+          </tr>
+        </thead>
 
-    {% if pagina.has_next %}
-      <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-      <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
-    {% endif %}
+        <tbody class="divide-y divide-slate-100 text-slate-700">
+          {% for grupo in pagina %}
+            {% with contrato=grupo.documento_principal trabajador=grupo.trabajador %}
+
+              <!-- Fila principal por trabajador -->
+              <tr class="hover:bg-slate-50 transition">
+
+                <!-- Flecha -->
+                <td class="px-4 py-3">
+                  <button type="button"
+                          class="js-toggle-docs inline-flex items-center justify-center w-8 h-8 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 font-bold"
+                          data-target="docs-{{ trabajador.id }}">
+                    ▸
+                  </button>
+                </td>
+
+                <!-- RUT -->
+                <td class="px-4 py-3 font-semibold text-slate-800">
+                  {{ trabajador.identidad }}
+                </td>
+
+                <!-- Trabajador -->
+                <td class="px-4 py-3">
+                  <div class="font-bold text-slate-900">
+                    {{ trabajador.get_full_name }}
+                  </div>
+                  {% if trabajador.email %}
+                    <div class="text-xs text-slate-400">
+                      {{ trabajador.email }}
+                    </div>
+                  {% endif %}
+
+                  <div class="mt-1 inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                    {{ grupo.cantidad_documentos }} documento(s)
+                  </div>
+                </td>
+
+                <!-- Documento principal -->
+                <td class="px-4 py-3">
+                  {% if contrato.tipo_documento_laboral %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                      {{ contrato.tipo_documento_laboral.nombre }}
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                      Sin tipo
+                    </span>
+                  {% endif %}
+                </td>
+
+                <!-- Fecha inicio -->
+                <td class="px-4 py-3">
+                  {{ contrato.fecha_inicio|date:"Y-m-d" }}
+                </td>
+
+                <!-- Fecha término -->
+                <td class="px-4 py-3">
+                  {% if contrato.fecha_termino %}
+                    {{ contrato.fecha_termino|date:"Y-m-d" }}
+                  {% else %}
+                    <span class="text-slate-500 font-semibold">Indefinido</span>
+                  {% endif %}
+                </td>
+
+                <!-- Status -->
+                <td class="px-4 py-3">
+                  {% if contrato.status_code == 'vencido' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                      Vencido
+                    </span>
+                  {% elif contrato.status_code == 'por_vencer' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                      Por vencer
+                    </span>
+                  {% elif contrato.status_code == 'vigente' %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                      Vigente
+                    </span>
+                  {% else %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                      Indefinido
+                    </span>
+                  {% endif %}
+
+                  {% if not contrato.activo %}
+                    <span class="ml-1 inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                      Inactivo
+                    </span>
+                  {% endif %}
+                </td>
+
+                <!-- Alertas -->
+                <td class="px-4 py-3">
+                  <form method="post"
+                        action="{% url 'rrhh:toggle_notificacion_contrato' contrato.id %}"
+                        class="inline-flex items-center gap-1 text-xs">
+                    {% csrf_token %}
+                    <label class="inline-flex items-center gap-2 cursor-pointer rounded-full border border-slate-200 bg-white px-3 py-1.5 hover:bg-slate-50">
+                      <input type="checkbox"
+                             name="notificar"
+                             value="1"
+                             class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                             onchange="this.form.submit()"
+                             {% if contrato.notificar_vencimiento %}checked{% endif %}>
+                      {% if contrato.notificar_vencimiento %}
+                        <span class="text-emerald-700 font-bold">Alertar</span>
+                      {% else %}
+                        <span class="text-slate-500 font-bold">Detenido</span>
+                      {% endif %}
+                    </label>
+                  </form>
+                </td>
+
+                <!-- Documento -->
+                <td class="px-4 py-3">
+                  {% if contrato.archivo %}
+                    <a href="{% url 'rrhh:ver_contrato' contrato.id %}"
+                       class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-bold"
+                       target="_blank">
+                      📄 Ver PDF
+                    </a>
+                  {% else %}
+                    <span class="text-slate-400 italic">No disponible</span>
+                  {% endif %}
+                </td>
+
+                <!-- Acciones -->
+                <td class="px-4 py-3 text-right">
+                  <div class="inline-flex items-center gap-2">
+                    <a href="{% url 'rrhh:editar_contrato' contrato.id %}"
+                       class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 text-xs font-bold">
+                      ✏️ Editar
+                    </a>
+
+                    <a href="{% url 'rrhh:eliminar_contrato' contrato.id %}"
+                       class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-red-50 border border-red-100 text-red-700 hover:bg-red-100 text-xs font-bold">
+                      🗑️ Eliminar
+                    </a>
+                  </div>
+                </td>
+              </tr>
+
+              <!-- Fila desplegable con historial -->
+              <tr id="docs-{{ trabajador.id }}" class="hidden bg-slate-50">
+                <td colspan="10" class="px-4 py-4">
+                  <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+
+                    <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                      <div>
+                        <p class="font-bold text-slate-800">
+                          Historial documental de {{ trabajador.get_full_name }}
+                        </p>
+                        <p class="text-xs text-slate-500">
+                          Aquí se muestran contratos, anexos, finiquitos y observaciones internas.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                      <table class="w-full text-xs min-w-[1000px]" style="white-space: nowrap;">
+                        <thead class="bg-white text-slate-500 uppercase tracking-wide">
+                          <tr>
+                            <th class="px-4 py-3 text-left">Tipo</th>
+                            <th class="px-4 py-3 text-left">Inicio</th>
+                            <th class="px-4 py-3 text-left">Término</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Alerta</th>
+                            <th class="px-4 py-3 text-left">Observación</th>
+                            <th class="px-4 py-3 text-left">PDF</th>
+                            <th class="px-4 py-3 text-right">Acciones</th>
+                          </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-slate-100">
+                          {% for doc in grupo.documentos %}
+                            <tr class="{% if doc.id == contrato.id %}bg-emerald-50/40{% else %}hover:bg-slate-50{% endif %}">
+
+                              <td class="px-4 py-3">
+                                {% if doc.tipo_documento_laboral %}
+                                  <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                                    {{ doc.tipo_documento_laboral.nombre }}
+                                  </span>
+                                {% else %}
+                                  <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                                    Sin tipo
+                                  </span>
+                                {% endif %}
+
+                                {% if doc.id == contrato.id %}
+                                  <span class="ml-1 inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                                    Principal
+                                  </span>
+                                {% endif %}
+
+                                {% if not doc.activo %}
+                                  <span class="ml-1 inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                                    Inactivo
+                                  </span>
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3 text-slate-700">
+                                {{ doc.fecha_inicio|date:"Y-m-d" }}
+                              </td>
+
+                              <td class="px-4 py-3 text-slate-700">
+                                {% if doc.fecha_termino %}
+                                  {{ doc.fecha_termino|date:"Y-m-d" }}
+                                {% else %}
+                                  Indefinido
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3">
+                                {% if doc.status_code == 'vencido' %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                                    Vencido
+                                  </span>
+                                {% elif doc.status_code == 'por_vencer' %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                                    Por vencer
+                                  </span>
+                                {% elif doc.status_code == 'vigente' %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                                    Vigente
+                                  </span>
+                                {% else %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                                    Indefinido
+                                  </span>
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3">
+                                {% if doc.notificar_vencimiento %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                                    Alertar
+                                  </span>
+                                {% else %}
+                                  <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                                    Detenido
+                                  </span>
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3 max-w-[320px]">
+                                {% if doc.observacion %}
+                                  <div class="text-slate-700 whitespace-normal leading-relaxed">
+                                    {{ doc.observacion }}
+                                  </div>
+                                {% else %}
+                                  <span class="text-slate-400 italic">Sin observación</span>
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3">
+                                {% if doc.archivo %}
+                                  <a href="{% url 'rrhh:ver_contrato' doc.id %}"
+                                     class="text-blue-600 hover:text-blue-700 font-bold"
+                                     target="_blank">
+                                    📄 Ver PDF
+                                  </a>
+                                {% else %}
+                                  <span class="text-slate-400 italic">No disponible</span>
+                                {% endif %}
+                              </td>
+
+                              <td class="px-4 py-3 text-right">
+                                <div class="inline-flex items-center gap-2">
+                                  <a href="{% url 'rrhh:editar_contrato' doc.id %}"
+                                     class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 text-xs font-bold">
+                                    ✏️ Editar
+                                  </a>
+
+                                  <a href="{% url 'rrhh:eliminar_contrato' doc.id %}"
+                                     class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-red-50 border border-red-100 text-red-700 hover:bg-red-100 text-xs font-bold">
+                                    🗑️ Eliminar
+                                  </a>
+                                </div>
+                              </td>
+
+                            </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+
+                  </div>
+                </td>
+              </tr>
+
+            {% endwith %}
+          {% empty %}
+            <tr>
+              <td colspan="10" class="px-4 py-12 text-center">
+                <div class="mx-auto w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl mb-3">
+                  📄
+                </div>
+                <p class="text-slate-700 font-bold">No se encontraron contratos.</p>
+                <p class="text-slate-500 text-sm mt-1">
+                  Prueba limpiando filtros o creando un nuevo documento laboral.
+                </p>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Footer tabla -->
+    <div class="px-5 sm:px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+      <!-- Selector de cantidad -->
+      <form method="get" class="flex flex-wrap items-center gap-2">
+        <label for="cantidad" class="text-sm font-bold text-slate-700">
+          Mostrar:
+        </label>
+
+        <select name="cantidad"
+                id="cantidad"
+                onchange="this.form.submit()"
+                class="border border-slate-300 rounded-xl px-3 py-2 bg-white shadow-sm text-sm">
+          <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
+          <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+          <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
+          <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+        </select>
+
+        <!-- mantener filtros al cambiar cantidad -->
+        <input type="hidden" name="identidad" value="{{ filtros.identidad }}">
+        <input type="hidden" name="nombre" value="{{ filtros.nombre }}">
+        <input type="hidden" name="status" value="{{ filtros.status }}">
+        <input type="hidden" name="fi_desde" value="{{ filtros.fi_desde }}">
+        <input type="hidden" name="fi_hasta" value="{{ filtros.fi_hasta }}">
+        <input type="hidden" name="ft_desde" value="{{ filtros.ft_desde }}">
+        <input type="hidden" name="ft_hasta" value="{{ filtros.ft_hasta }}">
+      </form>
+
+      <!-- Paginación -->
+      <div class="flex flex-wrap justify-center lg:justify-end gap-2 text-sm">
+        {% if pagina.has_previous %}
+          <a href="?page=1&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
+             class="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 font-semibold text-slate-700">
+            « Primero
+          </a>
+
+          <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
+             class="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 font-semibold text-slate-700">
+            ‹ Anterior
+          </a>
+        {% endif %}
+
+        <span class="px-3 py-2 text-slate-600 font-semibold">
+          Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+        </span>
+
+        {% if pagina.has_next %}
+          <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
+             class="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 font-semibold text-slate-700">
+            Siguiente ›
+          </a>
+
+          <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&identidad={{ filtros.identidad }}&nombre={{ filtros.nombre }}&status={{ filtros.status }}&fi_desde={{ filtros.fi_desde }}&fi_hasta={{ filtros.fi_hasta }}&ft_desde={{ filtros.ft_desde }}&ft_hasta={{ filtros.ft_hasta }}"
+             class="px-3 py-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-100 font-semibold text-slate-700">
+            Último »
+          </a>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
 </div>
 
-{# === Filtros automáticos tipo Hyperlink (sin botón) === #}
+{# === Filtros automáticos tipo Hyperlink (sin botón) + desplegable historial === #}
 <script>
 (function () {
   const form = document.getElementById('form-filtros');
-  if (!form) return;
 
-  const isTouch    = matchMedia('(pointer:coarse)').matches;
-  const textInputs = form.querySelectorAll('input[type="text"]');
-  const dateInputs = form.querySelectorAll('input[type="date"]');
-  const selects    = form.querySelectorAll('select[name="status"]');
-  const KEY = 'contratos_admin_filtros_focus_v1';
+  if (form) {
+    const isTouch    = matchMedia('(pointer:coarse)').matches;
+    const textInputs = form.querySelectorAll('input[type="text"]');
+    const dateInputs = form.querySelectorAll('input[type="date"]');
+    const selects    = form.querySelectorAll('select[name="status"]');
+    const KEY = 'contratos_admin_filtros_focus_v1';
 
-  function rememberCaret(el) {
-    try {
-      const pos = typeof el.selectionStart === 'number'
-        ? el.selectionStart
-        : (el.value || '').length;
-      sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
-    } catch (_) {}
-  }
-
-  function submitNow(fromEl) {
-    rememberCaret(fromEl);
-    form.requestSubmit();
-  }
-
-  // Inputs de texto
-  textInputs.forEach(el => {
-    if (isTouch) {
-      el.addEventListener('blur', () => submitNow(el));
-      el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          submitNow(el);
-        }
-      });
-    } else {
-      let t, composing = false;
-
-      function doSubmit() {
-        clearTimeout(t);
-        t = setTimeout(() => {
-          if (!composing) submitNow(el);
-        }, 700);
-      }
-
-      el.addEventListener('compositionstart', () => composing = true);
-      el.addEventListener('compositionend', () => { composing = false; doSubmit(); });
-      el.addEventListener('input', doSubmit);
-      el.addEventListener('change', doSubmit);
-      el.addEventListener('keydown', e => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          submitNow(el);
-        }
-      });
+    function rememberCaret(el) {
+      try {
+        const pos = typeof el.selectionStart === 'number'
+          ? el.selectionStart
+          : (el.value || '').length;
+        sessionStorage.setItem(KEY, JSON.stringify({ name: el.name, pos }));
+      } catch (_) {}
     }
-  });
 
-  // Inputs de fecha => submit inmediato al cambiar
-  dateInputs.forEach(el => {
-    el.addEventListener('change', () => submitNow(el));
-  });
+    function submitNow(fromEl) {
+      rememberCaret(fromEl);
+      form.requestSubmit();
+    }
 
-  // Select de status => submit inmediato
-  selects.forEach(el => {
-    el.addEventListener('change', () => submitNow(el));
-  });
+    textInputs.forEach(el => {
+      if (isTouch) {
+        el.addEventListener('blur', () => submitNow(el));
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitNow(el);
+          }
+        });
+      } else {
+        let t, composing = false;
 
-  // Restaurar foco/caret después de recargar
-  function restoreCaret() {
-    try {
-      const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-      if (!data) return;
-      const el = form.elements[data.name];
-      if (!el) return;
+        function doSubmit() {
+          clearTimeout(t);
+          t = setTimeout(() => {
+            if (!composing) submitNow(el);
+          }, 700);
+        }
 
-      el.focus({ preventScroll: true });
-      const len = (el.value || '').length;
-      const p = Math.min((data.pos ?? len), len);
-
-      if (typeof el.setSelectionRange === 'function') {
-        el.setSelectionRange(p, p);
+        el.addEventListener('compositionstart', () => composing = true);
+        el.addEventListener('compositionend', () => { composing = false; doSubmit(); });
+        el.addEventListener('input', doSubmit);
+        el.addEventListener('change', doSubmit);
+        el.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitNow(el);
+          }
+        });
       }
-    } catch (_) {}
+    });
+
+    dateInputs.forEach(el => {
+      el.addEventListener('change', () => submitNow(el));
+    });
+
+    selects.forEach(el => {
+      el.addEventListener('change', () => submitNow(el));
+    });
+
+    function restoreCaret() {
+      try {
+        const data = JSON.parse(sessionStorage.getItem(KEY) || 'null');
+        if (!data) return;
+        const el = form.elements[data.name];
+        if (!el) return;
+
+        el.focus({ preventScroll: true });
+        const len = (el.value || '').length;
+        const p = Math.min((data.pos ?? len), len);
+
+        if (typeof el.setSelectionRange === 'function') {
+          el.setSelectionRange(p, p);
+        }
+      } catch (_) {}
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      restoreCaret();
+      requestAnimationFrame(restoreCaret);
+    });
+    window.addEventListener('pageshow', restoreCaret);
   }
 
-  window.addEventListener('DOMContentLoaded', () => {
-    restoreCaret();
-    requestAnimationFrame(restoreCaret);
+  document.querySelectorAll('.js-toggle-docs').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const row = document.getElementById(targetId);
+      if (!row) return;
+
+      const isHidden = row.classList.contains('hidden');
+
+      row.classList.toggle('hidden');
+
+      if (isHidden) {
+        btn.textContent = '▾';
+        btn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+      } else {
+        btn.textContent = '▸';
+        btn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+      }
+    });
   });
-  window.addEventListener('pageshow', restoreCaret);
 })();
 </script>
 {% endblock %}

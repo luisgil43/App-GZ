@@ -58,9 +58,9 @@ from .forms import (ContratoTrabajoForm, CronogramaPagoForm,
                     DocumentoTrabajadorForm, FichaIngresoForm, FirmaForm,
                     ReemplazoDocumentoForm, RevisionVacacionesForm,
                     SolicitudAdelantoForm, SolicitudVacacionesForm,
-                    TipoDocumentoForm)
+                    TipoDocumentoForm, TipoDocumentoLaboralForm)
 from .models import (ContratoTrabajo, CronogramaPago, CustomUser,
-                     DocumentoTrabajador, TipoDocumento)
+                     DocumentoTrabajador, TipoDocumento, TipoDocumentoLaboral)
 from .utils import (calcular_estado_documento, contar_dias_habiles,
                     generar_pdf_solicitud_adelanto)
 
@@ -74,19 +74,37 @@ logger = logging.getLogger(__name__)
 @rol_requerido('admin', 'pm', 'rrhh')
 def listar_contratos_admin(request):
     """
-    Lista de contratos para admin/PM/RRHH con filtros, status y paginación.
+    Lista de documentos laborales para admin/PM/RRHH.
+
+    Importante producción:
+    - Sigue usando ContratoTrabajo.
+    - No cambia rutas.
+    - No toca Telegram.
+    - No toca cron de alertas.
+    - Solo cambia la forma de agrupar visualmente:
+      una fila por trabajador y documentos desplegables.
     """
-    qs = ContratoTrabajo.objects.select_related('tecnico').order_by('-fecha_inicio')
+    qs = (
+        ContratoTrabajo.objects
+        .select_related('tecnico', 'tipo_documento_laboral')
+        .order_by(
+            'tecnico__first_name',
+            'tecnico__last_name',
+            'tecnico__identidad',
+            '-fecha_inicio',
+            '-id',
+        )
+    )
 
     identidad = request.GET.get('identidad', '').strip()
     nombre = request.GET.get('nombre', '').strip()
     status = request.GET.get('status', '').strip()
 
-    # 🔹 nuevos filtros de fechas (rangos)
-    fi_desde = request.GET.get('fi_desde', '').strip()   # fecha_inicio desde
-    fi_hasta = request.GET.get('fi_hasta', '').strip()   # fecha_inicio hasta
-    ft_desde = request.GET.get('ft_desde', '').strip()   # fecha_termino desde
-    ft_hasta = request.GET.get('ft_hasta', '').strip()   # fecha_termino hasta
+    # 🔹 filtros de fechas (rangos)
+    fi_desde = request.GET.get('fi_desde', '').strip()
+    fi_hasta = request.GET.get('fi_hasta', '').strip()
+    ft_desde = request.GET.get('ft_desde', '').strip()
+    ft_hasta = request.GET.get('ft_hasta', '').strip()
 
     if identidad:
         qs = qs.filter(tecnico__identidad__icontains=identidad)
@@ -104,6 +122,7 @@ def listar_contratos_admin(request):
 
     if fi_desde_date:
         qs = qs.filter(fecha_inicio__gte=fi_desde_date)
+
     if fi_hasta_date:
         qs = qs.filter(fecha_inicio__lte=fi_hasta_date)
 
@@ -112,12 +131,20 @@ def listar_contratos_admin(request):
     ft_hasta_date = parse_date(ft_hasta) if ft_hasta else None
 
     if ft_desde_date:
-        qs = qs.filter(fecha_termino__isnull=False, fecha_termino__gte=ft_desde_date)
-    if ft_hasta_date:
-        qs = qs.filter(fecha_termino__isnull=False, fecha_termino__lte=ft_hasta_date)
+        qs = qs.filter(
+            fecha_termino__isnull=False,
+            fecha_termino__gte=ft_desde_date
+        )
 
-    # Filtros por status (usando fecha_termino)
+    if ft_hasta_date:
+        qs = qs.filter(
+            fecha_termino__isnull=False,
+            fecha_termino__lte=ft_hasta_date
+        )
+
+    # Filtros por status usando fecha_termino
     hoy = timezone.localdate()
+
     if status == 'vigente':
         qs = qs.filter(
             Q(fecha_termino__isnull=True) |
@@ -137,13 +164,78 @@ def listar_contratos_admin(request):
     elif status == 'indefinido':
         qs = qs.filter(fecha_termino__isnull=True)
 
+    # ==========================================================
+    # ✅ AGRUPACIÓN VISUAL POR TRABAJADOR
+    # No modifica datos. Solo prepara la información para template.
+    # ==========================================================
+
+    grupos_map = {}
+
+    for contrato in qs:
+        tecnico = contrato.tecnico
+        tecnico_id = tecnico.id
+
+        if tecnico_id not in grupos_map:
+            grupos_map[tecnico_id] = {
+                "trabajador": tecnico,
+                "documento_principal": None,
+                "documentos": [],
+                "cantidad_documentos": 0,
+            }
+
+        grupos_map[tecnico_id]["documentos"].append(contrato)
+
+    grupos = []
+
+    for grupo in grupos_map.values():
+        documentos = grupo["documentos"]
+
+        # Orden interno del historial:
+        # activos primero, luego fecha más reciente.
+        documentos.sort(
+            key=lambda c: (
+                not getattr(c, 'activo', True),
+                c.fecha_inicio or date.min,
+                c.id or 0,
+            ),
+            reverse=True
+        )
+
+        # Documento principal visible:
+        # 1) activo más reciente
+        # 2) si no hay activo, el más reciente
+        documento_principal = None
+
+        for doc in documentos:
+            if getattr(doc, 'activo', True):
+                documento_principal = doc
+                break
+
+        if documento_principal is None and documentos:
+            documento_principal = documentos[0]
+
+        grupo["documento_principal"] = documento_principal
+        grupo["cantidad_documentos"] = len(documentos)
+
+        grupos.append(grupo)
+
+    # Orden final de trabajadores por nombre
+    grupos.sort(
+        key=lambda g: (
+            (g["trabajador"].first_name or "").lower(),
+            (g["trabajador"].last_name or "").lower(),
+            (g["trabajador"].identidad or ""),
+        )
+    )
+
     cantidad = request.GET.get('cantidad', '20')
+
     try:
         cantidad_int = int(cantidad)
     except ValueError:
         cantidad_int = 20
 
-    paginator = Paginator(qs, cantidad_int)
+    paginator = Paginator(grupos, cantidad_int)
     page_number = request.GET.get('page') or 1
     pagina = paginator.get_page(page_number)
 
@@ -151,7 +243,6 @@ def listar_contratos_admin(request):
         "identidad": identidad,
         "nombre": nombre,
         "status": status,
-        # 🔹 para repintar los inputs
         "fi_desde": fi_desde,
         "fi_hasta": fi_hasta,
         "ft_desde": ft_desde,
@@ -171,6 +262,61 @@ def listar_contratos_admin(request):
         "filtros": filtros,
         "STATUS_CHOICES": STATUS_CHOICES,
     })
+
+
+@staff_member_required
+@rol_requerido("admin", "pm", "rrhh")
+def crear_tipo_documento_laboral(request):
+    """
+    Crea y edita tipos de documentos laborales usados por ContratoTrabajo.
+
+    Importante:
+    - No afecta contratos existentes.
+    - No cambia rutas de archivos.
+    - No toca Telegram ni alertas.
+    """
+    tipo_id = request.GET.get("editar")
+    tipo_a_editar = None
+
+    if tipo_id:
+        tipo_a_editar = get_object_or_404(TipoDocumentoLaboral, pk=tipo_id)
+        form = TipoDocumentoLaboralForm(request.POST or None, instance=tipo_a_editar)
+    else:
+        form = TipoDocumentoLaboralForm(request.POST or None)
+
+    if request.method == "POST":
+        if form.is_valid():
+            tipo = form.save()
+
+            if tipo_a_editar:
+                messages.success(
+                    request,
+                    f"✅ Tipo de documento laboral '{tipo.nombre}' actualizado correctamente.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"✅ Tipo de documento laboral '{tipo.nombre}' creado correctamente.",
+                )
+
+            return redirect("rrhh:crear_tipo_documento_laboral")
+
+        messages.error(
+            request,
+            "❌ Error al guardar el tipo de documento laboral. Revisa los campos.",
+        )
+
+    tipos = TipoDocumentoLaboral.objects.all().order_by("nombre")
+
+    return render(
+        request,
+        "rrhh/crear_tipo_documento_laboral.html",
+        {
+            "form": form,
+            "tipos": tipos,
+            "editando": tipo_a_editar,
+        },
+    )
 
 
 @login_required
@@ -258,8 +404,6 @@ def toggle_notificacion_contrato(request, contrato_id):
         )
 
     return redirect(request.META.get('HTTP_REFERER', 'rrhh:contratos_trabajo'))
-
-
 
 
 @staff_member_required

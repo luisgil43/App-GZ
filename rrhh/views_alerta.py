@@ -3,49 +3,102 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, send_mail
+from django.db.models import Q
 from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from .models import ContratoAlertaEnviada, ContratoTrabajo, CronDiarioEjecutado
 
+logger = logging.getLogger(__name__)
 
 def contrato_sigue_siend_ultimo(contrato: ContratoTrabajo) -> bool:
     """
-    Devuelve True si este contrato sigue siendo el 'último' contrato relevante
-    del técnico para efectos de alertas.
+    Devuelve True si este documento laboral sigue siendo el 'último' documento
+    relevante del técnico para efectos de alertas.
 
-    Si existe otro contrato del mismo técnico con:
-      - fecha_termino mayor, o
-      - fecha_termino en blanco (indefinido),
-    asumimos que ese contrato nuevo reemplaza al actual y por lo tanto
-    este contrato ya no debería generar correos (ni pre ni post-vencimiento).
+    Producción:
+    - Mantiene la lógica anterior basada en fecha_termino.
+    - Agrega soporte seguro para documentos activos.
+    - Ignora documentos con alertas apagadas.
+    - Ignora documentos cuyo tipo no genera alerta.
+    - Ignora documentos tipo finiquito o cierre de relación laboral.
     """
-    # ¿Hay algún contrato indefinido más nuevo?
-    existe_indefinido_nuevo = ContratoTrabajo.objects.filter(
-        tecnico=contrato.tecnico,
-        notificar_vencimiento=True,
-        fecha_termino__isnull=True,
-    ).exclude(pk=contrato.pk).exists()
+    if not getattr(contrato, "activo", True):
+        return False
+
+    if not contrato.notificar_vencimiento:
+        return False
+
+    tipo_actual = getattr(contrato, "tipo_documento_laboral", None)
+    if tipo_actual:
+        if not tipo_actual.activo:
+            return False
+
+        if not tipo_actual.genera_alerta_vencimiento:
+            return False
+
+        if tipo_actual.cierra_relacion_laboral:
+            return False
+
+    # ¿Hay algún documento indefinido activo más nuevo/relevante?
+    existe_indefinido_nuevo = (
+        ContratoTrabajo.objects.select_related("tipo_documento_laboral")
+        .filter(
+            tecnico=contrato.tecnico,
+            activo=True,
+            notificar_vencimiento=True,
+            fecha_termino__isnull=True,
+        )
+        .exclude(pk=contrato.pk)
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__activo=True)
+        )
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__genera_alerta_vencimiento=True)
+        )
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__cierra_relacion_laboral=False)
+        )
+        .exists()
+    )
 
     if existe_indefinido_nuevo:
         return False
 
-    # ¿Hay algún contrato con fecha_termino mayor que éste?
+    # ¿Hay algún documento activo con fecha_termino mayor que éste?
     if contrato.fecha_termino:
-        existe_mas_nuevo = ContratoTrabajo.objects.filter(
-            tecnico=contrato.tecnico,
-            notificar_vencimiento=True,
-            fecha_termino__gt=contrato.fecha_termino,
-        ).exclude(pk=contrato.pk).exists()
+        existe_mas_nuevo = (
+            ContratoTrabajo.objects.select_related("tipo_documento_laboral")
+            .filter(
+                tecnico=contrato.tecnico,
+                activo=True,
+                notificar_vencimiento=True,
+                fecha_termino__gt=contrato.fecha_termino,
+            )
+            .exclude(pk=contrato.pk)
+            .filter(
+                Q(tipo_documento_laboral__isnull=True)
+                | Q(tipo_documento_laboral__activo=True)
+            )
+            .filter(
+                Q(tipo_documento_laboral__isnull=True)
+                | Q(tipo_documento_laboral__genera_alerta_vencimiento=True)
+            )
+            .filter(
+                Q(tipo_documento_laboral__isnull=True)
+                | Q(tipo_documento_laboral__cierra_relacion_laboral=False)
+            )
+            .exists()
+        )
 
         if existe_mas_nuevo:
             return False
 
     return True
-
-
-logger = logging.getLogger(__name__)
 
 
 @require_http_methods(["GET", "HEAD"])
@@ -58,8 +111,9 @@ def cron_contratos_por_vencer(request):
     - PRE-vencimiento: envía correos cuando faltan 20, 15, 10, 5, 3, 2, 1 días.
     - POST-vencimiento: envía correos TODOS los días (hasta MAX_DIAS_POST)
       mientras:
-        * el contrato tenga notificar_vencimiento=True, y
-        * siga siendo el 'último' contrato del técnico.
+        * el documento tenga notificar_vencimiento=True,
+        * el documento esté activo=True, y
+        * siga siendo el último documento relevante del técnico.
     """
 
     # 1) Seguridad: validar token
@@ -81,7 +135,9 @@ def cron_contratos_por_vencer(request):
 
     # 3) Lock diario (para evitar doble ejecución). Si hay cualquier falla, lo liberamos al final para reintentar.
     job_name = "contratos_por_vencer"
-    cron_obj, created = CronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
+    cron_obj, created = CronDiarioEjecutado.objects.get_or_create(
+        nombre=job_name, fecha=hoy
+    )
     if not created:
         return JsonResponse(
             {"status": "already-run", "detail": "Ya se ejecutó hoy"},
@@ -114,12 +170,36 @@ def cron_contratos_por_vencer(request):
         "https://res.cloudinary.com/dm6gqg4fb/image/upload/v1751574704/planixb_a4lorr.jpg",
     )
 
-    # 5) Buscar contratos con fecha_termino definida y alertas activas
+    # 5) Buscar documentos laborales con fecha_termino definida y alertas activas
+    #
+    # IMPORTANTE PRODUCCIÓN:
+    # - Mantiene la lógica anterior de notificar_vencimiento=True.
+    # - Agrega activo=True para que documentos apagados no disparen alertas.
+    # - Respeta el tipo de documento laboral:
+    #     * si genera_alerta_vencimiento=False, no alerta.
+    #     * si cierra_relacion_laboral=True, no alerta.
+    #     * si el tipo está inactivo, no alerta.
+    # - Si tipo_documento_laboral está vacío en algún registro viejo, lo seguimos
+    #   permitiendo para no romper compatibilidad histórica.
     contratos = (
-        ContratoTrabajo.objects
-        .select_related("tecnico")
+        ContratoTrabajo.objects.select_related("tecnico", "tipo_documento_laboral")
         .exclude(fecha_termino__isnull=True)
-        .filter(notificar_vencimiento=True)
+        .filter(
+            activo=True,
+            notificar_vencimiento=True,
+        )
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__activo=True)
+        )
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__genera_alerta_vencimiento=True)
+        )
+        .filter(
+            Q(tipo_documento_laboral__isnull=True)
+            | Q(tipo_documento_laboral__cierra_relacion_laboral=False)
+        )
     )
 
     enviados = 0
@@ -130,7 +210,7 @@ def cron_contratos_por_vencer(request):
 
     try:
         for c in contratos:
-            # Si ya existe un contrato nuevo para este técnico, no seguir molestando
+            # Si ya existe un documento nuevo para este técnico, no seguir molestando
             if not contrato_sigue_siend_ultimo(c):
                 saltados += 1
                 continue
@@ -146,12 +226,16 @@ def cron_contratos_por_vencer(request):
 
                 estado_tabla = "Por vencer"
                 estado_subject = f"por vencer en {dias_relativos} días"
-                texto_linea_plain = f"Quedan {dias_relativos} día(s) para su vencimiento."
+                texto_linea_plain = (
+                    f"Quedan {dias_relativos} día(s) para su vencimiento."
+                )
                 alerta_html = f"<strong>Quedan {dias_relativos} día(s)</strong> para su vencimiento."
 
             # ---------------- POST-VENCIMIENTO ----------------
             else:
-                dias_pasados = -dias_relativos  # 0 => vence hoy, 1 => vencido hace 1 día...
+                dias_pasados = (
+                    -dias_relativos
+                )  # 0 => vence hoy, 1 => vencido hace 1 día...
 
                 if MAX_DIAS_POST is not None and dias_pasados > MAX_DIAS_POST:
                     saltados += 1
@@ -165,7 +249,9 @@ def cron_contratos_por_vencer(request):
                     alerta_html = "<strong>El contrato vence hoy.</strong>"
                 else:
                     estado_subject = f"vencido hace {dias_pasados} día(s)"
-                    texto_linea_plain = f"El contrato se encuentra vencido hace {dias_pasados} día(s)."
+                    texto_linea_plain = (
+                        f"El contrato se encuentra vencido hace {dias_pasados} día(s)."
+                    )
                     alerta_html = (
                         f"<strong>El contrato se encuentra vencido</strong> "
                         f"hace {dias_pasados} día(s)."
@@ -186,7 +272,8 @@ def cron_contratos_por_vencer(request):
             tecnico = c.tecnico
             nombre_tecnico = (
                 tecnico.get_full_name()
-                if hasattr(tecnico, "get_full_name") else str(tecnico)
+                if hasattr(tecnico, "get_full_name")
+                else str(tecnico)
             )
             rut_tecnico = getattr(tecnico, "identidad", "")
 
@@ -294,7 +381,8 @@ def cron_contratos_por_vencer(request):
                 ultimo_error = e.__class__.__name__
                 logger.exception(
                     "Fallo enviando alerta contrato_id=%s dias_relativos=%s",
-                    c.id, dias_relativos
+                    c.id,
+                    dias_relativos,
                 )
                 # No registramos ContratoAlertaEnviada si el envío falló
                 continue
@@ -307,7 +395,7 @@ def cron_contratos_por_vencer(request):
             )
             enviados += 1
 
-        success = (errores_envio == 0)
+        success = errores_envio == 0
 
     finally:
         # Si hubo cualquier problema (errores SMTP o excepción inesperada),

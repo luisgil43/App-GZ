@@ -2230,47 +2230,148 @@ def eliminar_movimiento(request, pk):
 @login_required
 @rol_requerido('facturacion', 'admin')
 def listar_saldos_usuarios(request):
-    # Cantidad por página (máx. 100)
-    cantidad_param = (request.GET.get('cantidad') or '5').strip().lower()
+    from decimal import Decimal
 
-    # Agrupar por usuario y calcular rendido y disponible
-    saldos = (
-        CartolaMovimiento.objects
-        .values('usuario__id', 'usuario__first_name', 'usuario__last_name', 'usuario__email')
-        .annotate(
-            # 👉 cargos SOLO de movimientos que NO están rechazados
-            monto_rendido=Sum(
-                'cargos',
-                filter=~Q(status__startswith='rechazado')
-            ),
-            monto_asignado=Sum('abonos'),
+    from django.core.paginator import Paginator
+    from django.db.models import (Case, DecimalField, ExpressionWrapper, F, Q,
+                                  Sum, Value, When)
+    from django.db.models.functions import Coalesce
+
+    from facturacion.models import CartolaMovimiento
+
+    cantidad = (request.GET.get('cantidad') or '5').strip().lower()
+
+    USER_PENDING = ['pendiente_abono_usuario']
+    SUP_PENDING = ['pendiente_supervisor']
+    PM_PENDING = ['aprobado_supervisor']
+    FIN_PENDING = ['aprobado_pm']
+
+    DEC = DecimalField(max_digits=12, decimal_places=2)
+    V0 = Value(Decimal('0.00'), output_field=DEC)
+
+    pend_user_abonos = Sum(
+        Case(
+            When(Q(abonos__gt=0) & Q(status__in=USER_PENDING), then=F('abonos')),
+            default=V0,
+            output_field=DEC,
         )
-        .order_by('usuario__first_name')
     )
 
-    # Calcular monto disponible
-    for s in saldos:
-        s['monto_disponible'] = (s['monto_asignado'] or 0) - (s['monto_rendido'] or 0)
+    pend_sup_abonos = Sum(
+        Case(
+            When(Q(abonos__gt=0) & Q(status__in=SUP_PENDING), then=F('abonos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
 
-    # Paginación (máx. 100)
-    if cantidad_param == 'todos':
-        per_page = 100
+    pend_sup_cargos = Sum(
+        Case(
+            When(Q(cargos__gt=0) & Q(status__in=SUP_PENDING), then=F('cargos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    pend_pm_abonos = Sum(
+        Case(
+            When(Q(abonos__gt=0) & Q(status__in=PM_PENDING), then=F('abonos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    pend_pm_cargos = Sum(
+        Case(
+            When(Q(cargos__gt=0) & Q(status__in=PM_PENDING), then=F('cargos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    pend_fin_abonos = Sum(
+        Case(
+            When(Q(abonos__gt=0) & Q(status__in=FIN_PENDING), then=F('abonos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    pend_fin_cargos = Sum(
+        Case(
+            When(Q(cargos__gt=0) & Q(status__in=FIN_PENDING), then=F('cargos')),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    base = CartolaMovimiento.objects.all()
+
+    qs = (
+        base
+        .values(
+            'usuario__id',
+            'usuario__first_name',
+            'usuario__last_name',
+            'usuario__email',
+        )
+        .annotate(
+            # Igual filosofía Hyperlink: total rendido / total asignado
+            monto_rendido=Coalesce(Sum('cargos'), V0, output_field=DEC),
+            monto_asignado=Coalesce(Sum('abonos'), V0, output_field=DEC),
+
+            pend_user=Coalesce(pend_user_abonos, V0, output_field=DEC),
+
+            _pend_sup_abonos=pend_sup_abonos,
+            _pend_sup_cargos=pend_sup_cargos,
+            _pend_pm_abonos=pend_pm_abonos,
+            _pend_pm_cargos=pend_pm_cargos,
+            _pend_fin_abonos=pend_fin_abonos,
+            _pend_fin_cargos=pend_fin_cargos,
+        )
+        .annotate(
+            pend_sup=ExpressionWrapper(
+                Coalesce(F('_pend_sup_abonos'), V0, output_field=DEC) +
+                Coalesce(F('_pend_sup_cargos'), V0, output_field=DEC),
+                output_field=DEC,
+            ),
+            pend_pm=ExpressionWrapper(
+                Coalesce(F('_pend_pm_abonos'), V0, output_field=DEC) +
+                Coalesce(F('_pend_pm_cargos'), V0, output_field=DEC),
+                output_field=DEC,
+            ),
+            pend_fin=ExpressionWrapper(
+                Coalesce(F('_pend_fin_abonos'), V0, output_field=DEC) +
+                Coalesce(F('_pend_fin_cargos'), V0, output_field=DEC),
+                output_field=DEC,
+            ),
+            monto_disponible=ExpressionWrapper(
+                Coalesce(F('monto_asignado'), V0, output_field=DEC) -
+                Coalesce(F('monto_rendido'), V0, output_field=DEC),
+                output_field=DEC,
+            ),
+        )
+        .order_by('usuario__first_name', 'usuario__last_name')
+    )
+
+    if cantidad == 'todos':
+        per_page = qs.count() or 1
     else:
         try:
-            per_page = max(5, min(int(cantidad_param), 100))
+            per_page = max(5, min(int(cantidad), 100))
         except ValueError:
             per_page = 5
-            cantidad_param = '5'
+            cantidad = '5'
 
-    paginator = Paginator(saldos, per_page)
-    page_number = request.GET.get('page')
-    pagina = paginator.get_page(page_number)
+    paginator = Paginator(qs, per_page)
+    pagina = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'facturacion/listar_saldos_usuarios.html', {
         'saldos': pagina,
         'pagina': pagina,
-        'cantidad': cantidad_param,
+        'cantidad': cantidad,
     })
+
 
 @login_required
 @rol_requerido('facturacion', 'admin')
@@ -2363,44 +2464,171 @@ def exportar_cartola_finanzas(request):
 
 
 @login_required
-@rol_requerido('admin', 'facturacion')  # Solo Admin y Finanzas
+@rol_requerido('admin', 'facturacion')
 def exportar_saldos_disponibles(request):
-    # Obtener los mismos datos que usa la vista principal
-    from django.db.models import F, Sum, Value
+    from datetime import datetime
+    from decimal import Decimal
+    from io import BytesIO
+
+    from django.db.models import (Case, DecimalField, ExpressionWrapper, F, Q,
+                                  Sum, Value, When)
+    from django.db.models.functions import Coalesce
+    from django.http import HttpResponse
+    from django.utils import timezone
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
 
     from facturacion.models import CartolaMovimiento
 
-    saldos = (CartolaMovimiento.objects
-              .values('usuario__first_name', 'usuario__last_name')
-              .annotate(
-                  monto_rendido=Sum('cargos', default=0),
-                  monto_disponible=Sum(F('abonos') - F('cargos'), default=0)
-              ).order_by('usuario__first_name'))
+    USER_PENDING = ['pendiente_abono_usuario']
+    SUP_PENDING = ['pendiente_supervisor']
+    PM_PENDING = ['aprobado_supervisor']
+    FIN_PENDING = ['aprobado_pm']
 
-    # Crear respuesta como Excel
-    response = HttpResponse(content_type='application/octet-stream')
-    response['Content-Disposition'] = 'attachment; filename="saldos_disponibles.xls"'
-    response['X-Content-Type-Options'] = 'nosniff'
+    DEC = DecimalField(max_digits=12, decimal_places=2)
+    V0 = Value(Decimal('0.00'), output_field=DEC)
 
-    wb = xlwt.Workbook(encoding='utf-8')
-    ws = wb.add_sheet('Saldos Disponibles')
+    def _sum_pending_abonos(status_list):
+        return Sum(
+            Case(
+                When(Q(abonos__gt=0) & Q(status__in=status_list), then=F('abonos')),
+                default=V0,
+                output_field=DEC,
+            )
+        )
 
-    header_style = xlwt.easyxf('font: bold on; align: horiz center')
-    currency_style = xlwt.easyxf(num_format_str='#,##0')
+    def _sum_pending_cargos(status_list):
+        return Sum(
+            Case(
+                When(Q(cargos__gt=0) & Q(status__in=status_list), then=F('cargos')),
+                default=V0,
+                output_field=DEC,
+            )
+        )
 
-    # Cabeceras
-    columns = ["Usuario", "Monto Rendido", "Monto Disponible"]
-    for col_num, column_title in enumerate(columns):
-        ws.write(0, col_num, column_title, header_style)
+    balances = (
+        CartolaMovimiento.objects
+        .values('usuario__first_name', 'usuario__last_name')
+        .annotate(
+            monto_rendido=Coalesce(Sum('cargos'), V0, output_field=DEC),
+            monto_asignado=Coalesce(Sum('abonos'), V0, output_field=DEC),
 
-    # Filas
-    for row_num, s in enumerate(saldos, start=1):
-        usuario = f"{s['usuario__first_name']} {s['usuario__last_name']}"
-        ws.write(row_num, 0, usuario)
-        ws.write(row_num, 1, float(s['monto_rendido'] or 0), currency_style)
-        ws.write(row_num, 2, float(s['monto_disponible'] or 0), currency_style)
+            pending_user=Coalesce(_sum_pending_abonos(USER_PENDING), V0, output_field=DEC),
 
-    wb.save(response)
+            sup_abonos=_sum_pending_abonos(SUP_PENDING),
+            sup_cargos=_sum_pending_cargos(SUP_PENDING),
+
+            pm_abonos=_sum_pending_abonos(PM_PENDING),
+            pm_cargos=_sum_pending_cargos(PM_PENDING),
+
+            fin_abonos=_sum_pending_abonos(FIN_PENDING),
+            fin_cargos=_sum_pending_cargos(FIN_PENDING),
+        )
+        .annotate(
+            monto_disponible=ExpressionWrapper(
+                Coalesce(F('monto_asignado'), V0, output_field=DEC) -
+                Coalesce(F('monto_rendido'), V0, output_field=DEC),
+                output_field=DEC,
+            )
+        )
+        .order_by('usuario__first_name', 'usuario__last_name')
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Saldos Disponibles"
+
+    ws.sheet_view.showGridLines = False
+    ws.print_options.gridLines = False
+
+    header_fill = PatternFill("solid", fgColor="374151")
+    header_font = Font(bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+
+    thin = Side(style="thin", color="D1D5DB")
+    border_all = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    left = Alignment(horizontal="left", vertical="center")
+    right = Alignment(horizontal="right", vertical="center")
+
+    columns = [
+        "Usuario",
+        "Monto Rendido",
+        "Monto Asignado",
+        "Monto Disponible",
+        "Pendiente Usuario",
+        "Pendiente Supervisor",
+        "Pendiente PM",
+        "Pendiente Finanzas",
+    ]
+
+    ws.append(columns)
+
+    for col_num, title in enumerate(columns, start=1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+        cell.border = border_all
+
+    for r, b in enumerate(balances, start=2):
+        pend_sup = float((b["sup_abonos"] or 0) + (b["sup_cargos"] or 0))
+        pend_pm = float((b["pm_abonos"] or 0) + (b["pm_cargos"] or 0))
+        pend_fin = float((b["fin_abonos"] or 0) + (b["fin_cargos"] or 0))
+
+        usuario = f"{b['usuario__first_name'] or ''} {b['usuario__last_name'] or ''}".strip()
+
+        ws.cell(row=r, column=1, value=usuario)
+        ws.cell(row=r, column=2, value=float(b["monto_rendido"] or 0))
+        ws.cell(row=r, column=3, value=float(b["monto_asignado"] or 0))
+        ws.cell(row=r, column=4, value=float(b["monto_disponible"] or 0))
+        ws.cell(row=r, column=5, value=float(b["pending_user"] or 0))
+        ws.cell(row=r, column=6, value=pend_sup)
+        ws.cell(row=r, column=7, value=pend_pm)
+        ws.cell(row=r, column=8, value=pend_fin)
+
+        for col in range(1, 9):
+            c = ws.cell(row=r, column=col)
+            c.border = border_all
+
+            if col == 1:
+                c.alignment = left
+            else:
+                c.alignment = right
+                c.number_format = "$#,##0"
+
+    widths = {
+        1: 28,
+        2: 18,
+        3: 18,
+        4: 18,
+        5: 20,
+        6: 24,
+        7: 18,
+        8: 24,
+    }
+
+    for col, width in widths.items():
+        ws.column_dimensions[get_column_letter(col)].width = width
+
+    ws.freeze_panes = "A2"
+    ws.auto_filter.ref = f"A1:{get_column_letter(ws.max_column)}{ws.max_row}"
+
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+
+    now_str = timezone.localtime().strftime("%Y%m%d_%H%M%S")
+
+    response = HttpResponse(
+        bio.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="saldos_disponibles_{now_str}.xlsx"'
+    )
+
     return response
 
 
