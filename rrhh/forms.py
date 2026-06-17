@@ -31,7 +31,6 @@ class ContratoTrabajoForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
 
         # ✅ Asegura que exista el tipo base sin romper producción/local.
-        # Esto ayuda si en algún ambiente aún no se creó por migración de datos.
         tipo_contrato, _ = TipoDocumentoLaboral.objects.get_or_create(
             nombre="Contrato de trabajo",
             defaults={
@@ -52,7 +51,8 @@ class ContratoTrabajoForm(forms.ModelForm):
             self.fields["tipo_documento_laboral"].initial = tipo_contrato
 
         # ---- requisitos básicos ----
-        self.fields["fecha_termino"].required = False  # la controlamos nosotros
+        self.fields["fecha_inicio"].required = False
+        self.fields["fecha_termino"].required = False
         self.fields["observacion"].required = False
         self.fields["tipo_documento_laboral"].required = True
 
@@ -70,12 +70,15 @@ class ContratoTrabajoForm(forms.ModelForm):
         self.fields["tipo_documento_laboral"].error_messages[
             "required"
         ] = "Debes seleccionar el tipo de documento laboral."
+
         self.fields["fecha_inicio"].error_messages[
             "required"
         ] = "Debes ingresar una fecha de inicio."
+
         self.fields["fecha_termino"].error_messages[
             "required"
         ] = "Debes ingresar una fecha de término."
+
         self.fields["archivo"].error_messages[
             "required"
         ] = "Debes subir el archivo del documento laboral en PDF."
@@ -130,20 +133,48 @@ class ContratoTrabajoForm(forms.ModelForm):
             ),
         }
 
-    # ===== Validaciones campo a campo =====
+    def clean(self):
+        cleaned_data = super().clean()
 
-    def clean_fecha_termino(self):
-        """
-        Si el documento NO es indefinido, la fecha_termino es obligatoria.
-        """
-        fecha_termino = self.cleaned_data.get("fecha_termino")
+        tipo = cleaned_data.get("tipo_documento_laboral")
+        fecha_inicio = cleaned_data.get("fecha_inicio")
+        fecha_termino = cleaned_data.get("fecha_termino")
 
-        if not self.indefinido and not fecha_termino:
-            raise forms.ValidationError(
-                "Debes ingresar una fecha de término o marcar el documento como indefinido."
+        # ======================================================
+        # ✅ FINIQUITO / DOCUMENTO QUE CIERRA RELACIÓN LABORAL
+        # ======================================================
+        # No debe exigir fecha inicio ni fecha término al usuario.
+        # Como fecha_inicio es obligatoria en el modelo, guardamos
+        # internamente la fecha actual para no tocar la base de datos.
+        if tipo and tipo.cierra_relacion_laboral:
+            if not fecha_inicio:
+                cleaned_data["fecha_inicio"] = date.today()
+
+            cleaned_data["fecha_termino"] = None
+            return cleaned_data
+
+        # ======================================================
+        # ✅ CONTRATOS / ANEXOS / ACUERDOS QUE SÍ MANEJAN VIGENCIA
+        # ======================================================
+        if not fecha_inicio:
+            self.add_error(
+                "fecha_inicio",
+                "Debes ingresar una fecha de inicio para este tipo de documento.",
             )
 
-        return fecha_termino
+        if not self.indefinido and not fecha_termino:
+            self.add_error(
+                "fecha_termino",
+                "Debes ingresar una fecha de término o marcar el documento como indefinido.",
+            )
+
+        if fecha_inicio and fecha_termino and fecha_termino < fecha_inicio:
+            self.add_error(
+                "fecha_termino",
+                "La fecha de término no puede ser anterior a la fecha de inicio.",
+            )
+
+        return cleaned_data
 
     def clean_archivo(self):
         """
@@ -166,7 +197,6 @@ class ContratoTrabajoForm(forms.ModelForm):
             return archivo
 
         # Si es un archivo subido en ESTE request, lo validamos.
-        # (Para el FieldFile ya guardado no revisamos content_type.)
         if isinstance(archivo, UploadedFile):
             nombre = (archivo.name or "").lower()
             if not nombre.endswith(".pdf"):
@@ -255,7 +285,6 @@ class TipoDocumentoLaboralForm(forms.ModelForm):
             )
 
         return cleaned_data
-
 
 
 class FichaIngresoForm(forms.ModelForm):

@@ -69,6 +69,84 @@ User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
+def aplicar_impacto_documento_laboral(documento: ContratoTrabajo):
+    """
+    Aplica reglas seguras al crear/editar documentos laborales.
+
+    Producción:
+    - No cambia modelos.
+    - No cambia rutas.
+    - No toca Telegram.
+    - Solo actualiza documentos anteriores del mismo trabajador.
+
+    Reglas:
+    - Si el documento cierra relación laboral, ejemplo Finiquito:
+        * El nuevo documento queda activo.
+        * Sin alerta.
+        * Sin fecha término.
+        * Apaga documentos anteriores del trabajador.
+    - Si el documento afecta vigencia, ejemplo Contrato o Anexo:
+        * El nuevo documento queda activo.
+        * Alerta según configuración del tipo.
+        * Apaga documentos anteriores activos del trabajador.
+    """
+    tipo = documento.tipo_documento_laboral
+
+    if not tipo:
+        return
+
+    # ==============================
+    # FINIQUITO / CIERRE LABORAL
+    # ==============================
+    if tipo.cierra_relacion_laboral:
+        documento.activo = True
+        documento.fecha_inicio = documento.fecha_inicio or timezone.localdate()
+        documento.fecha_termino = None
+        documento.notificar_vencimiento = False
+        documento.save(
+            update_fields=[
+                "activo",
+                "fecha_inicio",
+                "fecha_termino",
+                "notificar_vencimiento",
+            ]
+        )
+
+        ContratoTrabajo.objects.filter(
+            tecnico=documento.tecnico,
+            activo=True,
+        ).exclude(pk=documento.pk).update(
+            activo=False,
+            notificar_vencimiento=False,
+            cerrado_por=documento,
+            motivo_cierre="Cerrado por finiquito",
+        )
+
+        return
+
+    # ==============================
+    # CONTRATO / ANEXO / ACUERDO
+    # ==============================
+    if tipo.afecta_vigencia:
+        documento.activo = True
+        documento.notificar_vencimiento = tipo.genera_alerta_vencimiento
+        documento.save(
+            update_fields=[
+                "activo",
+                "notificar_vencimiento",
+            ]
+        )
+
+        ContratoTrabajo.objects.filter(
+            tecnico=documento.tecnico,
+            activo=True,
+        ).exclude(pk=documento.pk).update(
+            activo=False,
+            notificar_vencimiento=False,
+            reemplazado_por=documento,
+            motivo_cierre="Reemplazado por nuevo documento laboral",
+        )
+
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
@@ -335,10 +413,10 @@ def listar_contratos_usuario(request):
 
 
 @staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@rol_requerido("admin", "pm", "rrhh")
 def crear_contrato(request):
-    if request.method == 'POST':
-        indefinido = bool(request.POST.get('indefinido-check'))
+    if request.method == "POST":
+        indefinido = bool(request.POST.get("indefinido-check"))
 
         form = ContratoTrabajoForm(
             request.POST,
@@ -349,70 +427,124 @@ def crear_contrato(request):
         if form.is_valid():
             contrato = form.save(commit=False)
 
-            if indefinido:
+            tipo = contrato.tipo_documento_laboral
+
+            # ==================================================
+            # FINIQUITO / DOCUMENTO QUE CIERRA RELACIÓN LABORAL
+            # ==================================================
+            if tipo and tipo.cierra_relacion_laboral:
+                contrato.fecha_inicio = contrato.fecha_inicio or timezone.localdate()
                 contrato.fecha_termino = None
+                contrato.notificar_vencimiento = False
+                contrato.activo = True
+
+            # ==================================================
+            # CONTRATO / ANEXO / ACUERDO CON VIGENCIA
+            # ==================================================
+            else:
+                if indefinido:
+                    contrato.fecha_termino = None
+
+                contrato.activo = True
+
+                if tipo:
+                    contrato.notificar_vencimiento = tipo.genera_alerta_vencimiento
 
             contrato.save()
 
+            # ✅ Apaga documentos anteriores según el tipo creado
+            aplicar_impacto_documento_laboral(contrato)
+
             crear_notificacion(
                 usuario=contrato.tecnico,
-                mensaje='Se ha generado un nuevo contrato de trabajo. Puedes revisarlo y firmarlo en la plataforma.',
-                url=reverse('rrhh:mis_contratos'),
-                tipo='info'
+                mensaje="Se ha generado un nuevo documento laboral. Puedes revisarlo en la plataforma.",
+                url=reverse("rrhh:mis_contratos"),
+                tipo="info",
             )
 
-            messages.success(request, '✅ Contrato creado correctamente.')
-            return redirect('rrhh:contratos_trabajo')
-        else:
-            messages.error(
-                request,
-                '❌ Error al crear el contrato. Revisa los campos marcados en rojo.'
-            )
+            messages.success(request, "✅ Documento laboral creado correctamente.")
+            return redirect("rrhh:contratos_trabajo")
+
+        messages.error(
+            request,
+            "❌ Error al crear el documento laboral. Revisa los campos marcados en rojo.",
+        )
+
     else:
         form = ContratoTrabajoForm()
 
-    return render(request, 'rrhh/crear_contrato.html', {'form': form})
+    return render(request, "rrhh/crear_contrato.html", {"form": form})
 
 
 @staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@rol_requerido("admin", "pm", "rrhh")
 def toggle_notificacion_contrato(request, contrato_id):
     """
-    Activa o desactiva las alertas de vencimiento para un contrato.
+    Activa o desactiva las alertas de vencimiento para documentos laborales.
 
-    Se usa desde el listado con un checkbox que auto-envía el formulario.
+    Seguridad producción:
+    - No permite activar alertas en finiquitos/documentos de cierre laboral.
+    - No permite activar alertas en documentos inactivos.
     """
-    contrato = get_object_or_404(ContratoTrabajo, id=contrato_id)
+    contrato = get_object_or_404(
+        ContratoTrabajo.objects.select_related("tecnico", "tipo_documento_laboral"),
+        id=contrato_id,
+    )
 
-    if request.method != 'POST':
-        return redirect('rrhh:contratos_trabajo')
+    if request.method != "POST":
+        return redirect("rrhh:contratos_trabajo")
 
-    # Si el checkbox viene marcado => True, si no viene en POST => False
-    notificar = 'notificar' in request.POST
+    tipo = contrato.tipo_documento_laboral
+
+    # ✅ Finiquitos / cierres laborales nunca deben tener alerta
+    if tipo and tipo.cierra_relacion_laboral:
+        contrato.notificar_vencimiento = False
+        contrato.save(update_fields=["notificar_vencimiento"])
+
+        messages.warning(
+            request,
+            f"⚠️ Este documento corresponde a un cierre laboral y no puede generar alertas.",
+        )
+        return redirect(request.META.get("HTTP_REFERER", "rrhh:contratos_trabajo"))
+
+    # ✅ Documentos inactivos tampoco deben generar alertas
+    if not contrato.activo:
+        contrato.notificar_vencimiento = False
+        contrato.save(update_fields=["notificar_vencimiento"])
+
+        messages.warning(
+            request, f"⚠️ Este documento está inactivo y no puede generar alertas."
+        )
+        return redirect(request.META.get("HTTP_REFERER", "rrhh:contratos_trabajo"))
+
+    notificar = "notificar" in request.POST
     contrato.notificar_vencimiento = notificar
-    contrato.save(update_fields=['notificar_vencimiento'])
+    contrato.save(update_fields=["notificar_vencimiento"])
 
     if notificar:
         messages.success(
             request,
-            f"🔔 Alertas de vencimiento activadas para {contrato.tecnico.get_full_name()}."
+            f"🔔 Alertas de vencimiento activadas para {contrato.tecnico.get_full_name()}.",
         )
     else:
         messages.success(
             request,
-            f"🔕 Alertas de vencimiento desactivadas para {contrato.tecnico.get_full_name()}."
+            f"🔕 Alertas de vencimiento desactivadas para {contrato.tecnico.get_full_name()}.",
         )
 
-    return redirect(request.META.get('HTTP_REFERER', 'rrhh:contratos_trabajo'))
+    return redirect(request.META.get("HTTP_REFERER", "rrhh:contratos_trabajo"))
 
 
 @staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@rol_requerido("admin", "pm", "rrhh")
 def editar_contrato(request, contrato_id):
-    contrato = get_object_or_404(ContratoTrabajo, id=contrato_id)
+    contrato = get_object_or_404(
+        ContratoTrabajo.objects.select_related("tecnico", "tipo_documento_laboral"),
+        id=contrato_id,
+    )
 
-    if request.method == 'POST':
-        indefinido = bool(request.POST.get('indefinido-check'))
+    if request.method == "POST":
+        indefinido = bool(request.POST.get("indefinido-check"))
 
         form = ContratoTrabajoForm(
             request.POST,
@@ -423,27 +555,47 @@ def editar_contrato(request, contrato_id):
 
         if form.is_valid():
             contrato = form.save(commit=False)
+            tipo = contrato.tipo_documento_laboral
 
-            if indefinido:
+            # ==================================================
+            # FINIQUITO / DOCUMENTO QUE CIERRA RELACIÓN LABORAL
+            # ==================================================
+            if tipo and tipo.cierra_relacion_laboral:
+                contrato.fecha_inicio = contrato.fecha_inicio or timezone.localdate()
                 contrato.fecha_termino = None
+                contrato.notificar_vencimiento = False
+                contrato.activo = True
+
+            # ==================================================
+            # CONTRATO / ANEXO / ACUERDO CON VIGENCIA
+            # ==================================================
+            else:
+                if indefinido:
+                    contrato.fecha_termino = None
+
+                contrato.activo = True
+
+                if tipo:
+                    contrato.notificar_vencimiento = tipo.genera_alerta_vencimiento
 
             # Reemplazo de archivo sólo si marcaron el checkbox
-            reemplazar = form.cleaned_data.get('reemplazar_archivo')
-            archivo_nuevo = request.FILES.get('archivo')
+            reemplazar = form.cleaned_data.get("reemplazar_archivo")
+            archivo_nuevo = request.FILES.get("archivo")
 
             if reemplazar and archivo_nuevo:
-                if archivo_nuevo.content_type != 'application/pdf':
-                    messages.error(request, '❌ El archivo debe ser un PDF válido.')
+                if archivo_nuevo.content_type != "application/pdf":
+                    messages.error(request, "❌ El archivo debe ser un PDF válido.")
                     return render(
                         request,
-                        'rrhh/editar_contrato.html',
-                        {'form': form, 'contrato': contrato},
+                        "rrhh/editar_contrato.html",
+                        {"form": form, "contrato": contrato},
                     )
 
                 try:
                     nombre_original = None
+
                     if contrato.archivo and contrato.archivo.name:
-                        nombre_original = contrato.archivo.name.split('/')[-1]
+                        nombre_original = contrato.archivo.name.split("/")[-1]
                         contrato.archivo.delete(save=False)
 
                     if not nombre_original:
@@ -451,31 +603,34 @@ def editar_contrato(request, contrato_id):
 
                     archivo_nuevo.seek(0)
                     contenido = archivo_nuevo.read()
+
                     contrato.archivo.save(
-                        nombre_original,
-                        ContentFile(contenido),
-                        save=False
+                        nombre_original, ContentFile(contenido), save=False
                     )
+
                 except Exception as e:
-                    messages.error(
-                        request,
-                        f"❌ Error al subir el nuevo archivo: {e}"
-                    )
+                    messages.error(request, f"❌ Error al subir el nuevo archivo: {e}")
                     return render(
                         request,
-                        'rrhh/editar_contrato.html',
-                        {'form': form, 'contrato': contrato},
+                        "rrhh/editar_contrato.html",
+                        {"form": form, "contrato": contrato},
                     )
 
             contrato.save()
-            messages.success(request, '✅ Contrato actualizado correctamente.')
-            return redirect('rrhh:contratos_trabajo')
 
-        else:
-            messages.error(
-                request,
-                '❌ Error al actualizar el contrato. Revisa los campos marcados en rojo.'
-            )
+            # ✅ Aplica impacto también al editar:
+            # - Finiquito apaga contratos/anexos anteriores.
+            # - Contrato/anexo nuevo apaga documentos anteriores activos.
+            aplicar_impacto_documento_laboral(contrato)
+
+            messages.success(request, "✅ Documento laboral actualizado correctamente.")
+            return redirect("rrhh:contratos_trabajo")
+
+        messages.error(
+            request,
+            "❌ Error al actualizar el documento laboral. Revisa los campos marcados en rojo.",
+        )
+
     else:
         form = ContratoTrabajoForm(
             instance=contrato,
@@ -484,9 +639,10 @@ def editar_contrato(request, contrato_id):
 
     return render(
         request,
-        'rrhh/editar_contrato.html',
-        {'form': form, 'contrato': contrato},
+        "rrhh/editar_contrato.html",
+        {"form": form, "contrato": contrato},
     )
+
 
 @staff_member_required
 @rol_requerido('admin', 'pm', 'rrhh')
