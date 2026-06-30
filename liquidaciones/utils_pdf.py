@@ -18,7 +18,10 @@ def rut_clave(rut: str) -> str:
     - 26724679-3
     - 267246793
     - 25973603k
-    => "267246793"
+
+    Devuelve:
+    - 267246793
+    - 25973603k
     """
     if not rut:
         return ""
@@ -84,8 +87,11 @@ MESES_NOMBRE = {
 def detectar_mes_anio(texto: str):
     """
     Busca formatos como:
-    REMUNERACIONES MES DE: MAYO del 2026
-    REMUNERACIONES MES DE : MAYO DEL 2026
+    - REMUNERACIONES MES DE: JUNIO del 2026
+    - REMUNERACIONES MES DE : JUNIO DEL 2026
+
+    Devuelve:
+    - (6, 2026)
     """
     if not texto:
         return None, None
@@ -97,13 +103,13 @@ def detectar_mes_anio(texto: str):
         re.IGNORECASE,
     )
 
-    m = patron.search(texto_normalizado)
+    match = patron.search(texto_normalizado)
 
-    if not m:
+    if not match:
         return None, None
 
-    nombre_mes = m.group(1).strip().upper()
-    anio_txt = m.group(2).strip()
+    nombre_mes = match.group(1).strip().upper()
+    anio_txt = match.group(2).strip()
 
     mes_num = MESES_NOMBRE.get(nombre_mes)
 
@@ -119,55 +125,21 @@ def detectar_mes_anio(texto: str):
 
 
 # ==========================
-# RUT / Nombre trabajador
+# Limpieza de nombre
 # ==========================
-def extraer_rut_y_nombre(texto: str):
-    """
-    Soporta varios formatos de Nubox:
+def limpiar_nombre_liquidacion(nombre: str):
+    if not nombre:
+        return None
 
-    Formato A:
-    R.U.T. TRABAJADOR C.C.
-    19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+    nombre = str(nombre).strip()
 
-    Formato B:
-    R.U.T.
-    TRABAJADOR
-    C.C.
-    19.773.808-1
-    TORRES GUERRA EMILIO JAVIER
-
-    Formato C:
-    RUT EMPRESA:
-    77.084.679-K
-    R.U.T. TRABAJADOR C.C.
-    19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
-    """
-
-    if not texto:
-        return None, None
-
-    lineas = [l.strip() for l in texto.splitlines() if l and l.strip()]
-
-    rut_regex = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]\b")
-
-    palabras_bloqueadas_nombre = [
-        "A.F.P",
-        "AFP",
-        "ISAPRE",
-        "FECHA",
-        "TIPO DE CONTRATO",
-        "PLANVITAL",
-        "FONASA",
-        "HABERES",
-        "DESCUENTOS",
-        "DIAS",
-        "HH",
-        "TOTAL",
-    ]
+    if not nombre:
+        return None
 
     centros_costo = {
         "ADM",
         "EXT",
+        "MATRIZ",
         "OPER",
         "OP",
         "TEC",
@@ -175,65 +147,139 @@ def extraer_rut_y_nombre(texto: str):
         "PM",
     }
 
+    palabras_bloqueadas = [
+        "C.C.",
+        "C.C",
+        "FECHA INGRESO",
+        "TIPO DE CONTRATO",
+        "CARGO FUNCIONARIO",
+        "FECHA TERMINO CONTRATO",
+        "A.F.P.",
+        "AFP",
+        "ISAPRE",
+        "HABERES",
+        "DESCUENTOS",
+        "TOTAL",
+        "DIAS",
+        "HH",
+        "IMPONIBLE",
+        "TRIBUTABLE",
+    ]
+
+    nombre_upper = quitar_acentos(nombre).upper()
+
+    if any(palabra in nombre_upper for palabra in palabras_bloqueadas):
+        return None
+
+    partes = nombre.split()
+
+    # Quitar centro de costo si viene pegado al final del nombre
+    # Ej: "TORRES GUERRA EMILIO JAVIER EXT"
+    if partes and partes[-1].upper().replace(".", "") in centros_costo:
+        partes = partes[:-1]
+
+    nombre_limpio = " ".join(partes).strip()
+
+    if not nombre_limpio:
+        return None
+
+    return nombre_limpio
+
+
+# ==========================
+# RUT / Nombre trabajador
+# ==========================
+def extraer_rut_y_nombre(texto: str):
+    """
+    Extrae RUT y nombre del trabajador desde liquidaciones Nubox.
+
+    Soporta formato actual:
+        R.U.T.
+        25.973.603-K
+        TRABAJADOR
+        ZAPATA HERNANDEZ EDGARDO JOSE
+        C.C.
+        ADM
+
+    Soporta formato anterior:
+        R.U.T.
+        TRABAJADOR
+        C.C.
+        19.773.808-1
+        TORRES GUERRA EMILIO JAVIER
+
+    Soporta formato en una línea:
+        R.U.T. TRABAJADOR C.C.
+        19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+    """
+    if not texto:
+        return None, None
+
+    lineas = [linea.strip() for linea in texto.splitlines() if linea and linea.strip()]
+
+    rut_regex = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]\b")
+
     # ======================================================
-    # 1) Buscar cerca del encabezado R.U.T. TRABAJADOR
+    # 1) FORMATO ACTUAL NUBOX:
+    #
+    # R.U.T.
+    # 25.973.603-K
+    # TRABAJADOR
+    # ZAPATA HERNANDEZ EDGARDO JOSE
+    # C.C.
+    # ADM
     # ======================================================
     for i, linea in enumerate(lineas):
-        up = quitar_acentos(linea).upper()
-        up_sin_espacios = up.replace(" ", "")
+        linea_normalizada = quitar_acentos(linea).upper().strip()
 
-        es_header_trabajador = ("R.U.T" in up and "TRABAJADOR" in up) or (
-            "RUTTRABAJADOR" in up_sin_espacios
-        )
-
-        if not es_header_trabajador:
+        if linea_normalizada not in {"R.U.T.", "R.U.T", "RUT", "RUT."}:
             continue
 
-        # Revisar las próximas líneas después del encabezado
-        ventana = lineas[i + 1 : i + 8]
+        rut = None
+        rut_index = None
 
-        for candidato in ventana:
-            match = rut_regex.search(candidato)
+        # Buscar el primer RUT después de R.U.T.
+        for j in range(i + 1, min(i + 8, len(lineas))):
+            match = rut_regex.search(lineas[j])
+            if match:
+                rut = formatear_rut_chile(match.group())
+                rut_index = j
+                break
 
-            if not match:
-                continue
+        if not rut:
+            continue
 
-            rut = formatear_rut_chile(match.group())
+        nombre = None
 
-            resto = candidato[match.end() :].strip()
+        # Buscar la palabra TRABAJADOR después del RUT
+        for k in range(rut_index + 1, min(rut_index + 8, len(lineas))):
+            if quitar_acentos(lineas[k]).upper().strip() == "TRABAJADOR":
+                if k + 1 < len(lineas):
+                    nombre = limpiar_nombre_liquidacion(lineas[k + 1])
+                break
 
-            # Si el nombre viene en la misma línea:
-            # 19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
-            nombre = resto
+        # Fallback: si no encontró TRABAJADOR, probar línea siguiente al RUT
+        if not nombre and rut_index + 1 < len(lineas):
+            nombre = limpiar_nombre_liquidacion(lineas[rut_index + 1])
 
-            # Si el nombre no viene en la misma línea, tomar línea siguiente
-            if not nombre:
-                indice_candidato = lineas.index(candidato)
-                if indice_candidato + 1 < len(lineas):
-                    nombre = lineas[indice_candidato + 1].strip()
-
-            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
-
-            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
-                nombre = None
-
-            return rut, nombre
+        return rut, nombre
 
     # ======================================================
-    # 2) Formato separado:
+    # 2) FORMATO ANTERIOR:
+    #
     # R.U.T.
     # TRABAJADOR
     # C.C.
     # 19.773.808-1
-    # NOMBRE
+    # TORRES GUERRA EMILIO JAVIER
     # ======================================================
     for i, linea in enumerate(lineas):
-        up = quitar_acentos(linea).upper()
+        linea_normalizada = quitar_acentos(linea).upper().strip()
 
-        if not up.startswith("R.U.T"):
+        if linea_normalizada not in {"R.U.T.", "R.U.T", "RUT", "RUT."}:
             continue
 
-        ventana = lineas[i : i + 10]
+        ventana = lineas[i : i + 12]
 
         for j, candidato in enumerate(ventana):
             match = rut_regex.search(candidato)
@@ -249,16 +295,34 @@ def extraer_rut_y_nombre(texto: str):
                 if indice_global < len(lineas):
                     nombre = lineas[indice_global].strip()
 
-            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
-
-            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
-                nombre = None
+            nombre = limpiar_nombre_liquidacion(nombre)
 
             return rut, nombre
 
     # ======================================================
-    # 3) Fallback global:
-    # Buscar todos los RUT del PDF y evitar RUT EMPRESA.
+    # 3) FORMATO EN UNA LÍNEA:
+    #
+    # R.U.T. TRABAJADOR C.C.
+    # 19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+    # ======================================================
+    for i, linea in enumerate(lineas):
+        up = quitar_acentos(linea).upper().replace(" ", "")
+
+        if "R.U.T" in up and "TRABAJADOR" in up:
+            for j in range(i + 1, min(i + 8, len(lineas))):
+                match = rut_regex.search(lineas[j])
+
+                if not match:
+                    continue
+
+                rut = formatear_rut_chile(match.group())
+                nombre = limpiar_nombre_liquidacion(lineas[j][match.end() :].strip())
+
+                return rut, nombre
+
+    # ======================================================
+    # 4) FALLBACK GLOBAL:
+    # Buscar todos los RUT.
     # Normalmente:
     # - Primer RUT: empresa
     # - Segundo RUT: trabajador
@@ -273,53 +337,28 @@ def extraer_rut_y_nombre(texto: str):
     if not ruts_formateados:
         return None, None
 
-    # Si hay más de un RUT, normalmente el primero es empresa y el segundo trabajador
-    rut_trabajador = (
-        ruts_formateados[1] if len(ruts_formateados) >= 2 else ruts_formateados[0]
-    )
+    if len(ruts_formateados) >= 2:
+        rut_trabajador = ruts_formateados[1]
+    else:
+        rut_trabajador = ruts_formateados[0]
 
     nombre = None
-
     clave_trabajador = rut_clave(rut_trabajador)
 
     for i, linea in enumerate(lineas):
         if clave_trabajador in rut_clave(linea):
             match = rut_regex.search(linea)
+
             if match:
                 nombre = linea[match.end() :].strip()
 
             if not nombre and i + 1 < len(lineas):
                 nombre = lineas[i + 1].strip()
 
-            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
-
-            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
-                nombre = None
-
+            nombre = limpiar_nombre_liquidacion(nombre)
             break
 
     return rut_trabajador, nombre
-
-
-def limpiar_nombre_liquidacion(nombre: str, centros_costo: set):
-    if not nombre:
-        return None
-
-    nombre = nombre.strip()
-
-    # Separar por espacios
-    partes = nombre.split()
-
-    # Quitar centro de costo al final: EXT, ADM, etc.
-    if partes and partes[-1].upper().replace(".", "") in centros_costo:
-        partes = partes[:-1]
-
-    nombre_limpio = " ".join(partes).strip()
-
-    if not nombre_limpio:
-        return None
-
-    return nombre_limpio
 
 
 # ==========================
@@ -332,9 +371,9 @@ def extraer_paginas_liquidaciones(archivo_subido):
     {
       "ok": True/False,
       "pagina": 1,
-      "rut": "19.773.808-1",
-      "nombre": "TORRES GUERRA EMILIO JAVIER",
-      "mes": 5,
+      "rut": "25.973.603-K",
+      "nombre": "ZAPATA HERNANDEZ EDGARDO JOSE",
+      "mes": 6,
       "anio": 2026,
       "motivo": None,
       "pdf_bytes": b"..."
