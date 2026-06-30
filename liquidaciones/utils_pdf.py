@@ -1,10 +1,12 @@
 import logging
 import re
+import unicodedata
 from io import BytesIO
 
 import fitz  # PyMuPDF
 
 logger = logging.getLogger(__name__)
+
 
 # ==========================
 # Normalización de RUT
@@ -16,13 +18,47 @@ def rut_clave(rut: str) -> str:
     - 26724679-3
     - 267246793
     - 25973603k
-    => "267246793", siempre en minúscula para la k.
+    => "267246793"
     """
     if not rut:
         return ""
-    # deja solo dígitos y k/K
+
     limpio = re.sub(r"[^0-9kK]", "", str(rut))
     return limpio.lower()
+
+
+def formatear_rut_chile(rut: str) -> str:
+    """
+    Recibe:
+    - 197738081
+    - 19.773.8081
+    - 19.773.808-1
+    - 19773808-1
+
+    Devuelve:
+    - 19.773.808-1
+    """
+    clave = rut_clave(rut)
+
+    if len(clave) < 2:
+        return ""
+
+    cuerpo = clave[:-1]
+    dv = clave[-1].upper()
+
+    if not cuerpo.isdigit():
+        return ""
+
+    cuerpo_formateado = f"{int(cuerpo):,}".replace(",", ".")
+    return f"{cuerpo_formateado}-{dv}"
+
+
+def quitar_acentos(texto: str) -> str:
+    if not texto:
+        return ""
+
+    texto = unicodedata.normalize("NFKD", texto)
+    return "".join(c for c in texto if not unicodedata.combining(c))
 
 
 # ==========================
@@ -38,7 +74,7 @@ MESES_NOMBRE = {
     "JULIO": 7,
     "AGOSTO": 8,
     "SEPTIEMBRE": 9,
-    "SETIEMBRE": 9,  # por si acaso
+    "SETIEMBRE": 9,
     "OCTUBRE": 10,
     "NOVIEMBRE": 11,
     "DICIEMBRE": 12,
@@ -47,35 +83,30 @@ MESES_NOMBRE = {
 
 def detectar_mes_anio(texto: str):
     """
-    Busca algo como:
-      REMUNERACIONES MES DE: OCTUBRE del 2025
-    y devuelve (10, 2025).
+    Busca formatos como:
+    REMUNERACIONES MES DE: MAYO del 2026
+    REMUNERACIONES MES DE : MAYO DEL 2026
     """
     if not texto:
         return None, None
 
+    texto_normalizado = quitar_acentos(texto).upper()
+
     patron = re.compile(
-        r"REMUNERACIONES\s+MES\s+DE:\s+([A-ZÁÉÍÓÚÑ]+)\s+del\s+(\d{4})",
+        r"REMUNERACIONES\s+MES\s+DE\s*:?\s*([A-ZÑ]+)\s+DEL\s+(\d{4})",
         re.IGNORECASE,
     )
-    m = patron.search(texto)
+
+    m = patron.search(texto_normalizado)
+
     if not m:
         return None, None
 
-    nombre_mes_raw = m.group(1)
-    anio_txt = m.group(2)
-
-    # normalizamos el nombre del mes (mayúsculas, sin acentos)
-    nombre_mes = (
-        nombre_mes_raw.upper()
-        .replace("Á", "A")
-        .replace("É", "E")
-        .replace("Í", "I")
-        .replace("Ó", "O")
-        .replace("Ú", "U")
-    )
+    nombre_mes = m.group(1).strip().upper()
+    anio_txt = m.group(2).strip()
 
     mes_num = MESES_NOMBRE.get(nombre_mes)
+
     if not mes_num:
         return None, None
 
@@ -88,28 +119,230 @@ def detectar_mes_anio(texto: str):
 
 
 # ==========================
+# RUT / Nombre trabajador
+# ==========================
+def extraer_rut_y_nombre(texto: str):
+    """
+    Soporta varios formatos de Nubox:
+
+    Formato A:
+    R.U.T. TRABAJADOR C.C.
+    19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+
+    Formato B:
+    R.U.T.
+    TRABAJADOR
+    C.C.
+    19.773.808-1
+    TORRES GUERRA EMILIO JAVIER
+
+    Formato C:
+    RUT EMPRESA:
+    77.084.679-K
+    R.U.T. TRABAJADOR C.C.
+    19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+    """
+
+    if not texto:
+        return None, None
+
+    lineas = [l.strip() for l in texto.splitlines() if l and l.strip()]
+
+    rut_regex = re.compile(r"\b\d{1,2}\.?\d{3}\.?\d{3}-?[\dkK]\b")
+
+    palabras_bloqueadas_nombre = [
+        "A.F.P",
+        "AFP",
+        "ISAPRE",
+        "FECHA",
+        "TIPO DE CONTRATO",
+        "PLANVITAL",
+        "FONASA",
+        "HABERES",
+        "DESCUENTOS",
+        "DIAS",
+        "HH",
+        "TOTAL",
+    ]
+
+    centros_costo = {
+        "ADM",
+        "EXT",
+        "OPER",
+        "OP",
+        "TEC",
+        "RRHH",
+        "PM",
+    }
+
+    # ======================================================
+    # 1) Buscar cerca del encabezado R.U.T. TRABAJADOR
+    # ======================================================
+    for i, linea in enumerate(lineas):
+        up = quitar_acentos(linea).upper()
+        up_sin_espacios = up.replace(" ", "")
+
+        es_header_trabajador = ("R.U.T" in up and "TRABAJADOR" in up) or (
+            "RUTTRABAJADOR" in up_sin_espacios
+        )
+
+        if not es_header_trabajador:
+            continue
+
+        # Revisar las próximas líneas después del encabezado
+        ventana = lineas[i + 1 : i + 8]
+
+        for candidato in ventana:
+            match = rut_regex.search(candidato)
+
+            if not match:
+                continue
+
+            rut = formatear_rut_chile(match.group())
+
+            resto = candidato[match.end() :].strip()
+
+            # Si el nombre viene en la misma línea:
+            # 19.773.808-1 TORRES GUERRA EMILIO JAVIER EXT
+            nombre = resto
+
+            # Si el nombre no viene en la misma línea, tomar línea siguiente
+            if not nombre:
+                indice_candidato = lineas.index(candidato)
+                if indice_candidato + 1 < len(lineas):
+                    nombre = lineas[indice_candidato + 1].strip()
+
+            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
+
+            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
+                nombre = None
+
+            return rut, nombre
+
+    # ======================================================
+    # 2) Formato separado:
+    # R.U.T.
+    # TRABAJADOR
+    # C.C.
+    # 19.773.808-1
+    # NOMBRE
+    # ======================================================
+    for i, linea in enumerate(lineas):
+        up = quitar_acentos(linea).upper()
+
+        if not up.startswith("R.U.T"):
+            continue
+
+        ventana = lineas[i : i + 10]
+
+        for j, candidato in enumerate(ventana):
+            match = rut_regex.search(candidato)
+
+            if not match:
+                continue
+
+            rut = formatear_rut_chile(match.group())
+            nombre = candidato[match.end() :].strip()
+
+            if not nombre:
+                indice_global = i + j + 1
+                if indice_global < len(lineas):
+                    nombre = lineas[indice_global].strip()
+
+            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
+
+            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
+                nombre = None
+
+            return rut, nombre
+
+    # ======================================================
+    # 3) Fallback global:
+    # Buscar todos los RUT del PDF y evitar RUT EMPRESA.
+    # Normalmente:
+    # - Primer RUT: empresa
+    # - Segundo RUT: trabajador
+    # ======================================================
+    ruts = rut_regex.findall(texto)
+
+    if not ruts:
+        return None, None
+
+    ruts_formateados = [formatear_rut_chile(r) for r in ruts if formatear_rut_chile(r)]
+
+    if not ruts_formateados:
+        return None, None
+
+    # Si hay más de un RUT, normalmente el primero es empresa y el segundo trabajador
+    rut_trabajador = (
+        ruts_formateados[1] if len(ruts_formateados) >= 2 else ruts_formateados[0]
+    )
+
+    nombre = None
+
+    clave_trabajador = rut_clave(rut_trabajador)
+
+    for i, linea in enumerate(lineas):
+        if clave_trabajador in rut_clave(linea):
+            match = rut_regex.search(linea)
+            if match:
+                nombre = linea[match.end() :].strip()
+
+            if not nombre and i + 1 < len(lineas):
+                nombre = lineas[i + 1].strip()
+
+            nombre = limpiar_nombre_liquidacion(nombre, centros_costo)
+
+            if nombre and any(p in nombre.upper() for p in palabras_bloqueadas_nombre):
+                nombre = None
+
+            break
+
+    return rut_trabajador, nombre
+
+
+def limpiar_nombre_liquidacion(nombre: str, centros_costo: set):
+    if not nombre:
+        return None
+
+    nombre = nombre.strip()
+
+    # Separar por espacios
+    partes = nombre.split()
+
+    # Quitar centro de costo al final: EXT, ADM, etc.
+    if partes and partes[-1].upper().replace(".", "") in centros_costo:
+        partes = partes[:-1]
+
+    nombre_limpio = " ".join(partes).strip()
+
+    if not nombre_limpio:
+        return None
+
+    return nombre_limpio
+
+
+# ==========================
 # Extracción por página
 # ==========================
 def extraer_paginas_liquidaciones(archivo_subido):
     """
-    Recibe un InMemoryUploadedFile (el PDF que subes en el form) y devuelve
-    una lista de diccionarios, uno por página, con:
+    Recibe un InMemoryUploadedFile y devuelve una lista por página:
 
     {
       "ok": True/False,
-      "pagina": 1-based,
-      "rut": "26.724.679-3",
-      "nombre": "GIL MOYA LUIS ENRIQUE",
-      "mes": 10,
-      "anio": 2025,
-      "motivo": None o texto de error,
-      "pdf_bytes": b"...pdf con SOLO esa página..."
+      "pagina": 1,
+      "rut": "19.773.808-1",
+      "nombre": "TORRES GUERRA EMILIO JAVIER",
+      "mes": 5,
+      "anio": 2026,
+      "motivo": None,
+      "pdf_bytes": b"..."
     }
     """
     resultados = []
 
     try:
-        # por si el archivo ya fue leído en otro sitio
         try:
             archivo_subido.seek(0)
         except Exception:
@@ -117,6 +350,7 @@ def extraer_paginas_liquidaciones(archivo_subido):
 
         contenido = archivo_subido.read()
         doc = fitz.open(stream=contenido, filetype="pdf")
+
     except Exception as e:
         logger.error(f"[extraer_paginas_liquidaciones] No se pudo abrir el PDF: {e}")
         return [
@@ -136,73 +370,32 @@ def extraer_paginas_liquidaciones(archivo_subido):
 
     for idx in range(num_paginas):
         pagina_num = idx + 1
+
         try:
             page = doc.load_page(idx)
-            texto = page.get_text("text")
+            texto = page.get_text("text") or ""
 
-            # --- mes / año ---
+            # Mes / año
             mes, anio = detectar_mes_anio(texto)
 
-            # --- RUT y nombre ---
-            lineas = [l.strip() for l in texto.splitlines() if l.strip()]
-            rut = None
-            nombre = None
+            # RUT / nombre
+            rut, nombre = extraer_rut_y_nombre(texto)
+
             motivo = None
-            ok = False
-
-            # 1️⃣ FORMATO NUEVO:
-            #   R.U.T.
-            #   TRABAJADOR
-            #   C.C.
-            #   25.973.603-K
-            #   ZAPATA HERNANDEZ EDGARDO JOSE
-            #   ADM
-            for i, linea in enumerate(lineas):
-                up = linea.upper()
-                if up.startswith("R.U.T"):
-                    # comprobamos que las siguientes líneas sean TRABAJADOR / C.C.
-                    if i + 3 < len(lineas):
-                        l1 = lineas[i + 1].strip().upper()
-                        l2 = lineas[i + 2].strip().upper()
-                        if "TRABAJADOR" in l1 and ("C.C." in l2 or "C.C" in l2):
-                            rut_cand = lineas[i + 3].strip()
-                            nombre_cand = lineas[i + 4].strip() if i + 4 < len(lineas) else ""
-
-                            if rut_cand:
-                                rut = rut_cand
-                                nombre = nombre_cand or None
-                                break
-
-            # 2️⃣ FORMATO ANTIGUO (backup):
-            #    "R.U.T. TRABAJADOR ..." todo en la misma línea y en la siguiente RUT+NOMBRE+CC
-            if not rut:
-                for i, linea in enumerate(lineas):
-                    if linea.upper().startswith("R.U.T. TRABAJADOR"):
-                        if i + 1 < len(lineas):
-                            datos = lineas[i + 1]
-                            partes = datos.split()
-                            if partes:
-                                rut = partes[0]
-                                if len(partes) > 1:
-                                    # normalmente el último token es el centro de costo: ADM, EXT, etc.
-                                    if len(partes) >= 3:
-                                        nombre = " ".join(partes[1:-1])
-                                    else:
-                                        nombre = partes[1]
-                        break
+            ok = True
 
             if not rut:
                 motivo = "No se pudo leer el RUT del trabajador en la página."
                 ok = False
-            else:
-                ok = True
 
-            # --- sacar PDF de solo esa página ---
+            # Sacar PDF de solo esa página
             single_doc = fitz.open()
             single_doc.insert_pdf(doc, from_page=idx, to_page=idx)
+
             buffer = BytesIO()
             single_doc.save(buffer)
             single_doc.close()
+
             pdf_bytes = buffer.getvalue()
 
             resultados.append(

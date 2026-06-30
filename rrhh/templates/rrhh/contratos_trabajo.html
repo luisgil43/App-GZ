@@ -1,73 +1,352 @@
 {% extends 'dashboard/base.html' %}
 
 {% block content %}
-<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
-  <h1 class="text-2xl font-bold text-gray-800 mb-4">
-    📑 Mis Contratos de Trabajo
-  </h1>
+<div class="bg-slate-50 min-h-[calc(100vh-90px)] -mx-3 sm:mx-0 px-3 py-4 sm:p-6">
 
-   <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
-     <thead class="bg-gray-100 text-gray-700 font-semibold">
-  <tr>
-    <th class="px-4 py-2 text-left">Fecha de Inicio</th>
-    <th class="px-4 py-2 text-left">Fecha de Término</th>
-    <th class="px-4 py-2 text-left">Status</th>
-    <th class="px-4 py-2 text-left">Contrato Adjunto</th>
-  </tr>
-</thead>
-<tbody class="divide-y divide-gray-300 text-gray-800">
-  {% for contrato in contratos %}
-  <tr>
-    <td class="px-4 py-2">{{ contrato.fecha_inicio }}</td>
-    <td class="px-4 py-2">
-      {% if contrato.fecha_termino %}
-        {{ contrato.fecha_termino|date:"j \\d\\e F \\d\\e Y" }}
-      {% else %}
-        Indefinido
-      {% endif %}
-    </td>
+  <!-- Header -->
+  <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden mb-5">
+    <div class="p-5 sm:p-6">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-    {# === STATUS PARA EL USUARIO === #}
-    <td class="px-4 py-2">
-      {% if contrato.status_code == 'vencido' %}
-        <span class="inline-block px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-semibold">
-          Contrato vencido
-        </span>
-      {% elif contrato.status_code == 'por_vencer' %}
-        <span class="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-semibold">
-          Tu contrato vence en {{ contrato.dias_restantes }} días
-        </span>
-      {% elif contrato.status_code == 'vigente' %}
-        <span class="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold">
-          Contrato vigente
-        </span>
-      {% else %}
-        <span class="inline-block px-3 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-semibold">
-          Indefinido
-        </span>
-      {% endif %}
-    </td>
+        <div>
+          <div class="inline-flex items-center gap-2 rounded-full bg-emerald-50 border border-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 mb-3">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            Mi documentación laboral
+          </div>
 
-    <td class="px-4 py-2">
-      {% if contrato.archivo %}
-        <a href="{{ contrato.archivo.url }}" class="text-blue-600" target="_blank">
-          📄 <span class="underline ml-1">Ver contrato</span>
-        </a>
-      {% else %}
-        <span class="text-gray-400 italic">No adjunto</span>
-      {% endif %}
-    </td>
-  </tr>
-  {% empty %}
-  <tr>
-    <td colspan="4" class="px-4 py-6 text-center text-gray-500">
-      No tienes contratos registrados.
-    </td>
-  </tr>
-  {% endfor %}
-</tbody>
-    </table>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            📑 Mis Contratos y Documentos
+          </h1>
+
+          <p class="text-sm sm:text-base text-slate-500 mt-1 max-w-4xl">
+            Aquí puedes revisar tus contratos, anexos, finiquitos y documentos laborales disponibles en la plataforma.
+          </p>
+        </div>
+
+        <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 text-slate-600 px-4 py-2 text-sm font-bold w-fit">
+          {{ cantidad_documentos }} documento(s)
+        </div>
+
+      </div>
+    </div>
   </div>
+
+  {% if documento_principal %}
+
+    <!-- Documento principal -->
+    <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden mb-5">
+      <div class="px-5 sm:px-6 py-4 border-b border-slate-100">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-slate-900">
+              Documento principal
+            </h2>
+            <p class="text-sm text-slate-500">
+              Se muestra el documento laboral activo o el más reciente disponible.
+            </p>
+          </div>
+
+          {% if documento_principal.activo %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100 w-fit">
+              Activo
+            </span>
+          {% else %}
+            <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200 w-fit">
+              Inactivo
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="p-5 sm:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+          <!-- Tipo -->
+          <div class="lg:col-span-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Tipo de documento
+            </p>
+
+            {% if documento_principal.tipo_documento_laboral %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                {{ documento_principal.tipo_documento_laboral.nombre }}
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                Sin tipo
+              </span>
+            {% endif %}
+          </div>
+
+          <!-- Inicio -->
+          <div class="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Fecha inicio
+            </p>
+            <p class="text-sm font-bold text-slate-800">
+              {{ documento_principal.fecha_inicio|date:"Y-m-d" }}
+            </p>
+          </div>
+
+          <!-- Término -->
+          <div class="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Fecha término
+            </p>
+
+            {% if documento_principal.tipo_documento_laboral and documento_principal.tipo_documento_laboral.cierra_relacion_laboral %}
+              <p class="text-sm font-bold text-red-600">
+                No aplica
+              </p>
+            {% elif documento_principal.fecha_termino %}
+              <p class="text-sm font-bold text-slate-800">
+                {{ documento_principal.fecha_termino|date:"Y-m-d" }}
+              </p>
+            {% else %}
+              <p class="text-sm font-bold text-slate-600">
+                Indefinido
+              </p>
+            {% endif %}
+          </div>
+
+          <!-- Status -->
+          <div class="lg:col-span-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Estado
+            </p>
+
+            {% if documento_principal.tipo_documento_laboral and documento_principal.tipo_documento_laboral.cierra_relacion_laboral %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                Cierre laboral
+              </span>
+            {% elif documento_principal.status_code == 'vencido' %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                Documento vencido
+              </span>
+            {% elif documento_principal.status_code == 'por_vencer' %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                Vence en {{ documento_principal.dias_restantes }} días
+              </span>
+            {% elif documento_principal.status_code == 'vigente' %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                Vigente
+              </span>
+            {% else %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                Indefinido
+              </span>
+            {% endif %}
+          </div>
+
+          <!-- PDF -->
+          <div class="lg:col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p class="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+              Documento
+            </p>
+
+            {% if documento_principal.archivo %}
+              <a href="{{ documento_principal.archivo.url }}"
+                 class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-bold text-sm"
+                 target="_blank">
+                📄 Ver PDF
+              </a>
+            {% else %}
+              <span class="text-slate-400 italic text-sm">No disponible</span>
+            {% endif %}
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden">
+
+      <div class="px-5 sm:px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">
+            Historial documental
+          </h2>
+          <p class="text-sm text-slate-500">
+            Aquí se muestran todos tus contratos, anexos, finiquitos y observaciones disponibles.
+          </p>
+        </div>
+
+        <button type="button"
+                id="btn-toggle-historial"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 shadow-sm text-sm font-bold w-full sm:w-auto">
+          ▾ Ver historial
+        </button>
+      </div>
+
+      <div id="historial-documentos" class="hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm min-w-[1000px]" style="white-space: nowrap;">
+            <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
+              <tr>
+                <th class="px-4 py-3 text-left">Tipo</th>
+                <th class="px-4 py-3 text-left">Fecha inicio</th>
+                <th class="px-4 py-3 text-left">Fecha término</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Estado interno</th>
+                <th class="px-4 py-3 text-left">Observación</th>
+                <th class="px-4 py-3 text-left">Documento</th>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-100 text-slate-700">
+              {% for contrato in documentos %}
+                <tr class="{% if documento_principal and contrato.id == documento_principal.id %}bg-emerald-50/40{% else %}hover:bg-slate-50{% endif %}">
+
+                  <!-- Tipo -->
+                  <td class="px-4 py-3">
+                    {% if contrato.tipo_documento_laboral %}
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                        {{ contrato.tipo_documento_laboral.nombre }}
+                      </span>
+                    {% else %}
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        Sin tipo
+                      </span>
+                    {% endif %}
+
+                    {% if documento_principal and contrato.id == documento_principal.id %}
+                      <span class="ml-1 inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                        Principal
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <!-- Fecha inicio -->
+                  <td class="px-4 py-3">
+                    {{ contrato.fecha_inicio|date:"Y-m-d" }}
+                  </td>
+
+                  <!-- Fecha término -->
+                  <td class="px-4 py-3">
+                    {% if contrato.tipo_documento_laboral and contrato.tipo_documento_laboral.cierra_relacion_laboral %}
+                      <span class="text-red-600 font-bold">No aplica</span>
+                    {% elif contrato.fecha_termino %}
+                      {{ contrato.fecha_termino|date:"Y-m-d" }}
+                    {% else %}
+                      <span class="text-slate-500 font-semibold">Indefinido</span>
+                    {% endif %}
+                  </td>
+
+                  <!-- Status -->
+                  <td class="px-4 py-3">
+                    {% if contrato.tipo_documento_laboral and contrato.tipo_documento_laboral.cierra_relacion_laboral %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                        Cierre laboral
+                      </span>
+                    {% elif contrato.status_code == 'vencido' %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-red-50 text-red-700 text-xs font-bold border border-red-100">
+                        Vencido
+                      </span>
+                    {% elif contrato.status_code == 'por_vencer' %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-bold border border-amber-100">
+                        Por vencer
+                      </span>
+                    {% elif contrato.status_code == 'vigente' %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                        Vigente
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold">
+                        Indefinido
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <!-- Estado interno -->
+                  <td class="px-4 py-3">
+                    {% if contrato.activo %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                        Activo
+                      </span>
+                    {% else %}
+                      <span class="inline-flex px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold">
+                        Inactivo
+                      </span>
+                    {% endif %}
+                  </td>
+
+                  <!-- Observación -->
+                  <td class="px-4 py-3 max-w-[320px]">
+                    {% if contrato.observacion %}
+                      <div class="text-slate-700 whitespace-normal leading-relaxed">
+                        {{ contrato.observacion }}
+                      </div>
+                    {% else %}
+                      <span class="text-slate-400 italic">Sin observación</span>
+                    {% endif %}
+                  </td>
+
+                  <!-- PDF -->
+                  <td class="px-4 py-3">
+                    {% if contrato.archivo %}
+                      <a href="{{ contrato.archivo.url }}"
+                         class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-bold"
+                         target="_blank">
+                        📄 Ver PDF
+                      </a>
+                    {% else %}
+                      <span class="text-slate-400 italic">No disponible</span>
+                    {% endif %}
+                  </td>
+
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  {% else %}
+
+    <!-- Empty state -->
+    <div class="bg-white border border-slate-200 rounded-none sm:rounded-3xl shadow-sm overflow-hidden">
+      <div class="px-5 py-12 text-center">
+        <div class="mx-auto w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl mb-4">
+          📄
+        </div>
+
+        <h2 class="text-lg font-bold text-slate-800">
+          No tienes documentos laborales registrados.
+        </h2>
+
+        <p class="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+          Cuando Recursos Humanos cargue tus contratos, anexos o documentos laborales, aparecerán en esta sección.
+        </p>
+      </div>
+    </div>
+
+  {% endif %}
+
 </div>
+
+<script>
+(function () {
+  const btn = document.getElementById('btn-toggle-historial');
+  const historial = document.getElementById('historial-documentos');
+
+  if (!btn || !historial) return;
+
+  btn.addEventListener('click', () => {
+    const oculto = historial.classList.contains('hidden');
+
+    historial.classList.toggle('hidden');
+
+    if (oculto) {
+      btn.textContent = '▴ Ocultar historial';
+      btn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+    } else {
+      btn.textContent = '▾ Ver historial';
+      btn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-200');
+    }
+  });
+})();
+</script>
 {% endblock %}

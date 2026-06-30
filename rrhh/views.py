@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import re
 import uuid
 from collections import Counter
 from datetime import date, datetime, timedelta
@@ -68,6 +69,9 @@ User = get_user_model()
 
 
 logger = logging.getLogger(__name__)
+
+
+
 
 def aplicar_impacto_documento_laboral(documento: ContratoTrabajo):
     """
@@ -400,16 +404,53 @@ def crear_tipo_documento_laboral(request):
 @login_required
 def listar_contratos_usuario(request):
     """
-    Vista de contratos para el propio usuario (técnico).
+    Vista de documentos laborales para el propio usuario.
+
+    Producción:
+    - No cambia modelos.
+    - No cambia rutas.
+    - No toca admin.
+    - No toca Telegram.
+    - Muestra contrato, anexos, finiquitos e historial documental del usuario.
     """
     usuario = request.user
-    contratos = ContratoTrabajo.objects.filter(
-        tecnico=usuario
-    ).order_by('-fecha_inicio')
 
-    return render(request, 'rrhh/contratos_trabajo.html', {
-        "contratos": contratos,
-    })
+    documentos = list(
+        ContratoTrabajo.objects.filter(tecnico=usuario)
+        .select_related("tipo_documento_laboral")
+        .order_by("-fecha_inicio", "-id")
+    )
+
+    # Orden interno:
+    # activos primero, luego fecha más reciente.
+    documentos.sort(
+        key=lambda c: (
+            not getattr(c, "activo", True),
+            c.fecha_inicio or date.min,
+            c.id or 0,
+        ),
+        reverse=True,
+    )
+
+    documento_principal = None
+
+    for doc in documentos:
+        if getattr(doc, "activo", True):
+            documento_principal = doc
+            break
+
+    if documento_principal is None and documentos:
+        documento_principal = documentos[0]
+
+    return render(
+        request,
+        "rrhh/contratos_trabajo.html",
+        {
+            "documentos": documentos,
+            "documento_principal": documento_principal,
+            "cantidad_documentos": len(documentos),
+        },
+    )
 
 
 @staff_member_required
