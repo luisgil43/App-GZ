@@ -654,6 +654,211 @@ def detect_intent_from_text(
     return final_intent, float(final_score)
 
 
+def _resolver_intent_por_contexto(
+    texto: str,
+    *,
+    sesion: Optional[BotSession],
+) -> Tuple[Optional[BotIntent], float, dict]:
+    """
+    Resuelve respuestas cortas usando el contexto conversacional.
+
+    Ejemplo:
+    Bot: ¿Qué producción necesitas?
+    Usuario: este mes
+
+    Sin contexto, "este mes" puede confundirse con liquidaciones.
+    Con contexto, si el último intent fue producción, se mantiene producción.
+    """
+    texto = (texto or "").strip()
+    norm = _normalize(texto)
+    tokens = set(_tokenize(texto))
+
+    meta = {
+        "context_used": False,
+        "context_reason": "",
+        "context_last_intent": None,
+    }
+
+    if not texto or not sesion or not sesion.ultimo_intent:
+        return None, 0.0, meta
+
+    ultimo_slug = sesion.ultimo_intent.slug
+    meta["context_last_intent"] = ultimo_slug
+
+    # =========================
+    # Producción: respuestas cortas
+    # =========================
+    if ultimo_slug == "mi_produccion_hasta_hoy":
+        es_rango = bool(_parse_rango_fechas(texto))
+        es_mes_nombre = any(t in _MESES for t in tokens)
+        es_mes_anio = bool(_parse_mes_produccion(texto))
+
+        frases_produccion = {
+            "este mes",
+            "mes actual",
+            "actual",
+            "este",
+            "mes anterior",
+            "mes pasado",
+            "anterior",
+            "pasado",
+            "hoy",
+            "hasta hoy",
+            "a la fecha",
+            "fecha",
+        }
+
+        tokens_produccion = {
+            "mes",
+            "actual",
+            "este",
+            "anterior",
+            "pasado",
+            "hoy",
+            "fecha",
+            "produccion",
+            "hasta",
+        }
+
+        if (
+            norm in frases_produccion
+            or es_rango
+            or es_mes_nombre
+            or es_mes_anio
+            or (tokens and tokens <= tokens_produccion)
+        ):
+            meta["context_used"] = True
+            meta["context_reason"] = (
+                "Respuesta corta resuelta como continuación de producción."
+            )
+            return sesion.ultimo_intent, 1.0, meta
+
+    # =========================
+    # Liquidaciones: respuestas cortas
+    # =========================
+    if ultimo_slug == "mis_liquidaciones":
+        es_mes_nombre = any(t in _MESES for t in tokens)
+        es_mes_anio = bool(_parse_mes_anio_desde_texto(texto))
+        es_ultimas = bool(_parse_ultimas_n_desde_texto(texto))
+
+        frases_liquidacion = {
+            "este mes",
+            "mes actual",
+            "mes anterior",
+            "mes pasado",
+            "anterior",
+            "pasado",
+            "ultimas",
+            "ultimos",
+            "últimas",
+            "últimos",
+        }
+
+        tokens_liquidacion = {
+            "mes",
+            "actual",
+            "este",
+            "anterior",
+            "pasado",
+            "ultimas",
+            "ultimos",
+            "liquidacion",
+            "liquidaciones",
+        }
+
+        if (
+            norm in frases_liquidacion
+            or es_mes_nombre
+            or es_mes_anio
+            or es_ultimas
+            or (tokens and tokens <= tokens_liquidacion)
+        ):
+            meta["context_used"] = True
+            meta["context_reason"] = (
+                "Respuesta corta resuelta como continuación de liquidaciones."
+            )
+            return sesion.ultimo_intent, 1.0, meta
+
+    # =========================
+    # Rendiciones: respuestas cortas
+    # =========================
+    if ultimo_slug in ["mis_rendiciones_pendientes", "ayuda_rendicion_gastos"]:
+        tokens_rendiciones = {
+            "pendientes",
+            "pendiente",
+            "aprobadas",
+            "aprobada",
+            "aprobados",
+            "aprobado",
+            "rechazadas",
+            "rechazada",
+            "rechazados",
+            "rechazado",
+            "hoy",
+            "ayer",
+        }
+
+        if tokens and tokens <= tokens_rendiciones:
+            meta["context_used"] = True
+            meta["context_reason"] = (
+                "Respuesta corta resuelta como continuación de rendiciones."
+            )
+            return sesion.ultimo_intent, 1.0, meta
+
+    # =========================
+    # Info sitio: si el usuario responde solo con ID
+    # =========================
+    if ultimo_slug == "info_sitio_id_claro":
+        txt_up = texto.strip().upper()
+        site_hit = (
+            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
+            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
+            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
+        )
+
+        if site_hit:
+            meta["context_used"] = True
+            meta["context_reason"] = (
+                "ID de sitio resuelto como continuación de info_sitio_id_claro."
+            )
+            return sesion.ultimo_intent, 1.0, meta
+
+    # =========================
+    # Asignación: respuestas cortas
+    # =========================
+    if ultimo_slug == "mi_asignacion":
+        frases_asignacion = {
+            "hoy",
+            "para hoy",
+            "de hoy",
+            "asignacion",
+            "asignación",
+            "pega",
+            "mi pega",
+            "tengo pega",
+        }
+
+        tokens_asignacion = {
+            "hoy",
+            "asignacion",
+            "asignación",
+            "pega",
+            "trabajo",
+            "sitio",
+            "asignado",
+            "asignada",
+        }
+
+        if norm in frases_asignacion or (tokens and tokens <= tokens_asignacion):
+            meta["context_used"] = True
+            meta["context_reason"] = (
+                "Respuesta corta resuelta como continuación de asignación."
+            )
+            return sesion.ultimo_intent, 1.0, meta
+
+    return None, 0.0, meta
+
+
 def detect_intent_with_ai_fallback(
     texto: str,
     *,
@@ -2592,9 +2797,13 @@ def handle_telegram_update(update: dict) -> None:
     ✅ Vinculación por /start <token> generado en la web (activar_telegram).
 
     ✅ IA segura:
-    - Primero usa el motor tradicional.
-    - Si no entiende o tiene baja confianza, usa IA solo para sugerir un intent existente.
-    - La respuesta final sigue saliendo por handlers Django con permisos y filtros reales.
+    - Usa IA como clasificador principal cuando corresponde.
+    - Django valida permisos, existencia del intent y ejecuta handlers reales.
+    - La IA no consulta BD ni entrega datos directamente.
+
+    ✅ Contexto conversacional:
+    - Si el usuario responde algo corto como "este mes", "mes anterior", "hoy",
+      se interpreta según el último intent de la sesión antes de volver a clasificar desde cero.
 
     ✅ Humanizer:
     - Django genera la respuesta real.
@@ -2602,6 +2811,7 @@ def handle_telegram_update(update: dict) -> None:
     - No inventa datos ni consulta la base de datos.
     """
     callback = update.get("callback_query")
+
     if callback:
         msg_obj = callback.get("message") or {}
         chat = msg_obj.get("chat") or {}
@@ -2768,14 +2978,36 @@ def handle_telegram_update(update: dict) -> None:
         return
 
     # =========================
-    # Detección intent + IA fallback seguro
+    # Detección intent con contexto + IA
     # =========================
     if text:
-        intent, confianza, ai_meta = detect_intent_with_ai_fallback(
+        intent_ctx, confianza_ctx, ctx_meta = _resolver_intent_por_contexto(
             text,
-            usuario=usuario,
-            contexto=sesion.contexto,
+            sesion=sesion,
         )
+
+        if intent_ctx:
+            intent = intent_ctx
+            confianza = confianza_ctx
+            ai_meta = {
+                "ai_used": False,
+                "ai_result": None,
+                "traditional_intent": None,
+                "traditional_confidence": 0.0,
+                "resolved_by_context": True,
+                **ctx_meta,
+            }
+        else:
+            intent, confianza, ai_meta = detect_intent_with_ai_fallback(
+                text,
+                usuario=usuario,
+                contexto=sesion.contexto,
+            )
+            ai_meta = {
+                **ai_meta,
+                "resolved_by_context": False,
+                **ctx_meta,
+            }
     else:
         intent, confianza, ai_meta = (
             None,
@@ -2785,6 +3017,7 @@ def handle_telegram_update(update: dict) -> None:
                 "ai_result": None,
                 "traditional_intent": None,
                 "traditional_confidence": 0.0,
+                "resolved_by_context": False,
             },
         )
 
@@ -2854,8 +3087,6 @@ def handle_telegram_update(update: dict) -> None:
         },
         marcar_para_entrenamiento=marcar_train_out,
     )
-
-
 # ===================== WIZARD: Crear rendición (gasto) =====================
 
 _REND_WIZ_TTL = 60 * 30  # 30 min
