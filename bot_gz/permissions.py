@@ -80,12 +80,18 @@ def build_ai_capabilities_text(user) -> str:
         "mis_liquidaciones": "Consultar liquidaciones propias del usuario.",
         "mi_contrato_vigente": "Consultar contrato/anexos propios del usuario.",
         "mi_produccion_hasta_hoy": "Consultar producción propia.",
-        "mis_proyectos_pendientes": "Consultar proyectos/servicios propios.",
+        "mis_proyectos_pendientes": (
+            "Consultar proyectos o servicios propios pendientes en general, no necesariamente "
+            "la asignación específica del día."
+        ),
         "mis_proyectos_rechazados": "Consultar proyectos propios rechazados.",
         "mis_rendiciones_pendientes": "Consultar rendiciones propias.",
         "ayuda_rendicion_gastos": "Ayuda sobre rendiciones de gastos.",
         "direccion_basura": "Consultar lugar autorizado para disposición de residuos.",
-        "mi_asignacion": "Consultar asignación propia del usuario.",
+        "mi_asignacion": (
+            "Consultar asignación propia del usuario, pega del día, sitio al que debe ir, "
+            "trabajo asignado, tarea de hoy o destino de trabajo."
+        ),
         "info_sitio_id_claro": "Consultar información de un sitio por ID.",
         "cronograma_produccion_corte": "Consultar cronograma de pago/corte configurado.",
     }

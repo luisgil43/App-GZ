@@ -114,6 +114,10 @@ Tu tarea:
 - NO intentes acceder a información.
 - NO sugieras intents fuera de la lista permitida.
 - Si el usuario pide información de otra persona y el intent sería personal, igual clasifica el intent personal; Django aplicará seguridad.
+- En contexto técnico de terreno, frases como "dónde tengo que ir", "a dónde voy", "qué sitio tengo", "cuál es mi pega", "qué pega tengo", "qué tengo asignado", "qué trabajo tengo hoy" deben clasificarse como "mi_asignacion".
+- Frases sobre trabajos/proyectos pendientes en general, sin preguntar por el sitio o asignación del día, deben clasificarse como "mis_proyectos_pendientes".
+- Frases sobre dirección, ubicación, acceso o datos de un sitio específico con ID deben clasificarse como "info_sitio_id_claro".
+- Si el mensaje tiene sentido dentro del trabajo de terreno, evita responder null solo por ser corto.
 - Devuelve SOLO JSON válido.
 
 Contexto de sesión: {contexto}

@@ -661,95 +661,80 @@ def detect_intent_with_ai_fallback(
     contexto: str = "tecnico",
 ) -> Tuple[Optional[BotIntent], float, dict]:
     """
-    Primero usa el motor tradicional.
-    Si no detecta intent o la confianza es baja, intenta con IA.
+    Detección de intent con IA como motor principal.
 
-    Seguridad:
-    - La IA solo sugiere un intent existente.
-    - Django valida que el usuario pueda usar ese intent.
-    - Si no existe o no está permitido, se descarta.
-    - Si el tradicional venía con baja confianza, no lo usamos como fallback incorrecto.
+    Flujo:
+    1. Si hay usuario vinculado y la IA está activa, la IA intenta clasificar primero.
+    2. Django valida que el intent exista y que el usuario pueda usarlo.
+    3. Si la IA no puede clasificar, cae al motor tradicional.
+    4. La IA NO consulta datos, NO decide permisos y NO responde al usuario.
     """
-    intent, confianza = detect_intent_from_text(texto, scope=contexto)
+
+    texto = (texto or "").strip()
 
     ai_meta = {
         "ai_used": False,
         "ai_result": None,
-        "traditional_intent": intent.slug if intent else None,
-        "traditional_confidence": confianza,
+        "traditional_intent": None,
+        "traditional_confidence": 0.0,
+        "ai_first": True,
     }
 
     min_conf = getattr(settings, "BOT_GZ_AI_MIN_CONFIDENCE", 0.65)
 
-    # Si el motor tradicional está seguro, dejamos lo actual.
+    # =========================
+    # 1) IA primero
+    # =========================
+    if texto and usuario is not None and getattr(settings, "BOT_GZ_AI_ENABLED", False):
+        try:
+            ai_result = ai_suggest_intent(
+                texto_usuario=texto,
+                usuario=usuario,
+                contexto=contexto,
+            )
+
+            ai_meta["ai_used"] = True
+            ai_meta["ai_result"] = ai_result
+
+            if ai_result.get("ok"):
+                ai_slug = ai_result.get("intent_slug")
+
+                try:
+                    ai_conf = float(ai_result.get("confidence") or 0)
+                except Exception:
+                    ai_conf = 0.0
+
+                if ai_slug and ai_conf >= min_conf:
+                    # Seguridad final: Django valida permisos.
+                    if user_can_use_bot_intent(usuario, ai_slug):
+                        ai_intent = BotIntent.objects.filter(
+                            slug=ai_slug,
+                            activo=True,
+                        ).first()
+
+                        if ai_intent:
+                            return ai_intent, ai_conf, ai_meta
+
+                        ai_meta["ai_intent_not_found"] = ai_slug
+                    else:
+                        ai_meta["ai_blocked_by_permission"] = True
+
+        except Exception as e:
+            logger.exception("GZ Bot AI principal falló")
+            ai_meta["ai_error"] = str(e)
+
+    # =========================
+    # 2) Motor tradicional como respaldo
+    # =========================
+    intent, confianza = detect_intent_from_text(texto, scope=contexto)
+
+    ai_meta["traditional_intent"] = intent.slug if intent else None
+    ai_meta["traditional_confidence"] = confianza
+
     if intent and confianza >= min_conf:
         return intent, confianza, ai_meta
 
-    # Sin usuario vinculado no usamos IA para decidir acceso a información personal.
-    if usuario is None:
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-        return intent, confianza, ai_meta
-
-    try:
-        ai_result = ai_suggest_intent(
-            texto_usuario=texto,
-            usuario=usuario,
-            contexto=contexto,
-        )
-    except Exception as e:
-        logger.exception("GZ Bot AI fallback falló")
-        ai_meta["ai_used"] = True
-        ai_meta["ai_error"] = str(e)
-
-        # Si el tradicional era débil, no lo usamos.
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-
-        return intent, confianza, ai_meta
-
-    ai_meta["ai_used"] = True
-    ai_meta["ai_result"] = ai_result
-
-    # Si la IA no pudo sugerir algo válido, solo usamos tradicional si estaba aceptable.
-    if not ai_result.get("ok"):
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-        return intent, confianza, ai_meta
-
-    ai_slug = ai_result.get("intent_slug")
-
-    try:
-        ai_conf = float(ai_result.get("confidence") or 0)
-    except Exception:
-        ai_conf = 0.0
-
-    # Umbral mínimo para aceptar sugerencia IA.
-    if ai_conf < 0.70:
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-        return intent, confianza, ai_meta
-
-    # Seguridad final: aunque la IA devuelva algo, Django valida permisos.
-    if not user_can_use_bot_intent(usuario, ai_slug):
-        ai_meta["ai_blocked_by_permission"] = True
-
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-
-        return intent, confianza, ai_meta
-
-    ai_intent = BotIntent.objects.filter(slug=ai_slug, activo=True).first()
-    if not ai_intent:
-        ai_meta["ai_intent_not_found"] = ai_slug
-
-        # Si el intent tradicional venía con baja confianza, no lo usamos.
-        if confianza < min_conf:
-            return None, 0.0, ai_meta
-
-        return intent, confianza, ai_meta
-
-    return ai_intent, ai_conf, ai_meta
+    return None, 0.0, ai_meta
 
 
 # ===================== Envío de mensajes a Telegram + log =====================
