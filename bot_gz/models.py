@@ -292,3 +292,91 @@ class BotMessageLog(models.Model):
     def __str__(self):
         dir_str = dict(self.DIRECCION_CHOICES).get(self.direccion, self.direccion)
         return f"[{dir_str}] {self.chat_id} - {self.texto[:50]}"
+
+
+class AlertaClimaDiaria(models.Model):
+    ESTADOS = [
+        ("pendiente", "Pendiente"),
+        ("enviado", "Enviado"),
+        ("error", "Error"),
+        ("sin_telegram", "Sin Telegram"),
+        ("sin_asignacion", "Sin asignación"),
+        ("sin_ubicacion", "Sin ubicación"),
+    ]
+
+    trabajador = models.ForeignKey(
+        "usuarios.CustomUser",
+        on_delete=models.CASCADE,
+        related_name="alertas_clima_bot",
+    )
+    servicio = models.ForeignKey(
+        "operaciones.ServicioCotizado",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="alertas_clima_bot",
+    )
+    sitio = models.ForeignKey(
+        "operaciones.SitioMovil",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="alertas_clima_bot",
+    )
+
+    fecha = models.DateField()
+    chat_id = models.CharField(max_length=80, blank=True, default="")
+
+    id_claro = models.CharField(max_length=100, blank=True, default="")
+    id_new = models.CharField(max_length=100, blank=True, default="")
+    nombre_sitio = models.CharField(max_length=255, blank=True, default="")
+    direccion = models.TextField(blank=True, default="")
+
+    latitud = models.DecimalField(
+        max_digits=12, decimal_places=8, null=True, blank=True
+    )
+    longitud = models.DecimalField(
+        max_digits=12, decimal_places=8, null=True, blank=True
+    )
+
+    temperatura_c = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    sensacion_c = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    viento_kmh = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+
+    indice_uv = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
+    nivel_uv = models.CharField(max_length=40, blank=True, default="")
+    factor_solar_recomendado = models.CharField(max_length=40, blank=True, default="")
+
+    radiacion_wm2 = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True
+    )
+    prob_lluvia = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True
+    )
+    condicion = models.CharField(max_length=120, blank=True, default="")
+
+    fuente = models.CharField(max_length=80, blank=True, default="open-meteo")
+    estado_envio = models.CharField(max_length=30, choices=ESTADOS, default="pendiente")
+    error_envio = models.TextField(blank=True, default="")
+    mensaje_enviado = models.TextField(blank=True, default="")
+    enviado_en = models.DateTimeField(null=True, blank=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-fecha", "-creado_en"]
+        indexes = [
+            models.Index(fields=["trabajador", "fecha"]),
+            models.Index(fields=["estado_envio", "fecha"]),
+        ]
+
+    def __str__(self):
+        return f"Alerta clima {self.trabajador} - {self.fecha}"

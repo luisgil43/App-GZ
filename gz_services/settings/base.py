@@ -211,6 +211,37 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 TELEGRAM_BOT_TOKEN_GZ = os.getenv("TELEGRAM_BOT_TOKEN_GZ", "")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME", "").strip()
 
+# Clima / UV - Bot GZ
+BOT_GZ_CLIMA_ENABLED = (
+    os.getenv("BOT_GZ_CLIMA_ENABLED", "True").strip().lower() == "true"
+)
+BOT_GZ_CLIMA_TIMEZONE = os.getenv("BOT_GZ_CLIMA_TIMEZONE", "America/Santiago").strip()
+BOT_GZ_CLIMA_ACTIVE_STATES = os.getenv(
+    "BOT_GZ_CLIMA_ACTIVE_STATES",
+    "asignado,en_progreso",
+).split(",")
+BOT_GZ_CLIMA_MAX_SERVICIOS_POR_USUARIO = int(
+    os.getenv("BOT_GZ_CLIMA_MAX_SERVICIOS_POR_USUARIO", "5")
+)
+
+BOT_GZ_CLIMA_RUN_HOUR = int(os.getenv("BOT_GZ_CLIMA_RUN_HOUR", "8"))
+BOT_GZ_CLIMA_RUN_MINUTE = int(os.getenv("BOT_GZ_CLIMA_RUN_MINUTE", "0"))
+BOT_GZ_CLIMA_RUN_WINDOW_MINUTES = int(
+    os.getenv("BOT_GZ_CLIMA_RUN_WINDOW_MINUTES", "10")
+)
+# ===============================
+# OpenAI / IA - GZ Bot
+# ===============================
+OPENAI_API_KEY_GZ_BOT = os.getenv("OPENAI_API_KEY_GZ_BOT", "").strip()
+OPENAI_MODEL_GZ_BOT = os.getenv("OPENAI_MODEL_GZ_BOT", "gpt-4.1-mini").strip()
+
+# Seguridad: IA solo se usa si está habilitada explícitamente
+BOT_GZ_AI_ENABLED = os.getenv("BOT_GZ_AI_ENABLED", "False").strip().lower() == "true"
+
+# Umbral para usar IA cuando el intent tradicional tenga baja confianza
+BOT_GZ_AI_MIN_CONFIDENCE = float(os.getenv("BOT_GZ_AI_MIN_CONFIDENCE", "0.65"))
+
+
 DIRECT_UPLOADS_ENABLED = os.environ.get("DIRECT_UPLOADS_ENABLED", "1") == "1"
 DIRECT_UPLOADS_MAX_MB = int(os.environ.get("DIRECT_UPLOADS_MAX_MB", "20"))
 DIRECT_UPLOADS_SAFE_PREFIX = os.environ.get(

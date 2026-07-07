@@ -21,7 +21,10 @@ from operaciones.models import ServicioCotizado, SitioMovil
 from rrhh.models import ContratoTrabajo, CronogramaPago, DocumentoTrabajador
 from usuarios.models import CustomUser
 
+from .ai_engine import ai_suggest_intent
+from .ai_humanizer import humanize_bot_response
 from .models import BotIntent, BotMessageLog, BotSession, BotTrainingExample
+from .permissions import user_can_use_bot_intent
 from .services_tecnico import \
     responder_direccion_basura as _responder_direccion_basura
 from .services_tecnico import \
@@ -649,6 +652,104 @@ def detect_intent_from_text(
         return None, float(final_score)
 
     return final_intent, float(final_score)
+
+
+def detect_intent_with_ai_fallback(
+    texto: str,
+    *,
+    usuario: Optional[CustomUser],
+    contexto: str = "tecnico",
+) -> Tuple[Optional[BotIntent], float, dict]:
+    """
+    Primero usa el motor tradicional.
+    Si no detecta intent o la confianza es baja, intenta con IA.
+
+    Seguridad:
+    - La IA solo sugiere un intent existente.
+    - Django valida que el usuario pueda usar ese intent.
+    - Si no existe o no está permitido, se descarta.
+    - Si el tradicional venía con baja confianza, no lo usamos como fallback incorrecto.
+    """
+    intent, confianza = detect_intent_from_text(texto, scope=contexto)
+
+    ai_meta = {
+        "ai_used": False,
+        "ai_result": None,
+        "traditional_intent": intent.slug if intent else None,
+        "traditional_confidence": confianza,
+    }
+
+    min_conf = getattr(settings, "BOT_GZ_AI_MIN_CONFIDENCE", 0.65)
+
+    # Si el motor tradicional está seguro, dejamos lo actual.
+    if intent and confianza >= min_conf:
+        return intent, confianza, ai_meta
+
+    # Sin usuario vinculado no usamos IA para decidir acceso a información personal.
+    if usuario is None:
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+        return intent, confianza, ai_meta
+
+    try:
+        ai_result = ai_suggest_intent(
+            texto_usuario=texto,
+            usuario=usuario,
+            contexto=contexto,
+        )
+    except Exception as e:
+        logger.exception("GZ Bot AI fallback falló")
+        ai_meta["ai_used"] = True
+        ai_meta["ai_error"] = str(e)
+
+        # Si el tradicional era débil, no lo usamos.
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+
+        return intent, confianza, ai_meta
+
+    ai_meta["ai_used"] = True
+    ai_meta["ai_result"] = ai_result
+
+    # Si la IA no pudo sugerir algo válido, solo usamos tradicional si estaba aceptable.
+    if not ai_result.get("ok"):
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+        return intent, confianza, ai_meta
+
+    ai_slug = ai_result.get("intent_slug")
+
+    try:
+        ai_conf = float(ai_result.get("confidence") or 0)
+    except Exception:
+        ai_conf = 0.0
+
+    # Umbral mínimo para aceptar sugerencia IA.
+    if ai_conf < 0.70:
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+        return intent, confianza, ai_meta
+
+    # Seguridad final: aunque la IA devuelva algo, Django valida permisos.
+    if not user_can_use_bot_intent(usuario, ai_slug):
+        ai_meta["ai_blocked_by_permission"] = True
+
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+
+        return intent, confianza, ai_meta
+
+    ai_intent = BotIntent.objects.filter(slug=ai_slug, activo=True).first()
+    if not ai_intent:
+        ai_meta["ai_intent_not_found"] = ai_slug
+
+        # Si el intent tradicional venía con baja confianza, no lo usamos.
+        if confianza < min_conf:
+            return None, 0.0, ai_meta
+
+        return intent, confianza, ai_meta
+
+    return ai_intent, ai_conf, ai_meta
 
 
 # ===================== Envío de mensajes a Telegram + log =====================
@@ -2494,6 +2595,7 @@ def run_intent(
 
 # ===================== Entry point: manejar update de Telegram =====================
 
+
 def handle_telegram_update(update: dict) -> None:
     """
     Punto de entrada para el webhook de Telegram.
@@ -2502,8 +2604,17 @@ def handle_telegram_update(update: dict) -> None:
     - callback_query (inline_keyboard)
     - wizard de rendición (incluye comprobante como PDF/foto aunque venga SIN texto)
 
-    ✅ NUEVO:
-    - Vinculación por /start <token> generado en la web (activar_telegram).
+    ✅ Vinculación por /start <token> generado en la web (activar_telegram).
+
+    ✅ IA segura:
+    - Primero usa el motor tradicional.
+    - Si no entiende o tiene baja confianza, usa IA solo para sugerir un intent existente.
+    - La respuesta final sigue saliendo por handlers Django con permisos y filtros reales.
+
+    ✅ Humanizer:
+    - Django genera la respuesta real.
+    - La IA solo mejora el tono si es seguro hacerlo.
+    - No inventa datos ni consulta la base de datos.
     """
     callback = update.get("callback_query")
     if callback:
@@ -2522,7 +2633,9 @@ def handle_telegram_update(update: dict) -> None:
                     timeout=5,
                 )
             except Exception:
-                logger.exception("No se pudo hacer answerCallbackQuery (callback_id=%s)", cb_id)
+                logger.exception(
+                    "No se pudo hacer answerCallbackQuery (callback_id=%s)", cb_id
+                )
 
         message = dict(msg_obj)
         message["text"] = text
@@ -2530,7 +2643,9 @@ def handle_telegram_update(update: dict) -> None:
     else:
         message = update.get("message") or update.get("edited_message")
         if not message:
-            logger.info("Update de Telegram sin 'message' ni 'callback_query': %s", update)
+            logger.info(
+                "Update de Telegram sin 'message' ni 'callback_query': %s", update
+            )
             return
 
         chat = message.get("chat") or {}
@@ -2543,7 +2658,7 @@ def handle_telegram_update(update: dict) -> None:
         return
 
     # =========================
-    # ✅ NUEVO: /start <token> => vincular usuario
+    # /start <token> => vincular usuario
     # =========================
     if text and text.startswith("/start"):
         parts = text.split(maxsplit=1)
@@ -2556,15 +2671,12 @@ def handle_telegram_update(update: dict) -> None:
             if user_id:
                 u = CustomUser.objects.filter(id=user_id).first()
                 if u:
-                    # Vincular
                     u.telegram_chat_id = chat_id
                     u.telegram_activo = True
                     u.save(update_fields=["telegram_chat_id", "telegram_activo"])
 
-                    # Consumir token (one-time)
                     cache.delete(cache_key)
 
-                    # Crear/actualizar sesión y amarrarla al usuario
                     sesion, _ = get_or_create_session(chat_id, from_user)
                     if sesion.usuario_id != u.id:
                         sesion.usuario = u
@@ -2583,7 +2695,6 @@ def handle_telegram_update(update: dict) -> None:
                     )
                     return
 
-            # Token inválido / expirado
             sesion, usuario = get_or_create_session(chat_id, from_user)
             send_telegram_message(
                 chat_id,
@@ -2598,7 +2709,7 @@ def handle_telegram_update(update: dict) -> None:
             return
 
     # =========================
-    # Flujo normal (igual que tuyo)
+    # Flujo normal
     # =========================
     sesion, usuario = get_or_create_session(chat_id, from_user)
     sesion.ultima_interaccion = timezone.now()
@@ -2609,7 +2720,9 @@ def handle_telegram_update(update: dict) -> None:
 
     wizard_state = _rend_wiz_get(chat_id)
     if not text_for_log and not wizard_state:
-        logger.info("Mensaje sin texto/caption y sin wizard activo (chat_id=%s)", chat_id)
+        logger.info(
+            "Mensaje sin texto/caption y sin wizard activo (chat_id=%s)", chat_id
+        )
         return
 
     inbound_log = BotMessageLog.objects.create(
@@ -2619,10 +2732,15 @@ def handle_telegram_update(update: dict) -> None:
         direccion="in",
         texto=text_for_log,
         status="ok",
-        meta={"update_id": update.get("update_id"), "callback": bool(callback)},
+        meta={
+            "update_id": update.get("update_id"),
+            "callback": bool(callback),
+        },
     )
 
-    # WIZARD rendición
+    # =========================
+    # Wizard rendición
+    # =========================
     norm = _normalize(text or "")
     triggers_start = {
         "nueva rendicion",
@@ -2632,7 +2750,6 @@ def handle_telegram_update(update: dict) -> None:
         "crear rendicion gasto",
         "nueva rendicion de gastos",
         "nueva rendicion gastos",
-        "nueva rendicion de gastos",
     }
 
     if usuario is not None and (wizard_state or norm in triggers_start):
@@ -2655,30 +2772,101 @@ def handle_telegram_update(update: dict) -> None:
             sesion=sesion,
             usuario=usuario,
             intent=None,
-            meta={"from_update_id": update.get("update_id"), "wizard": True},
+            meta={
+                "from_update_id": update.get("update_id"),
+                "wizard": True,
+                "humanizer_used": False,
+                "humanizer_result": None,
+            },
             marcar_para_entrenamiento=False,
         )
         return
 
-    intent, confianza = detect_intent_from_text(text, scope=sesion.contexto) if text else (None, 0.0)
+    # =========================
+    # Detección intent + IA fallback seguro
+    # =========================
+    if text:
+        intent, confianza, ai_meta = detect_intent_with_ai_fallback(
+            text,
+            usuario=usuario,
+            contexto=sesion.contexto,
+        )
+    else:
+        intent, confianza, ai_meta = (
+            None,
+            0.0,
+            {
+                "ai_used": False,
+                "ai_result": None,
+                "traditional_intent": None,
+                "traditional_confidence": 0.0,
+            },
+        )
+
     if intent:
         sesion.ultimo_intent = intent
         sesion.save(update_fields=["ultimo_intent"])
 
     inbound_log.intent_detectado = intent
     inbound_log.confianza = confianza
-    inbound_log.save(update_fields=["intent_detectado", "confianza"])
+    inbound_log.meta = {
+        **(inbound_log.meta or {}),
+        **ai_meta,
+    }
+    inbound_log.save(update_fields=["intent_detectado", "confianza", "meta"])
 
+    # =========================
+    # Ejecutar handler Django
+    # =========================
     reply_text = run_intent(intent, text, sesion, usuario, inbound_log)
 
+    # =========================
+    # Humanizer IA seguro
+    # =========================
+    humanizer_meta = {
+        "humanizer_used": False,
+        "humanizer_result": None,
+    }
+
+    try:
+        if intent:
+            humanized = humanize_bot_response(
+                respuesta_original=reply_text,
+                texto_usuario=text,
+                intent_slug=intent.slug,
+                usuario=usuario,
+            )
+
+            humanizer_meta["humanizer_used"] = bool(humanized.get("ok"))
+            humanizer_meta["humanizer_result"] = {
+                "ok": humanized.get("ok"),
+                "reason": humanized.get("reason"),
+            }
+
+            if humanized.get("ok") and humanized.get("text"):
+                reply_text = humanized["text"]
+
+    except Exception as e:
+        logger.exception("GZ Bot Humanizer falló")
+        humanizer_meta["humanizer_used"] = False
+        humanizer_meta["humanizer_result"] = {
+            "ok": False,
+            "reason": str(e),
+        }
+
     marcar_train_out = (intent is None) or intent.requiere_revision_humana
+
     send_telegram_message(
         chat_id,
         reply_text,
         sesion=sesion,
         usuario=usuario,
         intent=intent,
-        meta={"from_update_id": update.get("update_id")},
+        meta={
+            "from_update_id": update.get("update_id"),
+            **ai_meta,
+            **humanizer_meta,
+        },
         marcar_para_entrenamiento=marcar_train_out,
     )
 

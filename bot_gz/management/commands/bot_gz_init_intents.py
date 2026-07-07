@@ -16,6 +16,10 @@ INTENTS_BASE = [
             "quiero ver mi liquidación de enero",
             "muéstrame mis liquidaciones",
             "enviame la liquidación del mes pasado",
+            "necesito ver mis pagos del mes",
+            "quiero ver mis pagos",
+            "dónde veo mi sueldo",
+            "pásame mis últimas liquidaciones",
         ],
     },
     {
@@ -29,6 +33,9 @@ INTENTS_BASE = [
             "quiero ver mi contrato vigente",
             "envíame mi contrato",
             "muéstrame mis contratos antiguos y el actual",
+            "necesito mi contrato",
+            "quiero revisar mis anexos",
+            "pásame mis anexos",
         ],
     },
     {
@@ -42,6 +49,26 @@ INTENTS_BASE = [
             "cuál es mi producción acumulada este mes",
             "dime mi producción de este mes",
             "cuánto llevo producido al día de hoy",
+            "mi producción hasta hoy",
+            "cuánto llevo producido este mes",
+        ],
+    },
+    {
+        "slug": "mi_asignacion",
+        "nombre": "Mi asignación",
+        "descripcion": "Permite al técnico consultar su asignación, tarea o trabajo pendiente.",
+        "scope": "tecnico",
+        "requiere_revision_humana": False,
+        "training": [
+            "qué pega tengo para hoy",
+            "dónde tengo que ir a trabajar",
+            "cuál es mi asignación de hoy",
+            "qué tengo asignado",
+            "qué trabajo tengo pendiente",
+            "qué sitio tengo que visitar hoy",
+            "dime mi asignación",
+            "tengo trabajo para hoy",
+            "qué me toca hacer hoy",
         ],
     },
     {
@@ -54,6 +81,7 @@ INTENTS_BASE = [
             "qué proyectos tengo rechazados",
             "muéstrame mis servicios rechazados",
             "tengo proyectos rechazados este mes",
+            "qué servicios me rechazaron",
         ],
     },
     {
@@ -66,6 +94,12 @@ INTENTS_BASE = [
             "qué proyectos tengo pendientes",
             "qué servicios me faltan por terminar",
             "muéstrame mis servicios asignados",
+            "mis proyectos",
+            "mis servicios",
+            "proyectos asignados",
+            "servicios pendientes",
+            "total monto proyectos",
+            "mapa de mis proyectos",
         ],
     },
     {
@@ -78,18 +112,27 @@ INTENTS_BASE = [
             "cuántas declaraciones tengo pendientes por aprobación",
             "qué rendiciones tengo pendientes",
             "mis gastos aún no aprobados",
+            "rendiciones pendientes",
+            "rendiciones aprobadas",
+            "rendiciones rechazadas",
+            "rendiciones de hoy",
         ],
     },
     {
         "slug": "info_sitio_id_claro",
         "nombre": "Información de sitio por ID Claro",
-        "descripcion": "Entrega información de un sitio (dirección, accesos, Google Maps) a partir del ID Claro.",
+        "descripcion": "Entrega información de un sitio, dirección, accesos y Google Maps a partir del ID Claro, ID Sites o ID New.",
         "scope": "tecnico",
         "requiere_revision_humana": False,
         "training": [
             "necesito información del sitio id claro MA5694",
             "dame la dirección del sitio con id claro tal",
             "cuál es la ubicación del sitio xxxx",
+            "información del sitio",
+            "dónde queda el sitio",
+            "dame datos del sitio",
+            "necesito las claves del sitio",
+            "cómo entro al sitio",
         ],
     },
     {
@@ -102,6 +145,9 @@ INTENTS_BASE = [
             "cuándo es el corte de la producción",
             "qué día cierran la producción",
             "hasta qué fecha cuenta la producción de este mes",
+            "cuándo pagan producción",
+            "cuándo es el corte",
+            "cronograma de pago",
         ],
     },
     {
@@ -114,6 +160,26 @@ INTENTS_BASE = [
             "quiero rendir un gasto",
             "ayúdame a hacer una rendición",
             "quiero declarar un gasto nuevo",
+            "nueva rendición",
+            "crear rendición",
+            "nueva rendición de gasto",
+            "quiero subir un comprobante",
+        ],
+    },
+    {
+        "slug": "direccion_basura",
+        "nombre": "Dirección retiro de basura",
+        "descripcion": "Informa dónde botar, retirar o disponer basura, residuos o desechos según la configuración del sistema.",
+        "scope": "tecnico",
+        "requiere_revision_humana": False,
+        "training": [
+            "dónde boto la basura",
+            "dónde tengo que dejar los residuos",
+            "dirección para botar basura",
+            "dónde se dejan los desechos",
+            "retiro de basura",
+            "punto de disposición de residuos",
+            "dónde tirar la basura",
         ],
     },
 ]
@@ -132,9 +198,7 @@ class Command(BaseCommand):
                 "descripcion": item.get("descripcion", ""),
                 "scope": item.get("scope", "tecnico"),
                 "activo": True,
-                "requiere_revision_humana": item.get(
-                    "requiere_revision_humana", False
-                ),
+                "requiere_revision_humana": item.get("requiere_revision_humana", False),
             }
 
             obj, created = BotIntent.objects.get_or_create(
@@ -145,12 +209,12 @@ class Command(BaseCommand):
             if created:
                 self.stdout.write(self.style.SUCCESS(f"  + Intent '{slug}' creado."))
             else:
-                # Actualizamos campos clave por si modificamos descripción o scope
                 changed = False
                 for field, value in defaults.items():
                     if getattr(obj, field) != value:
                         setattr(obj, field, value)
                         changed = True
+
                 if changed:
                     obj.save()
                     self.stdout.write(
@@ -161,7 +225,6 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write(f"  = Intent '{slug}' ya existía (sin cambios).")
 
-            # ===== Crear ejemplos de entrenamiento =====
             for txt in item.get("training", []):
                 ex, ex_created = BotTrainingExample.objects.get_or_create(
                     intent=obj,
@@ -171,7 +234,12 @@ class Command(BaseCommand):
                         "activo": True,
                     },
                 )
+
                 if ex_created:
                     self.stdout.write(f"      + Ejemplo añadido: “{txt}”")
+                elif not ex.activo:
+                    ex.activo = True
+                    ex.save(update_fields=["activo"])
+                    self.stdout.write(f"      ~ Ejemplo reactivado: “{txt}”")
 
         self.stdout.write(self.style.SUCCESS("Intents base inicializados."))

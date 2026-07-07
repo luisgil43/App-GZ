@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import IntegrityError, connection
@@ -11,6 +12,7 @@ from django.test.client import RequestFactory
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from bot_gz.services_clima import procesar_alertas_clima_diarias
 from flota.views_cron import cron_flota_mantenciones
 from prevencion.views_cron import cron_prevencion_documentos
 from rrhh.views_alerta import cron_contratos_por_vencer
@@ -104,9 +106,15 @@ def cron_diario_general(request):
     """
     Cron central:
     - Token ?token=... (ideal: CRON_GENERAL_TOKEN)
-    - Dispara internamente RRHH / Flota / Prevención
+    - Dispara internamente RRHH / Flota / Prevención / Bot GZ Clima
     - Nunca responde 500 (para evitar reintentos agresivos del monitor)
     - Lock global (Postgres advisory lock) para evitar concurrencia
+
+    Parámetros útiles:
+    - force=1              Fuerza ejecución general de sub-crons que soportan force.
+    - clima_force=1        Fuerza solo el bloque de clima aunque no sea la hora.
+    - clima_dry_run=1      Prueba clima sin enviar Telegram.
+    - clima_user_id=2      Ejecuta clima solo para un usuario específico.
     """
 
     token_recibido = (request.GET.get("token") or "").strip()
@@ -121,6 +129,7 @@ def cron_diario_general(request):
 
     # ✅ Lock global por día (ESTABLE: no usamos hash() de Python)
     import zlib
+
     lock_key = zlib.crc32(f"cron_diario_general:{hoy.isoformat()}".encode("utf-8"))
 
     if not _try_pg_advisory_lock(lock_key):
@@ -144,6 +153,7 @@ def cron_diario_general(request):
         rrhh_params = {"token": _token_or_general("CONTRATOS_CRON_TOKEN")}
         if force_run:
             rrhh_params["force"] = "1"
+
         resultados["rrhh"] = _safe_call(
             "rrhh",
             cron_contratos_por_vencer,
@@ -158,6 +168,7 @@ def cron_diario_general(request):
         flota_params = {"token": _token_or_general("FLOTA_CRON_TOKEN")}
         if force_run:
             flota_params["force"] = "1"
+
         resultados["flota"] = _safe_call(
             "flota",
             cron_flota_mantenciones,
@@ -172,6 +183,7 @@ def cron_diario_general(request):
         prev_params = {"token": _token_or_general("PREVENCION_CRON_TOKEN")}
         if force_run:
             prev_params["force"] = "1"
+
         resultados["prevencion"] = _safe_call(
             "prevencion",
             cron_prevencion_documentos,
@@ -180,8 +192,53 @@ def cron_diario_general(request):
             prev_params,
         )
 
-        # ✅ Diagnóstico extra para tu caso (sin reintentar / sin spam)
-        # Si flota dice already-run pero hoy no hay alertas, lo marcamos en el JSON para debug.
+        # =========================
+        # Bot GZ - Alertas clima / UV
+        # =========================
+        try:
+            clima_user_id = None
+            clima_user_id_raw = (request.GET.get("clima_user_id") or "").strip()
+
+            if clima_user_id_raw:
+                try:
+                    clima_user_id = int(clima_user_id_raw)
+                except Exception:
+                    clima_user_id = None
+
+            clima_dry_run = (request.GET.get("clima_dry_run") or "").strip() == "1"
+
+            if _should_run_clima_now(ahora, request):
+                resultados["bot_gz_clima"] = procesar_alertas_clima_diarias(
+                    fecha=hoy,
+                    user_id=clima_user_id,
+                    dry_run=clima_dry_run,
+                    force=force_run,
+                )
+            else:
+                resultados["bot_gz_clima"] = {
+                    "ok": True,
+                    "status": "skipped-by-hour",
+                    "detail": (
+                        "Clima no ejecutado porque aún no está dentro de la ventana "
+                        "horaria configurada."
+                    ),
+                    "run_hour": int(getattr(settings, "BOT_GZ_CLIMA_RUN_HOUR", 8)),
+                    "run_minute": int(getattr(settings, "BOT_GZ_CLIMA_RUN_MINUTE", 0)),
+                    "window_minutes": int(
+                        getattr(settings, "BOT_GZ_CLIMA_RUN_WINDOW_MINUTES", 10)
+                    ),
+                    "current_time": ahora.strftime("%H:%M:%S"),
+                }
+
+        except Exception as e:
+            logger.exception("CRON general: fallo inesperado en bot_gz_clima")
+            resultados["bot_gz_clima"] = {
+                "ok": False,
+                "status": "error",
+                "detail": e.__class__.__name__,
+            }
+
+        # ✅ Diagnóstico extra para flota
         try:
             from flota.models import (FlotaAlertaEnviada,
                                       FlotaCronDiarioEjecutado)
@@ -193,6 +250,7 @@ def cron_diario_general(request):
                     fecha=hoy,
                 ).exists()
                 alerts_today = FlotaAlertaEnviada.objects.filter(sent_on=hoy).count()
+
                 resultados["flota_debug"] = {
                     "lock_exists": bool(lock_exists),
                     "alerts_today_count": int(alerts_today),
@@ -201,6 +259,7 @@ def cron_diario_general(request):
                         "pero hay servicios overdue, entonces hoy quedó marcado como ejecutado sin enviar."
                     ),
                 }
+
         except Exception:
             logger.exception("CRON general: fallo agregando flota_debug")
             resultados["flota_debug"] = {"error": "debug_failed"}
@@ -209,8 +268,17 @@ def cron_diario_general(request):
         _pg_advisory_unlock(lock_key)
 
     overall_status = "ok"
-    if any(v.get("status") in ("error", "invalid-json") for v in resultados.values() if isinstance(v, dict)):
-        overall_status = "partial-error"
+
+    for value in resultados.values():
+        if not isinstance(value, dict):
+            continue
+
+        status = value.get("status")
+        ok = value.get("ok")
+
+        if status in ("error", "invalid-json") or ok is False:
+            overall_status = "partial-error"
+            break
 
     return JsonResponse(
         {
@@ -221,4 +289,36 @@ def cron_diario_general(request):
             "results": resultados,
         },
         status=200,
+        json_dumps_params={"ensure_ascii": False},
     )
+
+
+def _should_run_clima_now(ahora, request) -> bool:
+    """
+    Controla que el bloque de clima solo corra en una ventana horaria.
+
+    Como Better ejecuta el cron cada 3 minutos, usamos una ventana:
+    - Por defecto: desde 08:00 hasta 08:10
+    - force=1 permite correrlo manualmente para pruebas generales
+    - clima_force=1 permite forzar solo clima
+    """
+    if (request.GET.get("force") or "").strip() == "1":
+        return True
+
+    if (request.GET.get("clima_force") or "").strip() == "1":
+        return True
+
+    hora_inicio = int(getattr(settings, "BOT_GZ_CLIMA_RUN_HOUR", 8))
+    minuto_inicio = int(getattr(settings, "BOT_GZ_CLIMA_RUN_MINUTE", 0))
+    ventana_minutos = int(getattr(settings, "BOT_GZ_CLIMA_RUN_WINDOW_MINUTES", 10))
+
+    inicio = ahora.replace(
+        hour=hora_inicio,
+        minute=minuto_inicio,
+        second=0,
+        microsecond=0,
+    )
+
+    fin = inicio + timedelta(minutes=ventana_minutos)
+
+    return inicio <= ahora < fin
