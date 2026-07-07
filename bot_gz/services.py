@@ -3087,6 +3087,8 @@ def handle_telegram_update(update: dict) -> None:
         },
         marcar_para_entrenamiento=marcar_train_out,
     )
+
+
 # ===================== WIZARD: Crear rendición (gasto) =====================
 
 _REND_WIZ_TTL = 60 * 30  # 30 min
