@@ -825,6 +825,27 @@ def _parse_pickup_frecuente_choice(
     return {"accion": "invalid", "point": None}
 
 
+def _prompt_guardar_frecuente(tipo: str, point: dict) -> str:
+    label = _label_tipo_frecuente(tipo)
+
+    if tipo == "companero":
+        return (
+            "¿Deseas guardar esta dirección como ubicación de *Compañero* "
+            "para poder elegirla en futuras rutas?\n\n"
+            "Responde:\n"
+            "• `sí`\n"
+            "• `no`\n\n"
+            "Escribe `cancelar` para salir."
+        )
+
+    return (
+        f"¿Deseas guardar esta dirección como *{label}* para no tener que ingresarla nuevamente?\n\n"
+        "Responde:\n"
+        "• `sí`\n"
+        "• `no`\n\n"
+        "Escribe `cancelar` para salir."
+    )
+
 def _guardar_direccion_frecuente(
     *,
     usuario: CustomUser,
@@ -1005,26 +1026,47 @@ def _prompt_confirmar_point(point: dict, contexto_label: str) -> str:
     return msg
 
 
-def _prompt_guardar_frecuente(tipo: str, point: dict) -> str:
-    label = _label_tipo_frecuente(tipo)
-
-    if tipo == "companero":
-        return (
-            "¿Deseas guardar esta dirección como ubicación de *Compañero* "
-            "para poder elegirla en futuras rutas?\n\n"
-            "Responde:\n"
-            "• `sí`\n"
-            "• `no`\n\n"
-            "Escribe `cancelar` para salir."
-        )
+def _prompt_guardar_origen_manual(point: dict) -> str:
+    direccion = point.get("direccion") or point.get("label") or "la ubicación indicada"
 
     return (
-        f"¿Deseas guardar esta dirección como *{label}* para no tener que ingresarla todos los días?\n\n"
-        "Responde:\n"
-        "• `sí`\n"
-        "• `no`\n\n"
+        "¿Deseas guardar esta dirección de salida para futuras rutas?\n\n"
+        f"📍 *{direccion}*\n\n"
+        "Responde una opción:\n"
+        "1) `casa`\n"
+        "2) `oficina`\n"
+        "3) `bodega`\n"
+        "4) `no guardar`\n\n"
+        "También puedes responder directamente: `casa`, `oficina`, `bodega` o `no`.\n\n"
         "Escribe `cancelar` para salir."
     )
+
+
+def _parse_tipo_guardar_origen_manual(texto: str) -> Optional[str]:
+    norm = _norm(texto)
+
+    if norm in {"1", "casa", "mi casa"}:
+        return "casa"
+
+    if norm in {"2", "oficina", "la oficina"}:
+        return "oficina"
+
+    if norm in {"3", "bodega", "la bodega"}:
+        return "bodega"
+
+    if norm in {
+        "4",
+        "no",
+        "n",
+        "nop",
+        "no guardar",
+        "no guardarla",
+        "solo esta ruta",
+        "solo para esta ruta",
+    }:
+        return "no_guardar"
+
+    return None
 
 
 def _continuar_a_pickup(state: dict, chat_id: str) -> str:
@@ -1351,6 +1393,9 @@ def _parse_destino_final_desde_texto(
 
     Si el usuario dice "casa de mi compañero" y ya existe pickup,
     usa la misma ubicación del compañero.
+
+    Si el usuario dice "casa" y en esta misma ruta salió desde una
+    dirección manual marcada como casa temporal, reutiliza ese origen.
     """
     loc = _extraer_location(message)
     if loc:
@@ -1444,6 +1489,20 @@ def _parse_destino_final_desde_texto(
         }
 
     if norm in {"3", "casa", "mi casa", "volver a casa", "retornar a casa"}:
+        # Primero intentamos usar el origen de esta misma ruta si fue marcado como casa temporal.
+        if origen and origen.get("usar_como_casa_temporal"):
+            destino = dict(origen)
+            destino["label"] = "Casa / origen de esta ruta"
+            destino["tipo"] = destino.get("tipo") or "casa_temporal"
+            return destino
+
+        # Si el origen ya venía desde una dirección frecuente tipo casa, también sirve.
+        if origen and origen.get("tipo_frecuente") == "casa":
+            destino = dict(origen)
+            destino["label"] = "Casa / origen de esta ruta"
+            destino["tipo"] = destino.get("tipo") or "casa"
+            return destino
+
         return {
             "tipo": "requiere_frecuente",
             "tipo_frecuente": "casa",
@@ -1453,6 +1512,12 @@ def _parse_destino_final_desde_texto(
         }
 
     if norm in {"4", "oficina", "la oficina", "volver a oficina", "retornar a oficina"}:
+        if origen and origen.get("tipo_frecuente") == "oficina":
+            destino = dict(origen)
+            destino["label"] = "Oficina / origen de esta ruta"
+            destino["tipo"] = destino.get("tipo") or "oficina"
+            return destino
+
         return {
             "tipo": "requiere_frecuente",
             "tipo_frecuente": "oficina",
@@ -1462,6 +1527,12 @@ def _parse_destino_final_desde_texto(
         }
 
     if norm in {"5", "bodega", "la bodega", "volver a bodega", "retornar a bodega"}:
+        if origen and origen.get("tipo_frecuente") == "bodega":
+            destino = dict(origen)
+            destino["label"] = "Bodega / origen de esta ruta"
+            destino["tipo"] = destino.get("tipo") or "bodega"
+            return destino
+
         return {
             "tipo": "requiere_frecuente",
             "tipo_frecuente": "bodega",
@@ -1655,8 +1726,9 @@ def procesar_planificacion_ruta(
     - Permite confirmar/corregir direcciones.
     - Valida/geocodifica direcciones manuales antes de aceptarlas.
     - Permite guardar frecuentes.
-    - Para compañero NO asume automáticamente la dirección guardada:
-      primero pregunta si desea usar una guardada, otra nueva o no pasar a buscar a nadie.
+    - Para origen manual pregunta si desea guardar como casa/oficina/bodega.
+    - Si el usuario luego dice "casa" como destino final, puede reutilizar el origen manual de esta ruta.
+    - Para compañero NO asume automáticamente la dirección guardada.
     - Permite usar la ubicación del compañero como destino final.
     """
     message = message or {}
@@ -1684,9 +1756,22 @@ def procesar_planificacion_ruta(
 
         if loc:
             loc["validada"] = True
-            origen = loc
-        else:
-            origen = _parse_origen_desde_texto(texto)
+            loc["label"] = "Origen indicado"
+            loc["direccion"] = "Ubicación compartida por Telegram - origen"
+
+            state["pending_point"] = {
+                "target": "origen",
+                "tipo_frecuente": "__origen_manual__",
+                "label": "origen",
+                "preguntar_guardar": True,
+            }
+            state["pending_point_value"] = loc
+            state["step"] = "confirmar_direccion"
+            ruta_set(chat_id, state)
+
+            return _prompt_confirmar_point(loc, "origen")
+
+        origen = _parse_origen_desde_texto(texto)
 
         if origen.get("tipo") == "direccion_invalida":
             return _mensaje_direccion_no_validada("origen", texto)
@@ -1700,6 +1785,7 @@ def procesar_planificacion_ruta(
             )
 
             if frecuente:
+                frecuente["tipo_frecuente"] = tipo
                 state["origen"] = frecuente
                 ruta_set(chat_id, state)
                 return _continuar_a_pickup(state, chat_id)
@@ -1717,6 +1803,27 @@ def procesar_planificacion_ruta(
 
         if origen.get("tipo") == "direccion" and not origen.get("lat"):
             return _mensaje_direccion_no_validada("origen", texto)
+
+        if origen.get("tipo") == "current_location":
+            state["origen"] = origen
+            ruta_set(chat_id, state)
+            return _continuar_a_pickup(state, chat_id)
+
+        if origen.get("tipo") in {"direccion", "coordenadas"}:
+            origen["label"] = origen.get("label") or "origen"
+            origen["usar_como_casa_temporal"] = True
+
+            state["pending_point"] = {
+                "target": "origen",
+                "tipo_frecuente": "__origen_manual__",
+                "label": "origen",
+                "preguntar_guardar": True,
+            }
+            state["pending_point_value"] = origen
+            state["step"] = "confirmar_direccion"
+            ruta_set(chat_id, state)
+
+            return _prompt_confirmar_point(origen, "origen")
 
         state["origen"] = origen
         ruta_set(chat_id, state)
@@ -1737,6 +1844,9 @@ def procesar_planificacion_ruta(
 
         if point.get("tipo") == "direccion_invalida":
             return _mensaje_direccion_no_validada(label, texto)
+
+        if pending.get("target") == "origen":
+            point["usar_como_casa_temporal"] = True
 
         state["pending_point_value"] = point
         state["step"] = "confirmar_direccion"
@@ -1777,6 +1887,13 @@ def procesar_planificacion_ruta(
                 )
 
             if target == "origen":
+                if tipo_frecuente in {"casa", "oficina", "bodega"}:
+                    point["tipo_frecuente"] = tipo_frecuente
+                    point["label"] = _label_tipo_frecuente(tipo_frecuente)
+
+                if tipo_frecuente == "__origen_manual__":
+                    point["usar_como_casa_temporal"] = True
+
                 state["origen"] = point
 
             elif target == "pickup":
@@ -1786,6 +1903,11 @@ def procesar_planificacion_ruta(
                 state["destino_final"] = point
 
             if preguntar_guardar and tipo_frecuente:
+                if target == "origen" and tipo_frecuente == "__origen_manual__":
+                    state["step"] = "guardar_origen_manual"
+                    ruta_set(chat_id, state)
+                    return _prompt_guardar_origen_manual(point)
+
                 state["step"] = "guardar_frecuente"
                 ruta_set(chat_id, state)
                 return _prompt_guardar_frecuente(tipo_frecuente, point)
@@ -1839,10 +1961,64 @@ def procesar_planificacion_ruta(
         if nuevo_point.get("tipo") == "direccion_invalida":
             return _mensaje_direccion_no_validada(label, texto)
 
+        if target == "origen":
+            nuevo_point["usar_como_casa_temporal"] = True
+
         state["pending_point_value"] = nuevo_point
         ruta_set(chat_id, state)
 
         return _prompt_confirmar_point(nuevo_point, label)
+
+    # =========================
+    # GUARDAR ORIGEN MANUAL COMO CASA / OFICINA / BODEGA
+    # =========================
+    if step == "guardar_origen_manual":
+        pending = state.get("pending_point") or {}
+        point = state.get("pending_point_value") or {}
+
+        tipo_guardar = _parse_tipo_guardar_origen_manual(texto)
+
+        if tipo_guardar is None:
+            return (
+                "No entendí cómo deseas guardar esta dirección.\n\n"
+                "Responde una opción:\n"
+                "1) `casa`\n"
+                "2) `oficina`\n"
+                "3) `bodega`\n"
+                "4) `no guardar`"
+            )
+
+        prefijo = ""
+
+        if tipo_guardar != "no_guardar":
+            point["tipo_frecuente"] = tipo_guardar
+            point["label"] = _label_tipo_frecuente(tipo_guardar)
+
+            obj = _guardar_direccion_frecuente(
+                usuario=usuario,
+                tipo=tipo_guardar,
+                point=point,
+            )
+
+            if obj:
+                prefijo = f"✅ Dirección guardada como *{_label_tipo_frecuente(tipo_guardar)}*.\n\n"
+            else:
+                prefijo = (
+                    "⚠️ No pude guardar la dirección, pero continuaré con la ruta.\n\n"
+                )
+        else:
+            point["usar_como_casa_temporal"] = True
+            point["label"] = "Origen de esta ruta"
+            prefijo = "Perfecto, la usaré solo para esta ruta.\n\n"
+
+        if pending.get("target") == "origen":
+            state["origen"] = point
+
+        state.pop("pending_point", None)
+        state.pop("pending_point_value", None)
+        ruta_set(chat_id, state)
+
+        return prefijo + _continuar_a_pickup(state, chat_id)
 
     # =========================
     # GUARDAR FRECUENTE
@@ -1870,12 +2046,24 @@ def procesar_planificacion_ruta(
                     point.get("direccion") or texto,
                 )
 
+            if tipo_frecuente in {"casa", "oficina", "bodega", "companero"}:
+                point["tipo_frecuente"] = tipo_frecuente
+                point["label"] = _label_tipo_frecuente(tipo_frecuente)
+
             obj = _guardar_direccion_frecuente(
                 usuario=usuario,
                 tipo=tipo_frecuente,
                 point=point,
             )
             guardada = bool(obj)
+
+            if target == "origen":
+                state["origen"] = point
+
+        if si_no is False and target == "origen":
+            point["usar_como_casa_temporal"] = True
+            point["label"] = "Origen de esta ruta"
+            state["origen"] = point
 
         state.pop("pending_point", None)
         state.pop("pending_point_value", None)
@@ -1932,7 +2120,6 @@ def procesar_planificacion_ruta(
         loc = _extraer_location(message)
         coord = _parse_coord_text(texto)
 
-        # Si comparte ubicación directamente, la tomamos como nuevo punto de compañero.
         if loc:
             loc["label"] = "ubicación del compañero"
             loc["direccion"] = "Ubicación compartida por Telegram - compañero"
@@ -1950,7 +2137,6 @@ def procesar_planificacion_ruta(
 
             return _prompt_confirmar_point(loc, "ubicación del compañero")
 
-        # Si escribe coordenadas directamente, las tomamos como nuevo punto.
         if coord:
             coord["label"] = "ubicación del compañero"
             coord["direccion"] = "Coordenadas indicadas - compañero"
@@ -1968,10 +2154,8 @@ def procesar_planificacion_ruta(
 
             return _prompt_confirmar_point(coord, "ubicación del compañero")
 
-        # Direcciones frecuentes ya cargadas en el state.
         frecuentes = state.get("pickup_frecuentes") or []
 
-        # Si por algún motivo no están en state, las buscamos ahora.
         if not frecuentes:
             frecuentes = _buscar_direcciones_frecuentes(
                 usuario=usuario,
@@ -1981,7 +2165,6 @@ def procesar_planificacion_ruta(
             state["pickup_frecuentes"] = frecuentes
             ruta_set(chat_id, state)
 
-        # Si hay direcciones guardadas, NO asumimos con "sí".
         if frecuentes:
             choice = _parse_pickup_frecuente_choice(texto, frecuentes)
 
@@ -2027,7 +2210,6 @@ def procesar_planificacion_ruta(
 
             return "No entendí cuál opción quieres usar para el compañero.\n\n" + msg
 
-        # Si no hay direcciones frecuentes guardadas, procesamos sí/no normal.
         si_no = _parse_si_no(texto)
 
         if si_no is False:
@@ -2053,7 +2235,6 @@ def procesar_planificacion_ruta(
                 "Escribe `cancelar` para salir."
             )
 
-        # Si escribió una dirección directamente.
         point = _point_desde_texto_o_location(
             texto=texto,
             message=message,
@@ -2173,6 +2354,8 @@ def procesar_planificacion_ruta(
             )
 
             if frecuente:
+                frecuente["tipo_frecuente"] = tipo
+                frecuente["label"] = _label_tipo_frecuente(tipo)
                 destino_final = frecuente
             else:
                 state["pending_point"] = {
