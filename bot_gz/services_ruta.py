@@ -412,16 +412,13 @@ def _geocode_address(direccion: str) -> Optional[dict]:
     """
     Convierte una dirección manual en coordenadas reales.
 
-    Usa Google Geocoding si existe GOOGLE_MAPS_API_KEY.
-    Si no hay key, usa Nominatim como respaldo simple.
+    Usa la key de servidor de Google Maps si existe:
+    - GOOGLE_MAPS_SERVER_KEY
+    - GOOGLE_MAPS_KEY
+    - GOOGLE_MAPS_API_KEY
+    - GOOGLE_GEOCODING_API_KEY
 
-    Retorna:
-    {
-        "direccion": "dirección normalizada",
-        "lat": float,
-        "lng": float,
-        "fuente": "google" | "nominatim"
-    }
+    Si Google no responde, intenta Nominatim como respaldo.
     """
     direccion = (direccion or "").strip()
 
@@ -434,90 +431,120 @@ def _geocode_address(direccion: str) -> Optional[dict]:
         return cached
 
     google_key = (
-        getattr(settings, "GOOGLE_MAPS_API_KEY", None)
+        getattr(settings, "GOOGLE_MAPS_SERVER_KEY", None)
+        or getattr(settings, "GOOGLE_MAPS_KEY", None)
+        or getattr(settings, "GOOGLE_MAPS_API_KEY", None)
         or getattr(settings, "GOOGLE_GEOCODING_API_KEY", None)
         or ""
     )
     google_key = str(google_key).strip()
 
+    variantes = []
+    base = direccion.strip()
+    norm_base = _norm(base)
+
+    variantes.append(base)
+
+    if "santiago" not in norm_base:
+        variantes.append(f"{base}, Santiago")
+
+    if "region metropolitana" not in norm_base:
+        variantes.append(f"{base}, Región Metropolitana")
+
+    if "chile" not in norm_base:
+        variantes.append(f"{base}, Santiago, Región Metropolitana, Chile")
+
+    # Quitar duplicados manteniendo orden
+    variantes_unicas = []
+    seen = set()
+
+    for item in variantes:
+        key = _norm(item)
+        if key not in seen:
+            seen.add(key)
+            variantes_unicas.append(item)
+
     # =========================
     # 1) Google Geocoding API
     # =========================
     if google_key:
+        for query in variantes_unicas:
+            try:
+                resp = requests.get(
+                    "https://maps.googleapis.com/maps/api/geocode/json",
+                    params={
+                        "address": query,
+                        "key": google_key,
+                        "region": "cl",
+                        "language": "es",
+                    },
+                    timeout=12,
+                )
+
+                data = resp.json()
+
+                if data.get("status") == "OK" and data.get("results"):
+                    result = data["results"][0]
+                    loc = result.get("geometry", {}).get("location", {})
+
+                    lat = loc.get("lat")
+                    lng = loc.get("lng")
+
+                    if _coord_ok(lat, lng):
+                        out = {
+                            "direccion": result.get("formatted_address") or query,
+                            "lat": float(lat),
+                            "lng": float(lng),
+                            "fuente": "google",
+                        }
+                        cache.set(cache_key, out, timeout=60 * 60 * 24 * 30)
+                        return out
+
+            except Exception:
+                pass
+
+    # =========================
+    # 2) Fallback Nominatim
+    # =========================
+    for query in variantes_unicas:
         try:
+            q = query
+
+            if "chile" not in _norm(q):
+                q = f"{q}, Chile"
+
             resp = requests.get(
-                "https://maps.googleapis.com/maps/api/geocode/json",
+                "https://nominatim.openstreetmap.org/search",
                 params={
-                    "address": direccion,
-                    "key": google_key,
-                    "region": "cl",
-                    "language": "es",
+                    "q": q,
+                    "format": "json",
+                    "limit": 1,
+                    "countrycodes": "cl",
+                    "addressdetails": 1,
                 },
+                headers={"User-Agent": "GZServicesBot/1.0"},
                 timeout=12,
             )
+
             data = resp.json()
 
-            if data.get("status") == "OK" and data.get("results"):
-                result = data["results"][0]
-                loc = result.get("geometry", {}).get("location", {})
-
-                lat = loc.get("lat")
-                lng = loc.get("lng")
+            if isinstance(data, list) and data:
+                result = data[0]
+                lat = result.get("lat")
+                lng = result.get("lon")
 
                 if _coord_ok(lat, lng):
                     out = {
-                        "direccion": result.get("formatted_address") or direccion,
+                        "direccion": result.get("display_name") or q,
                         "lat": float(lat),
                         "lng": float(lng),
-                        "fuente": "google",
+                        "fuente": "nominatim",
                     }
                     cache.set(cache_key, out, timeout=60 * 60 * 24 * 30)
                     return out
 
         except Exception:
             pass
-
-    # =========================
-    # 2) Fallback Nominatim
-    # =========================
-    try:
-        query = direccion
-
-        # Si no trae país, ayudamos un poco al geocoder.
-        if "chile" not in _norm(query):
-            query = f"{query}, Chile"
-
-        resp = requests.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={
-                "q": query,
-                "format": "json",
-                "limit": 1,
-                "countrycodes": "cl",
-                "addressdetails": 1,
-            },
-            headers={"User-Agent": "GZServicesBot/1.0"},
-            timeout=12,
-        )
-        data = resp.json()
-
-        if isinstance(data, list) and data:
-            result = data[0]
-            lat = result.get("lat")
-            lng = result.get("lon")
-
-            if _coord_ok(lat, lng):
-                out = {
-                    "direccion": result.get("display_name") or direccion,
-                    "lat": float(lat),
-                    "lng": float(lng),
-                    "fuente": "nominatim",
-                }
-                cache.set(cache_key, out, timeout=60 * 60 * 24 * 30)
-                return out
-
-    except Exception:
-        pass
 
     return None
 
