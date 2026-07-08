@@ -662,12 +662,16 @@ def _resolver_intent_por_contexto(
     """
     Resuelve respuestas cortas usando el contexto conversacional.
 
-    Ejemplo:
-    Bot: ¿Qué producción necesitas?
-    Usuario: este mes
+    Esto evita errores como:
+    - Bot pregunta por producción
+    - Usuario responde: "este mes"
+    - La IA lo manda a liquidaciones
 
-    Sin contexto, "este mes" puede confundirse con liquidaciones.
-    Con contexto, si el último intent fue producción, se mantiene producción.
+    También permite continuidad:
+    - "cual filtro?"
+    - "aprobación supervisor"
+    - "finalización"
+    - "creación"
     """
     texto = (texto or "").strip()
     norm = _normalize(texto)
@@ -686,7 +690,7 @@ def _resolver_intent_por_contexto(
     meta["context_last_intent"] = ultimo_slug
 
     # =========================
-    # Producción: respuestas cortas
+    # Producción: respuestas cortas / continuidad
     # =========================
     if ultimo_slug == "mi_produccion_hasta_hoy":
         es_rango = bool(_parse_rango_fechas(texto))
@@ -706,6 +710,35 @@ def _resolver_intent_por_contexto(
             "hasta hoy",
             "a la fecha",
             "fecha",
+            "cual filtro",
+            "cuál filtro",
+            "que filtro",
+            "qué filtro",
+            "cual filtro usar",
+            "cuál filtro usar",
+            "que fecha",
+            "qué fecha",
+            "que fecha uso",
+            "qué fecha uso",
+            "cual fecha",
+            "cuál fecha",
+            "explicame el filtro",
+            "explícame el filtro",
+            "no entiendo el filtro",
+            "creacion",
+            "creación",
+            "fecha creacion",
+            "fecha creación",
+            "aprobacion",
+            "aprobación",
+            "aprobacion supervisor",
+            "aprobación supervisor",
+            "fecha aprobacion",
+            "fecha aprobación",
+            "finalizacion",
+            "finalización",
+            "fecha finalizacion",
+            "fecha finalización",
         }
 
         tokens_produccion = {
@@ -716,8 +749,30 @@ def _resolver_intent_por_contexto(
             "pasado",
             "hoy",
             "fecha",
+            "fechas",
             "produccion",
+            "producción",
             "hasta",
+            "filtro",
+            "filtros",
+            "campo",
+            "calculo",
+            "cálculo",
+            "creacion",
+            "creación",
+            "creado",
+            "creados",
+            "aprobacion",
+            "aprobación",
+            "aprobado",
+            "aprobados",
+            "supervisor",
+            "finalizacion",
+            "finalización",
+            "finalizado",
+            "finalizados",
+            "terminado",
+            "terminados",
         }
 
         if (
@@ -726,6 +781,18 @@ def _resolver_intent_por_contexto(
             or es_mes_nombre
             or es_mes_anio
             or (tokens and tokens <= tokens_produccion)
+            or ({"filtro", "filtros", "fecha", "fechas", "campo"} & tokens)
+            or (
+                {
+                    "creacion",
+                    "creación",
+                    "aprobacion",
+                    "aprobación",
+                    "finalizacion",
+                    "finalización",
+                }
+                & tokens
+            )
         ):
             meta["context_used"] = True
             meta["context_reason"] = (
@@ -752,6 +819,10 @@ def _resolver_intent_por_contexto(
             "ultimos",
             "últimas",
             "últimos",
+            "las ultimas",
+            "las últimas",
+            "mis ultimas",
+            "mis últimas",
         }
 
         tokens_liquidacion = {
@@ -836,6 +907,12 @@ def _resolver_intent_por_contexto(
             "pega",
             "mi pega",
             "tengo pega",
+            "donde voy",
+            "dónde voy",
+            "donde tengo que ir",
+            "dónde tengo que ir",
+            "que sitio tengo",
+            "qué sitio tengo",
         }
 
         tokens_asignacion = {
@@ -847,6 +924,9 @@ def _resolver_intent_por_contexto(
             "sitio",
             "asignado",
             "asignada",
+            "donde",
+            "dónde",
+            "voy",
         }
 
         if norm in frases_asignacion or (tokens and tokens <= tokens_asignacion):
@@ -1578,11 +1658,30 @@ def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
 
 
 def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=None):
+    """
+    Responde producción por rango.
+
+    Por ahora el cálculo por fechas todavía está pendiente,
+    pero dejamos el flujo conversacional claro para que el usuario sepa
+    qué filtro puede elegir.
+    """
     return (
         f"📊 *Producción estimada*\n"
-        f"Rango: {date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}\n\n"
-        "⚙️ (Pendiente: aplicar filtro por fechas en el cálculo)\n"
-        "Si quieres, dime qué fecha del servicio usar: creación, aprobación supervisor o finalización."
+        f"Periodo: {date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}\n\n"
+        "⚙️ Nota: aún está pendiente aplicar el filtro por fechas en el cálculo.\n\n"
+        "Para calcularlo correctamente necesito saber qué fecha del servicio prefieres usar:\n\n"
+        "1) *Creación*\n"
+        "   Fecha en que el servicio fue creado en el sistema.\n\n"
+        "2) *Aprobación supervisor*\n"
+        "   Fecha en que el supervisor aprobó el trabajo.\n"
+        "   Esta suele servir mejor para producción validada.\n\n"
+        "3) *Finalización*\n"
+        "   Fecha en que el técnico finalizó o subió el informe.\n\n"
+        "Puedes responder, por ejemplo:\n"
+        "• `creación`\n"
+        "• `aprobación supervisor`\n"
+        "• `finalización`\n"
+        "• `cual filtro?`"
     )
 
 
@@ -1597,8 +1696,72 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
     hoy = timezone.localdate()
     norm = _normalize(texto_usuario)
 
+    # =========================
+    # Ayuda sobre filtro de fecha
+    # =========================
+    pregunta_filtro = (
+        {"filtro", "filtros", "campo", "fecha", "fechas"} & tokens
+        or "cual filtro" in norm
+        or "cuál filtro" in norm
+        or "que filtro" in norm
+        or "qué filtro" in norm
+        or "que fecha" in norm
+        or "qué fecha" in norm
+        or "no entiendo el filtro" in norm
+        or "explicame" in norm
+        or "explícame" in norm
+    )
+
+    if pregunta_filtro:
+        return (
+            "📊 *Filtro de producción*\n\n"
+            "Cuando pides producción por mes o por rango de fechas, necesito saber "
+            "qué fecha del servicio quieres usar para filtrar.\n\n"
+            "Puedes elegir una de estas opciones:\n\n"
+            "1) *Creación del servicio*\n"
+            "   Usa la fecha en que el servicio fue creado en el sistema.\n"
+            "   Ejemplo: trabajos ingresados durante el mes.\n\n"
+            "2) *Aprobación del supervisor*\n"
+            "   Usa la fecha en que el supervisor aprobó el trabajo.\n"
+            "   Esta opción es recomendable si quieres medir producción ya validada.\n\n"
+            "3) *Finalización*\n"
+            "   Usa la fecha en que el técnico finalizó o subió el informe.\n"
+            "   Sirve para medir trabajos ejecutados durante un periodo.\n\n"
+            "Responde con una opción:\n"
+            "• `creación`\n"
+            "• `aprobación supervisor`\n"
+            "• `finalización`"
+        )
+
+    # =========================
+    # El usuario eligió tipo de filtro
+    # =========================
+    if {"creacion", "creación", "creado", "creados"} & tokens:
+        return (
+            "✅ Perfecto. Usaremos como filtro la *fecha de creación del servicio*.\n\n"
+            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango.\n"
+            "Cuando lo dejemos conectado, podré calcular producción usando esa fecha."
+        )
+
+    if {"aprobacion", "aprobación", "aprobado", "aprobados", "supervisor"} & tokens:
+        return (
+            "✅ Perfecto. Usaremos como filtro la *fecha de aprobación del supervisor*.\n\n"
+            "Esta opción normalmente sirve para producción validada por supervisión.\n\n"
+            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango."
+        )
+
+    if {"finalizacion", "finalización", "finalizado", "finalizados", "terminado", "terminados"} & tokens:
+        return (
+            "✅ Perfecto. Usaremos como filtro la *fecha de finalización del servicio*.\n\n"
+            "Esta opción sirve para medir trabajos efectivamente ejecutados en un periodo.\n\n"
+            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango."
+        )
+
     flags = _parse_flags_estados_produccion(tokens)
 
+    # =========================
+    # Rango explícito
+    # =========================
     rango = _parse_rango_fechas(texto_usuario)
     if rango:
         d1, d2 = rango
@@ -1606,37 +1769,89 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
             d1, d2 = d2, d1
         return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
 
-    if {"hoy", "ahora", "fecha"} & tokens or ("hasta hoy" in norm) or ("a la fecha" in norm):
+    # =========================
+    # Producción hasta hoy
+    # =========================
+    if (
+        {"hoy", "ahora"} & tokens
+        or "hasta hoy" in norm
+        or "a la fecha" in norm
+        or norm in {"produccion", "producción", "mi produccion", "mi producción"}
+    ):
+        # Si solo dice "producción", mostramos menú.
+        if norm in {"produccion", "producción", "mi produccion", "mi producción"}:
+            return (
+                "📊 ¿Qué información sobre producción necesitas?\n\n"
+                "Puedo ayudarte con lo siguiente:\n"
+                "• Producción de este mes hasta hoy: escribe `mi producción de este mes`\n"
+                "• Producción del mes anterior completo: escribe `mi producción del mes anterior`\n"
+                "• Producción de un mes específico: por ejemplo, `mi producción de agosto 2025` "
+                "o simplemente `agosto 2025`\n"
+                "• Producción en un rango de fechas: por ejemplo, "
+                "`mi producción 2025-08-01 a 2025-08-31`\n\n"
+                "Si deseas un estimado más detallado según estados, puedes solicitarlo así:\n"
+                "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`"
+            )
+
         return _responder_produccion_hasta_hoy(usuario)
 
-    if ("este mes" in norm) or ("mes actual" in norm) or ("mes" in tokens and ({"este", "actual"} & tokens)):
+    # =========================
+    # Este mes
+    # =========================
+    if (
+        "este mes" in norm
+        or "mes actual" in norm
+        or norm in {"este", "actual"}
+        or ("mes" in tokens and ({"este", "actual"} & tokens))
+    ):
         start, _end = _month_start_end(hoy.year, hoy.month)
         return responder_produccion_rango(usuario, start, hoy, incluir_estados=flags)
 
-    if ("mes anterior" in norm) or ("mes pasado" in norm) or ("mes" in tokens and ({"anterior", "pasado"} & tokens)):
+    # =========================
+    # Mes anterior
+    # =========================
+    if (
+        "mes anterior" in norm
+        or "mes pasado" in norm
+        or norm in {"anterior", "pasado"}
+        or ("mes" in tokens and ({"anterior", "pasado"} & tokens))
+    ):
         year = hoy.year
         month = hoy.month - 1
         if month == 0:
             month = 12
             year -= 1
+
         start, end = _month_start_end(year, month)
         return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
+    # =========================
+    # Mes específico
+    # =========================
     parsed_mes = _parse_mes_produccion(texto_usuario)
     if parsed_mes:
         mes, anio = parsed_mes
         start, end = _month_start_end(anio, mes)
         return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
 
+    # =========================
+    # Menú por defecto
+    # =========================
     return (
-        "📊 ¿Qué producción necesitas?\n\n"
-        "Puedo ayudarte con:\n"
-        "• *Este mes hasta hoy*: `mi producción de este mes`\n"
-        "• *Mes anterior completo*: `mi producción del mes anterior`\n"
-        "• *Un mes específico*: `mi producción de agosto 2025` (o `agosto 2025`)\n"
-        "• *Rango de fechas*: `mi producción 2025-08-01 a 2025-08-31`\n\n"
-        "También puedo darte un *estimado ampliado* según estados (si lo pides así):\n"
-        "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`"
+        "📊 ¿Qué información sobre producción necesitas?\n\n"
+        "Puedo ayudarte con lo siguiente:\n"
+        "• Producción de este mes hasta hoy: escribe `mi producción de este mes`\n"
+        "• Producción del mes anterior completo: escribe `mi producción del mes anterior`\n"
+        "• Producción de un mes específico: por ejemplo, `mi producción de agosto 2025` "
+        "o simplemente `agosto 2025`\n"
+        "• Producción en un rango de fechas: por ejemplo, "
+        "`mi producción 2025-08-01 a 2025-08-31`\n\n"
+        "Si deseas un estimado más detallado según estados, puedes solicitarlo así:\n"
+        "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`\n\n"
+        "Si ya te pregunté por el filtro de fecha, responde:\n"
+        "• `creación`\n"
+        "• `aprobación supervisor`\n"
+        "• `finalización`"
     )
 
 
