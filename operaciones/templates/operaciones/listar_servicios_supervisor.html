@@ -1012,50 +1012,63 @@ function syncFiltersWithUrl(){
   }
 
   function renderOptions(key){
-    const globalVals = getExcelGlobal();
-    const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
-    const selected = activeFilters[key];
+  const globalVals = getExcelGlobal();
+  const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
+  const selected = activeFilters[key];
 
-    optionsBox.innerHTML = '';
+  optionsBox.innerHTML = '';
 
-    const allWrap = document.createElement('label');
-    allWrap.className = 'flex items-center gap-2 mb-2';
-    allWrap.innerHTML = `<input type="checkbox" id="excel-select-all"> <span>(Seleccionar todo)</span>`;
+  const allWrap = document.createElement('label');
+  allWrap.className = 'flex items-center gap-2 mb-2';
+  allWrap.innerHTML = `<input type="checkbox" id="excel-select-all"> <span>(Seleccionar todo)</span>`;
 
-    optionsBox.appendChild(allWrap);
+  optionsBox.appendChild(allWrap);
 
-    values.forEach(val => {
-      const label = document.createElement('label');
+  values.forEach(val => {
+    const label = document.createElement('label');
 
-      label.className = 'flex items-center gap-2 text-xs mt-1';
-      label.dataset.optionLabel = "1";
+    label.className = 'flex items-center gap-2 text-xs mt-1';
+    label.dataset.optionLabel = "1";
 
-      const checked = !selected || selected.has(val);
+    const checked = selected ? selected.has(val) : true;
 
-      label.innerHTML = `
-        <input type="checkbox" class="excel-opt" data-value="${escapeHtml(val)}" ${checked ? 'checked' : ''}>
-        <span>${escapeHtml(val)}</span>
-      `;
+    label.innerHTML = `
+      <input type="checkbox" class="excel-opt" data-value="${escapeHtml(val)}" ${checked ? 'checked' : ''}>
+      <span>${escapeHtml(val)}</span>
+    `;
 
-      optionsBox.appendChild(label);
-    });
+    optionsBox.appendChild(label);
+  });
 
-    const selectAll = document.getElementById('excel-select-all');
-    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
+  const selectAll = document.getElementById('excel-select-all');
+  const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
 
-    selectAll.checked = !selected || selected.size === values.length;
-
-    selectAll.addEventListener('change', () => {
-      opts.forEach(o => {
-        const row = o.closest('[data-option-label]');
-
-        if (row && row.style.display === 'none' && searchInput.value.trim()) return;
-
-        o.checked = selectAll.checked;
-      });
-    });
+  function refreshSelectAllState(){
+    const checkedCount = opts.filter(o => o.checked).length;
+    selectAll.checked = opts.length > 0 && checkedCount === opts.length;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
   }
 
+  refreshSelectAllState();
+
+  selectAll.addEventListener('change', () => {
+    /*
+      Importante:
+      Aunque haya búsqueda activa, si el usuario desmarca "Seleccionar todo",
+      se deben desmarcar TODOS los valores, también los ocultos.
+      Si no, al aplicar queda todo seleccionado y el backend no filtra.
+    */
+    opts.forEach(o => {
+      o.checked = selectAll.checked;
+    });
+
+    selectAll.indeterminate = false;
+  });
+
+  opts.forEach(o => {
+    o.addEventListener('change', refreshSelectAllState);
+  });
+}
   function filterOptionList(q){
     const query = (q || '').trim().toLowerCase();
     let visible = 0;
@@ -1210,7 +1223,9 @@ btnApply.addEventListener('click', async () => {
   const selected = new Set();
 
   optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-    if(opt.checked) selected.add(opt.dataset.value);
+    if(opt.checked) {
+      selected.add(opt.dataset.value);
+    }
   });
 
   const total = new Set(getExcelGlobal()[currentKey] || []);

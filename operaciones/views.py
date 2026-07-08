@@ -1035,7 +1035,7 @@ def listar_servicios_supervisor(request):
     from urllib.parse import urlencode
 
     from django.core.paginator import Paginator
-    from django.db.models import Case, IntegerField, Prefetch, Q, Value, When
+    from django.db.models import Case, IntegerField, Q, Value, When
 
     estado_prioridad = Case(
         When(estado="aprobado_pendiente", then=Value(1)),
@@ -1114,15 +1114,21 @@ def listar_servicios_supervisor(request):
         except Exception:
             return "$ 0 CLP"
 
-    def asignados_label(servicio):
+    def asignados_lista(servicio):
         vals = []
+
         try:
             for tecnico in servicio.trabajadores_asignados.all():
-                nombre = tecnico.get_full_name() or tecnico.username
+                nombre = (tecnico.get_full_name() or tecnico.username or "").strip()
                 if nombre:
                     vals.append(nombre)
         except Exception:
             pass
+
+        return vals
+
+    def asignados_label(servicio):
+        vals = asignados_lista(servicio)
         return ", ".join(vals) if vals else "Sin asignar"
 
     def fecha_fin_label(servicio):
@@ -1132,31 +1138,42 @@ def listar_servicios_supervisor(request):
                 and servicio.fecha_aprobacion_supervisor
             ):
                 return servicio.fecha_aprobacion_supervisor.strftime("%d/%m/%Y %H:%M")
+
             if servicio.fecha_fin:
                 return servicio.fecha_fin.strftime("%d/%m/%Y %H:%M")
         except Exception:
             pass
+
         return "—"
 
     def status_label(servicio):
         if servicio.estado == "aprobado_pendiente":
             return "Aprobado por PM"
+
         if servicio.estado == "asignado":
             return "Asignado"
+
         if servicio.estado == "en_progreso":
             return "En ejecución"
+
         if servicio.estado in ["en_revision_supervisor", "finalizado_trabajador"]:
             return "Pendiente revisión supervisor"
+
         if servicio.estado == "rechazado_supervisor":
             return "Rechazado por Supervisor"
+
         if servicio.estado == "aprobado_supervisor":
             return "Aprobado por Supervisor"
+
         if servicio.estado == "ajuste_bono":
             return "Bono"
+
         if servicio.estado == "ajuste_adelanto":
             return "Adelanto"
+
         if servicio.estado == "ajuste_descuento":
             return "Descuento"
+
         return str(servicio.estado or "—")
 
     def excel_value_for_servicio(servicio, col):
@@ -1197,6 +1214,31 @@ def listar_servicios_supervisor(request):
 
         return ""
 
+    def excel_values_for_servicio(servicio, col):
+        """
+        Devuelve todos los valores posibles por columna para filtrar.
+        En ASIGNADOS devuelve:
+        - cada técnico individual
+        - y también el texto combinado
+        """
+        col = str(col)
+
+        if col == "7":
+            individuales = asignados_lista(servicio)
+
+            if not individuales:
+                return ["Sin asignar"]
+
+            combinado = ", ".join(individuales)
+            vals = list(individuales)
+
+            if combinado and combinado not in vals:
+                vals.append(combinado)
+
+            return vals
+
+        return [excel_value_for_servicio(servicio, col)]
+
     # ---------------- Filtros Excel globales ----------------
     excel_filters_raw = (request.GET.get("excel_filters") or "").strip()
 
@@ -1214,13 +1256,18 @@ def listar_servicios_supervisor(request):
             ok = True
 
             for col, values in excel_filters.items():
-                values_set = set(values or [])
+                values_set = {str(v).strip() for v in (values or []) if str(v).strip()}
+
                 if not values_set:
                     continue
 
-                label = excel_value_for_servicio(servicio, col)
+                row_values = {
+                    str(v).strip()
+                    for v in excel_values_for_servicio(servicio, col)
+                    if str(v).strip()
+                }
 
-                if label not in values_set:
+                if not row_values.intersection(values_set):
                     ok = False
                     break
 
@@ -1236,11 +1283,12 @@ def listar_servicios_supervisor(request):
         vals = set()
 
         for servicio in servicios_list:
-            vals.add(excel_value_for_servicio(servicio, str(col)) or "(Vacías)")
+            for value in excel_values_for_servicio(servicio, str(col)):
+                vals.add(value or "(Vacías)")
 
         excel_global[col] = sorted(vals)
 
-    excel_global_json = json.dumps(excel_global)
+    excel_global_json = json.dumps(excel_global, ensure_ascii=False)
 
     # ---------------- Paginación ----------------
     cantidad_param = request.GET.get("cantidad", "10")
