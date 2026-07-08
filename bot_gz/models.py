@@ -380,3 +380,78 @@ class AlertaClimaDiaria(models.Model):
 
     def __str__(self):
         return f"Alerta clima {self.trabajador} - {self.fecha}"
+
+
+class BotRutaDireccionFrecuente(models.Model):
+    """
+    Direcciones frecuentes usadas por el bot para planificación de rutas.
+
+    Ejemplos:
+    - casa del técnico
+    - oficina
+    - bodega
+    - casa / ubicación frecuente de un compañero
+    """
+
+    TIPO_CHOICES = [
+        ("casa", "Casa"),
+        ("oficina", "Oficina"),
+        ("bodega", "Bodega"),
+        ("companero", "Compañero"),
+        ("otro", "Otro"),
+    ]
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="bot_ruta_direcciones_frecuentes",
+    )
+
+    tipo = models.CharField(
+        max_length=30,
+        choices=TIPO_CHOICES,
+        db_index=True,
+    )
+
+    nombre = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Nombre opcional. Ej: Casa, Oficina, Compañero Juan.",
+    )
+
+    direccion = models.TextField(
+        blank=True,
+        default="",
+        help_text="Dirección escrita por el usuario.",
+    )
+
+    latitud = models.DecimalField(
+        max_digits=12,
+        decimal_places=8,
+        null=True,
+        blank=True,
+    )
+
+    longitud = models.DecimalField(
+        max_digits=12,
+        decimal_places=8,
+        null=True,
+        blank=True,
+    )
+
+    activo = models.BooleanField(default=True)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Dirección frecuente de ruta"
+        verbose_name_plural = "Direcciones frecuentes de ruta"
+        indexes = [
+            models.Index(fields=["usuario", "tipo", "activo"]),
+        ]
+
+    def __str__(self):
+        label = self.nombre or self.direccion or self.tipo
+        return f"{self.usuario} - {self.tipo} - {label}"

@@ -12,12 +12,14 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import FieldError
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from facturacion.models import CartolaMovimiento, Proyecto, TipoGasto
 from liquidaciones.models import Liquidacion
-from operaciones.models import ServicioCotizado, SitioMovil
+from operaciones.models import (EvidenciaFoto, RequisitoFoto, ServicioCotizado,
+                                SesionFotos, SesionFotoTecnico, SitioMovil)
 from rrhh.models import ContratoTrabajo, CronogramaPago, DocumentoTrabajador
 from usuarios.models import CustomUser
 
@@ -25,6 +27,8 @@ from .ai_engine import ai_suggest_intent
 from .ai_humanizer import humanize_bot_response
 from .models import BotIntent, BotMessageLog, BotSession, BotTrainingExample
 from .permissions import user_can_use_bot_intent
+from .services_ruta import (es_intencion_planificar_ruta,
+                            procesar_planificacion_ruta, ruta_get)
 from .services_tecnico import \
     responder_direccion_basura as _responder_direccion_basura
 from .services_tecnico import \
@@ -551,19 +555,50 @@ def _ik_produccion_menu() -> dict:
 
 # ===================== Detección de intent =====================
 
+
 def detect_intent_from_text(
     texto: str, scope: Optional[str] = None
 ) -> Tuple[Optional[BotIntent], float]:
     """
     Detección de intent basada en:
     1) overlap de tokens con ejemplos de entrenamiento
-    2) refuerzo por palabras clave (liquidación, contrato, rendiciones, etc.)
+    2) refuerzo por palabras clave
+    3) ayuda/menú se maneja como respuesta directa en run_intent
     """
+    norm = _normalize(texto)
     user_tokens = set(_tokenize(texto))
-    if not user_tokens:
+
+    if not user_tokens and not norm:
         return None, 0.0
 
-    examples_qs = BotTrainingExample.objects.filter(activo=True).select_related("intent")
+    # Ayuda / menú no necesita BotIntent en BD.
+    # Lo resolveremos en run_intent cuando no haya intent.
+    frases_ayuda = {
+        "ayuda",
+        "menu",
+        "menú",
+        "opciones",
+        "comandos",
+        "que puedo hacer",
+        "qué puedo hacer",
+        "que cosas puedo hacer",
+        "qué cosas puedo hacer",
+        "que cosas puedo hacer en este bot",
+        "qué cosas puedo hacer en este bot",
+        "que hace este bot",
+        "qué hace este bot",
+        "para que sirve este bot",
+        "para qué sirve este bot",
+        "funciones",
+        "funcionalidades",
+    }
+
+    if norm in {_normalize(x) for x in frases_ayuda}:
+        return None, 0.0
+
+    examples_qs = BotTrainingExample.objects.filter(activo=True).select_related(
+        "intent"
+    )
 
     if scope:
         examples_qs = examples_qs.filter(intent__scope__in=[scope, "global"])
@@ -575,11 +610,13 @@ def detect_intent_from_text(
         ex_tokens = set(_tokenize(ex.texto))
         if not ex_tokens:
             continue
+
         inter = user_tokens & ex_tokens
         if not inter:
             continue
 
         score = len(inter) / len(ex_tokens)
+
         if score > best_score:
             best_score = score
             best_intent = ex.intent
@@ -589,54 +626,99 @@ def detect_intent_from_text(
 
     def add_keyword_candidate(slug: str, score: float):
         nonlocal keyword_intent, keyword_score
+
         if score <= keyword_score:
             return
+
         try:
             intent = BotIntent.objects.get(slug=slug, activo=True)
         except BotIntent.DoesNotExist:
             return
+
         keyword_intent = intent
         keyword_score = score
 
-    if {"liquidacion", "liquidaciones"} & user_tokens:
+    # =========================
+    # Liquidaciones
+    # =========================
+    if {"liquidacion", "liquidaciones", "sueldo"} & user_tokens:
         add_keyword_candidate("mis_liquidaciones", 0.9)
 
-    if "contrato" in user_tokens or "contratos" in user_tokens:
+    # =========================
+    # Contrato / anexos
+    # =========================
+    if {"contrato", "contratos", "anexo", "anexos"} & user_tokens:
         add_keyword_candidate("mi_contrato_vigente", 0.9)
 
-    if "produccion" in user_tokens:
-        add_keyword_candidate("mi_produccion_hasta_hoy", 0.8)
+    # =========================
+    # Producción
+    # =========================
+    if {"produccion", "producción"} & user_tokens:
+        add_keyword_candidate("mi_produccion_hasta_hoy", 0.9)
 
-    if "proyectos" in user_tokens or "servicios" in user_tokens:
-        if {"pendientes", "pendiente", "asignados"} & user_tokens:
-            add_keyword_candidate("mis_proyectos_pendientes", 0.8)
-
-    if {"asignacion", "asignaciones", "asignado", "asignados", "asignada", "asignadas"} & user_tokens:
+    # =========================
+    # Asignación / pega
+    # =========================
+    if (
+        {
+            "asignacion",
+            "asignación",
+            "asignaciones",
+            "asignado",
+            "asignados",
+            "asignada",
+            "asignadas",
+        }
+        & user_tokens
+        or {"pega", "trabajo", "sitio"} & user_tokens
+        and {"tengo", "voy", "donde", "dónde"} & user_tokens
+        or "donde tengo que ir" in norm
+        or "dónde tengo que ir" in norm
+        or "que pega tengo" in norm
+        or "qué pega tengo" in norm
+        or "que sitio tengo" in norm
+        or "qué sitio tengo" in norm
+    ):
         add_keyword_candidate("mi_asignacion", 0.95)
 
+    # =========================
+    # Proyectos
+    # =========================
     if {"proyectos", "proyecto", "servicios", "servicio"} & user_tokens:
-        if not ({"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens):
-            add_keyword_candidate("mis_proyectos_pendientes", 0.75)
+        if {"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens:
+            add_keyword_candidate("mis_proyectos_rechazados", 0.85)
+        else:
+            add_keyword_candidate("mis_proyectos_pendientes", 0.8)
+
+    if {"proceso", "ejecucion", "ejecución", "progreso"} & user_tokens:
+        add_keyword_candidate("mis_proyectos_pendientes", 0.75)
 
     if {"rechazados", "rechazado", "rechazadas", "rechazada"} & user_tokens:
         add_keyword_candidate("mis_proyectos_rechazados", 0.8)
 
-    if {"rendicion", "rendiciones", "gasto", "gastos"} & user_tokens:
+    # =========================
+    # Rendiciones
+    # =========================
+    if {"rendicion", "rendición", "rendiciones", "gasto", "gastos"} & user_tokens:
         add_keyword_candidate("mis_rendiciones_pendientes", 0.85)
 
-    if {"basura", "residuos", "desechos"} & user_tokens:
+    # =========================
+    # Basura
+    # =========================
+    if {"basura", "residuos", "desechos", "botar", "tirar"} & user_tokens:
         add_keyword_candidate("direccion_basura", 0.9)
 
-    if {"pago", "pagan", "pagar", "corte", "cronograma"} & user_tokens:
-        add_keyword_candidate("cronograma_produccion_corte", 0.7)
 
-    if "sitio" in user_tokens or "site" in user_tokens:
+    # =========================
+    # Sitio
+    # =========================
+    if {"sitio", "site"} & user_tokens:
         add_keyword_candidate("info_sitio_id_claro", 0.7)
 
     txt_up = (texto or "").strip().upper()
     if (
         re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
-        or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
+        or re.search(r"\bCL-\d{2}(?:-[A-Z]{2,3}-)?\d{5}-\d{2}\b", txt_up)
         or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
     ):
         add_keyword_candidate("info_sitio_id_claro", 0.72)
@@ -1656,36 +1738,208 @@ def _parse_flags_estados_produccion(tokens: set[str]) -> dict:
         "incluye_todo": bool({"todo", "todos", "completo"} & tokens),
     }
 
+# ===================== PRODUCCIÓN BOT =====================
+
+_BOT_EST_PROD = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
+_BOT_AJ_POS = {"ajuste_bono", "ajuste_adelanto"}
+_BOT_AJ_NEG = {"ajuste_descuento"}
+_BOT_ESTADOS_PROD_Y_AJUSTES = _BOT_EST_PROD | _BOT_AJ_POS | _BOT_AJ_NEG
+
+
+def _bot_monto_firmado_por_estado(monto, estado: str) -> Decimal:
+    base = Decimal(str(monto or 0))
+
+    if estado in _BOT_AJ_NEG:
+        return -abs(base)
+
+    if estado in _BOT_AJ_POS:
+        return abs(base)
+
+    return base
+
+
+def _bot_month_aliases(month: str) -> list[str]:
+    s = (month or "").strip()
+    if not s:
+        return []
+
+    meses = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ]
+
+    m = re.match(r"^(\d{4})[-/](\d{1,2})$", s)
+    if not m:
+        return [s]
+
+    y = int(m.group(1))
+    mm = int(m.group(2))
+
+    if not 1 <= mm <= 12:
+        return [s]
+
+    nombre = meses[mm - 1]
+    mm2 = str(mm).zfill(2)
+
+    return [
+        f"{y}-{mm2}",
+        f"{y}/{mm}",
+        f"{mm}-{y}",
+        f"{mm2}-{y}",
+        f"{mm}/{y}",
+        f"{nombre} {y}",
+        f"{nombre.lower()} {y}",
+        f"{nombre} de {y}",
+        f"{nombre.lower()} de {y}",
+    ]
+
+
+def _bot_yyyy_mm_from_date(d) -> str:
+    if hasattr(d, "date"):
+        d = d.date()
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def _bot_mes_label(month: str) -> str:
+    meses = [
+        "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ]
+
+    try:
+        y = int(month[:4])
+        m = int(month[5:7])
+        return f"{meses[m]} {y}"
+    except Exception:
+        return month
+
+
+def _bot_responder_produccion_mes(usuario: CustomUser, month: str) -> str:
+    aliases = _bot_month_aliases(month)
+
+    cond_mes = Q()
+    for a in aliases:
+        cond_mes |= Q(mes_produccion__icontains=a)
+
+    qs = (
+        ServicioCotizado.objects
+        .filter(
+            estado__in=_BOT_ESTADOS_PROD_Y_AJUSTES,
+            trabajadores_asignados=usuario,
+        )
+        .filter(cond_mes)
+        .prefetch_related("trabajadores_asignados")
+        .order_by("-fecha_aprobacion_supervisor", "-id")
+    )
+
+    total = Decimal("0.00")
+    aprobados = Decimal("0.00")
+    ajustes = Decimal("0.00")
+    detalles = []
+
+    for s in qs:
+        asignados = list(s.trabajadores_asignados.all())
+        if not asignados:
+            continue
+
+        firmado = _bot_monto_firmado_por_estado(s.monto_mmoo, s.estado)
+        parte = (Decimal(str(firmado)) / len(asignados)).quantize(Decimal("0.01"))
+
+        total += parte
+
+        if s.estado in _BOT_EST_PROD:
+            aprobados += parte
+        else:
+            ajustes += parte
+
+        du = s.du or "—"
+        id_ref = s.id_claro or getattr(s, "id_new", None) or "—"
+        tarea = (s.detalle_tarea or "").strip()
+
+        if len(tarea) > 55:
+            tarea = tarea[:52] + "…"
+
+        detalles.append({
+            "du": du,
+            "id_ref": id_ref,
+            "estado": s.estado,
+            "tarea": tarea,
+            "monto": parte,
+        })
+
+    label = _bot_mes_label(month)
+
+    if not detalles:
+        return (
+            f"📊 *Producción de {label}*\n\n"
+            "No encontré producción aprobada ni ajustes asociados a tu usuario para ese mes.\n\n"
+            "Recuerda: la producción entra cuando el proyecto está aprobado por supervisor "
+            "o en los estados posteriores de pago."
+        )
+
+    msg = f"📊 *Producción de {label}*\n\n"
+    msg += f"✅ Total producción/ajustes: *{_fmt_clp(total)}*\n"
+    msg += f"• Producción aprobada: {_fmt_clp(aprobados)}\n"
+    msg += f"• Ajustes: {_fmt_clp(ajustes)}\n\n"
+
+    msg += "Detalle:\n"
+
+    for d in detalles[:15]:
+        estado = d["estado"]
+
+        if estado == "ajuste_bono":
+            estado_txt = "Bono"
+        elif estado == "ajuste_adelanto":
+            estado_txt = "Adelanto"
+        elif estado == "ajuste_descuento":
+            estado_txt = "Descuento"
+        else:
+            estado_txt = "Producción aprobada"
+
+        msg += (
+            f"• DU `{d['du']}` / `{d['id_ref']}` – {estado_txt} – "
+            f"{_fmt_clp(d['monto'])}"
+        )
+
+        if d["tarea"]:
+            msg += f" – {d['tarea']}"
+
+        msg += "\n"
+
+    if len(detalles) > 15:
+        msg += f"\nMostrando 15 de {len(detalles)} registros."
+
+    return msg.strip()
 
 def responder_produccion_rango(usuario, date_from, date_to, *, incluir_estados=None):
     """
-    Responde producción por rango.
+    Respuesta para rangos/meses que todavía no tienen cálculo exacto conectado.
 
-    Por ahora el cálculo por fechas todavía está pendiente,
-    pero dejamos el flujo conversacional claro para que el usuario sepa
-    qué filtro puede elegir.
+    Importante:
+    - NO preguntamos por filtro de fecha.
+    - NO desviamos al usuario a un flujo que todavía no calcula nada.
+    - Para "este mes", _handler_mi_produccion usa directamente
+      _responder_produccion_hasta_hoy(usuario).
     """
     return (
-        f"📊 *Producción estimada*\n"
-        f"Periodo: {date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}\n\n"
-        "⚙️ Nota: aún está pendiente aplicar el filtro por fechas en el cálculo.\n\n"
-        "Para calcularlo correctamente necesito saber qué fecha del servicio prefieres usar:\n\n"
-        "1) *Creación*\n"
-        "   Fecha en que el servicio fue creado en el sistema.\n\n"
-        "2) *Aprobación supervisor*\n"
-        "   Fecha en que el supervisor aprobó el trabajo.\n"
-        "   Esta suele servir mejor para producción validada.\n\n"
-        "3) *Finalización*\n"
-        "   Fecha en que el técnico finalizó o subió el informe.\n\n"
-        "Puedes responder, por ejemplo:\n"
-        "• `creación`\n"
-        "• `aprobación supervisor`\n"
-        "• `finalización`\n"
-        "• `cual filtro?`"
+        f"📊 *Producción por rango*\n"
+        f"Periodo solicitado: *{date_from.strftime('%d-%m-%Y')} al {date_to.strftime('%d-%m-%Y')}*\n\n"
+        "Por ahora el cálculo exacto por rango todavía está en desarrollo.\n\n"
+        "Actualmente puedo mostrarte la producción acumulada disponible hasta hoy.\n"
+        "Para verla, escribe:\n"
+        "• `mi producción hasta hoy`\n"
+        "• `producción este mes`\n"
+        "• `mi producción de este mes`"
     )
 
 
 def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
+    """
+    Producción del bot usando la misma lógica del módulo producción:
+    - aprobado_supervisor / aprobado_pm / aprobado_finanzas
+    - ajuste_bono / ajuste_adelanto / ajuste_descuento
+    - prorrateo por cantidad de técnicos asignados.
+    """
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
             "Por seguridad solo puedo mostrarte *tu propia producción*.\n"
@@ -1696,120 +1950,50 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
     hoy = timezone.localdate()
     norm = _normalize(texto_usuario)
 
-    # =========================
-    # Ayuda sobre filtro de fecha
-    # =========================
-    pregunta_filtro = (
-        {"filtro", "filtros", "campo", "fecha", "fechas"} & tokens
+    current_month = _bot_yyyy_mm_from_date(hoy)
+
+    if (
+        {"filtro", "filtros", "campo"} & tokens
         or "cual filtro" in norm
         or "cuál filtro" in norm
         or "que filtro" in norm
         or "qué filtro" in norm
-        or "que fecha" in norm
-        or "qué fecha" in norm
-        or "no entiendo el filtro" in norm
-        or "explicame" in norm
-        or "explícame" in norm
-    )
-
-    if pregunta_filtro:
+    ):
         return (
-            "📊 *Filtro de producción*\n\n"
-            "Cuando pides producción por mes o por rango de fechas, necesito saber "
-            "qué fecha del servicio quieres usar para filtrar.\n\n"
-            "Puedes elegir una de estas opciones:\n\n"
-            "1) *Creación del servicio*\n"
-            "   Usa la fecha en que el servicio fue creado en el sistema.\n"
-            "   Ejemplo: trabajos ingresados durante el mes.\n\n"
-            "2) *Aprobación del supervisor*\n"
-            "   Usa la fecha en que el supervisor aprobó el trabajo.\n"
-            "   Esta opción es recomendable si quieres medir producción ya validada.\n\n"
-            "3) *Finalización*\n"
-            "   Usa la fecha en que el técnico finalizó o subió el informe.\n"
-            "   Sirve para medir trabajos ejecutados durante un periodo.\n\n"
-            "Responde con una opción:\n"
-            "• `creación`\n"
-            "• `aprobación supervisor`\n"
-            "• `finalización`"
+            "📊 *Producción*\n\n"
+            "No necesitas elegir filtro.\n"
+            "El bot calcula tu producción usando la misma base del módulo de producción:\n\n"
+            "• Proyectos aprobados por supervisor\n"
+            "• Proyectos aprobados para pago\n"
+            "• Bonos, adelantos y descuentos\n"
+            "• Monto prorrateado si hay varios técnicos\n\n"
+            "Puedes pedirlo así:\n"
+            "• `producción este mes`\n"
+            "• `mi producción de este mes`\n"
+            "• `producción mes anterior`"
         )
 
-    # =========================
-    # El usuario eligió tipo de filtro
-    # =========================
-    if {"creacion", "creación", "creado", "creados"} & tokens:
+    if norm in {"produccion", "producción", "mi produccion", "mi producción"}:
         return (
-            "✅ Perfecto. Usaremos como filtro la *fecha de creación del servicio*.\n\n"
-            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango.\n"
-            "Cuando lo dejemos conectado, podré calcular producción usando esa fecha."
+            "📊 ¿Qué producción necesitas?\n\n"
+            "Puedes pedirme:\n"
+            "• `producción este mes`\n"
+            "• `mi producción de este mes`\n"
+            "• `producción mes anterior`\n"
+            "• `producción julio 2026`"
         )
 
-    if {"aprobacion", "aprobación", "aprobado", "aprobados", "supervisor"} & tokens:
-        return (
-            "✅ Perfecto. Usaremos como filtro la *fecha de aprobación del supervisor*.\n\n"
-            "Esta opción normalmente sirve para producción validada por supervisión.\n\n"
-            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango."
-        )
-
-    if {"finalizacion", "finalización", "finalizado", "finalizados", "terminado", "terminados"} & tokens:
-        return (
-            "✅ Perfecto. Usaremos como filtro la *fecha de finalización del servicio*.\n\n"
-            "Esta opción sirve para medir trabajos efectivamente ejecutados en un periodo.\n\n"
-            "⚙️ Por ahora todavía falta conectar este filtro al cálculo real por rango."
-        )
-
-    flags = _parse_flags_estados_produccion(tokens)
-
-    # =========================
-    # Rango explícito
-    # =========================
-    rango = _parse_rango_fechas(texto_usuario)
-    if rango:
-        d1, d2 = rango
-        if d2 < d1:
-            d1, d2 = d2, d1
-        return responder_produccion_rango(usuario, d1, d2, incluir_estados=flags)
-
-    # =========================
-    # Producción hasta hoy
-    # =========================
     if (
         {"hoy", "ahora"} & tokens
         or "hasta hoy" in norm
         or "a la fecha" in norm
-        or norm in {"produccion", "producción", "mi produccion", "mi producción"}
-    ):
-        # Si solo dice "producción", mostramos menú.
-        if norm in {"produccion", "producción", "mi produccion", "mi producción"}:
-            return (
-                "📊 ¿Qué información sobre producción necesitas?\n\n"
-                "Puedo ayudarte con lo siguiente:\n"
-                "• Producción de este mes hasta hoy: escribe `mi producción de este mes`\n"
-                "• Producción del mes anterior completo: escribe `mi producción del mes anterior`\n"
-                "• Producción de un mes específico: por ejemplo, `mi producción de agosto 2025` "
-                "o simplemente `agosto 2025`\n"
-                "• Producción en un rango de fechas: por ejemplo, "
-                "`mi producción 2025-08-01 a 2025-08-31`\n\n"
-                "Si deseas un estimado más detallado según estados, puedes solicitarlo así:\n"
-                "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`"
-            )
-
-        return _responder_produccion_hasta_hoy(usuario)
-
-    # =========================
-    # Este mes
-    # =========================
-    if (
-        "este mes" in norm
+        or "este mes" in norm
         or "mes actual" in norm
         or norm in {"este", "actual"}
         or ("mes" in tokens and ({"este", "actual"} & tokens))
     ):
-        start, _end = _month_start_end(hoy.year, hoy.month)
-        return responder_produccion_rango(usuario, start, hoy, incluir_estados=flags)
+        return _bot_responder_produccion_mes(usuario, current_month)
 
-    # =========================
-    # Mes anterior
-    # =========================
     if (
         "mes anterior" in norm
         or "mes pasado" in norm
@@ -1818,40 +2002,42 @@ def _handler_mi_produccion(usuario: CustomUser, texto_usuario: str) -> str:
     ):
         year = hoy.year
         month = hoy.month - 1
+
         if month == 0:
             month = 12
             year -= 1
 
-        start, end = _month_start_end(year, month)
-        return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
+        target_month = f"{year:04d}-{month:02d}"
+        return _bot_responder_produccion_mes(usuario, target_month)
 
-    # =========================
-    # Mes específico
-    # =========================
     parsed_mes = _parse_mes_produccion(texto_usuario)
     if parsed_mes:
         mes, anio = parsed_mes
-        start, end = _month_start_end(anio, mes)
-        return responder_produccion_rango(usuario, start, end, incluir_estados=flags)
+        target_month = f"{anio:04d}-{mes:02d}"
+        return _bot_responder_produccion_mes(usuario, target_month)
 
-    # =========================
-    # Menú por defecto
-    # =========================
+    rango = _parse_rango_fechas(texto_usuario)
+    if rango:
+        d1, d2 = rango
+        if d2 < d1:
+            d1, d2 = d2, d1
+
+        return (
+            f"📊 *Producción por rango*\n"
+            f"Periodo solicitado: *{d1.strftime('%d-%m-%Y')} al {d2.strftime('%d-%m-%Y')}*\n\n"
+            "Por ahora el bot calcula producción por mes de producción.\n"
+            "Puedes pedirme por ejemplo:\n"
+            "• `producción julio 2026`\n"
+            "• `producción este mes`"
+        )
+
     return (
-        "📊 ¿Qué información sobre producción necesitas?\n\n"
-        "Puedo ayudarte con lo siguiente:\n"
-        "• Producción de este mes hasta hoy: escribe `mi producción de este mes`\n"
-        "• Producción del mes anterior completo: escribe `mi producción del mes anterior`\n"
-        "• Producción de un mes específico: por ejemplo, `mi producción de agosto 2025` "
-        "o simplemente `agosto 2025`\n"
-        "• Producción en un rango de fechas: por ejemplo, "
-        "`mi producción 2025-08-01 a 2025-08-31`\n\n"
-        "Si deseas un estimado más detallado según estados, puedes solicitarlo así:\n"
-        "• `mi producción incluyendo asignados + en ejecución + pendientes + finalizados`\n\n"
-        "Si ya te pregunté por el filtro de fecha, responde:\n"
-        "• `creación`\n"
-        "• `aprobación supervisor`\n"
-        "• `finalización`"
+        "📊 ¿Qué producción necesitas?\n\n"
+        "Puedes pedirme:\n"
+        "• `producción este mes`\n"
+        "• `mi producción de este mes`\n"
+        "• `producción mes anterior`\n"
+        "• `producción julio 2026`"
     )
 
 
@@ -1988,7 +2174,7 @@ _PROJ_BUCKETS = {
     "en_ejecucion": {"en_progreso"},
     "revision_supervisor": {"en_revision_supervisor"},
     "aprobado_supervisor": {"aprobado_supervisor"},
-    "finalizados": {"finalizado_trabajador", "informe_subido", "finalizado"},
+    "finalizados": {"en_revision_supervisor"},
     "rechazados": {"rechazado_supervisor"},
 }
 
@@ -1997,7 +2183,7 @@ _PROJ_BUCKET_LABEL = {
     "en_ejecucion": "En ejecución",
     "revision_supervisor": "En revisión supervisor",
     "aprobado_supervisor": "Aprobado por supervisor",
-    "finalizados": "Finalizados",
+    "finalizados": "Enviados a revisión supervisor",
     "rechazados": "Rechazados",
 }
 
@@ -2187,20 +2373,25 @@ def _build_maps_link_for_services(servicios: list[ServicioCotizado]) -> tuple[Op
 
 def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     tokens = set(_tokenize(texto_usuario))
+    norm = _normalize(texto_usuario)
 
-    base = (
-        ServicioCotizado.objects
-        .filter(trabajadores_asignados=usuario)
-        .annotate(n_tecs=Count("trabajadores_asignados", distinct=True))
+    base = ServicioCotizado.objects.filter(trabajadores_asignados=usuario).annotate(
+        n_tecs=Count("trabajadores_asignados", distinct=True)
     )
 
     mf = _project_month_filter(texto_usuario)
     mes_label = None
     if mf:
         start, end, mes_label = mf
-        base = base.filter(fecha_creacion__date__gte=start, fecha_creacion__date__lte=end)
+        base = base.filter(
+            fecha_creacion__date__gte=start, fecha_creacion__date__lte=end
+        )
 
     pid = _extract_project_id(texto_usuario)
+
+    # =========================
+    # Detalle por ID / DU
+    # =========================
     if pid:
         pid_u = pid.strip().upper()
         s = (
@@ -2208,14 +2399,15 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             or base.filter(id_new__iexact=pid_u).first()
             or base.filter(du__iexact=pid_u).first()
         )
+
         if not s:
             return (
                 f"No encontré un proyecto asignado a ti con identificador `{pid_u}`.\n\n"
                 "Puedes mandarme:\n"
-                "• `13_094` (ID Claro)\n"
-                "• `CL-13-00421-05` (ID Sites)\n"
-                "• `CL-13-SN-00421-05` (ID New)\n"
-                "• o el `DU 00000131`"
+                "• `13_094` ID Claro\n"
+                "• `CL-13-00421-05` ID Sites\n"
+                "• `CL-13-SN-00421-05` ID New\n"
+                "• o el DU"
             )
 
         estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
@@ -2235,14 +2427,124 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             msg += f"• MMOO total: {_fmt_clp(s.monto_mmoo)} (técnicos: {n})\n"
 
         if s.detalle_tarea:
-            det = s.detalle_tarea.strip()
-            msg += f"\n🛠️ Tarea:\n{det}\n"
-        msg += "\nSi quieres, dime: `mapa de mis proyectos` o `total monto proyectos`."
-        return msg
+            msg += f"\n🛠️ Tarea:\n{s.detalle_tarea.strip()}\n"
 
+        msg += "\nSi quieres finalizar un proyecto en proceso, dime: `quiero finalizar un proyecto`."
+        return msg.strip()
+
+    # =========================
+    # Pregunta: ¿cómo cotizaciones?
+    # =========================
+    if {"cotizacion", "cotizaciones", "cotizado", "cotizada"} & tokens:
+        return (
+            "📊 *Sobre el cálculo de producción*\n\n"
+            "La producción que te muestra el bot por ahora es un *estimado* basado en los servicios "
+            "asignados a tu usuario y los montos de mano de obra registrados en cada servicio.\n\n"
+            "Por eso el mensaje dice que está basado en *cotizaciones y costos de mano de obra*.\n\n"
+            "En simple:\n"
+            "• Si el servicio está aprobado por supervisor, se suma como producción aprobada.\n"
+            "• Si está pendiente de aprobación, queda separado como pendiente.\n"
+            "• Si el servicio tiene varios técnicos, el monto se reparte según la lógica disponible del sistema.\n\n"
+            "Más adelante podemos compararlo contra pagos mensuales cerrados para mayor precisión."
+        )
+
+    # =========================
+    # Selección de estado específico
+    # =========================
+    quiere_lista = bool(
+        {"cuales", "cuáles", "lista", "listar", "detalle", "ver", "mostrar", "dime"}
+        & tokens
+    )
+
+    estado_objetivo = None
+    titulo_estado = None
+
+    if {"proceso", "ejecucion", "ejecución", "progreso"} & tokens:
+        estado_objetivo = ["en_progreso"]
+        titulo_estado = "proyectos en proceso / ejecución"
+
+    elif {"asignado", "asignados", "asignada", "asignadas"} & tokens:
+        estado_objetivo = ["asignado"]
+        titulo_estado = "proyectos asignados"
+
+    elif {"revision", "revisión"} & tokens and "supervisor" in tokens:
+        estado_objetivo = ["en_revision_supervisor"]
+        titulo_estado = "proyectos en revisión supervisor"
+
+    elif {
+        "aprobado",
+        "aprobados",
+        "aprobada",
+        "aprobadas",
+        "aprobacion",
+        "aprobación",
+    } & tokens:
+        estado_objetivo = ["aprobado_supervisor"]
+        titulo_estado = "proyectos aprobados por supervisor"
+
+    elif {
+        "finalizado",
+        "finalizados",
+        "finalice",
+        "finalicé",
+        "termine",
+        "terminé",
+    } & tokens:
+        estado_objetivo = ["en_revision_supervisor"]
+        titulo_estado = "proyectos enviados a revisión supervisor"
+
+    elif {"rechazado", "rechazados", "rechazada", "rechazadas"} & tokens:
+        estado_objetivo = ["rechazado_supervisor"]
+        titulo_estado = "proyectos rechazados"
+
+    if estado_objetivo:
+        qs = base.filter(estado__in=estado_objetivo).order_by("-fecha_creacion")
+        total = qs.count()
+        estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
+
+        periodo = f" del mes {mes_label}" if mes_label else " actuales"
+
+        if total == 0:
+            return f"✅ No tienes {titulo_estado}{periodo}."
+
+        servicios = list(qs[:15])
+
+        msg = f"📌 *Tus {titulo_estado}{periodo}*\n\n"
+        msg += f"Total: *{total}*\n\n"
+
+        for s in servicios:
+            du = s.du or "—"
+            id_ref = s.id_claro or (getattr(s, "id_new", None) or "—")
+            est = estados_dict.get(s.estado, s.estado)
+            det = (s.detalle_tarea or "").strip()
+
+            if len(det) > 90:
+                det = det[:87] + "…"
+
+            msg += f"• DU `{du}` / `{id_ref}` – {est}"
+            if det:
+                msg += f" – {det}"
+            msg += "\n"
+
+        if total > len(servicios):
+            msg += f"\nMostrando {len(servicios)} de {total}."
+
+        if estado_objetivo == ["en_progreso"]:
+            msg += (
+                "\n\nSi quieres finalizar uno o varios, dime:\n"
+                "• `quiero finalizar un proyecto`"
+            )
+
+        return msg.strip()
+
+    # =========================
+    # Mapa
+    # =========================
     if {"mapa", "maps", "google", "ubicacion", "ubicación"} & tokens:
         bucket_keys = _pick_project_buckets(tokens)
-        estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
+        estados = set().union(
+            *(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS)
+        )
         qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")[:20]
         servicios = list(qs)
 
@@ -2251,29 +2553,33 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
             return f"No encontré proyectos para mapear{extra}."
 
         ruta, links = _build_maps_link_for_services(servicios)
+
         msg = "🗺️ *Mapa de tus proyectos*\n\n"
         if mes_label:
             msg += f"Filtro mes: *{mes_label}*\n\n"
 
         if ruta:
-            msg += f"Ruta sugerida (usa tu ubicación actual):\n{ruta}\n\n"
+            msg += f"Ruta sugerida usando tu ubicación actual:\n{ruta}\n\n"
         else:
-            msg += "No pude armar una ruta única (puede faltar coordenadas), pero aquí van links individuales:\n\n"
+            msg += "No pude armar una ruta única. Te dejo links individuales:\n\n"
 
         if links:
-            msg += "Links (algunos sitios pueden no tener coordenadas cargadas):\n"
             msg += "\n".join(links[:12])
             if len(links) > 12:
-                msg += f"\n… y {len(links)-12} más."
+                msg += f"\n… y {len(links) - 12} más."
         else:
             msg += "No encontré coordenadas en SitioMovil para tus proyectos."
 
-        msg += "\n\nTip: si quieres solo `asignados este mes` escribe: `mapa proyectos asignados este mes`."
-        return msg
+        return msg.strip()
 
+    # =========================
+    # Total monto
+    # =========================
     if {"monto", "montos", "total", "suma", "sumo", "cuanto", "cuánto"} & tokens:
         bucket_keys = _pick_project_buckets(tokens)
-        estados = set().union(*(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS))
+        estados = set().union(
+            *(_PROJ_BUCKETS[k] for k in bucket_keys if k in _PROJ_BUCKETS)
+        )
         qs = base.filter(estado__in=list(estados)).order_by("-fecha_creacion")
 
         servicios = list(qs)
@@ -2283,24 +2589,33 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
         for s in servicios:
             total_mmoo += _mmoo_share_for_user(s, usuario)
 
-        extra = f" (mes {mes_label})" if mes_label else ""
+        extra = f" del mes {mes_label}" if mes_label else ""
         labels = ", ".join(_PROJ_BUCKET_LABEL[k] for k in bucket_keys)
 
         return (
-            f"💰 *Total proyectos / montos*{extra}\n\n"
+            f"💰 *Total proyectos / montos{extra}*\n\n"
             f"Grupos: *{labels}*\n"
             f"• Proyectos: *{total_proy}*\n"
             f"• Tu MMOO total: *{_fmt_clp(total_mmoo)}*\n\n"
-            "Si quieres el detalle de uno, dime: `monto proyecto 13_913` (o pega el DU / ID NEW)."
+            "Si quieres el detalle de uno, dime: `monto proyecto 13_913`."
         )
 
+    # =========================
+    # Resumen general
+    # =========================
     estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
-    bucket_keys = ["asignados", "en_ejecucion", "revision_supervisor", "aprobado_supervisor", "finalizados", "rechazados"]
+    bucket_keys = [
+        "asignados",
+        "en_ejecucion",
+        "revision_supervisor",
+        "aprobado_supervisor",
+        "finalizados",
+        "rechazados",
+    ]
 
-    msg = "📌 *Resumen de tus proyectos*\n"
-    if mes_label:
-        msg += f"Filtro mes: *{mes_label}*\n"
-    msg += "\n"
+    msg = "📌 *Resumen de tus proyectos"
+    msg += f" del mes {mes_label}" if mes_label else " actuales"
+    msg += "*\n\n"
 
     total_general = 0
     total_mmoo_general = Decimal("0")
@@ -2312,6 +2627,7 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
 
         c = len(servicios)
         m = Decimal("0")
+
         for s in servicios:
             m += _mmoo_share_for_user(s, usuario)
 
@@ -2323,28 +2639,35 @@ def _handler_mis_proyectos(usuario: CustomUser, texto_usuario: str) -> str:
     msg += f"\n✅ Total: *{total_general}* proyectos (tu MMOO {_fmt_clp(total_mmoo_general)})\n\n"
 
     ejemplos = list(base.order_by("-fecha_creacion")[:8])
+
     if ejemplos:
-        msg += "Últimos proyectos (recientes):\n"
+        msg += "Últimos proyectos recientes:\n"
+
         for s in ejemplos:
             du = s.du or "—"
             idc = s.id_claro or (getattr(s, "id_new", None) or "—")
             est = estados_dict.get(s.estado, s.estado)
             det = (s.detalle_tarea or "").strip()
+
             if len(det) > 60:
                 det = det[:57] + "…"
-            msg += f"• DU {du} / {idc} – {est} – {det}\n"
+
+            msg += f"• DU `{du}` / `{idc}` – {est}"
+            if det:
+                msg += f" – {det}"
+            msg += "\n"
 
     msg += (
-        "\n📲 Pídemelo así (PRO):\n"
-        "• `proyectos aprobados por el supervisor`\n"
-        "• `proyectos asignados este mes`\n"
-        "• `proyectos en ejecución`\n"
-        "• `proyectos finalizados mes pasado`\n"
-        "• `total monto proyectos (asignados + ejecución + revisión)`\n"
-        "• `monto proyecto 13_913`\n"
+        "\n📲 Puedes pedirme:\n"
+        "• `cuáles están en proceso`\n"
+        "• `cuáles proyectos tengo asignados ahora`\n"
+        "• `cuáles proyectos finalicé este mes`\n"
+        "• `proyectos aprobados por supervisor`\n"
+        "• `quiero finalizar un proyecto`\n"
         "• `mapa de mis proyectos asignados`"
     )
-    return msg
+
+    return msg.strip()
 
 
 _ASIGNACION_ESTADOS_ACTIVOS = ["asignado", "en_progreso", "en_revision_supervisor"]
@@ -2673,6 +2996,500 @@ def _get_direccion_retiro_basura_from_settings() -> Optional[str]:
 
     return None
 
+    return _responder_direccion_basura()
+
+# ===================== WIZARD: Finalizar proyectos =====================
+
+_FINALIZAR_PROY_TTL = 60 * 20
+
+
+def _finalizar_proy_key(chat_id: str) -> str:
+    return f"gzbot:finalizar_proyectos:{str(chat_id)}"
+
+
+def _finalizar_proy_get(chat_id: str) -> Optional[dict]:
+    return cache.get(_finalizar_proy_key(chat_id))
+
+
+def _finalizar_proy_set(chat_id: str, data: dict) -> None:
+    cache.set(_finalizar_proy_key(chat_id), data, timeout=_FINALIZAR_PROY_TTL)
+
+
+def _finalizar_proy_clear(chat_id: str) -> None:
+    cache.delete(_finalizar_proy_key(chat_id))
+
+
+def _bot_get_or_create_sesion_fotos(servicio: ServicioCotizado) -> SesionFotos:
+    sesion_fotos, _ = SesionFotos.objects.get_or_create(
+        servicio=servicio,
+        defaults={"estado": "asignado"},
+    )
+    return sesion_fotos
+
+
+def _bot_estado_legible_servicio(estado: str) -> str:
+    estados = dict(getattr(ServicioCotizado, "ESTADOS", []))
+    return estados.get(estado, estado or "—")
+
+
+def _bot_nombre_usuario(u: CustomUser) -> str:
+    return (u.get_full_name() or u.username or f"Usuario {u.id}").strip()
+
+
+def _bot_parse_indices_finalizar(texto: str, max_n: int) -> list[int]:
+    raw = _normalize(texto or "")
+    nums = re.findall(r"\b\d{1,3}\b", raw)
+
+    out = []
+    seen = set()
+
+    for n in nums:
+        try:
+            i = int(n)
+        except Exception:
+            continue
+
+        if 1 <= i <= max_n and i not in seen:
+            seen.add(i)
+            out.append(i)
+
+    return out
+
+
+def _bot_tecnico_acepto(asg: SesionFotoTecnico) -> bool:
+    if getattr(asg, "aceptado_en", None):
+        return True
+
+    return asg.estado in {
+        "en_proceso",
+        "en_revision_supervisor",
+        "aprobado_supervisor",
+        "aprobado_pm",
+    }
+
+
+def _bot_tecnico_finalizo(asg: SesionFotoTecnico) -> bool:
+    if getattr(asg, "finalizado_en", None):
+        return True
+
+    return asg.estado in {
+        "en_revision_supervisor",
+        "aprobado_supervisor",
+        "aprobado_pm",
+    }
+
+
+def _bot_sync_asignaciones_servicio(
+    servicio: ServicioCotizado,
+) -> tuple[SesionFotos, dict[int, SesionFotoTecnico]]:
+    sesion_fotos = _bot_get_or_create_sesion_fotos(servicio)
+
+    asignados_ids = list(servicio.trabajadores_asignados.values_list("id", flat=True))
+
+    existentes = {
+        a.tecnico_id: a
+        for a in sesion_fotos.asignaciones.filter(tecnico_id__in=asignados_ids)
+    }
+
+    for tecnico_id in asignados_ids:
+        if tecnico_id not in existentes:
+            existentes[tecnico_id] = SesionFotoTecnico.objects.create(
+                sesion=sesion_fotos,
+                tecnico_id=tecnico_id,
+                estado="asignado",
+            )
+
+    return sesion_fotos, existentes
+
+
+def _bot_missing_requisitos_finalizar(sesion_fotos: SesionFotos) -> list[str]:
+    def _norm_title_local(s: str) -> str:
+        s = (s or "").strip().lower()
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
+        s = re.sub(r"\s+", " ", s)
+        return s
+
+    canon_by_norm = {}
+
+    qs = RequisitoFoto.objects.filter(
+        tecnico_sesion__sesion=sesion_fotos, activo=True
+    ).values("id", "titulo", "obligatorio", "orden")
+
+    for r in qs:
+        norm = _norm_title_local(r["titulo"])
+        b = canon_by_norm.get(norm)
+
+        if not b:
+            canon_by_norm[norm] = {
+                "id": r["id"],
+                "titulo": r["titulo"],
+                "obligatorio": r["obligatorio"],
+                "orden": r["orden"],
+                "ids": {r["id"]},
+            }
+        else:
+            b["ids"].add(r["id"])
+            if (r["orden"], r["id"]) < (b["orden"], b["id"]):
+                b["id"] = r["id"]
+                b["titulo"] = r["titulo"]
+                b["obligatorio"] = r["obligatorio"]
+                b["orden"] = r["orden"]
+
+    if not canon_by_norm:
+        return []
+
+    all_ids = [rid for b in canon_by_norm.values() for rid in b["ids"]]
+
+    ids_with_ev = set(
+        EvidenciaFoto.objects.filter(requisito_id__in=all_ids).values_list(
+            "requisito_id", flat=True
+        )
+    )
+
+    missing = []
+
+    for _norm, b in sorted(
+        canon_by_norm.items(), key=lambda x: (x[1]["orden"], x[1]["id"])
+    ):
+        if not b["obligatorio"]:
+            continue
+
+        done = any(rid in ids_with_ev for rid in b["ids"])
+        if not done:
+            missing.append(b["titulo"])
+
+    return missing
+
+
+def _bot_servicios_en_progreso_para_finalizar(usuario: CustomUser):
+    servicios = (
+        ServicioCotizado.objects.filter(
+            trabajadores_asignados=usuario,
+            estado="en_progreso",
+        )
+        .prefetch_related("trabajadores_asignados", "sesion_fotos__asignaciones")
+        .order_by("-fecha_creacion")
+    )
+
+    out = []
+
+    for servicio in servicios:
+        _sesion_fotos, asignaciones_map = _bot_sync_asignaciones_servicio(servicio)
+        mi_asg = asignaciones_map.get(usuario.id)
+
+        if mi_asg and _bot_tecnico_finalizo(mi_asg):
+            continue
+
+        out.append(servicio)
+
+    return out
+
+
+def _bot_fmt_servicio_finalizar_opcion(s: ServicioCotizado, idx: int) -> str:
+    du = s.du or "—"
+    id_ref = s.id_claro or (getattr(s, "id_new", None) or "—")
+    detalle = (s.detalle_tarea or "").strip()
+
+    if len(detalle) > 90:
+        detalle = detalle[:87] + "…"
+
+    return f"{idx}) DU `{du}` / `{id_ref}` – {detalle or 'Sin detalle'}"
+
+
+def _handler_iniciar_finalizar_proyectos(
+    usuario: CustomUser,
+    sesion: BotSession,
+) -> str:
+    servicios = list(_bot_servicios_en_progreso_para_finalizar(usuario))[:20]
+
+    if not servicios:
+        _finalizar_proy_clear(sesion.chat_id)
+        return (
+            "✅ No tienes proyectos *en proceso* pendientes por finalizar.\n\n"
+            "Puedes revisar tus proyectos con:\n"
+            "• `cuáles están en proceso`\n"
+            "• `cuáles proyectos tengo asignados ahora`"
+        )
+
+    state = {
+        "step": "seleccion",
+        "servicio_ids": [s.id for s in servicios],
+    }
+    _finalizar_proy_set(sesion.chat_id, state)
+
+    msg = "✅ *Finalizar proyecto(s)*\n\n"
+    msg += "Estos son los proyectos que tienes actualmente *en proceso*:\n\n"
+
+    for idx, s in enumerate(servicios, start=1):
+        msg += _bot_fmt_servicio_finalizar_opcion(s, idx) + "\n"
+
+    msg += (
+        "\nResponde con el número del proyecto que deseas finalizar.\n"
+        "También puedes indicar varios números para finalizar varios a la vez.\n\n"
+        "Ejemplos:\n"
+        "• `1`\n"
+        "• `1, 3`\n"
+        "• `1 2 4`\n\n"
+        "Si prefieres no continuar, escribe `cancelar`."
+    )
+
+    return msg.strip()
+
+
+def _bot_finalizar_un_servicio_desde_bot(
+    *,
+    servicio: ServicioCotizado,
+    usuario: CustomUser,
+) -> tuple[bool, str]:
+    if not servicio.trabajadores_asignados.filter(id=usuario.id).exists():
+        return False, (
+            f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+            "  No estás asignado a este proyecto."
+        )
+
+    if servicio.estado != "en_progreso":
+        return False, (
+            f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+            f"  No está en progreso. Estado actual: {_bot_estado_legible_servicio(servicio.estado)}."
+        )
+
+    sesion_fotos, asignaciones_map = _bot_sync_asignaciones_servicio(servicio)
+    mi_asg = asignaciones_map.get(usuario.id)
+
+    if not mi_asg:
+        return False, (
+            f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+            "  No encontré tu asignación fotográfica. Intenta desde la web."
+        )
+
+    if not _bot_tecnico_acepto(mi_asg):
+        return False, (
+            f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+            "  Primero debes aceptar la asignación antes de finalizar."
+        )
+
+    missing = _bot_missing_requisitos_finalizar(sesion_fotos)
+
+    if missing:
+        return False, (
+            f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+            "  No se puede finalizar porque faltan fotos requeridas:\n"
+            f"  {', '.join(missing)}"
+        )
+
+    now_ = timezone.now()
+
+    with transaction.atomic():
+        mi_asg.estado = "en_revision_supervisor"
+        mi_asg.finalizado_en = now_
+        mi_asg.save(update_fields=["estado", "finalizado_en"])
+
+        servicio.tecnico_finalizo = usuario
+        servicio.save(update_fields=["tecnico_finalizo"])
+
+        asignados = list(servicio.trabajadores_asignados.all())
+        asignados_ids = [u.id for u in asignados]
+
+        asignaciones = list(
+            sesion_fotos.asignaciones.filter(
+                tecnico_id__in=asignados_ids
+            ).select_related("tecnico")
+        )
+
+        pendientes_aceptar = []
+        pendientes_finalizar = []
+
+        for asg in asignaciones:
+            if not _bot_tecnico_acepto(asg):
+                pendientes_aceptar.append(_bot_nombre_usuario(asg.tecnico))
+                continue
+
+            if not _bot_tecnico_finalizo(asg):
+                pendientes_finalizar.append(_bot_nombre_usuario(asg.tecnico))
+
+        if pendientes_aceptar or pendientes_finalizar:
+            sesion_fotos.estado = "en_proceso"
+            sesion_fotos.save(update_fields=["estado"])
+
+            msg = (
+                f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+                "  ✅ Tu parte fue marcada como finalizada.\n"
+                "  El proyecto completo sigue *en progreso* porque falta otro técnico.\n"
+            )
+
+            if pendientes_aceptar:
+                msg += f"  Falta aceptar: {', '.join(pendientes_aceptar)}\n"
+
+            if pendientes_finalizar:
+                msg += f"  Falta finalizar: {', '.join(pendientes_finalizar)}\n"
+
+            return True, msg.strip()
+
+        sesion_fotos.asignaciones.filter(tecnico_id__in=asignados_ids).update(
+            estado="en_revision_supervisor",
+            finalizado_en=now_,
+        )
+
+        sesion_fotos.estado = "en_revision_supervisor"
+        sesion_fotos.save(update_fields=["estado"])
+
+        servicio.estado = "en_revision_supervisor"
+        servicio.tecnico_finalizo = usuario
+        servicio.save(update_fields=["estado", "tecnico_finalizo"])
+
+    return True, (
+        f"• DU `{servicio.du}` / `{servicio.id_claro or '—'}`\n"
+        "  ✅ Proyecto enviado a *revisión del supervisor*."
+    )
+
+
+def _handler_confirmar_finalizar_proyectos(
+    *,
+    usuario: CustomUser,
+    sesion: BotSession,
+    texto_usuario: str,
+) -> str:
+    state = _finalizar_proy_get(sesion.chat_id)
+
+    if not state:
+        return _handler_iniciar_finalizar_proyectos(usuario, sesion)
+
+    norm = _normalize(texto_usuario or "")
+    tokens = set(_tokenize(texto_usuario or ""))
+
+    if norm in {"cancelar", "salir", "no", "anular", "no continuar"}:
+        _finalizar_proy_clear(sesion.chat_id)
+        return "✅ Listo, cancelé la finalización de proyectos."
+
+    servicio_ids = state.get("servicio_ids") or []
+
+    if not servicio_ids:
+        _finalizar_proy_clear(sesion.chat_id)
+        return "Se perdió la lista de proyectos. Escribe nuevamente: `quiero finalizar un proyecto`."
+
+    indices = _bot_parse_indices_finalizar(texto_usuario, len(servicio_ids))
+
+    # Si no respondió con número y parece que cambió de tema, cancelamos finalizar y respondemos ese tema.
+    if not indices:
+        cambio_tema = False
+
+        temas = {
+            "produccion",
+            "producción",
+            "liquidacion",
+            "liquidaciones",
+            "contrato",
+            "contratos",
+            "rendicion",
+            "rendiciones",
+            "gasto",
+            "gastos",
+            "asignacion",
+            "asignación",
+            "proyectos",
+            "proyecto",
+            "servicios",
+            "servicio",
+            "sitio",
+            "basura",
+            "ruta",
+            "mapa",
+            "ayuda",
+            "menu",
+            "menú",
+        }
+
+        if temas & tokens or es_intencion_planificar_ruta(texto_usuario):
+            cambio_tema = True
+
+        if cambio_tema:
+            _finalizar_proy_clear(sesion.chat_id)
+
+            fake_log = BotMessageLog.objects.create(
+                sesion=sesion,
+                usuario=usuario,
+                chat_id=sesion.chat_id,
+                direccion="in",
+                texto=texto_usuario,
+                status="ok",
+                meta={"auto_redirect_from": "finalizar_proyectos"},
+            )
+
+            resolved = _resolver_texto_generico_sin_intent(
+                texto_usuario=texto_usuario,
+                usuario=usuario,
+                sesion=sesion,
+                inbound_log=fake_log,
+            )
+
+            if resolved:
+                return (
+                    "✅ Cancelé la finalización de proyectos y seguí con tu nueva consulta.\n\n"
+                    + resolved
+                )
+
+        return (
+            "No entendí qué proyecto quieres finalizar.\n\n"
+            "Responde con el número de la lista.\n"
+            "Ejemplo:\n"
+            "• `1`\n"
+            "• `1, 2`\n\n"
+            "O escribe `cancelar`.\n\n"
+            "Si quieres hacer otra consulta, también puedes escribir por ejemplo:\n"
+            "• `producción`\n"
+            "• `liquidación`\n"
+            "• `contrato`\n"
+            "• `proyectos`\n"
+            "• `ayuda`"
+        )
+
+    selected_ids = [servicio_ids[i - 1] for i in indices]
+
+    servicios = list(
+        ServicioCotizado.objects.filter(
+            id__in=selected_ids,
+            trabajadores_asignados=usuario,
+        ).prefetch_related("trabajadores_asignados", "sesion_fotos__asignaciones")
+    )
+
+    by_id = {s.id: s for s in servicios}
+
+    ok_count = 0
+    respuestas = []
+
+    for sid in selected_ids:
+        servicio = by_id.get(sid)
+
+        if not servicio:
+            respuestas.append("• Proyecto no encontrado o ya no está asignado a ti.")
+            continue
+
+        ok, msg = _bot_finalizar_un_servicio_desde_bot(
+            servicio=servicio,
+            usuario=usuario,
+        )
+
+        if ok:
+            ok_count += 1
+
+        respuestas.append(msg)
+
+    _finalizar_proy_clear(sesion.chat_id)
+
+    titulo = "✅ *Resultado de finalización*"
+    if ok_count == 0:
+        titulo = "⚠️ *No se pudo finalizar*"
+
+    return (
+        f"{titulo}\n\n" + "\n\n".join(respuestas) + "\n\nPuedes revisar ahora con:\n"
+        "• `cuáles están en proceso`\n"
+        "• `cuáles proyectos envié a revisión supervisor`\n"
+        "• `cuáles proyectos tengo asignados ahora`"
+    )
+
+
+# ===================== Router principal de intents =====================
 
 def _handler_direccion_basura(usuario: CustomUser, texto_usuario: str = "") -> str:
     """
@@ -2704,7 +3521,370 @@ def _handler_direccion_basura(usuario: CustomUser, texto_usuario: str = "") -> s
     return _responder_direccion_basura()
 
 
+def _handler_menu_bot(usuario: Optional[CustomUser] = None) -> str:
+    """
+    Menú principal del bot.
+    Se usa para:
+    - ayuda
+    - menú
+    - qué puedo hacer
+    - opciones
+    - comandos
+    - fallback cuando no entiende
+    """
+    nombre = ""
+    if usuario:
+        nombre = usuario.first_name or usuario.get_full_name() or ""
+        nombre = nombre.strip()
+
+    saludo = f"👋 Hola {nombre}.\n\n" if nombre else "👋 Hola.\n\n"
+
+    return (
+        saludo + "Soy el bot de *GZ Services* y puedo ayudarte con estas opciones:\n\n"
+        "🧭 *Asignaciones / trabajos*\n"
+        "• `asignación`\n"
+        "• `asignación de hoy`\n"
+        "• `qué pega tengo`\n"
+        "• `dónde tengo que ir`\n\n"
+        "🗺️ *Planificación de ruta*\n"
+        "• `planifica mi ruta`\n"
+        "• `mejor ruta para hoy`\n"
+        "• `ordena mis sitios`\n"
+        "• `qué sitio hago primero`\n\n"
+        "📌 *Proyectos / servicios*\n"
+        "• `proyectos`\n"
+        "• `cuáles están en proceso`\n"
+        "• `cuáles proyectos tengo asignados ahora`\n"
+        "• `proyectos aprobados por supervisor`\n"
+        "• `cuáles proyectos envié a revisión supervisor`\n"
+        "• `mapa de mis proyectos asignados`\n\n"
+        "✅ *Finalizar proyectos*\n"
+        "• `finalizar`\n"
+        "• `quiero finalizar un proyecto`\n"
+        "• `finalizar proyectos`\n\n"
+        "📊 *Producción*\n"
+        "• `producción`\n"
+        "• `producción este mes`\n"
+        "• `mi producción de este mes`\n"
+        "• `producción mes anterior`\n"
+        "• `producción julio 2026`\n\n"
+        "🧾 *Liquidaciones*\n"
+        "• `liquidación`\n"
+        "• `liquidaciones`\n"
+        "• `mis últimas 3 liquidaciones`\n"
+        "• `liquidación de noviembre 2025`\n"
+        "• `liquidaciones de julio y septiembre 2025`\n\n"
+        "📄 *Contrato / documentos*\n"
+        "• `contrato`\n"
+        "• `contratos`\n"
+        "• `mi contrato vigente`\n"
+        "• `mi contrato y sus extensiones`\n"
+        "• `mis anexos`\n\n"
+        "🧾 *Rendiciones de gastos*\n"
+        "• `rendición de gasto`\n"
+        "• `rendiciones pendientes`\n"
+        "• `rendiciones aprobadas`\n"
+        "• `rendiciones rechazadas`\n"
+        "• `nueva rendición`\n\n"
+        "📡 *Información de sitios*\n"
+        "• `sitio 13_094`\n"
+        "• `dirección sitio 13_094`\n"
+        "• `CL-13-00421-05`\n"
+        "• `CL-13-SN-00421-05`\n\n"
+        "🗑️ *Basura / retiro de residuos*\n"
+        "• `dónde boto la basura`\n"
+        "• `dirección basura`\n\n"
+        "También puedes escribir:\n"
+        "• `ayuda`\n"
+        "• `menú`\n"
+        "• `qué puedo hacer`\n\n"
+        "✅ Usa frases cortas y directas."
+    )
+
+
+def _handler_opciones_liquidaciones(usuario: CustomUser) -> str:
+    return (
+        "🧾 *Liquidaciones*\n\n"
+        "Sí, puedo ayudarte con tus liquidaciones.\n\n"
+        "Puedes pedirme por ejemplo:\n"
+        "• `mis liquidaciones`\n"
+        "• `mis últimas 3 liquidaciones`\n"
+        "• `liquidación de noviembre 2025`\n"
+        "• `liquidaciones de julio y septiembre 2025`\n\n"
+        "Si quieres una específica, dime el mes y año."
+    )
+
+
+def _handler_opciones_contrato(usuario: CustomUser) -> str:
+    return (
+        "📄 *Contrato / documentos*\n\n"
+        "Puedo ayudarte con tus contratos y documentos laborales.\n\n"
+        "Puedes pedirme por ejemplo:\n"
+        "• `mi contrato vigente`\n"
+        "• `contratos`\n"
+        "• `mi contrato y sus extensiones`\n"
+        "• `mis anexos`\n\n"
+        "Por seguridad solo puedo mostrar documentos asociados a tu usuario."
+    )
+
+
+def _handler_opciones_rendiciones(usuario: CustomUser) -> str:
+    return (
+        "🧾 *Rendiciones de gastos*\n\n"
+        "Puedo ayudarte con tus rendiciones.\n\n"
+        "Puedes pedirme por ejemplo:\n"
+        "• `nueva rendición`\n"
+        "• `rendiciones pendientes`\n"
+        "• `rendiciones aprobadas`\n"
+        "• `rendiciones rechazadas`\n"
+        "• `rendiciones pendientes de hoy`\n\n"
+        "Para crear una nueva, escribe: `nueva rendición`."
+    )
+
+
+def _handler_opciones_sitio() -> str:
+    return (
+        "📡 *Información de sitios*\n\n"
+        "Para darte la dirección o información del sitio, necesito que me envíes un identificador.\n\n"
+        "Ejemplos:\n"
+        "• `sitio 13_094`\n"
+        "• `dirección sitio 13_094`\n"
+        "• `CL-13-00421-05`\n"
+        "• `CL-13-SN-00421-05`\n\n"
+        "Con eso puedo mostrarte nombre, dirección, comuna, región, acceso y mapa si existen coordenadas."
+    )
+
+
+def _handler_opciones_produccion() -> str:
+    return (
+        "📊 *Producción*\n\n"
+        "Puedo mostrarte tu producción usando la base del módulo de producción.\n\n"
+        "Puedes pedirme por ejemplo:\n"
+        "• `producción este mes`\n"
+        "• `mi producción de este mes`\n"
+        "• `producción mes anterior`\n"
+        "• `producción julio 2026`"
+    )
+
+
+def _handler_pagos_no_disponible() -> str:
+    return (
+        "📆 *Pagos / cortes de producción*\n\n"
+        "Por ahora esta opción no está disponible desde el bot.\n\n"
+        "Puedes revisar la información de pagos o cortes directamente en la plataforma web "
+        "o consultar con administración/finanzas."
+    )
+
+
+def _resolver_texto_generico_sin_intent(
+    *,
+    texto_usuario: str,
+    usuario: CustomUser,
+    sesion: BotSession,
+    inbound_log: BotMessageLog,
+) -> Optional[str]:
+    """
+    Resuelve palabras genéricas del menú aunque la IA o el matcher no hayan detectado intent.
+
+    Ejemplos:
+    - liquidacion
+    - contratos
+    - rendicion de gasto
+    - direccion sitio
+    - proyectos
+    - produccion
+    """
+    texto_usuario = texto_usuario or ""
+    norm = _normalize(texto_usuario)
+    tokens = set(_tokenize(texto_usuario))
+
+    def _ok() -> None:
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+    ayuda_frases = {
+        "ayuda",
+        "menu",
+        "menú",
+        "opciones",
+        "comandos",
+        "funciones",
+        "funcionalidades",
+        "que puedo hacer",
+        "qué puedo hacer",
+        "que cosas puedo hacer",
+        "qué cosas puedo hacer",
+        "que cosas puedo hacer en este bot",
+        "qué cosas puedo hacer en este bot",
+        "que hace este bot",
+        "qué hace este bot",
+        "para que sirve este bot",
+        "para qué sirve este bot",
+        "como funciona",
+        "cómo funciona",
+        "que puedes hacer",
+        "qué puedes hacer",
+    }
+
+    ayuda_norm = {_normalize(x) for x in ayuda_frases}
+
+    if (
+        norm in ayuda_norm
+        or {
+            "ayuda",
+            "menu",
+            "menú",
+            "opciones",
+            "comandos",
+            "funciones",
+            "funcionalidades",
+        }
+        & tokens
+        or ("puedo" in tokens and "hacer" in tokens)
+        or ("puedes" in tokens and "hacer" in tokens)
+        or ("sirve" in tokens and "bot" in tokens)
+        or _es_saludo(texto_usuario)
+    ):
+        _ok()
+        return _handler_menu_bot(usuario)
+
+    if norm in {"cancelar", "salir", "anular", "no continuar"}:
+        _ok()
+        return (
+            "✅ No tengo ningún flujo activo para cancelar.\n\n"
+            "Estas son las opciones que puedes usar ahora:\n\n"
+            + _handler_menu_bot(usuario)
+        )
+
+    if {"liquidacion", "liquidaciones", "sueldo"} & tokens:
+        _ok()
+
+        # Si el usuario solo puso "liquidacion/liquidaciones", respondemos con opciones.
+        if tokens <= {"liquidacion", "liquidaciones", "sueldo"}:
+            return _handler_opciones_liquidaciones(usuario)
+
+        return _handler_mis_liquidaciones(usuario, texto_usuario)
+
+    if {"contrato", "contratos", "anexo", "anexos", "documento", "documentos"} & tokens:
+        _ok()
+
+        if tokens <= {"contrato", "contratos", "documento", "documentos"}:
+            return _handler_opciones_contrato(usuario)
+
+        return _handler_mi_contrato(usuario, texto_usuario)
+
+    if {"rendicion", "rendiciones", "gasto", "gastos"} & tokens:
+        _ok()
+
+        if tokens <= {"rendicion", "rendiciones", "gasto", "gastos"}:
+            return _handler_opciones_rendiciones(usuario)
+
+        return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+
+    if {"basura", "residuos", "desechos", "botar", "tirar"} & tokens:
+        _ok()
+        return _handler_direccion_basura(usuario, texto_usuario)
+
+    if {"pago", "pagos", "pagan", "pagar", "corte", "cronograma"} & tokens:
+        _ok()
+        return _handler_pagos_no_disponible()
+
+    if "sitio" in tokens or "site" in tokens:
+        txt_up = texto_usuario.strip().upper()
+        site_hit = (
+            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
+            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
+            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
+        )
+
+        _ok()
+
+        if site_hit:
+            return _handler_info_sitio_id_claro(texto_usuario)
+
+        return _handler_opciones_sitio()
+
+    txt_up = texto_usuario.strip().upper()
+    site_hit = re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up) or re.search(
+        r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up
+    )
+
+    if site_hit:
+        _ok()
+        return _handler_info_sitio_id_claro(texto_usuario)
+
+    if {"produccion", "producción"} & tokens:
+        _ok()
+
+        if tokens <= {"produccion", "producción"}:
+            return _handler_opciones_produccion()
+
+        return _handler_mi_produccion(usuario, texto_usuario)
+
+    if {
+        "asignacion",
+        "asignación",
+        "asignaciones",
+        "asignado",
+        "asignados",
+        "pega",
+    } & tokens:
+        _ok()
+        return _handler_asignacion(usuario, texto_usuario)
+
+    if {"proyectos", "proyecto", "servicios", "servicio"} & tokens:
+        _ok()
+        return _handler_mis_proyectos(usuario, texto_usuario)
+
+    if es_intencion_planificar_ruta(texto_usuario):
+        _ok()
+        return procesar_planificacion_ruta(
+            chat_id=sesion.chat_id,
+            usuario=usuario,
+            texto=texto_usuario,
+            message={"text": texto_usuario},
+        )
+
+    pregunta_estado_proyectos = bool(
+        {
+            "cuales",
+            "cuáles",
+            "lista",
+            "listar",
+            "mostrar",
+            "muestra",
+            "ver",
+            "dime",
+            "estado",
+            "estados",
+            "proceso",
+            "ejecucion",
+            "ejecución",
+            "progreso",
+            "asignado",
+            "asignados",
+            "revision",
+            "revisión",
+            "aprobado",
+            "aprobados",
+            "finalizado",
+            "finalizados",
+            "rechazado",
+            "rechazados",
+        }
+        & tokens
+    )
+
+    if pregunta_estado_proyectos:
+        _ok()
+        return _handler_mis_proyectos(usuario, texto_usuario)
+
+    return None
+
+
 # ===================== Router principal de intents =====================
+
 
 def run_intent(
     intent: Optional[BotIntent],
@@ -2714,7 +3894,14 @@ def run_intent(
     inbound_log: BotMessageLog,
 ) -> str:
     chat_id = sesion.chat_id
+    texto_usuario = texto_usuario or ""
 
+    norm_run = _normalize(texto_usuario)
+    tokens_run = set(_tokenize(texto_usuario))
+
+    # ============================
+    # Seguridad: sin usuario vinculado
+    # ============================
     if usuario is None:
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
@@ -2722,14 +3909,75 @@ def run_intent(
         return _respuesta_sin_usuario(chat_id)
 
     # ============================
-    # ✅ Wizard Rendición (texto)
+    # Wizard finalizar proyectos
+    # ============================
+    try:
+        finalizar_state = _finalizar_proy_get(chat_id)
+    except Exception:
+        finalizar_state = None
+
+    quiere_finalizar_proyecto = (
+        ({"finalizar", "terminar", "cerrar"} & tokens_run)
+        or norm_run
+        in {
+            "quiero finalizar",
+            "quiero terminar",
+            "quiero cerrar",
+            "finalizar",
+            "finalizar proyecto",
+            "finalizar proyectos",
+            "terminar proyecto",
+            "terminar proyectos",
+        }
+        or "quiero finalizar" in norm_run
+        or "quiero terminar" in norm_run
+        or "quiero cerrar" in norm_run
+    )
+
+    es_pregunta_finalizados = bool(
+        {
+            "cuales",
+            "cuáles",
+            "dime",
+            "ver",
+            "mostrar",
+            "lista",
+            "listar",
+        }
+        & tokens_run
+        and {
+            "finalice",
+            "finalicé",
+            "finalizado",
+            "finalizados",
+            "terminado",
+            "terminados",
+        }
+        & tokens_run
+    )
+
+    if finalizar_state or (quiere_finalizar_proyecto and not es_pregunta_finalizados):
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+        if finalizar_state:
+            return _handler_confirmar_finalizar_proyectos(
+                usuario=usuario,
+                sesion=sesion,
+                texto_usuario=texto_usuario,
+            )
+
+        return _handler_iniciar_finalizar_proyectos(usuario, sesion)
+
+    # ============================
+    # Wizard Rendición
     # ============================
     try:
         wiz_state = _rend_wiz_get(chat_id)
     except Exception:
         wiz_state = None
 
-    norm = _normalize(texto_usuario or "")
     triggers_start = {
         "nueva rendicion",
         "nueva rendicion gasto",
@@ -2740,218 +3988,46 @@ def run_intent(
         "nueva rendicion gastos",
     }
 
-    if usuario is not None and (wiz_state or norm in triggers_start):
+    if wiz_state or norm_run in triggers_start:
         inbound_log.status = "ok"
         inbound_log.marcar_para_entrenamiento = False
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
-        if norm in triggers_start and not wiz_state:
+        if norm_run in triggers_start and not wiz_state:
             return _rendicion_wizard_start(chat_id, usuario)
 
         return _rendicion_wizard_handle_message(
             chat_id=chat_id,
             usuario=usuario,
-            message={"text": texto_usuario or ""},
+            message={"text": texto_usuario},
         )
 
+    # ============================
+    # Sin intent: resolver palabras genéricas del menú
+    # ============================
     if not intent:
-        tokens = set(_tokenize(texto_usuario))
-
-        # ✅ Basura (fallback directo por tokens)
-        if {"basura", "residuos", "desechos"} & tokens:
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            return _handler_direccion_basura(usuario, texto_usuario)
-
-        if ("supervisor" in tokens) and ({"aprobado", "aprobados", "aprobada", "aprobadas", "aprobacion", "aprobación"} & tokens):
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            return _handler_mis_proyectos(usuario, texto_usuario)
-
-        if _es_saludo(texto_usuario):
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            nombre = usuario.first_name or usuario.get_full_name() or ""
-            nombre = nombre.strip()
-            saludo_nombre = f"{nombre}, " if nombre else ""
-
-            return (
-                f"👋 Hola {saludo_nombre}soy el bot de *GZ Services*.\n\n"
-                "Puedo ayudarte con:\n"
-                "🧾 *Liquidaciones*\n"
-                "• `mis últimas 3 liquidaciones`\n"
-                "• `liquidación de noviembre 2025` / `liquidación 11/2025`\n\n"
-                "📄 *Contrato de trabajo*\n"
-                "• `mi contrato vigente`\n"
-                "• `mi contrato y sus extensiones`\n"
-                "• `mis anexos`\n\n"
-                "🧭 *Asignación (pendientes/activos)*\n"
-                "• `asignación` / `asignación de hoy`\n\n"
-                "📌 *Proyectos / servicios*\n"
-                "• `mis proyectos` (resumen)\n"
-                "• `proyectos aprobados por supervisor`\n"
-                "• `proyectos en ejecución` / `proyectos finalizados`\n"
-                "• `total monto proyectos`\n"
-                "• `monto proyecto 13_512` (o pega DU / ID NEW)\n"
-                "• `mapa de mis proyectos`\n\n"
-                "🧾 *Rendiciones de gastos*\n"
-                "• `rendiciones pendientes` / `rendiciones aprobadas` / `rendiciones rechazadas`\n"
-                "• `rendiciones pendientes de hoy`\n\n"
-                "📊 *Producción*\n"
-                "• `mi producción hasta hoy`\n"
-                "• `mi producción de este mes`\n"
-                "• `mi producción 2025-08-01 a 2025-08-31`\n\n"
-                "📡 *Info de sitios*\n"
-                "• Envía un ID: `13_094` o `CL-13-00421-05` o `CL-13-SN-00421-05`\n\n"
-                "✅ Escribe frases cortas (yo te guío)."
-            )
-
-        if (
-            sesion.ultimo_intent
-            and sesion.ultimo_intent.slug
-            in ["mis_rendiciones_pendientes", "ayuda_rendicion_gastos"]
-        ):
-            if {"rechazadas", "rechazada", "aprobadas", "aprobada", "pendientes", "hoy", "ayer"} & tokens:
-                inbound_log.status = "ok"
-                inbound_log.marcar_para_entrenamiento = False
-                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-                return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
-
-        txt_up = (texto_usuario or "").strip().upper()
-        site_hit = (
-            re.search(r"\b\d{2}[_\s]\d{3}\b", txt_up)
-            or re.search(r"\bCL-\d{2}(?:-[A-Z]{2})?-\d{5}-\d{2}\b", txt_up)
-            or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
+        resolved = _resolver_texto_generico_sin_intent(
+            texto_usuario=texto_usuario,
+            usuario=usuario,
+            sesion=sesion,
+            inbound_log=inbound_log,
         )
-        if site_hit:
-            if (
-                (sesion.ultimo_intent and sesion.ultimo_intent.slug == "info_sitio_id_claro")
-                or ("sitio" in tokens or "site" in tokens)
-                or _normalize(texto_usuario) == _normalize(site_hit.group(0))
-            ):
-                inbound_log.status = "ok"
-                inbound_log.marcar_para_entrenamiento = False
-                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-                return _handler_info_sitio_id_claro(texto_usuario)
 
-        if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mis_proyectos_pendientes", "mis_proyectos_rechazados"]:
-            if (
-                {"estado", "estados", "status", "situacion", "situación", "ejecucion", "ejecución", "progreso",
-                 "revision", "revisión", "supervisor", "finalizados", "finalizado",
-                 "rechazados", "rechazado", "asignados", "asignado", "monto", "total", "suma"} & tokens
-            ):
-                inbound_log.status = "ok"
-                inbound_log.marcar_para_entrenamiento = False
-                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-
-                qs_all = (
-                    ServicioCotizado.objects
-                    .filter(trabajadores_asignados=usuario)
-                    .annotate(n_tecs=Count("trabajadores_asignados", distinct=True))
-                    .order_by("-fecha_creacion")
-                )
-
-                total = qs_all.count()
-                if total == 0:
-                    return "No tienes proyectos/servicios asignados actualmente. ✅"
-
-                total_mmoo = Decimal("0")
-                for s in list(qs_all):
-                    total_mmoo += _mmoo_share_for_user(s, usuario)
-
-                counts = {}
-                for s in qs_all.only("estado"):
-                    k = s.estado or "—"
-                    counts[k] = counts.get(k, 0) + 1
-
-                estados_dict = dict(getattr(ServicioCotizado, "ESTADOS", []))
-
-                msg = "🧭 *Resumen de tus proyectos*\n\n"
-                msg += f"• Total: *{total}*\n"
-                msg += f"• Tu MMOO total: *{_fmt_clp(total_mmoo)}*\n\n"
-                msg += "📌 *Por estado:*\n"
-                orden_preferido = [
-                    "asignado",
-                    "en_progreso",
-                    "en_revision_supervisor",
-                    "aprobado_supervisor",
-                    "rechazado_supervisor",
-                    "informe_subido",
-                    "finalizado_trabajador",
-                    "finalizado",
-                ]
-                usados = set()
-                for key in orden_preferido:
-                    if key in counts:
-                        usados.add(key)
-                        msg += f"• {estados_dict.get(key, key)}: {counts[key]}\n"
-                for key, c in sorted(counts.items(), key=lambda x: x[0]):
-                    if key in usados:
-                        continue
-                    msg += f"• {estados_dict.get(key, key)}: {c}\n"
-
-                msg += "\n🧾 *Últimos asignados/actualizados:*\n"
-                for s in qs_all[:8]:
-                    du = s.du or "—"
-                    id_claro = s.id_claro or "Sin ID Claro"
-                    detalle = (s.detalle_tarea or "").strip()
-                    if len(detalle) > 60:
-                        detalle = detalle[:57] + "…"
-                    est = estados_dict.get(s.estado, s.estado)
-                    msg += f"• DU `{du}` / `{id_claro}` – {est}: {detalle}\n"
-
-                msg += (
-                    "\nSi quieres algo más específico, dime por ejemplo:\n"
-                    "• `proyectos asignados` / `proyectos en progreso` / `proyectos finalizados`\n"
-                    "• `monto total de mis proyectos`\n"
-                )
-                return msg
-
-        if {"asignacion", "asignaciones", "asignado", "asignados"} & tokens:
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            return _handler_asignacion(usuario, texto_usuario)
-
-        if {"proyectos", "proyecto", "servicios", "servicio"} & tokens:
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            return _handler_mis_proyectos(usuario, texto_usuario)
-
-        if sesion.ultimo_intent and sesion.ultimo_intent.slug in ["mi_produccion_hasta_hoy"]:
-            if (
-                {"mes", "anterior", "pasado", "este", "actual", "produccion", "producción", "hoy", "fecha"} & tokens
-                or any(t in _MESES for t in tokens)
-            ):
-                inbound_log.status = "ok"
-                inbound_log.marcar_para_entrenamiento = False
-                inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-                return _handler_mi_produccion(usuario, texto_usuario)
-
-        if {"produccion", "producción"} & tokens:
-            inbound_log.status = "ok"
-            inbound_log.marcar_para_entrenamiento = False
-            inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-            return _handler_mi_produccion(usuario, texto_usuario)
+        if resolved:
+            return resolved
 
         inbound_log.status = "fallback"
         inbound_log.marcar_para_entrenamiento = True
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
 
         return (
-            "Por ahora todavía estoy aprendiendo y no pude entender bien tu mensaje 🤖.\n\n"
-            "Puedes pedirme, por ejemplo:\n"
-            "• ver mi liquidación de sueldo\n"
-            "• consultar mi contrato de trabajo\n"
-            "• ver mis proyectos pendientes\n"
-            "• ver mis rendiciones de gastos pendientes por aprobación\n\n"
-            "Intenta usar frases cortas y directas, y yo te voy guiando."
+            "No pude identificar exactamente qué necesitas, pero puedo ayudarte con estas opciones:\n\n"
+            + _handler_menu_bot(usuario)
         )
 
+    # ============================
+    # Hay intent detectado
+    # ============================
     inbound_log.status = "ok"
     inbound_log.marcar_para_entrenamiento = intent.requiere_revision_humana
     inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
@@ -2959,7 +4035,7 @@ def run_intent(
     slug = intent.slug
 
     if slug == "cronograma_produccion_corte":
-        return _handler_cronograma_produccion(usuario)
+        return _handler_pagos_no_disponible()
 
     if slug == "mis_liquidaciones":
         return _handler_mis_liquidaciones(usuario, texto_usuario)
@@ -2977,7 +4053,7 @@ def run_intent(
         return _handler_mis_proyectos(usuario, texto_usuario)
 
     if slug == "mis_proyectos_rechazados":
-        return _handler_mis_proyectos_rechazados(usuario)
+        return _handler_mis_proyectos(usuario, texto_usuario)
 
     if slug == "ayuda_rendicion_gastos":
         return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
@@ -2991,10 +4067,19 @@ def run_intent(
     if slug == "mi_asignacion":
         return _handler_asignacion(usuario, texto_usuario)
 
+    resolved = _resolver_texto_generico_sin_intent(
+        texto_usuario=texto_usuario,
+        usuario=usuario,
+        sesion=sesion,
+        inbound_log=inbound_log,
+    )
+
+    if resolved:
+        return resolved
+
     return (
-        f"Recibí tu consulta y la reconocí como '{intent.nombre}', "
-        "pero esta funcionalidad aún se está terminando de implementar en el bot.\n\n"
-        "Mientras tanto, puedes revisar esa información directamente en la app web."
+        "Reconocí tu consulta, pero esa opción todavía no tiene una respuesta final configurada.\n\n"
+        "Estas son las opciones disponibles ahora:\n\n" + _handler_menu_bot(usuario)
     )
 
 
@@ -3008,6 +4093,7 @@ def handle_telegram_update(update: dict) -> None:
     - message / edited_message (texto y/o caption)
     - callback_query (inline_keyboard)
     - wizard de rendición (incluye comprobante como PDF/foto aunque venga SIN texto)
+    - wizard de planificación de ruta (incluye ubicación Telegram)
 
     ✅ Vinculación por /start <token> generado en la web (activar_telegram).
 
@@ -3126,12 +4212,21 @@ def handle_telegram_update(update: dict) -> None:
     sesion.save(update_fields=["ultima_interaccion"])
 
     has_file = bool(message.get("document") or message.get("photo"))
-    text_for_log = text if text else ("[archivo]" if has_file else "")
+    has_location = bool(message.get("location"))
+
+    text_for_log = (
+        text
+        if text
+        else ("[ubicacion]" if has_location else ("[archivo]" if has_file else ""))
+    )
 
     wizard_state = _rend_wiz_get(chat_id)
-    if not text_for_log and not wizard_state:
+    ruta_state = ruta_get(chat_id)
+
+    if not text_for_log and not wizard_state and not ruta_state:
         logger.info(
-            "Mensaje sin texto/caption y sin wizard activo (chat_id=%s)", chat_id
+            "Mensaje sin texto/caption, sin ubicación y sin wizard activo (chat_id=%s)",
+            chat_id,
         )
         return
 
@@ -3145,6 +4240,8 @@ def handle_telegram_update(update: dict) -> None:
         meta={
             "update_id": update.get("update_id"),
             "callback": bool(callback),
+            "has_location": has_location,
+            "has_file": has_file,
         },
     )
 
@@ -3185,6 +4282,45 @@ def handle_telegram_update(update: dict) -> None:
             meta={
                 "from_update_id": update.get("update_id"),
                 "wizard": True,
+                "wizard_type": "rendicion",
+                "humanizer_used": False,
+                "humanizer_result": None,
+            },
+            marcar_para_entrenamiento=False,
+        )
+        return
+
+    # =========================
+    # Wizard planificación de ruta
+    # =========================
+    ruta_state = ruta_get(chat_id)
+
+    if usuario is not None and (
+        ruta_state
+        or es_intencion_planificar_ruta(text)
+        or (has_location and ruta_state)
+    ):
+        reply_text = procesar_planificacion_ruta(
+            chat_id=chat_id,
+            usuario=usuario,
+            texto=text,
+            message=message,
+        )
+
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+
+        send_telegram_message(
+            chat_id,
+            reply_text,
+            sesion=sesion,
+            usuario=usuario,
+            intent=None,
+            meta={
+                "from_update_id": update.get("update_id"),
+                "wizard": True,
+                "wizard_type": "ruta",
                 "humanizer_used": False,
                 "humanizer_result": None,
             },
