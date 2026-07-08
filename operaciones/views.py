@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import models, transaction
@@ -288,68 +289,625 @@ def eliminar_sitio(request, pk: int):
     return render(request, "operaciones/eliminar_sitio.html", {"sitio": sitio, "next": next_url})
 
 
-# operaciones/views.py
+def _sitios_import_cache_key(user_id, token):
+    return f"gz:sitios_import_preview:{user_id}:{token}"
+
+
+def _sitios_clean_value(value):
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    if value.lower() in {"nan", "none", "null"}:
+        return None
+
+    return value
+
+
+def _sitios_clean_decimal(value):
+    value = _sitios_clean_value(value)
+
+    if value in (None, ""):
+        return None
+
+    try:
+        return float(str(value).replace(",", "."))
+    except Exception:
+        return None
+
+
+def _sitios_clean_int_or_text(value):
+    value = _sitios_clean_value(value)
+
+    if value in (None, ""):
+        return None
+
+    try:
+        f = float(str(value).replace(",", "."))
+        if f.is_integer():
+            return str(int(f))
+    except Exception:
+        pass
+
+    return str(value).strip()
+
+
+def _sitios_get_col(row, *names):
+    """
+    Busca una columna de forma flexible.
+    Ej:
+    - Dirección / Direccion
+    - Candado BT / Candado
+    - ID Sites NEW / ID NEW
+    """
+    for name in names:
+        if name in row:
+            return row.get(name)
+
+    # fallback normalizado
+    norm_map = {}
+    for col in row.index:
+        norm_map[_norm_col_sitios(col)] = col
+
+    for name in names:
+        key = _norm_col_sitios(name)
+        real_col = norm_map.get(key)
+        if real_col:
+            return row.get(real_col)
+
+    return None
+
+
+def _norm_col_sitios(value):
+    value = str(value or "").strip().lower()
+    value = value.replace("á", "a")
+    value = value.replace("é", "e")
+    value = value.replace("í", "i")
+    value = value.replace("ó", "o")
+    value = value.replace("ú", "u")
+    value = value.replace("ñ", "n")
+    value = value.replace(".", "")
+    value = value.replace("_", " ")
+    value = value.replace("-", " ")
+    value = " ".join(value.split())
+    return value
+
+
+def _leer_excel_sitios(archivo):
+    """
+    Lee el Excel de sitios.
+    Si existe hoja Colocalizados, usa esa.
+    Si no existe, usa la primera hoja.
+    """
+    xls = pd.ExcelFile(archivo)
+
+    sheet_name = None
+
+    for name in xls.sheet_names:
+        if _norm_col_sitios(name) == "colocalizados":
+            sheet_name = name
+            break
+
+    if not sheet_name:
+        sheet_name = xls.sheet_names[0]
+
+    df = pd.read_excel(archivo, sheet_name=sheet_name)
+
+    # Quitar filas completamente vacías
+    df = df.dropna(how="all")
+
+    return df, sheet_name
+
+
+def _row_sitio_to_data(row):
+    """
+    Convierte una fila del Excel al formato del modelo SitioMovil.
+    Soporta el formato actual de Colocalizados.
+    """
+    id_sites = _sitios_clean_value(_sitios_get_col(row, "ID Sites", "ID Site", "ID"))
+
+    if not id_sites:
+        return None
+
+    candado_bt = _sitios_clean_value(
+        _sitios_get_col(row, "Candado BT", "Candado", "Tipo de candado")
+    )
+
+    if not candado_bt:
+        candado_bt = _sitios_clean_value(_sitios_get_col(row, "Tipo de candado"))
+
+    data = {
+        "id_sites": id_sites,
+        "id_claro": _sitios_clean_value(
+            _sitios_get_col(row, "ID Claro", "Id Claro", "ID CLARO")
+        ),
+        "id_sites_new": _sitios_clean_value(
+            _sitios_get_col(row, "ID Sites NEW", "ID NEW", "ID Sites New")
+        ),
+        "region": _sitios_clean_int_or_text(_sitios_get_col(row, "Región", "Region")),
+        "nombre": _sitios_clean_value(_sitios_get_col(row, "Nombre")),
+        "direccion": _sitios_clean_value(
+            _sitios_get_col(row, "Direccion", "Dirección")
+        ),
+        "latitud": _sitios_clean_decimal(_sitios_get_col(row, "Latitud")),
+        "longitud": _sitios_clean_decimal(_sitios_get_col(row, "Longitud")),
+        "comuna": _sitios_clean_value(_sitios_get_col(row, "Comuna")),
+        "tipo_construccion": _sitios_clean_value(
+            _sitios_get_col(
+                row, "Tipo de contruccion", "Tipo de construcción", "Tipo construccion"
+            )
+        ),
+        "altura": _sitios_clean_int_or_text(_sitios_get_col(row, "Altura")),
+        "candado_bt": candado_bt,
+        "condiciones_acceso": _sitios_clean_value(
+            _sitios_get_col(row, "Condiciones de acceso", "Acceso")
+        ),
+        "claves": _sitios_clean_value(_sitios_get_col(row, "Claves")),
+        "llaves": _sitios_clean_value(_sitios_get_col(row, "Llaves")),
+        "cantidad_llaves": _sitios_clean_int_or_text(
+            _sitios_get_col(row, "Cantidad de Llaves", "Cantidad Llaves")
+        ),
+        "observaciones_generales": _sitios_clean_value(
+            _sitios_get_col(row, "Observaciones Generales", "Observaciones")
+        ),
+        "zonas_conflictivas": _sitios_clean_value(
+            _sitios_get_col(row, "Sitios zonas conflictivas", "Zonas Conflictivas")
+        ),
+        "alarmas": _sitios_clean_value(_sitios_get_col(row, "Alarmas")),
+        "guardias": _sitios_clean_value(_sitios_get_col(row, "Guardias")),
+        "nivel": _sitios_clean_int_or_text(_sitios_get_col(row, "Nivel")),
+        "descripcion": _sitios_clean_value(
+            _sitios_get_col(row, "Descripción", "Descripcion")
+        ),
+    }
+
+    return data
+
+
+def _campos_import_sitios_por_modo(modo):
+    """
+    modo=acceso: actualiza solo datos sensibles de acceso.
+    modo=completo: actualiza todo.
+    """
+    campos_acceso = [
+        "candado_bt",
+        "condiciones_acceso",
+        "claves",
+        "llaves",
+        "cantidad_llaves",
+        "observaciones_generales",
+        "zonas_conflictivas",
+        "alarmas",
+        "guardias",
+        "nivel",
+        "descripcion",
+    ]
+
+    campos_completo = [
+        "id_claro",
+        "id_sites_new",
+        "region",
+        "nombre",
+        "direccion",
+        "latitud",
+        "longitud",
+        "comuna",
+        "tipo_construccion",
+        "altura",
+        "candado_bt",
+        "condiciones_acceso",
+        "claves",
+        "llaves",
+        "cantidad_llaves",
+        "observaciones_generales",
+        "zonas_conflictivas",
+        "alarmas",
+        "guardias",
+        "nivel",
+        "descripcion",
+    ]
+
+    if modo == "completo":
+        return campos_completo
+
+    return campos_acceso
+
+
+def _normalizar_para_comparar(value):
+    if value is None:
+        return ""
+
+    value = str(value).strip()
+
+    if value.lower() in {"none", "nan", "null"}:
+        return ""
+
+    return value
+
+
+def _generar_preview_import_sitios(df, modo):
+    campos = _campos_import_sitios_por_modo(modo)
+
+    preview = []
+    errores = []
+
+    total_nuevos = 0
+    total_actualizados = 0
+    total_sin_cambios = 0
+    total_errores = 0
+
+    for index, row in df.iterrows():
+        fila_excel = int(index) + 2
+
+        data = _row_sitio_to_data(row)
+
+        if not data:
+            total_errores += 1
+            errores.append(
+                {
+                    "fila": fila_excel,
+                    "error": "Fila sin ID Sites válido.",
+                }
+            )
+            continue
+
+        id_sites = data.get("id_sites")
+
+        sitio = SitioMovil.objects.filter(id_sites__iexact=id_sites).first()
+
+        if not sitio:
+            total_nuevos += 1
+
+            preview.append(
+                {
+                    "fila": fila_excel,
+                    "id_sites": id_sites,
+                    "id_claro": data.get("id_claro") or "—",
+                    "nombre": data.get("nombre") or "—",
+                    "estado": "nuevo",
+                    "cambios": [
+                        {
+                            "campo": campo,
+                            "antes": "—",
+                            "despues": (
+                                data.get(campo)
+                                if data.get(campo) not in (None, "")
+                                else "—"
+                            ),
+                        }
+                        for campo in campos
+                        if data.get(campo) not in (None, "")
+                    ],
+                    "data": data,
+                }
+            )
+            continue
+
+        cambios = []
+
+        for campo in campos:
+            nuevo = data.get(campo)
+            anterior = getattr(sitio, campo, None)
+
+            anterior_cmp = _normalizar_para_comparar(anterior)
+            nuevo_cmp = _normalizar_para_comparar(nuevo)
+
+            if anterior_cmp != nuevo_cmp:
+                cambios.append(
+                    {
+                        "campo": campo,
+                        "antes": anterior if anterior not in (None, "") else "—",
+                        "despues": nuevo if nuevo not in (None, "") else "—",
+                    }
+                )
+
+        if cambios:
+            total_actualizados += 1
+            estado = "actualizar"
+        else:
+            total_sin_cambios += 1
+            estado = "sin_cambios"
+
+        preview.append(
+            {
+                "fila": fila_excel,
+                "id_sites": id_sites,
+                "id_claro": data.get("id_claro")
+                or getattr(sitio, "id_claro", "")
+                or "—",
+                "nombre": data.get("nombre") or getattr(sitio, "nombre", "") or "—",
+                "estado": estado,
+                "cambios": cambios,
+                "data": data,
+            }
+        )
+
+    resumen = {
+        "total_filas": len(df),
+        "nuevos": total_nuevos,
+        "actualizados": total_actualizados,
+        "sin_cambios": total_sin_cambios,
+        "errores": total_errores,
+    }
+
+    return preview, resumen, errores
+
+
+def _aplicar_import_sitios(preview, modo):
+    campos = _campos_import_sitios_por_modo(modo)
+
+    creados = 0
+    actualizados = 0
+    sin_cambios = 0
+
+    for item in preview:
+        estado = item.get("estado")
+        data = item.get("data") or {}
+
+        if estado == "sin_cambios":
+            sin_cambios += 1
+            continue
+
+        id_sites = data.get("id_sites")
+
+        if not id_sites:
+            continue
+
+        defaults = {}
+
+        for campo in campos:
+            defaults[campo] = data.get(campo)
+
+        # Para sitios nuevos, aunque el modo sea acceso, debemos crear lo básico también.
+        if estado == "nuevo":
+            for campo in [
+                "id_claro",
+                "id_sites_new",
+                "region",
+                "nombre",
+                "direccion",
+                "latitud",
+                "longitud",
+                "comuna",
+                "tipo_construccion",
+                "altura",
+            ]:
+                defaults[campo] = data.get(campo)
+
+        sitio, created = SitioMovil.objects.update_or_create(
+            id_sites=id_sites,
+            defaults=defaults,
+        )
+
+        if created:
+            creados += 1
+        else:
+            actualizados += 1
+
+    return {
+        "creados": creados,
+        "actualizados": actualizados,
+        "sin_cambios": sin_cambios,
+    }
+
+
+@login_required
+@rol_requerido("admin")
+def importar_sitios_excel(request):
+    import uuid
+
+    token = request.POST.get("token") or ""
+    accion = request.POST.get("accion") or ""
+    modo = request.POST.get("modo") or "acceso"
+
+    if modo not in {"acceso", "completo"}:
+        modo = "acceso"
+
+    # ==========================
+    # CONFIRMAR IMPORTACIÓN
+    # ==========================
+    if request.method == "POST" and accion == "confirmar":
+        if not token:
+            messages.error(request, "No se encontró el preview de importación.")
+            return redirect("operaciones:importar_sitios")
+
+        cache_key = _sitios_import_cache_key(request.user.id, token)
+        payload = cache.get(cache_key)
+
+        if not payload:
+            messages.error(
+                request, "El preview expiró o no existe. Vuelve a subir el archivo."
+            )
+            return redirect("operaciones:importar_sitios")
+
+        preview = payload.get("preview") or []
+        modo = payload.get("modo") or modo
+
+        try:
+            resultado = _aplicar_import_sitios(preview, modo)
+
+            cache.delete(cache_key)
+
+            messages.success(
+                request,
+                (
+                    "Importación aplicada correctamente. "
+                    f"Nuevos: {resultado['creados']}. "
+                    f"Actualizados: {resultado['actualizados']}. "
+                    f"Sin cambios: {resultado['sin_cambios']}."
+                ),
+            )
+
+            return redirect("operaciones:listar_sitios")
+
+        except Exception as e:
+            messages.error(request, f"Ocurrió un error aplicando la importación: {e}")
+            return redirect("operaciones:importar_sitios")
+
+    # ==========================
+    # CANCELAR PREVIEW
+    # ==========================
+    if request.method == "POST" and accion == "cancelar":
+        if token:
+            cache.delete(_sitios_import_cache_key(request.user.id, token))
+
+        messages.info(request, "Importación cancelada.")
+        return redirect("operaciones:importar_sitios")
+
+    # ==========================
+    # GENERAR PREVIEW
+    # ==========================
+    if request.method == "POST" and request.FILES.get("archivo"):
+        archivo = request.FILES["archivo"]
+
+        try:
+            df, sheet_name = _leer_excel_sitios(archivo)
+
+            preview, resumen, errores = _generar_preview_import_sitios(df, modo)
+
+            token = uuid.uuid4().hex
+            cache_key = _sitios_import_cache_key(request.user.id, token)
+
+            cache.set(
+                cache_key,
+                {
+                    "preview": preview,
+                    "resumen": resumen,
+                    "errores": errores,
+                    "modo": modo,
+                    "sheet_name": sheet_name,
+                },
+                timeout=60 * 30,
+            )
+
+            preview_mostrar = preview[:200]
+
+            return render(
+                request,
+                "operaciones/importar_sitios.html",
+                {
+                    "preview": preview_mostrar,
+                    "preview_total": len(preview),
+                    "resumen": resumen,
+                    "errores": errores[:50],
+                    "errores_total": len(errores),
+                    "token": token,
+                    "modo": modo,
+                    "sheet_name": sheet_name,
+                },
+            )
+
+        except Exception as e:
+            messages.error(request, f"Ocurrió un error al leer el archivo: {e}")
+            return redirect("operaciones:importar_sitios")
+
+    return render(
+        request,
+        "operaciones/importar_sitios.html",
+        {
+            "modo": "acceso",
+        },
+    )
 
 @login_required
 @rol_requerido('admin')
-def importar_sitios_excel(request):
-    if request.method == 'POST' and request.FILES.get('archivo'):
-        archivo = request.FILES['archivo']
+def descargar_formato_sitios_excel(request):
+    """
+    Descarga formato oficial para importar/actualizar sitios.
+    """
+    columnas = [
+        "ID Sites",
+        "ID Claro",
+        "ID Sites NEW",
+        "Región",
+        "Nombre",
+        "Direccion",
+        "Latitud",
+        "Longitud",
+        "Comuna",
+        "Tipo de contruccion",
+        "Altura",
+        "Candado BT",
+        "Condiciones de acceso",
+        "Claves",
+        "Llaves",
+        "Cantidad de Llaves",
+        "Observaciones Generales",
+        "Sitios zonas conflictivas",
+        "Alarmas",
+        "Guardias",
+        "Nivel",
+        "Descripción",
+    ]
 
-        try:
-            df = pd.read_excel(archivo)
+    ejemplo = [
+        "CL-13-00421-05",
+        "13_094",
+        "CL-13-SN-00421-05",
+        "13",
+        "Vicuña Mackenna",
+        "Vasconia 71",
+        "-33.494717",
+        "-70.620000",
+        "SAN JOAQUÍN",
+        "MP",
+        "36",
+        "NA",
+        "Acceso con autorización previa",
+        "1309 - 7394 - 1394",
+        "Sin Llaves",
+        "0",
+        "Observación general del sitio",
+        "No Aplica",
+        "No Aplica",
+        "No Aplica",
+        "4",
+        "Llamadas",
+    ]
 
-            sitios_creados = 0
-            for _, row in df.iterrows():
-                # Normalizamos coordenadas reemplazando ',' por '.'
-                latitud = float(str(row.get('Latitud')).replace(
-                    ',', '.')) if pd.notna(row.get('Latitud')) else None
-                longitud = float(str(row.get('Longitud')).replace(
-                    ',', '.')) if pd.notna(row.get('Longitud')) else None
+    df = pd.DataFrame([ejemplo], columns=columnas)
 
-                sitio, created = SitioMovil.objects.update_or_create(
-                    id_sites=row.get('ID Sites'),
-                    defaults={
-                        'id_claro': row.get('ID Claro'),
-                        'id_sites_new': row.get('ID Sites NEW'),
-                        'region': row.get('Región'),
-                        'nombre': row.get('Nombre'),
-                        'direccion': row.get('Direccion'),
-                        'latitud': latitud,
-                        'longitud': longitud,
-                        'comuna': row.get('Comuna'),
-                        'tipo_construccion': row.get('Tipo de contruccion'),
-                        'altura': row.get('Altura'),
-                        'candado_bt': row.get('Candado BT'),
-                        'condiciones_acceso': row.get('Condiciones de acceso'),
-                        'claves': row.get('Claves'),
-                        'llaves': row.get('Llaves'),
-                        'cantidad_llaves': row.get('Cantidad de Llaves'),
-                        'observaciones_generales': row.get('Observaciones Generales'),
-                        'zonas_conflictivas': row.get('Sitios zonas conflictivas'),
-                        'alarmas': row.get('Alarmas'),
-                        'guardias': row.get('Guardias'),
-                        'nivel': row.get('Nivel'),
-                        'descripcion': row.get('Descripción'),
-                    }
-                )
-                if created:
-                    sitios_creados += 1
+    output = io.BytesIO()
 
-            messages.success(
-                request, f'Se importaron correctamente {sitios_creados} sitios.')
-            return redirect('operaciones:listar_sitios')
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Colocalizados")
 
-        except Exception as e:
-            messages.error(request, f'Ocurrió un error al importar: {str(e)}')
+        workbook = writer.book
+        worksheet = writer.sheets["Colocalizados"]
 
-    return render(request, 'operaciones/importar_sitios.html')
+        worksheet.freeze_panes = "A2"
 
+        for col_idx, column_name in enumerate(columnas, start=1):
+            cell = worksheet.cell(row=1, column=col_idx)
+            cell.value = column_name
+
+            try:
+                cell.font = cell.font.copy(bold=True)
+            except Exception:
+                pass
+
+            width = max(len(str(column_name)) + 4, 14)
+            worksheet.column_dimensions[cell.column_letter].width = min(width, 35)
+
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="formato_importacion_sitios.xlsx"'
+
+    return response
 
 @login_required
-
 @rol_requerido("pm", "admin", "facturacion")
-
 def listar_servicios_pm(request):
 
     """

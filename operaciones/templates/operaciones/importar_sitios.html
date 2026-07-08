@@ -2,43 +2,450 @@
 {% block title %}Importar Sitios Móviles{% endblock %}
 
 {% block dashboard_content %}
-<div class="max-w-2xl w-full mx-auto mt-6 px-4 sm:px-6 lg:px-8">
-  <div class="bg-white p-6 rounded-xl shadow-md">
+<div class="w-full max-w-none mx-auto mt-6 px-3 sm:px-4 lg:px-6">
+  <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md">
 
-    <h2 class="text-2xl font-bold text-gray-800 mb-4">📥 Importar Sitios Móviles</h2>
+    <style>
+      .modal-confirm-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.55);
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .modal-confirm-backdrop.show {
+        display: flex;
+      }
+
+      .modal-confirm-card {
+        width: 100%;
+        max-width: 520px;
+        background: white;
+        border-radius: 1.25rem;
+        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.28);
+        overflow: hidden;
+        transform: scale(0.96);
+        opacity: 0;
+        transition: all 0.18s ease;
+      }
+
+      .modal-confirm-backdrop.show .modal-confirm-card {
+        transform: scale(1);
+        opacity: 1;
+      }
+    </style>
+
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+      <h2 class="text-2xl font-bold text-gray-800">
+        📥 Importar Sitios Móviles
+      </h2>
+
+      <div class="flex flex-wrap gap-2">
+        <a href="{% url 'operaciones:listar_sitios' %}"
+           class="text-center bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300 text-sm">
+          ← Volver
+        </a>
+
+        <a href="{% url 'operaciones:descargar_formato_sitios' %}"
+           class="text-center bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 text-sm">
+          📄 Descargar formato .xlsx
+        </a>
+      </div>
+    </div>
 
     {% if messages %}
       {% for message in messages %}
         <div class="mb-4 p-4 rounded-xl text-sm font-semibold
                     {% if message.tags == 'success' %} bg-green-100 text-green-700
                     {% elif message.tags == 'error' %} bg-red-100 text-red-700
+                    {% elif message.tags == 'warning' %} bg-yellow-100 text-yellow-800
                     {% else %} bg-blue-100 text-blue-700 {% endif %}">
           {{ message }}
         </div>
       {% endfor %}
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" class="space-y-5">
-      {% csrf_token %}
-      <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">
-          Selecciona el archivo Excel (.xlsx):
-        </label>
-        <input type="file" name="archivo" accept=".xlsx"
-               class="block w-full border border-gray-300 rounded-xl p-2 shadow-sm focus:ring-2 focus:ring-emerald-500">
+    {% if not preview %}
+      <div class="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-900">
+        <div class="font-semibold mb-1">Modo recomendado</div>
+        <p>
+          Si el archivo viene desde Claro/Sites y solo necesitas actualizar accesos,
+          claves, llaves y observaciones, usa el modo
+          <strong>Actualizar solo acceso / claves / llaves</strong>.
+        </p>
+        <p class="mt-2">
+          Antes de actualizar, el sistema mostrará un preview con los cambios detectados.
+        </p>
       </div>
 
-      <div class="flex flex-col sm:flex-row sm:justify-between gap-2 sm:gap-4">
-        <a href="{% url 'operaciones:listar_sitios' %}"
-           class="text-center bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300">
-          ← Volver
-        </a>
-        <button type="submit"
-                class="text-center bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
-          Importar
+      <form method="post" enctype="multipart/form-data" class="space-y-5">
+        {% csrf_token %}
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            Selecciona el archivo Excel (.xlsx):
+          </label>
+
+          <input type="file"
+                 name="archivo"
+                 accept=".xlsx"
+                 required
+                 class="block w-full border border-gray-300 rounded-xl p-2 shadow-sm focus:ring-2 focus:ring-emerald-500">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            ¿Qué deseas actualizar?
+          </label>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="border rounded-xl p-4 cursor-pointer hover:bg-gray-50">
+              <div class="flex items-start gap-2">
+                <input type="radio"
+                       name="modo"
+                       value="acceso"
+                       checked
+                       class="mt-1">
+                <div>
+                  <div class="font-semibold text-gray-800">
+                    Acceso / claves / llaves
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    Actualiza candado, condiciones de acceso, claves, llaves,
+                    cantidad de llaves, observaciones, alarmas, guardias, nivel y descripción.
+                  </div>
+                </div>
+              </div>
+            </label>
+
+            <label class="border rounded-xl p-4 cursor-pointer hover:bg-gray-50">
+              <div class="flex items-start gap-2">
+                <input type="radio"
+                       name="modo"
+                       value="completo"
+                       class="mt-1">
+                <div>
+                  <div class="font-semibold text-gray-800">
+                    Toda la información del sitio
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    Actualiza también nombre, dirección, comuna, coordenadas,
+                    región, altura y datos generales.
+                  </div>
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:justify-end gap-2 sm:gap-4">
+          <button type="submit"
+                  class="text-center bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+            👀 Ver preview antes de importar
+          </button>
+        </div>
+      </form>
+    {% endif %}
+
+    {% if preview %}
+      <div class="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h3 class="text-lg font-bold text-gray-800">
+              👀 Preview de importación
+            </h3>
+
+            <p class="text-sm text-gray-600 mt-1">
+              Hoja leída:
+              <strong>{{ sheet_name }}</strong>
+            </p>
+
+            <p class="text-sm text-gray-600">
+              Modo:
+              {% if modo == "completo" %}
+                <strong>Toda la información del sitio</strong>
+              {% else %}
+                <strong>Acceso / claves / llaves</strong>
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
+            <div class="bg-white border rounded-xl px-3 py-2">
+              <div class="text-gray-500 text-xs">Nuevos</div>
+              <div class="font-bold text-blue-700">{{ resumen.nuevos }}</div>
+            </div>
+
+            <div class="bg-white border rounded-xl px-3 py-2">
+              <div class="text-gray-500 text-xs">Actualizados</div>
+              <div class="font-bold text-amber-700">{{ resumen.actualizados }}</div>
+            </div>
+
+            <div class="bg-white border rounded-xl px-3 py-2">
+              <div class="text-gray-500 text-xs">Sin cambios</div>
+              <div class="font-bold text-emerald-700">{{ resumen.sin_cambios }}</div>
+            </div>
+
+            <div class="bg-white border rounded-xl px-3 py-2">
+              <div class="text-gray-500 text-xs">Errores</div>
+              <div class="font-bold text-red-700">{{ resumen.errores }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if errores %}
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4">
+          <h4 class="font-semibold text-red-700 mb-2">
+            ⚠️ Errores detectados
+          </h4>
+
+          <div class="max-h-48 overflow-auto text-sm">
+            {% for err in errores %}
+              <div class="text-red-700">
+                Fila {{ err.fila }}: {{ err.error }}
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if errores_total > errores|length %}
+            <div class="text-xs text-red-500 mt-2">
+              Mostrando {{ errores|length }} de {{ errores_total }} errores.
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <div class="mb-4 flex flex-col sm:flex-row justify-end gap-2">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="cancelar">
+          <input type="hidden" name="token" value="{{ token }}">
+
+          <button type="submit"
+                  class="w-full sm:w-auto bg-gray-200 text-gray-800 px-4 py-2 rounded-xl hover:bg-gray-300">
+            Cancelar
+          </button>
+        </form>
+
+        <button type="button"
+                id="btnAbrirConfirmacionImport"
+                class="w-full sm:w-auto bg-emerald-600 text-white px-4 py-2 rounded-xl hover:bg-emerald-700">
+          ✅ Confirmar importación
         </button>
       </div>
-    </form>
+
+      <div class="overflow-x-auto border rounded-xl">
+        <table class="table-auto w-full text-xs min-w-[1200px]">
+          <thead class="bg-gray-100 text-gray-700 uppercase">
+            <tr>
+              <th class="p-2 border">Fila</th>
+              <th class="p-2 border">ID Sites</th>
+              <th class="p-2 border">ID Claro</th>
+              <th class="p-2 border">Nombre</th>
+              <th class="p-2 border">Estado</th>
+              <th class="p-2 border">Cambios detectados</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for item in preview %}
+              <tr class="align-top
+                {% if item.estado == 'nuevo' %} bg-blue-50
+                {% elif item.estado == 'actualizar' %} bg-yellow-50
+                {% else %} bg-white
+                {% endif %}">
+                <td class="p-2 border text-center">
+                  {{ item.fila }}
+                </td>
+
+                <td class="p-2 border font-mono">
+                  {{ item.id_sites }}
+                </td>
+
+                <td class="p-2 border font-mono">
+                  {{ item.id_claro }}
+                </td>
+
+                <td class="p-2 border">
+                  {{ item.nombre }}
+                </td>
+
+                <td class="p-2 border text-center">
+                  {% if item.estado == "nuevo" %}
+                    <span class="inline-block px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-semibold">
+                      Nuevo
+                    </span>
+                  {% elif item.estado == "actualizar" %}
+                    <span class="inline-block px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 font-semibold">
+                      Actualizar
+                    </span>
+                  {% else %}
+                    <span class="inline-block px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                      Sin cambios
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td class="p-2 border">
+                  {% if item.cambios %}
+                    <div class="space-y-2">
+                      {% for cambio in item.cambios %}
+                        <div class="border rounded-lg bg-white p-2">
+                          <div class="font-semibold text-gray-800">
+                            {{ cambio.campo }}
+                          </div>
+
+                          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1">
+                            <div>
+                              <div class="text-[10px] uppercase text-gray-400">Antes</div>
+                              <div class="text-red-700 whitespace-pre-wrap break-words">
+                                {{ cambio.antes }}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div class="text-[10px] uppercase text-gray-400">Después</div>
+                              <div class="text-emerald-700 whitespace-pre-wrap break-words">
+                                {{ cambio.despues }}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span class="text-gray-400 italic">Sin cambios</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="p-4 text-center text-gray-500">
+                  No hay datos para mostrar.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if preview_total > preview|length %}
+        <div class="text-xs text-gray-500 mt-2">
+          Mostrando {{ preview|length }} de {{ preview_total }} filas del preview.
+          Al confirmar, se procesarán todas.
+        </div>
+      {% endif %}
+
+      <!-- Modal bonito de confirmación -->
+      <div id="modalConfirmacionImport" class="modal-confirm-backdrop">
+        <div class="modal-confirm-card">
+          <div class="px-6 py-5 border-b bg-gradient-to-r from-emerald-50 to-blue-50">
+            <div class="flex items-start gap-3">
+              <div class="h-11 w-11 rounded-full bg-emerald-100 flex items-center justify-center text-2xl">
+                ✅
+              </div>
+
+              <div>
+                <h3 class="text-lg font-bold text-gray-900">
+                  Confirmar importación
+                </h3>
+                <p class="text-sm text-gray-600 mt-1">
+                  Revisa el resumen antes de aplicar los cambios en la base de datos.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="px-6 py-5">
+            <div class="grid grid-cols-2 gap-3 text-center text-sm mb-4">
+              <div class="border rounded-xl p-3 bg-blue-50">
+                <div class="text-xs text-blue-700">Nuevos</div>
+                <div class="text-xl font-bold text-blue-800">{{ resumen.nuevos }}</div>
+              </div>
+
+              <div class="border rounded-xl p-3 bg-amber-50">
+                <div class="text-xs text-amber-700">Actualizados</div>
+                <div class="text-xl font-bold text-amber-800">{{ resumen.actualizados }}</div>
+              </div>
+
+              <div class="border rounded-xl p-3 bg-emerald-50">
+                <div class="text-xs text-emerald-700">Sin cambios</div>
+                <div class="text-xl font-bold text-emerald-800">{{ resumen.sin_cambios }}</div>
+              </div>
+
+              <div class="border rounded-xl p-3 bg-red-50">
+                <div class="text-xs text-red-700">Errores</div>
+                <div class="text-xl font-bold text-red-800">{{ resumen.errores }}</div>
+              </div>
+            </div>
+
+            <div class="rounded-xl bg-yellow-50 border border-yellow-200 p-3 text-sm text-yellow-900">
+              Esta acción actualizará los sitios según el preview mostrado.
+              Verifica especialmente las claves, accesos, llaves y observaciones antes de continuar.
+            </div>
+          </div>
+
+          <div class="px-6 py-4 bg-gray-50 border-t flex flex-col sm:flex-row justify-end gap-2">
+            <button type="button"
+                    id="btnCerrarConfirmacionImport"
+                    class="px-4 py-2 rounded-xl bg-white border text-gray-700 hover:bg-gray-100">
+              Cancelar
+            </button>
+
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="accion" value="confirmar">
+              <input type="hidden" name="token" value="{{ token }}">
+
+              <button type="submit"
+                      class="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 font-semibold">
+                Sí, aplicar cambios
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        (function () {
+          const modal = document.getElementById('modalConfirmacionImport');
+          const btnOpen = document.getElementById('btnAbrirConfirmacionImport');
+          const btnClose = document.getElementById('btnCerrarConfirmacionImport');
+
+          if (!modal || !btnOpen || !btnClose) return;
+
+          function openModal() {
+            modal.classList.add('show');
+            document.body.classList.add('overflow-hidden');
+          }
+
+          function closeModal() {
+            modal.classList.remove('show');
+            document.body.classList.remove('overflow-hidden');
+          }
+
+          btnOpen.addEventListener('click', openModal);
+          btnClose.addEventListener('click', closeModal);
+
+          modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+              closeModal();
+            }
+          });
+
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+              closeModal();
+            }
+          });
+        })();
+      </script>
+    {% endif %}
 
   </div>
 </div>

@@ -35,14 +35,22 @@
 </style>
 
 <div class="flex flex-wrap items-center justify-between mb-4 gap-3">
-  <div class="flex items-center gap-3">
+  <div class="flex flex-wrap items-center gap-3">
     <h2 class="text-2xl font-bold text-gray-800">
       📋 Listado de Sitios Móviles
     </h2>
-    <a href="{% url 'operaciones:importar_sitios' %}"
-       class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-emerald-700 transition">
-      📥 Importar Sitios
-    </a>
+
+    <div class="flex flex-wrap gap-2">
+      <a href="{% url 'operaciones:importar_sitios' %}"
+         class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-emerald-700 transition">
+        📥 Importar Sitios
+      </a>
+
+      <a href="{% url 'operaciones:descargar_formato_sitios' %}"
+         class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
+        📄 Descargar formato
+      </a>
+    </div>
   </div>
 </div>
 
@@ -95,17 +103,14 @@
       ⚙️ Columnas
     </summary>
 
-    <!-- IMPORTANTE: mismo id que usa el script -->
     <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
       <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
-      <!-- Master checkbox -->
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
         <input type="checkbox" id="col-toggle-all" checked>
         <span class="font-semibold text-xs">Mostrar todas</span>
       </label>
 
-      <!-- Una línea por columna (0-based, igual orden que el thead) -->
       <div class="space-y-1 text-sm">
         <label class="flex items-center gap-2">
           <input type="checkbox" class="col-toggle" data-col="0" checked>
@@ -204,10 +209,11 @@
   </details>
 </div>
 
-
 <!-- Tabla con scroll -->
- <div class="overflow-x-auto">
-    <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
+<div class="tabla-scroll overflow-x-auto">
+  <table data-columns-table="sitios-moviles"
+         class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+         style="white-space: nowrap;">
     <thead class="bg-gray-100 text-xs uppercase font-semibold text-center">
       <tr>
         <th class="p-2 border">ID Sites</th>
@@ -232,53 +238,53 @@
         <th class="p-2 border">Guardias</th>
         <th class="p-2 border">Nivel</th>
         <th class="p-2 border">Descripción</th>
-<th class="p-2 border">Acciones</th>
+        <th class="p-2 border">Acciones</th>
       </tr>
     </thead>
+
     <tbody>
       {% for sitio in sitios %}
-      <tr class="hover:bg-gray-50 text-center">
-        <td class="p-2 border">{{ sitio.id_sites }}</td>
-        <td class="p-2 border">{{ sitio.id_claro }}</td>
-        <td class="p-2 border">{{ sitio.id_sites_new }}</td>
-        <td class="p-2 border">{{ sitio.region }}</td>
-        <td class="p-2 border">{{ sitio.nombre }}</td>
-        <td class="p-2 border">{{ sitio.direccion }}</td>
-        <td class="p-2 border">{{ sitio.latitud }}</td>
-        <td class="p-2 border">{{ sitio.longitud }}</td>
-        <td class="p-2 border">{{ sitio.comuna }}</td>
-        <td class="p-2 border">{{ sitio.tipo_construccion }}</td>
-        <td class="p-2 border">{{ sitio.altura }}</td>
-        <td class="p-2 border">{{ sitio.candado_bt }}</td>
-        <td class="p-2 border">{{ sitio.condiciones_acceso }}</td>
-        <td class="p-2 border">{{ sitio.claves }}</td>
-        <td class="p-2 border">{{ sitio.llaves }}</td>
-        <td class="p-2 border">{{ sitio.cantidad_llaves }}</td>
-        <td class="p-2 border">{{ sitio.observaciones_generales }}</td>
-        <td class="p-2 border">{{ sitio.zonas_conflictivas }}</td>
-        <td class="p-2 border">{{ sitio.alarmas }}</td>
-        <td class="p-2 border">{{ sitio.guardias }}</td>
-        <td class="p-2 border">{{ sitio.nivel }}</td>
-        <td class="p-2 border">{{ sitio.descripcion }}</td>
-    <td class="p-2 border">
-      {% with next_param="?next="|add:request.get_full_path %}
-        <a href="{% url 'operaciones:editar_sitio' sitio.pk %}{{ next_param }}"
-           class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs">
-          ✏️ Editar
-        </a>
-      {% endwith %}
-      {% with next_param="?next="|add:request.get_full_path %}
-        <a href="{% url 'operaciones:eliminar_sitio' sitio.pk %}{{ next_param }}"
-           class="inline-block bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-full text-xs ml-1">
-          🗑️ Eliminar
-        </a>
-      {% endwith %}
-    </td>
-      </tr>
+        <tr class="hover:bg-gray-50 text-center">
+          <td class="p-2 border">{{ sitio.id_sites }}</td>
+          <td class="p-2 border">{{ sitio.id_claro }}</td>
+          <td class="p-2 border">{{ sitio.id_sites_new }}</td>
+          <td class="p-2 border">{{ sitio.region }}</td>
+          <td class="p-2 border">{{ sitio.nombre }}</td>
+          <td class="p-2 border">{{ sitio.direccion }}</td>
+          <td class="p-2 border">{{ sitio.latitud }}</td>
+          <td class="p-2 border">{{ sitio.longitud }}</td>
+          <td class="p-2 border">{{ sitio.comuna }}</td>
+          <td class="p-2 border">{{ sitio.tipo_construccion }}</td>
+          <td class="p-2 border">{{ sitio.altura }}</td>
+          <td class="p-2 border">{{ sitio.candado_bt }}</td>
+          <td class="p-2 border">{{ sitio.condiciones_acceso }}</td>
+          <td class="p-2 border">{{ sitio.claves }}</td>
+          <td class="p-2 border">{{ sitio.llaves }}</td>
+          <td class="p-2 border">{{ sitio.cantidad_llaves }}</td>
+          <td class="p-2 border">{{ sitio.observaciones_generales }}</td>
+          <td class="p-2 border">{{ sitio.zonas_conflictivas }}</td>
+          <td class="p-2 border">{{ sitio.alarmas }}</td>
+          <td class="p-2 border">{{ sitio.guardias }}</td>
+          <td class="p-2 border">{{ sitio.nivel }}</td>
+          <td class="p-2 border">{{ sitio.descripcion }}</td>
+          <td class="p-2 border">
+            <a href="{% url 'operaciones:editar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
+               class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs">
+              ✏️ Editar
+            </a>
+
+            <a href="{% url 'operaciones:eliminar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
+               class="inline-block bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-full text-xs ml-1">
+              🗑️ Eliminar
+            </a>
+          </td>
+        </tr>
       {% empty %}
-      <tr>
-        <td colspan="22" class="text-center text-gray-500 p-4">No hay sitios registrados.</td>
-      </tr>
+        <tr>
+          <td colspan="23" class="text-center text-gray-500 p-4">
+            No hay sitios registrados.
+          </td>
+        </tr>
       {% endfor %}
     </tbody>
   </table>
@@ -287,13 +293,18 @@
 <!-- Selector de cantidad -->
 <form method="get" class="mt-4 flex items-center gap-2">
   <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
-  <select name="cantidad" id="cantidad" onchange="this.form.submit()" class="border rounded-lg px-3 py-1">
-    <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
+
+  <select name="cantidad"
+          id="cantidad"
+          onchange="this.form.submit()"
+          class="border rounded-lg px-3 py-1">
+    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
+    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
+    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
     <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
     <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
   </select>
+
   <input type="hidden" name="id_claro" value="{{ id_claro }}">
   <input type="hidden" name="id_new" value="{{ id_new }}">
 </form>
@@ -301,17 +312,36 @@
 <!-- Paginación -->
 <div class="mt-4 flex justify-center gap-2 text-sm">
   {% if pagina.has_previous %}
-    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">« Primero</a>
-    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">‹ Anterior</a>
+    <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+      « Primero
+    </a>
+
+    <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+      ‹ Anterior
+    </a>
   {% endif %}
-  <span class="px-3 py-1">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+
+  <span class="px-3 py-1">
+    Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+  </span>
+
   {% if pagina.has_next %}
-    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente ›</a>
-    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro }}&id_new={{ id_new }}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Último »</a>
+    <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+      Siguiente ›
+    </a>
+
+    <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
+       class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+      Último »
+    </a>
   {% endif %}
 </div>
 
 </div>
+
 <script>
 /* === Conservar scroll en "Listado de Sitios Móviles" === */
 (function () {
@@ -324,6 +354,7 @@
   function saveScroll() {
     try {
       const z = zone();
+
       sessionStorage.setItem(KEY, JSON.stringify({
         winX: window.scrollX || window.pageXOffset || 0,
         winY: window.scrollY || window.pageYOffset || 0,
@@ -337,8 +368,11 @@
     try {
       const s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
       if (!s) return;
+
       requestAnimationFrame(() => window.scrollTo(s.winX || 0, s.winY || 0));
+
       const z = zone();
+
       if (z) {
         z.scrollLeft = s.zoneX || 0;
         z.scrollTop  = s.zoneY || 0;
@@ -347,20 +381,21 @@
   }
 
   document.addEventListener('DOMContentLoaded', restoreScroll);
-  window.addEventListener('pageshow', (e) => { if (e.persisted) restoreScroll(); });
+
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) restoreScroll();
+  });
+
   window.addEventListener('beforeunload', saveScroll);
 
-  // Guardar al enviar formularios (filtros, selector de cantidad)
   document.addEventListener('submit', (e) => {
     if (e.target && e.target.matches('form')) saveScroll();
   });
 
-  // Guardar al cambiar el select de cantidad
   document.addEventListener('change', (e) => {
     if (e.target && e.target.matches('select#cantidad')) saveScroll();
   });
 
-  // Guardar al navegar por paginación
   document.addEventListener('click', (e) => {
     const a = e.target.closest('a[href*="page="]');
     if (a) saveScroll();
@@ -370,17 +405,15 @@
 
 <script>
 (function () {
-  // Panel de columnas
   const panel = document.getElementById('columnToggles');
   if (!panel) return;
 
-  // Tabla asociada: usa la que tenga data-columns-table
   const table =
     document.querySelector('[data-columns-table]') ||
     document.querySelector('table');
+
   if (!table) return;
 
-  // Clave para recordar las columnas por vista/tabla
   const tableId = table.dataset.columnsTable || location.pathname;
   const STORAGE_KEY = 'cols:' + tableId;
 
@@ -388,7 +421,9 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return {};
+
       const obj = JSON.parse(raw);
+
       return obj && typeof obj === 'object' ? obj : {};
     } catch (e) {
       return {};
@@ -402,33 +437,35 @@
   }
 
   function applyVisibility() {
-    const state = loadState(); // {0: true, 1: false, ...}
+    const state = loadState();
 
-    // Encabezados
     const theadCells = table.querySelectorAll('thead tr th');
+
     theadCells.forEach((th, idx) => {
-      const visible = state[idx] !== false; // por defecto visible
+      const visible = state[idx] !== false;
       th.style.display = visible ? '' : 'none';
     });
 
-    // Celdas
     table.querySelectorAll('tbody tr').forEach((tr) => {
       const tds = tr.querySelectorAll('td');
+
       tds.forEach((td, idx) => {
         const visible = state[idx] !== false;
         td.style.display = visible ? '' : 'none';
       });
     });
 
-    // Sincronizar checkboxes + master
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
+
     let allOn = true;
 
     checks.forEach((cb) => {
       const idx = parseInt(cb.dataset.col || '0', 10);
       const visible = state[idx] !== false;
+
       cb.checked = visible;
+
       if (!visible) allOn = false;
     });
 
@@ -441,18 +478,18 @@
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
 
-    // Individuales
     checks.forEach((cb) => {
       cb.addEventListener('change', () => {
         const idx = parseInt(cb.dataset.col || '0', 10);
         const state = loadState();
+
         state[idx] = cb.checked;
+
         saveState(state);
         applyVisibility();
       });
     });
 
-    // Master "Show all columns"
     if (master) {
       master.addEventListener('change', () => {
         const val = master.checked;
@@ -460,6 +497,7 @@
 
         checks.forEach((cb) => {
           const idx = parseInt(cb.dataset.col || '0', 10);
+
           cb.checked = val;
           state[idx] = val;
         });
@@ -470,7 +508,6 @@
     }
   }
 
-  // Cerrar el <details> al hacer clic fuera
   function bindOutsideClickToClose() {
     const details = panel.closest('details');
     if (!details) return;
@@ -478,11 +515,11 @@
     document.addEventListener('click', (e) => {
       if (!details.open) return;
       if (details.contains(e.target)) return;
+
       details.open = false;
     });
   }
 
-  // Inicializar
   bindToggles();
   applyVisibility();
   bindOutsideClickToClose();
