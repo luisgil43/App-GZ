@@ -10,13 +10,17 @@
     <h2 class="text-2xl font-bold text-gray-800">
       📸 Configurar Requerimientos — DU{{ servicio.du }} ({{ servicio.id_claro }})
     </h2>
-    <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-       class="text-sm text-gray-600 hover:underline">← Volver a la lista</a>
+    <a href="{% if next_url %}{{ next_url }}{% elif request.GET.next %}{{ request.GET.next }}{% else %}{% url 'operaciones:listar_servicios_supervisor' %}{% endif %}"
+   class="text-sm text-gray-600 hover:underline">
+  ← Volver a la lista
+</a>
   </div>
 
-  <form method="post" class="space-y-4">
+  <form method="post"
+      action="?next={{ next_url|default:request.GET.next|urlencode }}"
+      class="space-y-4">
     {% csrf_token %}
-
+<input type="hidden" name="next" value="{{ next_url|default:request.GET.next }}">
     <label class="inline-flex items-center gap-2">
       <input type="checkbox" name="proyecto_especial" {% if is_special %}checked{% endif %}
              class="h-4 w-4 rounded border-gray-300">
@@ -28,7 +32,9 @@
 
     <div class="flex flex-wrap gap-2 items-center">
       <a class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50"
-         href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}">📥 Importar (CSV/XLSX)</a>
+   href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}?next={{ next_url|default:request.GET.next|urlencode }}">
+  📥 Importar (CSV/XLSX)
+</a>
     </div>
 
     <div class="rounded-xl border border-gray-200 overflow-x-auto">

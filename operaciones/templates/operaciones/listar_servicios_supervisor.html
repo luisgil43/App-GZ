@@ -926,7 +926,32 @@
   const btnClearAll = document.getElementById('btnExcelClearAll');
 
   let currentKey = null;
-  let activeFilters = loadFilters();
+
+syncFiltersWithUrl();
+
+let activeFilters = loadFilters();
+
+function syncFiltersWithUrl(){
+  try {
+    const storageKey = 'excelFiltersServiciosSupervisor:' + location.pathname;
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('excel_filters');
+
+    if (!raw) {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    const parsed = JSON.parse(raw || '{}');
+
+    if (!parsed || typeof parsed !== 'object') {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    sessionStorage.setItem(storageKey, JSON.stringify(parsed));
+  } catch (_) {}
+}
 
   function loadFilters(){
     try{
@@ -1179,34 +1204,30 @@
     btnApply.click();
   });
 
-  btnApply.addEventListener('click', async () => {
-    if(currentKey == null) return;
+btnApply.addEventListener('click', async () => {
+  if(currentKey == null) return;
 
-    const selected = new Set();
+  const selected = new Set();
 
-    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-      const row = opt.closest('[data-option-label]');
-
-      if(searchInput.value.trim() && row.style.display === 'none') return;
-
-      if(opt.checked) selected.add(opt.dataset.value);
-    });
-
-    const total = new Set(getExcelGlobal()[currentKey] || []);
-
-    if(selected.size === 0 || selected.size === total.size){
-      delete activeFilters[currentKey];
-    }else{
-      activeFilters[currentKey] = selected;
-    }
-
-    saveFilters();
-    updateHeaderStates();
-
-    panel.classList.add('hidden');
-
-    await reloadWithParams(buildParams(true));
+  optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+    if(opt.checked) selected.add(opt.dataset.value);
   });
+
+  const total = new Set(getExcelGlobal()[currentKey] || []);
+
+  if(selected.size === 0 || selected.size === total.size){
+    delete activeFilters[currentKey];
+  }else{
+    activeFilters[currentKey] = selected;
+  }
+
+  saveFilters();
+  updateHeaderStates();
+
+  panel.classList.add('hidden');
+
+  await reloadWithParams(buildParams(true));
+});
 
   btnClear.addEventListener('click', async () => {
     if(currentKey == null) return;

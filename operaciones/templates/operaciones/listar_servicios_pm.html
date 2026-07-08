@@ -479,11 +479,11 @@
                   </button>
                 {% endif %}
 
-                <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}"
-                   class="btn-ghost btn-edit"
-                   title="Editar">
-                  ✏️
-                </a>
+                <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+   class="btn-ghost btn-edit"
+   title="Editar">
+  ✏️
+</a>
 
                 <button type="button"
                         class="btn-ghost btn-delete"
@@ -494,11 +494,11 @@
 
               {% else %}
                 {% if servicio.estado == 'cotizado' %}
-                  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}"
-                     class="btn-ghost btn-edit"
-                     title="Editar">
-                    ✏️
-                  </a>
+                  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+   class="btn-ghost btn-edit"
+   title="Editar">
+  ✏️
+</a>
 
                   <button type="button"
                           class="btn-ghost btn-delete"
@@ -507,12 +507,12 @@
                     🗑️
                   </button>
 
-                {% elif servicio.estado in estado_permite_editar %}
-                  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}"
-                     class="btn-ghost btn-edit"
-                     title="Editar">
-                    ✏️
-                  </a>
+               {% elif servicio.estado in estado_permite_editar %}
+  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+     class="btn-ghost btn-edit"
+     title="Editar">
+    ✏️
+  </a>
 
                   <button type="button"
                           class="btn-ghost btn-delete"
@@ -558,14 +558,14 @@
           </button>
 
           <form method="post"
-                action="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}">
-            {% csrf_token %}
-
-            <button type="submit"
-                    class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
-              Eliminar
-            </button>
-          </form>
+      action="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit"
+          class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+    Eliminar
+  </button>
+</form>
         </div>
       </div>
     </div>
@@ -589,14 +589,15 @@
           </button>
 
           <form method="post"
-                action="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}">
-            {% csrf_token %}
+      action="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
 
-            <button type="submit"
-                    class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-              Aprobar
-            </button>
-          </form>
+  <button type="submit"
+          class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+    Aprobar
+  </button>
+</form>
         </div>
       </div>
     </div>
@@ -916,7 +917,32 @@
   const btnClearAll = document.getElementById('btnExcelClearAll');
 
   let currentKey = null;
-  let activeFilters = loadFilters();
+
+syncFiltersWithUrl();
+
+let activeFilters = loadFilters();
+
+function syncFiltersWithUrl(){
+  try {
+    const storageKey = 'excelFiltersServiciosPm:' + location.pathname;
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('excel_filters');
+
+    if (!raw) {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    const parsed = JSON.parse(raw || '{}');
+
+    if (!parsed || typeof parsed !== 'object') {
+      sessionStorage.removeItem(storageKey);
+      return;
+    }
+
+    sessionStorage.setItem(storageKey, JSON.stringify(parsed));
+  } catch (_) {}
+}
 
   function loadFilters(){
     try{

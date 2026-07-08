@@ -747,56 +747,85 @@ def crear_servicio_cotizado(request):
 
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion')
+@rol_requerido("pm", "admin", "facturacion")
 def editar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
+
+    if next_url and not next_url.startswith("/"):
+        next_url = ""
+
     # --- Permitir edición siempre a PM, Admin y Facturación ---
-    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (
+    if servicio.estado not in ["cotizado", "aprobado_pendiente"] and not (
         request.user.is_superuser or request.user.es_facturacion or request.user.es_pm
     ):
         messages.error(
-            request, "No puedes editar esta cotización porque ya fue asignada.")
-        return redirect('operaciones:listar_servicios_pm')
+            request, "No puedes editar esta cotización porque ya fue asignada."
+        )
+        return redirect(next_url or "operaciones:listar_servicios_pm")
 
-    if request.method == 'POST':
+    if request.method == "POST":
         form = ServicioCotizadoForm(request.POST, instance=servicio)
+
         if form.is_valid():
             servicio = form.save(commit=False)
+
             if servicio.id_claro:
-                sitio = SitioMovil.objects.filter(
-                    id_claro=servicio.id_claro).first()
+                sitio = SitioMovil.objects.filter(id_claro=servicio.id_claro).first()
+
                 if sitio:
                     servicio.id_new = sitio.id_sites_new
                     servicio.region = sitio.region
+
             servicio.save()
             messages.success(request, "Cotización actualizada correctamente.")
-            return redirect('operaciones:listar_servicios_pm')
+            return redirect(next_url or "operaciones:listar_servicios_pm")
+
         else:
             messages.error(request, "Corrige los errores en el formulario.")
+
     else:
         form = ServicioCotizadoForm(instance=servicio)
 
-    return render(request, 'operaciones/editar_servicio_cotizado.html', {
-        'form': form,
-        'servicio': servicio
-    })
+    return render(
+        request,
+        "operaciones/editar_servicio_cotizado.html",
+        {
+            "form": form,
+            "servicio": servicio,
+            "next_url": next_url,
+        },
+    )
 
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion')
+@rol_requerido("pm", "admin", "facturacion")
 def eliminar_servicio_cotizado(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
+
+    if next_url and not next_url.startswith("/"):
+        next_url = ""
+
     # Validar estado permitido
-    if servicio.estado not in ['cotizado', 'aprobado_pendiente'] and not (request.user.is_superuser or request.user.es_facturacion):
+    if servicio.estado not in ["cotizado", "aprobado_pendiente"] and not (
+        request.user.is_superuser or request.user.es_facturacion
+    ):
         messages.error(
-            request, "No puedes eliminar esta cotización porque ya fue asignada.")
-        return redirect('operaciones:listar_servicios_pm')
+            request, "No puedes eliminar esta cotización porque ya fue asignada."
+        )
+        return redirect(next_url or "operaciones:listar_servicios_pm")
+
+    if request.method == "POST":
+        servicio.delete()
+        messages.success(request, "Cotización eliminada correctamente.")
+        return redirect(next_url or "operaciones:listar_servicios_pm")
 
     servicio.delete()
     messages.success(request, "Cotización eliminada correctamente.")
-    return redirect('operaciones:listar_servicios_pm')
+    return redirect(next_url or "operaciones:listar_servicios_pm")
 
 
 def obtener_datos_sitio(request):
@@ -813,37 +842,40 @@ def obtener_datos_sitio(request):
 
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion')
+@rol_requerido("pm", "admin", "facturacion")
 @require_POST
 def aprobar_cotizacion(request, pk):
     cotizacion = get_object_or_404(ServicioCotizado, pk=pk)
 
-    # solo permite aprobar si está en 'cotizado'
-    if cotizacion.estado != 'cotizado':
-        messages.warning(
-            request, "Esta cotización ya no está en estado 'cotizado'.")
-        return redirect('operaciones:listar_servicios_pm')
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
 
-    cotizacion.estado = 'aprobado_pendiente'
+    if next_url and not next_url.startswith("/"):
+        next_url = ""
+
+    # solo permite aprobar si está en 'cotizado'
+    if cotizacion.estado != "cotizado":
+        messages.warning(request, "Esta cotización ya no está en estado 'cotizado'.")
+        return redirect(next_url or "operaciones:listar_servicios_pm")
+
+    cotizacion.estado = "aprobado_pendiente"
     cotizacion.pm_aprueba = request.user
     cotizacion.save()
 
     du_formateado = f"DU{str(cotizacion.du).zfill(8)}"
 
     # Notificar supervisores reales
-    from usuarios.models import CustomUser
-    supervisores = CustomUser.objects.filter(
-        roles__nombre='supervisor', is_active=True)
+    supervisores = CustomUser.objects.filter(roles__nombre="supervisor", is_active=True)
+
     for supervisor in supervisores:
         crear_notificacion(
             usuario=supervisor,
             mensaje=f"Se ha aprobado una nueva cotización {du_formateado}.",
-            url=reverse('operaciones:asignar_cotizacion', args=[cotizacion.pk])
+            url=reverse("operaciones:asignar_cotizacion", args=[cotizacion.pk]),
         )
 
-    messages.success(
-        request, f"Cotización {du_formateado} aprobada correctamente.")
-    return redirect('operaciones:listar_servicios_pm')
+    messages.success(request, f"Cotización {du_formateado} aprobada correctamente.")
+
+    return redirect(next_url or "operaciones:listar_servicios_pm")
 
 
 @login_required
@@ -986,7 +1018,6 @@ def advertencia_cotizaciones_omitidas(request):
     return render(request, 'operaciones/advertencia_duplicados.html', {
         'cotizaciones': cotizaciones
     })
-
 
 
 @login_required
@@ -1324,21 +1355,26 @@ def listar_servicios_supervisor(request):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 @require_POST
 def reabrir_servicio(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)
 
-    if servicio.estado != 'aprobado_supervisor':
-        messages.error(
-            request, "Solo se pueden reabrir servicios aprobados por el supervisor.")
-        return redirect('operaciones:listar_servicios_supervisor')
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
 
-    motivo = (request.POST.get('motivo') or "").strip()
-    if not motivo:
+    if next_url and not next_url.startswith("/"):
+        next_url = ""
+
+    if servicio.estado != "aprobado_supervisor":
         messages.error(
-            request, "Debes indicar un motivo para reabrir el servicio.")
-        return redirect('operaciones:listar_servicios_supervisor')
+            request, "Solo se pueden reabrir servicios aprobados por el supervisor."
+        )
+        return redirect(next_url or "operaciones:listar_servicios_supervisor")
+
+    motivo = (request.POST.get("motivo") or "").strip()
+    if not motivo:
+        messages.error(request, "Debes indicar un motivo para reabrir el servicio.")
+        return redirect(next_url or "operaciones:listar_servicios_supervisor")
 
     with transaction.atomic():
         servicio.motivo_rechazo = motivo
@@ -1346,27 +1382,37 @@ def reabrir_servicio(request, pk):
         servicio.supervisor_rechazo = None
         servicio.tecnico_finalizo = None
         servicio.tecnico_aceptado = None
-        servicio.estado = 'asignado'
-        servicio.save(update_fields=[
-            'motivo_rechazo', 'supervisor_aprobo', 'supervisor_rechazo',
-            'tecnico_finalizo', 'tecnico_aceptado', 'estado',
-        ])
+        servicio.estado = "asignado"
+        servicio.save(
+            update_fields=[
+                "motivo_rechazo",
+                "supervisor_aprobo",
+                "supervisor_rechazo",
+                "tecnico_finalizo",
+                "tecnico_aceptado",
+                "estado",
+            ]
+        )
 
         sesion = _get_or_create_sesion(servicio)
 
         qs = SesionFotoTecnico.objects.filter(sesion=sesion)
-        update_vals = {'estado': 'asignado'}
-        if hasattr(SesionFotoTecnico, 'aceptado_en'):
-            update_vals['aceptado_en'] = None
-        if hasattr(SesionFotoTecnico, 'finalizado_en'):
-            update_vals['finalizado_en'] = None
-        if hasattr(SesionFotoTecnico, 'rechazado_en'):
-            update_vals['rechazado_en'] = None
+        update_vals = {"estado": "asignado"}
+
+        if hasattr(SesionFotoTecnico, "aceptado_en"):
+            update_vals["aceptado_en"] = None
+
+        if hasattr(SesionFotoTecnico, "finalizado_en"):
+            update_vals["finalizado_en"] = None
+
+        if hasattr(SesionFotoTecnico, "rechazado_en"):
+            update_vals["rechazado_en"] = None
+
         qs.update(**update_vals)
 
-    messages.success(
-        request, f"Servicio DU{servicio.du} reabierto. Motivo: {motivo}")
-    return redirect('operaciones:listar_servicios_supervisor')
+    messages.success(request, f"Servicio DU{servicio.du} reabierto. Motivo: {motivo}")
+
+    return redirect(next_url or "operaciones:listar_servicios_supervisor")
 
 
 @login_required
@@ -1394,6 +1440,15 @@ def asignar_trabajadores(request, pk):
       - reasignar: reemplaza lista completa
       - agregar: mantiene los actuales y solo agrega nuevos
     """
+
+    next_url = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or ""
+    )
+
+    if next_url and not next_url.startswith("/"):
+        next_url = ""
 
     cotizacion = ServicioCotizado.objects.filter(pk=pk).first()
 
@@ -1423,7 +1478,7 @@ def asignar_trabajadores(request, pk):
             request,
             "No se encontró la cotización (ID/DU). Puede haber sido eliminada o no existe."
         )
-        return redirect('operaciones:listar_servicios_supervisor')
+        return redirect(next_url or 'operaciones:listar_servicios_supervisor')
 
     modo = (request.GET.get('modo') or request.POST.get('modo') or 'reasignar').strip().lower()
     if modo not in {'reasignar', 'agregar'}:
@@ -1433,8 +1488,6 @@ def asignar_trabajadores(request, pk):
         form = AsignarTrabajadoresForm(request.POST)
         dejar_pendiente = request.POST.get('dejar_pendiente_asignacion') == '1'
 
-        # ✅ IMPORTANTE:
-        # Este flujo debe ir ANTES de validar el form, porque puede no haber técnicos seleccionados.
         if dejar_pendiente:
             with transaction.atomic():
                 cotizacion.trabajadores_asignados.clear()
@@ -1468,8 +1521,10 @@ def asignar_trabajadores(request, pk):
 
                 if hasattr(SesionFotoTecnico, 'aceptado_en'):
                     vals['aceptado_en'] = None
+
                 if hasattr(SesionFotoTecnico, 'finalizado_en'):
                     vals['finalizado_en'] = None
+
                 if hasattr(SesionFotoTecnico, 'reintento_habilitado'):
                     vals['reintento_habilitado'] = False
 
@@ -1479,7 +1534,7 @@ def asignar_trabajadores(request, pk):
                 request,
                 "El servicio quedó nuevamente pendiente por asignar. Se quitaron todos los técnicos y se limpió la aceptación previa."
             )
-            return redirect('operaciones:listar_servicios_supervisor')
+            return redirect(next_url or 'operaciones:listar_servicios_supervisor')
 
         if form.is_valid():
             seleccionados = form.cleaned_data['trabajadores']
@@ -1487,9 +1542,9 @@ def asignar_trabajadores(request, pk):
             old_ids = set(cotizacion.trabajadores_asignados.values_list('id', flat=True))
             selected_ids = set(seleccionados.values_list('id', flat=True))
 
-            # En modo agregar, no se permite quitar técnicos
             if modo == 'agregar':
                 removed_ids = old_ids - selected_ids
+
                 if removed_ids:
                     messages.error(
                         request,
@@ -1499,6 +1554,7 @@ def asignar_trabajadores(request, pk):
                         'cotizacion': cotizacion,
                         'form': form,
                         'modo': modo,
+                        'next_url': next_url,
                     })
 
                 final_ids = old_ids | selected_ids
@@ -1616,6 +1672,7 @@ def asignar_trabajadores(request, pk):
                             log.status,
                             getattr(log, "error", ""),
                         )
+
             except Exception:
                 logger.exception("Error enviando notificación Telegram de asignación")
 
@@ -1634,7 +1691,7 @@ def asignar_trabajadores(request, pk):
             else:
                 messages.success(request, "Asignación actualizada correctamente.")
 
-            return redirect('operaciones:listar_servicios_supervisor')
+            return redirect(next_url or 'operaciones:listar_servicios_supervisor')
 
     else:
         inicial_ids = list(cotizacion.trabajadores_asignados.values_list('id', flat=True))
@@ -1646,7 +1703,9 @@ def asignar_trabajadores(request, pk):
         'cotizacion': cotizacion,
         'form': form,
         'modo': modo,
+        'next_url': next_url,
     })
+
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')

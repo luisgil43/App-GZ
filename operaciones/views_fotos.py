@@ -25,6 +25,7 @@ from django.db.models import Case, IntegerField, Max, Prefetch, Value, When
 from django.http import (FileResponse, HttpResponse, HttpResponseBadRequest,
                          JsonResponse)
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.text import slugify
@@ -197,12 +198,17 @@ def _dedupe_requisitos(asig, allowed_norms: set | None = None):
             r.save(update_fields=["activo"])
 
 
-
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
 def configurar_requisitos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
+
+    next_url = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or reverse("operaciones:listar_servicios_supervisor")
+    )
 
     asignaciones = list(
         sesion.asignaciones
@@ -230,36 +236,47 @@ def configurar_requisitos(request, servicio_id):
                 orders = request.POST.getlist("order[]")
                 mand   = request.POST.getlist("mandatory[]")
 
-                # Normalizamos el payload del formulario
-                desired = []  # [(id_str_or_empty, orden, titulo, obligatorio, norm)]
+                desired = []
+
                 for i, nm in enumerate(names):
                     titulo = (nm or "").strip()
                     if not titulo:
                         continue
+
                     try:
                         orden = int(orders[i]) if i < len(orders) else i
                     except Exception:
                         orden = i
+
                     obligatorio = (mand[i] == "1") if i < len(mand) else True
                     rid = ids[i] if i < len(ids) else ""
+
                     desired.append((rid, orden, titulo, obligatorio, _norm_title(titulo)))
 
-                # Conjunto de normas que DEBEN quedar activas tras guardar
                 desired_norms = {x[4] for x in desired}
 
                 for a in asignaciones:
                     existentes = list(RequisitoFoto.objects.filter(tecnico_sesion=a))
                     by_id = {str(r.id): r for r in existentes}
 
-                    # Mapa por norma para merges/colisiones (el “mejor” por (activo, orden, id))
                     by_norm = {}
+
                     for r in existentes:
                         key = _norm_title(r.titulo)
                         cur = by_norm.get(key)
+
                         if cur is None:
                             by_norm[key] = r
                         else:
-                            if (getattr(r, "activo", True), r.orden, r.id) < (getattr(cur, "activo", True), cur.orden, cur.id):
+                            if (
+                                getattr(r, "activo", True),
+                                r.orden,
+                                r.id
+                            ) < (
+                                getattr(cur, "activo", True),
+                                cur.orden,
+                                cur.id
+                            ):
                                 by_norm[key] = r
 
                     vistos_ids = set()
@@ -267,84 +284,117 @@ def configurar_requisitos(request, servicio_id):
                     for rid, orden, titulo, obligatorio, norm in desired:
                         if rid and rid in by_id:
                             r = by_id[rid]
-                            # Si el nuevo título colisiona con otro por norma, mergeamos
                             collision = by_norm.get(norm)
+
                             if collision and collision.id != r.id:
                                 c = collision
                                 upds = []
+
                                 if c.obligatorio != obligatorio:
-                                    c.obligatorio = obligatorio; upds.append("obligatorio")
+                                    c.obligatorio = obligatorio
+                                    upds.append("obligatorio")
+
                                 if c.orden != orden:
-                                    c.orden = orden; upds.append("orden")
-                                # ⬇️ aseguramos normalizado correcto
+                                    c.orden = orden
+                                    upds.append("orden")
+
                                 if getattr(c, "titulo_norm", None) != norm:
-                                    c.titulo_norm = norm; upds.append("titulo_norm")
+                                    c.titulo_norm = norm
+                                    upds.append("titulo_norm")
+
                                 if hasattr(c, "activo") and not c.activo:
-                                    c.activo = True; upds.append("activo")
+                                    c.activo = True
+                                    upds.append("activo")
+
                                 if upds:
                                     c.save(update_fields=upds)
+
                                 if getattr(r, "activo", True):
                                     r.activo = False
                                     r.save(update_fields=["activo"])
+
                                 vistos_ids.add(str(c.id))
                                 by_norm[norm] = c
                                 continue
 
                             cambios = []
+
                             if r.titulo != titulo:
-                                r.titulo = titulo; cambios.append("titulo")
+                                r.titulo = titulo
+                                cambios.append("titulo")
+
                             if r.orden != orden:
-                                r.orden = orden; cambios.append("orden")
+                                r.orden = orden
+                                cambios.append("orden")
+
                             if r.obligatorio != obligatorio:
-                                r.obligatorio = obligatorio; cambios.append("obligatorio")
-                            # ⬇️ actualizar siempre el normalizado cuando cambie (o por saneo)
+                                r.obligatorio = obligatorio
+                                cambios.append("obligatorio")
+
                             if getattr(r, "titulo_norm", None) != norm:
-                                r.titulo_norm = norm; cambios.append("titulo_norm")
+                                r.titulo_norm = norm
+                                cambios.append("titulo_norm")
+
                             if hasattr(r, "activo") and not r.activo:
-                                r.activo = True; cambios.append("activo")
+                                r.activo = True
+                                cambios.append("activo")
+
                             if cambios:
                                 r.save(update_fields=cambios)
+
                             vistos_ids.add(str(r.id))
                             by_norm[norm] = r
+
                         else:
                             exist = by_norm.get(norm)
+
                             if exist:
                                 cambios = []
+
                                 if exist.obligatorio != obligatorio:
-                                    exist.obligatorio = obligatorio; cambios.append("obligatorio")
+                                    exist.obligatorio = obligatorio
+                                    cambios.append("obligatorio")
+
                                 if exist.orden != orden:
-                                    exist.orden = orden; cambios.append("orden")
+                                    exist.orden = orden
+                                    cambios.append("orden")
+
                                 if getattr(exist, "titulo_norm", None) != norm:
-                                    exist.titulo_norm = norm; cambios.append("titulo_norm")
+                                    exist.titulo_norm = norm
+                                    cambios.append("titulo_norm")
+
                                 if hasattr(exist, "activo") and not exist.activo:
-                                    exist.activo = True; cambios.append("activo")
+                                    exist.activo = True
+                                    cambios.append("activo")
+
                                 if cambios:
                                     exist.save(update_fields=cambios)
+
                                 vistos_ids.add(str(exist.id))
+
                             else:
                                 nuevo = RequisitoFoto.objects.create(
                                     tecnico_sesion=a,
                                     titulo=titulo,
-                                    titulo_norm=norm,   # ⬅️ NUEVO
+                                    titulo_norm=norm,
                                     descripcion="",
                                     obligatorio=obligatorio,
                                     orden=orden,
                                     activo=True,
                                 )
+
                                 vistos_ids.add(str(nuevo.id))
                                 by_norm[norm] = nuevo
 
-                    # Desactivar (soft-delete) TODO lo no presente en el formulario
                     for r in existentes:
                         if str(r.id) not in vistos_ids and getattr(r, "activo", True):
                             r.activo = False
                             r.save(update_fields=["activo"])
 
-                    # Dedupe final, pero SOLO sobre las normas permitidas
                     _dedupe_requisitos(a, allowed_norms=desired_norms)
 
             messages.success(request, "Requerimientos actualizados.")
-            return redirect('operaciones:listar_servicios_supervisor')
+            return redirect(next_url)
 
         except Exception as e:
             messages.error(request, f"No se pudo guardar la lista: {e}")
@@ -355,10 +405,12 @@ def configurar_requisitos(request, servicio_id):
         {
             "servicio": servicio,
             "sesion": sesion,
-            "requirements": canonical,   # activos, ordenados
+            "requirements": canonical,
             "is_special": bool(sesion.proyecto_especial),
+            "next_url": next_url,
         },
     )
+
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
@@ -609,9 +661,6 @@ def importar_requisitos(request, servicio_id):
 # ============================
 # UTIL: normalizador + EXIF + HEIC
 # ============================
-
-
-
 
 
 def _to_jpeg_if_needed(uploaded_file):
@@ -1467,17 +1516,23 @@ def borrar_evidencia_supervisor(request, ev_id: int):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def revisar_sesion_fotos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
+
+    next_url = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or reverse("operaciones:listar_servicios_supervisor")
+    )
+
     asignaciones = (
-        sesion.asignaciones
-        .select_related("tecnico")
+        sesion.asignaciones.select_related("tecnico")
         .prefetch_related("evidencias__requisito")
         .all()
     )
-    # Solo se puede aprobar/rechazar cuando la sesión está en revisión
+
     can_review = sesion.estado == "en_revision_supervisor"
 
     if request.method == "POST":
@@ -1485,50 +1540,51 @@ def revisar_sesion_fotos(request, servicio_id):
         comentario = (request.POST.get("comentario") or "").strip()
 
         if not can_review:
-            messages.error(
-                request, "Este proyecto no está listo para revisión.")
-            return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
+            messages.error(request, "Este proyecto no está listo para revisión.")
+            return redirect(
+                f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
+            )
 
         if accion == "aprobar":
-            # ✅ Siempre generamos/reemplazamos al aprobar (también después de un rechazo)
             with transaction.atomic():
-                # 1) Generar XLSX e ACTA (bytes)
                 try:
                     xlsx_path = _xlsx_path_reporte_fotografico(servicio)
                 except Exception as e:
-                    messages.error(
-                        request, f"No se pudo generar el informe: {e}")
-                    return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
+                    messages.error(request, f"No se pudo generar el informe: {e}")
+                    return redirect(
+                        f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
+                    )
 
                 try:
                     bytes_pdf = _bytes_acta_aceptacion(servicio)
                 except Exception as e:
                     messages.error(request, f"No se pudo generar el acta: {e}")
-                    return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
+                    return redirect(
+                        f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
+                    )
 
                 from .models import _excel_filename, _pdf_filename
 
-                # 2) Si ya existían archivos, eliminarlos para reescribir
                 try:
                     if getattr(servicio.reporte_fotografico, "name", ""):
                         servicio.reporte_fotografico.delete(save=False)
                 except Exception:
                     pass
+
                 try:
                     if getattr(servicio.acta_aceptacion_pdf, "name", ""):
                         servicio.acta_aceptacion_pdf.delete(save=False)
                 except Exception:
                     pass
 
-                # 3) Adjuntar nuevos archivos
                 excel_name = _excel_filename(servicio)
-                pdf_name = _pdf_filename(
-                    servicio, servicio.documento_compra or "DOC")
+                pdf_name = _pdf_filename(servicio, servicio.documento_compra or "DOC")
 
                 try:
                     with open(xlsx_path, "rb") as f:
                         servicio.reporte_fotografico.save(
-                            excel_name, File(f), save=False)
+                            excel_name, File(f), save=False
+                        )
                 finally:
                     try:
                         if xlsx_path and os.path.exists(xlsx_path):
@@ -1537,98 +1593,88 @@ def revisar_sesion_fotos(request, servicio_id):
                         pass
 
                 servicio.acta_aceptacion_pdf.save(
-                    pdf_name, ContentFile(bytes_pdf), save=False)
+                    pdf_name, ContentFile(bytes_pdf), save=False
+                )
 
-                # 4) Actualizar estados de servicio/sesión/asignaciones
                 servicio.estado = "aprobado_supervisor"
                 servicio.supervisor_aprobo = request.user
                 servicio.fecha_aprobacion_supervisor = timezone.now()
-                servicio._skip_report_signal = True  # evitar doble generación por signals
+                servicio._skip_report_signal = True
 
-                servicio.save(update_fields=[
-                    "reporte_fotografico", "acta_aceptacion_pdf",
-                    "estado", "supervisor_aprobo", "fecha_aprobacion_supervisor"
-                ])
+                servicio.save(
+                    update_fields=[
+                        "reporte_fotografico",
+                        "acta_aceptacion_pdf",
+                        "estado",
+                        "supervisor_aprobo",
+                        "fecha_aprobacion_supervisor",
+                    ]
+                )
 
                 sesion.estado = "aprobado_supervisor"
                 sesion.save(update_fields=["estado"])
                 sesion.asignaciones.update(estado="aprobado_supervisor")
 
                 messages.success(
-                    request, "Proyecto aprobado. Informe y acta generados.")
-                return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
+                    request, "Proyecto aprobado. Informe y acta generados."
+                )
+                return redirect(next_url)
 
         elif accion == "rechazar":
-            # Rechazo: habilita reintento a técnicos
             sesion.estado = "rechazado_supervisor"
             sesion.save(update_fields=["estado"])
+
             sesion.asignaciones.update(
-                estado="rechazado_supervisor",
-                reintento_habilitado=True
+                estado="rechazado_supervisor", reintento_habilitado=True
             )
+
             servicio.estado = "rechazado_supervisor"
             servicio.supervisor_rechazo = request.user
             servicio.motivo_rechazo = comentario or "Rechazado por supervisor."
+
             servicio.save(
-                update_fields=["estado", "supervisor_rechazo", "motivo_rechazo"])
+                update_fields=[
+                    "estado",
+                    "supervisor_rechazo",
+                    "motivo_rechazo",
+                ]
+            )
 
             messages.warning(
-                request, "Proyecto rechazado. Técnicos habilitados para reintento.")
-            return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
+                request, "Proyecto rechazado. Técnicos habilitados para reintento."
+            )
+            return redirect(next_url)
 
         messages.error(request, "Acción no válida.")
-        return redirect("operaciones:fotos_revisar_sesion", servicio_id=servicio.id)
-
-    # GET — armar contexto
-    evidencias_por_asig = []
-    for a in asignaciones:
-        evs = _order_evidencias(
-            a.evidencias.select_related("requisito")
+        return redirect(
+            f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
         )
+
+    evidencias_por_asig = []
+
+    for a in asignaciones:
+        evs = _order_evidencias(a.evidencias.select_related("requisito"))
         evidencias_por_asig.append((a, evs))
 
-    return render(request, "operaciones/fotos_revisar_sesion.html", {
-        "servicio": servicio,
-        "sesion": sesion,
-        "evidencias_por_asig": evidencias_por_asig,
-        "can_review": can_review,
-        "reporte_listo": bool(servicio.reporte_fotografico),
-        "reporte_url": servicio.reporte_fotografico.url if servicio.reporte_fotografico else "",
-        "acta_url": servicio.acta_aceptacion_pdf.url if servicio.acta_aceptacion_pdf else "",
-    })
+    return render(
+        request,
+        "operaciones/fotos_revisar_sesion.html",
+        {
+            "servicio": servicio,
+            "sesion": sesion,
+            "evidencias_por_asig": evidencias_por_asig,
+            "can_review": can_review,
+            "reporte_listo": bool(servicio.reporte_fotografico),
+            "reporte_url": (
+                servicio.reporte_fotografico.url if servicio.reporte_fotografico else ""
+            ),
+            "acta_url": (
+                servicio.acta_aceptacion_pdf.url if servicio.acta_aceptacion_pdf else ""
+            ),
+            "next_url": next_url,
+        },
+    )
 
-
-@login_required
-# si no quieres incluir PM, deja solo 'supervisor', 'admin'
-@rol_requerido('supervisor', 'admin', 'pm')
-def borrar_evidencia_supervisor(request, ev_id: int):
-    ev = get_object_or_404(EvidenciaFoto, pk=ev_id)
-    servicio = ev.tecnico_sesion.sesion.servicio
-
-    ESTADOS_PERMITIDOS = {'en_revision_supervisor',
-                          'en_progreso', 'rechazado_supervisor'}
-    if servicio.estado not in ESTADOS_PERMITIDOS:
-        messages.warning(
-            request, "No se puede eliminar evidencias en el estado actual del proyecto.")
-        return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
-
-    if request.method == "POST":
-        # 🔒 Borrado seguro: elimina el archivo físico solo si no hay otra evidencia que lo referencie
-        try:
-            if ev.imagen and ev.imagen.name:
-                same = EvidenciaFoto.objects.filter(
-                    imagen=ev.imagen.name).exclude(pk=ev.pk).exists()
-                if not same:
-                    ev.imagen.delete(save=False)
-        except Exception:
-            pass
-
-        ev.delete()
-        messages.success(request, "Evidencia eliminada correctamente.")
-    else:
-        messages.error(request, "Método no permitido.")
-
-    return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
 # ---- Nombre de archivos ----
 

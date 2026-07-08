@@ -18,15 +18,28 @@
     </p>
   {% endif %}
 
-  <p class="mb-4 break-words max-w-full">
-    Servicio:
-    <strong>DU{{ cotizacion.du }}</strong> -
-    <span class="break-words text-gray-700">{{ cotizacion.detalle_tarea }}</span>
-  </p>
+<p class="mb-4 break-words max-w-full">
+  Servicio:
+  <strong>DU{{ cotizacion.du }}</strong>
 
-  <form method="post" id="form-asignacion">
+  {% if cotizacion.id_claro %}
+    <span class="ml-1 inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700 border border-blue-100">
+      ID Claro: {{ cotizacion.id_claro }}
+    </span>
+  {% endif %}
+
+  <br>
+
+  <span class="break-words text-gray-700">
+    {{ cotizacion.detalle_tarea }}
+  </span>
+</p>
+
+  <form method="post"
+      id="form-asignacion"
+      action="?next={{ next_url|default:request.GET.next|urlencode }}&modo={{ modo|default:'reasignar' }}">
     {% csrf_token %}
-    <input type="hidden" name="modo" value="{{ modo|default:'reasignar' }}">
+    <input type="hidden" name="next" value="{{ next_url|default:request.GET.next }}">
 
     <div id="zona-trabajadores" class="rounded-xl border border-gray-200 bg-gray-50 p-4 mb-4">
       {{ form.as_p }}
@@ -55,10 +68,10 @@
     </div>
 
     <div class="flex justify-between mt-6">
-      <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-         class="bg-gray-300 px-4 py-2 rounded-xl hover:bg-gray-400">
-        Volver
-      </a>
+     <a href="{% if next_url %}{{ next_url }}{% elif request.GET.next %}{{ request.GET.next }}{% else %}{% url 'operaciones:listar_servicios_supervisor' %}{% endif %}"
+   class="bg-gray-300 px-4 py-2 rounded-xl hover:bg-gray-400">
+  Volver
+</a>
 
       <button type="submit"
               id="btn-submit-asignacion"

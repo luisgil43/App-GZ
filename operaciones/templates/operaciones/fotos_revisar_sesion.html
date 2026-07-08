@@ -34,10 +34,10 @@
 <!-- Acciones -->
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
   <div class="flex flex-wrap gap-2">
-    <a href="{% url 'operaciones:listar_servicios_supervisor' %}"
-       class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded shadow inline-flex items-center gap-1">
-      ⬅️ Volver
-    </a>
+<a href="{% if next_url %}{{ next_url }}{% elif request.GET.next %}{{ request.GET.next }}{% else %}{% url 'operaciones:listar_servicios_supervisor' %}{% endif %}"
+   class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded shadow inline-flex items-center gap-1">
+  ⬅️ Volver
+</a>
 
     {# ✅ Acta (PDF): SIEMPRE visible, esté o no aprobado #}
    <a href="{% url 'operaciones:generar_acta_preview' s.id %}?force=1&save=1"
@@ -57,14 +57,15 @@
 
   {% if can_review %}
     <div class="flex items-center gap-2">
-      <form method="post" action=".">
-        {% csrf_token %}
-        <input type="hidden" name="accion" value="aprobar">
-        <button type="submit"
-                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
-          ✅ Aprobar & generar reporte
-        </button>
-      </form>
+     <form method="post" action="?next={{ next_url|default:request.GET.next|urlencode }}">
+  {% csrf_token %}
+  <input type="hidden" name="accion" value="aprobar">
+  <input type="hidden" name="next" value="{{ next_url|default:request.GET.next }}">
+  <button type="submit"
+          class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+    ✅ Aprobar & generar reporte
+  </button>
+</form>
 
       <button type="button"
               onclick="toggleRejectModal(true)"
@@ -166,7 +167,7 @@
                      bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
               title="Eliminar esta foto"
               data-delete
-              data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}">
+              data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}?next={{ next_url|default:request.GET.next|urlencode }}">
         ✕
       </button>
     {% else %}
@@ -227,9 +228,10 @@
         <button type="button" class="text-gray-400 hover:text-gray-600" onclick="toggleRejectModal(false)">✕</button>
       </div>
 
-      <form method="post" action="." class="mt-4">
-        {% csrf_token %}
-        <input type="hidden" name="accion" value="rechazar">
+      <form method="post" action="?next={{ next_url|default:request.GET.next|urlencode }}" class="mt-4">
+  {% csrf_token %}
+  <input type="hidden" name="accion" value="rechazar">
+  <input type="hidden" name="next" value="{{ next_url|default:request.GET.next }}">
         <label class="block text-sm font-medium text-gray-700">Motivo</label>
         <textarea name="comentario" rows="4" class="w-full border rounded-lg p-2 mt-1"
                   placeholder="Ingrese el motivo del rechazo..." required></textarea>
