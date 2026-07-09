@@ -1284,9 +1284,41 @@ searchInput.addEventListener('keydown', async (e) => {
   await aplicarFiltroActual();
 });
 
-  btnApply.addEventListener('click', async () => {
-    await aplicarFiltroActual();
-  });
+btnApply.addEventListener('click', async () => {
+  if (currentKey == null) return;
+
+  const query = normSearch(searchInput.value);
+
+  if (query) {
+    let visibles = 0;
+
+    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+      const row = opt.closest('[data-option-label]');
+      const visible = row && row.style.display !== 'none';
+
+      opt.checked = visible;
+
+      if (visible) {
+        visibles++;
+      }
+    });
+
+    if (visibles === 0) {
+      return;
+    }
+
+    const selectAll = document.getElementById('excel-select-all');
+    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
+    const checkedCount = opts.filter(o => o.checked).length;
+
+    if (selectAll) {
+      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
+    }
+  }
+
+  await aplicarFiltroActual();
+});
 
   btnClear.addEventListener('click', async () => {
     if(currentKey == null) return;
