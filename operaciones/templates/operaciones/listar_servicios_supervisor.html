@@ -927,31 +927,31 @@
 
   let currentKey = null;
 
-syncFiltersWithUrl();
+  syncFiltersWithUrl();
 
-let activeFilters = loadFilters();
+  let activeFilters = loadFilters();
 
-function syncFiltersWithUrl(){
-  try {
-    const storageKey = 'excelFiltersServiciosSupervisor:' + location.pathname;
-    const params = new URLSearchParams(location.search);
-    const raw = params.get('excel_filters');
+  function syncFiltersWithUrl(){
+    try {
+      const storageKey = 'excelFiltersServiciosSupervisor:' + location.pathname;
+      const params = new URLSearchParams(location.search);
+      const raw = params.get('excel_filters');
 
-    if (!raw) {
-      sessionStorage.removeItem(storageKey);
-      return;
-    }
+      if (!raw) {
+        sessionStorage.removeItem(storageKey);
+        return;
+      }
 
-    const parsed = JSON.parse(raw || '{}');
+      const parsed = JSON.parse(raw || '{}');
 
-    if (!parsed || typeof parsed !== 'object') {
-      sessionStorage.removeItem(storageKey);
-      return;
-    }
+      if (!parsed || typeof parsed !== 'object') {
+        sessionStorage.removeItem(storageKey);
+        return;
+      }
 
-    sessionStorage.setItem(storageKey, JSON.stringify(parsed));
-  } catch (_) {}
-}
+      sessionStorage.setItem(storageKey, JSON.stringify(parsed));
+    } catch (_) {}
+  }
 
   function loadFilters(){
     try{
@@ -992,6 +992,14 @@ function syncFiltersWithUrl(){
     }
   }
 
+  function normSearch(s){
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+  }
+
   function updateHeaderStates(){
     activeFilters = loadFilters();
 
@@ -1012,69 +1020,69 @@ function syncFiltersWithUrl(){
   }
 
   function renderOptions(key){
-  const globalVals = getExcelGlobal();
-  const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
-  const selected = activeFilters[key];
+    const globalVals = getExcelGlobal();
+    const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
+    const selected = activeFilters[key];
 
-  optionsBox.innerHTML = '';
+    optionsBox.innerHTML = '';
 
-  const allWrap = document.createElement('label');
-  allWrap.className = 'flex items-center gap-2 mb-2';
-  allWrap.innerHTML = `<input type="checkbox" id="excel-select-all"> <span>(Seleccionar todo)</span>`;
+    const allWrap = document.createElement('label');
+    allWrap.className = 'flex items-center gap-2 mb-2';
+    allWrap.innerHTML = `<input type="checkbox" id="excel-select-all"> <span>(Seleccionar todo)</span>`;
 
-  optionsBox.appendChild(allWrap);
+    optionsBox.appendChild(allWrap);
 
-  values.forEach(val => {
-    const label = document.createElement('label');
+    values.forEach(val => {
+      const label = document.createElement('label');
 
-    label.className = 'flex items-center gap-2 text-xs mt-1';
-    label.dataset.optionLabel = "1";
+      label.className = 'flex items-center gap-2 text-xs mt-1';
+      label.dataset.optionLabel = "1";
 
-    const checked = selected ? selected.has(val) : true;
+      const checked = selected ? selected.has(val) : true;
 
-    label.innerHTML = `
-      <input type="checkbox" class="excel-opt" data-value="${escapeHtml(val)}" ${checked ? 'checked' : ''}>
-      <span>${escapeHtml(val)}</span>
-    `;
+      label.innerHTML = `
+        <input type="checkbox" class="excel-opt" data-value="${escapeHtml(val)}" ${checked ? 'checked' : ''}>
+        <span>${escapeHtml(val)}</span>
+      `;
 
-    optionsBox.appendChild(label);
-  });
-
-  const selectAll = document.getElementById('excel-select-all');
-  const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
-
-  function refreshSelectAllState(){
-    const checkedCount = opts.filter(o => o.checked).length;
-    selectAll.checked = opts.length > 0 && checkedCount === opts.length;
-    selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
-  }
-
-  refreshSelectAllState();
-
-  selectAll.addEventListener('change', () => {
-    /*
-      Importante:
-      Aunque haya búsqueda activa, si el usuario desmarca "Seleccionar todo",
-      se deben desmarcar TODOS los valores, también los ocultos.
-      Si no, al aplicar queda todo seleccionado y el backend no filtra.
-    */
-    opts.forEach(o => {
-      o.checked = selectAll.checked;
+      optionsBox.appendChild(label);
     });
 
-    selectAll.indeterminate = false;
-  });
+    const selectAll = document.getElementById('excel-select-all');
+    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
 
-  opts.forEach(o => {
-    o.addEventListener('change', refreshSelectAllState);
-  });
-}
+    function refreshSelectAllState(){
+      const checkedCount = opts.filter(o => o.checked).length;
+
+      if (!selectAll) return;
+
+      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
+    }
+
+    refreshSelectAllState();
+
+    if (selectAll) {
+      selectAll.addEventListener('change', () => {
+        opts.forEach(o => {
+          o.checked = selectAll.checked;
+        });
+
+        selectAll.indeterminate = false;
+      });
+    }
+
+    opts.forEach(o => {
+      o.addEventListener('change', refreshSelectAllState);
+    });
+  }
+
   function filterOptionList(q){
-    const query = (q || '').trim().toLowerCase();
+    const query = normSearch(q);
     let visible = 0;
 
     optionsBox.querySelectorAll('[data-option-label]').forEach(lbl => {
-      const txt = lbl.textContent.toLowerCase();
+      const txt = normSearch(lbl.textContent);
       const show = !query || txt.includes(query);
 
       lbl.style.display = show ? '' : 'none';
@@ -1190,6 +1198,34 @@ function syncFiltersWithUrl(){
     }
   }
 
+  async function aplicarFiltroActual(){
+    if(currentKey == null) return;
+
+    const selected = new Set();
+
+    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+      if(opt.checked) {
+        selected.add(opt.dataset.value);
+      }
+    });
+
+    const total = new Set(getExcelGlobal()[currentKey] || []);
+
+    if(selected.size === 0 || selected.size === total.size){
+      delete activeFilters[currentKey];
+    }else{
+      activeFilters[currentKey] = selected;
+    }
+
+    saveFilters();
+    updateHeaderStates();
+
+    panel.classList.add('hidden');
+
+    await reloadWithParams(buildParams(true));
+  }
+
+  
   function bindHeaders(){
     zona.querySelectorAll('th[data-excel-col] .excel-header-btn').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -1203,46 +1239,54 @@ function syncFiltersWithUrl(){
   bindHeaders();
   updateHeaderStates();
 
-  searchInput.addEventListener('input', () => {
+searchInput.addEventListener('input', () => {
     filterOptionList(searchInput.value);
   });
 
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
+searchInput.addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
 
-    e.preventDefault();
+  e.preventDefault();
+  e.stopPropagation();
 
-    if (btnApply.disabled || currentKey == null) return;
+  if (currentKey == null) return;
 
-    btnApply.click();
-  });
+  const query = normSearch(searchInput.value);
 
-btnApply.addEventListener('click', async () => {
-  if(currentKey == null) return;
+  if (query) {
+    let visibles = 0;
 
-  const selected = new Set();
+    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+      const row = opt.closest('[data-option-label]');
+      const visible = row && row.style.display !== 'none';
 
-  optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-    if(opt.checked) {
-      selected.add(opt.dataset.value);
+      opt.checked = visible;
+
+      if (visible) {
+        visibles++;
+      }
+    });
+
+    if (visibles === 0) {
+      return;
     }
-  });
 
-  const total = new Set(getExcelGlobal()[currentKey] || []);
+    const selectAll = document.getElementById('excel-select-all');
+    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
+    const checkedCount = opts.filter(o => o.checked).length;
 
-  if(selected.size === 0 || selected.size === total.size){
-    delete activeFilters[currentKey];
-  }else{
-    activeFilters[currentKey] = selected;
+    if (selectAll) {
+      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
+    }
   }
 
-  saveFilters();
-  updateHeaderStates();
-
-  panel.classList.add('hidden');
-
-  await reloadWithParams(buildParams(true));
+  await aplicarFiltroActual();
 });
+
+  btnApply.addEventListener('click', async () => {
+    await aplicarFiltroActual();
+  });
 
   btnClear.addEventListener('click', async () => {
     if(currentKey == null) return;
