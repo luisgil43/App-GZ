@@ -1805,34 +1805,50 @@ def listar_servicios_supervisor(request):
     except json.JSONDecodeError:
         excel_filters = {}
 
-    servicios_list = list(servicios)
+    if not isinstance(excel_filters, dict):
+        excel_filters = {}
+
+    servicios_base_excel = list(servicios)
+
+    def pasa_filtros_excel(servicio, filtros, skip_col=None):
+        """
+        Aplica filtros Excel.
+        skip_col permite construir las opciones de una columna ignorando
+        el filtro de esa misma columna, para poder acumular varios valores.
+        """
+        if not filtros:
+            return True
+
+        for col, values in filtros.items():
+            col = str(col)
+
+            if skip_col is not None and col == str(skip_col):
+                continue
+
+            values_set = {str(v).strip() for v in (values or []) if str(v).strip()}
+
+            if not values_set:
+                continue
+
+            row_values = {
+                str(v).strip()
+                for v in excel_values_for_servicio(servicio, col)
+                if str(v).strip()
+            }
+
+            if not row_values.intersection(values_set):
+                return False
+
+        return True
 
     if excel_filters:
-        filtered_list = []
-
-        for servicio in servicios_list:
-            ok = True
-
-            for col, values in excel_filters.items():
-                values_set = {str(v).strip() for v in (values or []) if str(v).strip()}
-
-                if not values_set:
-                    continue
-
-                row_values = {
-                    str(v).strip()
-                    for v in excel_values_for_servicio(servicio, col)
-                    if str(v).strip()
-                }
-
-                if not row_values.intersection(values_set):
-                    ok = False
-                    break
-
-            if ok:
-                filtered_list.append(servicio)
-
-        servicios_list = filtered_list
+        servicios_list = [
+            servicio
+            for servicio in servicios_base_excel
+            if pasa_filtros_excel(servicio, excel_filters)
+        ]
+    else:
+        servicios_list = servicios_base_excel
 
     # ---------------- Globales para panel Excel ----------------
     excel_global = {}
@@ -1840,11 +1856,14 @@ def listar_servicios_supervisor(request):
     for col in range(11):
         vals = set()
 
-        for servicio in servicios_list:
+        for servicio in servicios_base_excel:
+            if not pasa_filtros_excel(servicio, excel_filters, skip_col=str(col)):
+                continue
+
             for value in excel_values_for_servicio(servicio, str(col)):
                 vals.add(value or "(Vacías)")
 
-        excel_global[col] = sorted(vals)
+        excel_global[col] = sorted(vals, key=lambda x: str(x).lower())
 
     excel_global_json = json.dumps(excel_global, ensure_ascii=False)
 

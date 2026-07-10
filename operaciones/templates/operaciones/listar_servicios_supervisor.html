@@ -1198,35 +1198,52 @@
     }
   }
 
-  async function aplicarFiltroActual(){
-    if(currentKey == null) return;
+  async function aplicarFiltroActual({ addVisibleSearch = false } = {}){
+  if(currentKey == null) return;
 
-    const selected = new Set();
+  const query = normSearch(searchInput.value);
+  const total = new Set(getExcelGlobal()[currentKey] || []);
 
+  let selected = new Set();
+
+  /*
+    Regla:
+    - Siempre tomamos primero TODOS los checkboxes que estén marcados en el panel.
+    - Si hay búsqueda escrita, además agregamos los resultados visibles.
+    - Así no se pierden los ID seleccionados antes de escribir/buscar otro.
+  */
+  optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+    if (opt.checked) {
+      selected.add(opt.dataset.value);
+    }
+  });
+
+  if (addVisibleSearch && query) {
     optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-      if(opt.checked) {
+      const row = opt.closest('[data-option-label]');
+      const visible = row && row.style.display !== 'none';
+
+      if (visible) {
         selected.add(opt.dataset.value);
       }
     });
-
-    const total = new Set(getExcelGlobal()[currentKey] || []);
-
-    if(selected.size === 0 || selected.size === total.size){
-      delete activeFilters[currentKey];
-    }else{
-      activeFilters[currentKey] = selected;
-    }
-
-    saveFilters();
-    updateHeaderStates();
-
-    panel.classList.add('hidden');
-
-    await reloadWithParams(buildParams(true));
   }
 
-  
-  function bindHeaders(){
+  if(selected.size === 0 || selected.size === total.size){
+    delete activeFilters[currentKey];
+  }else{
+    activeFilters[currentKey] = selected;
+  }
+
+  saveFilters();
+  updateHeaderStates();
+
+  panel.classList.add('hidden');
+
+  await reloadWithParams(buildParams(true));
+}
+
+function bindHeaders(){
     zona.querySelectorAll('th[data-excel-col] .excel-header-btn').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
@@ -1243,81 +1260,48 @@ searchInput.addEventListener('input', () => {
     filterOptionList(searchInput.value);
   });
 
+async function aplicarDesdePanel(){
+  if (currentKey == null) return;
+
+  const query = normSearch(searchInput.value);
+
+  if (query) {
+    const visibles = Array.from(optionsBox.querySelectorAll('.excel-opt')).filter(opt => {
+      const row = opt.closest('[data-option-label]');
+      return row && row.style.display !== 'none';
+    });
+
+    if (!visibles.length) {
+      return;
+    }
+
+    await aplicarFiltroActual({ addVisibleSearch: true });
+    return;
+  }
+
+  await aplicarFiltroActual();
+}
+
 searchInput.addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter') return;
 
   e.preventDefault();
   e.stopPropagation();
 
-  if (currentKey == null) return;
+  await aplicarDesdePanel();
+});
 
-  const query = normSearch(searchInput.value);
+panel.addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
 
-  if (query) {
-    let visibles = 0;
+  e.preventDefault();
+  e.stopPropagation();
 
-    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-      const row = opt.closest('[data-option-label]');
-      const visible = row && row.style.display !== 'none';
-
-      opt.checked = visible;
-
-      if (visible) {
-        visibles++;
-      }
-    });
-
-    if (visibles === 0) {
-      return;
-    }
-
-    const selectAll = document.getElementById('excel-select-all');
-    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
-    const checkedCount = opts.filter(o => o.checked).length;
-
-    if (selectAll) {
-      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
-      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
-    }
-  }
-
-  await aplicarFiltroActual();
+  await aplicarDesdePanel();
 });
 
 btnApply.addEventListener('click', async () => {
-  if (currentKey == null) return;
-
-  const query = normSearch(searchInput.value);
-
-  if (query) {
-    let visibles = 0;
-
-    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-      const row = opt.closest('[data-option-label]');
-      const visible = row && row.style.display !== 'none';
-
-      opt.checked = visible;
-
-      if (visible) {
-        visibles++;
-      }
-    });
-
-    if (visibles === 0) {
-      return;
-    }
-
-    const selectAll = document.getElementById('excel-select-all');
-    const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
-    const checkedCount = opts.filter(o => o.checked).length;
-
-    if (selectAll) {
-      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
-      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
-    }
-  }
-
-  await aplicarFiltroActual();
+  await aplicarDesdePanel();
 });
 
   btnClear.addEventListener('click', async () => {
