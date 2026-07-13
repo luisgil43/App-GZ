@@ -1204,28 +1204,70 @@
   const query = normSearch(searchInput.value);
   const total = new Set(getExcelGlobal()[currentKey] || []);
 
+  const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
+  const checkedNow = opts.filter(opt => opt.checked);
+
+  const hadActiveFilter =
+    activeFilters[currentKey] &&
+    activeFilters[currentKey].size > 0;
+
+  const allCurrentlyChecked =
+    opts.length > 0 &&
+    checkedNow.length === opts.length;
+
   let selected = new Set();
 
   /*
-    Regla:
-    - Siempre tomamos primero TODOS los checkboxes que estén marcados en el panel.
-    - Si hay búsqueda escrita, además agregamos los resultados visibles.
-    - Así no se pierden los ID seleccionados antes de escribir/buscar otro.
+    REGLAS:
+
+    1. Sin búsqueda:
+       usamos exactamente los checkbox seleccionados.
+
+    2. Con búsqueda + filtro previo existente:
+       conservamos todos los seleccionados anteriores
+       y agregamos los resultados visibles de la búsqueda.
+
+    3. Con búsqueda + SIN filtro previo:
+       - si todos están marcados por defecto, NO tomamos todos;
+         tomamos solamente los resultados visibles.
+       - si el usuario ya destildó/marcó manualmente algunos,
+         conservamos esos seleccionados y agregamos lo visible.
   */
-  optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
-    if (opt.checked) {
-      selected.add(opt.dataset.value);
-    }
-  });
 
   if (addVisibleSearch && query) {
-    optionsBox.querySelectorAll('.excel-opt').forEach(opt => {
+
+    if (hadActiveFilter) {
+      // Conserva el filtro múltiple que ya estaba aplicado
+      selected = new Set(activeFilters[currentKey]);
+
+      // También respeta cualquier cambio manual hecho en el panel actual
+      opts.forEach(opt => {
+        if (opt.checked) {
+          selected.add(opt.dataset.value);
+        }
+      });
+
+    } else if (!allCurrentlyChecked) {
+      // No había filtro previo, pero el usuario hizo selección manual
+      checkedNow.forEach(opt => {
+        selected.add(opt.dataset.value);
+      });
+    }
+
+    // Agregar los resultados visibles de la búsqueda actual
+    opts.forEach(opt => {
       const row = opt.closest('[data-option-label]');
       const visible = row && row.style.display !== 'none';
 
       if (visible) {
         selected.add(opt.dataset.value);
       }
+    });
+
+  } else {
+    // Sin texto de búsqueda: comportamiento normal por checkbox
+    checkedNow.forEach(opt => {
+      selected.add(opt.dataset.value);
     });
   }
 
