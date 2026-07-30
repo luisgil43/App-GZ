@@ -63,17 +63,33 @@ def _get_2fa_days_left():
     today = timezone.localdate()
     return (enforce_date - today).days
 
+
 def _user_requires_2fa(user) -> bool:
     """
-    En GZ: el 2FA se exige solo a usuarios administrativos (is_staff=True)
-    y que además tengan el 2FA activado.
+    Determina si el usuario debe completar la verificación 2FA al iniciar sesión.
+
+    Reglas:
+    - Antes de TWO_FACTOR_ENFORCE_DATE, no se solicita 2FA.
+    - Si no existe una fecha configurada, no se solicita 2FA.
+    - Solo se solicita a usuarios staff.
+    - El usuario debe tener el 2FA activado.
     """
-    # Si el usuario no tiene 2FA activado, no se exige
-    if not getattr(user, "two_factor_enabled", False):
+    enforce_date = _get_2fa_enforce_date()
+
+    # Sin fecha configurada, no exigir 2FA
+    if not enforce_date:
         return False
 
-    # Solo personal administrativo/staff
-    return bool(user.is_staff)
+    # Antes de la fecha establecida, no exigir 2FA
+    if timezone.localdate() < enforce_date:
+        return False
+
+    # Solo exigirlo a usuarios administrativos
+    if not user.is_staff:
+        return False
+
+    # Solo puede verificarse si el usuario ya tiene 2FA configurado
+    return bool(getattr(user, "two_factor_enabled", False))
 
 
 def _has_valid_trusted_device(request, user) -> bool:

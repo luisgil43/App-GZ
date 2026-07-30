@@ -5,10 +5,31 @@
 {% block title %}Mis Servicios Asignados{% endblock %}
 
 {% block content %}
-<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
-  <h2 class="text-2xl font-bold text-gray-800 mb-4">🛠️ Lista de Actividades Asignadas</h2>
+<div class="bg-slate-50 min-h-screen mt-3 -mx-3 sm:mx-0 px-3 py-4 sm:p-6">
 
-  <div class="overflow-x-auto">
+  <div class="bg-white border border-gray-200 shadow-sm rounded-2xl sm:rounded-3xl overflow-hidden">
+
+    <div class="px-4 py-5 sm:px-6 sm:py-6 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white">
+      <div class="flex items-center gap-3">
+
+        <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-blue-100 flex items-center justify-center text-2xl sm:text-3xl shrink-0">
+          🛠️
+        </div>
+
+        <div>
+          <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
+            Actividades asignadas
+          </h1>
+
+          <p class="text-sm text-gray-500 mt-1">
+            Revisa tus trabajos, abre la ubicación del sitio y gestiona las evidencias.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
     <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;">
       <thead class="bg-gray-100">
         <tr>
@@ -30,7 +51,66 @@
             {% with servicio=item.servicio monto=item.monto_str %}
             <tr class="border-t">
               <td class="p-2 font-mono whitespace-nowrap">DU{{ servicio.du }}</td>
-              <td class="p-2 whitespace-nowrap">{{ servicio.id_claro }}</td>
+              <td class="p-2 whitespace-nowrap">
+  <div class="inline-flex items-center justify-center gap-2">
+
+    <span class="font-semibold text-slate-800">
+      {{ servicio.id_claro }}
+    </span>
+
+    {% if item.tiene_ubicacion %}
+      <a
+        href="{{ item.maps_url }}"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Abrir ubicación del sitio en Google Maps"
+        aria-label="Abrir ubicación de {{ servicio.id_claro }} en Google Maps"
+        class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+               border border-blue-200 bg-blue-50 text-blue-700
+               hover:bg-blue-100 hover:border-blue-300
+               focus:outline-none focus:ring-2 focus:ring-blue-300
+               transition"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-4 h-4"
+          aria-hidden="true"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M11.54 22.351l.07.04.028.016a.75.75 0 00.724 0l.028-.015.071-.041a16.975 16.975 0 002.69-1.914c2.27-1.913 4.849-4.963 4.849-8.437a8 8 0 10-16 0c0 3.474 2.58 6.524 4.849 8.437a16.975 16.975 0 002.69 1.914zM12 14.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z"
+            clip-rule="evenodd"
+          />
+        </svg>
+      </a>
+
+    {% else %}
+      <span
+        title="Este sitio no tiene coordenadas registradas"
+        class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+               border border-gray-200 bg-gray-50 text-gray-300
+               cursor-not-allowed"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          class="w-4 h-4"
+          aria-hidden="true"
+        >
+          <path
+            fill-rule="evenodd"
+            d="M11.54 22.351l.07.04.028.016a.75.75 0 00.724 0l.028-.015.071-.041a16.975 16.975 0 002.69-1.914c2.27-1.913 4.849-4.963 4.849-8.437a8 8 0 10-16 0c0 3.474 2.58 6.524 4.849 8.437a16.975 16.975 0 002.69 1.914zM12 14.25a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z"
+            clip-rule="evenodd"
+          />
+        </svg>
+      </span>
+    {% endif %}
+
+  </div>
+</td>
               <td class="p-2 whitespace-nowrap">{{ servicio.region }}</td>
               <td class="p-2 whitespace-nowrap">{{ servicio.mes_produccion }}</td>
               <td class="p-2 whitespace-nowrap">{{ servicio.id_new }}</td>
@@ -178,7 +258,7 @@
     </table>
   </div>
 </div>
-
+</div>
 <script>
 /* === Conservar scroll en "Mis Servicios Asignados" === */
 (function () {

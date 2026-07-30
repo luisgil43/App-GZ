@@ -121,6 +121,170 @@ def _clonar_requisitos_a_asignacion(origen_asignacion, destino_asignacion):
             }
         )
 
+    def _calcular_resumen_saldos(movimientos_qs):
+        """
+        Calcula los indicadores financieros mostrados al usuario.
+
+        Reglas:
+        - Saldo disponible:
+          histórico acumulado de abonos aprobados menos gastos aprobados
+          por Finanzas.
+
+        - Rendido del mes:
+          gastos aprobados por Finanzas cuya fecha real del gasto pertenece
+          al mes actual.
+
+        - Pendiente del mes:
+          gastos del mes que todavía esperan aprobación del Supervisor,
+          PM o Finanzas.
+
+        - Rechazado del mes:
+          gastos del mes rechazados por Supervisor, PM o Finanzas.
+
+        - Abonos pendientes:
+          abonos que todavía esperan aceptación del usuario.
+
+        Para determinar el mes se usa fecha_transaccion.
+        Si fecha_transaccion está vacía, se utiliza fecha como respaldo.
+        """
+        hoy = timezone.localdate()
+        inicio_mes = hoy.replace(day=1)
+
+        if inicio_mes.month == 12:
+            inicio_mes_siguiente = inicio_mes.replace(
+                year=inicio_mes.year + 1,
+                month=1,
+            )
+        else:
+            inicio_mes_siguiente = inicio_mes.replace(
+                month=inicio_mes.month + 1,
+            )
+
+        meses_es = {
+            1: "enero",
+            2: "febrero",
+            3: "marzo",
+            4: "abril",
+            5: "mayo",
+            6: "junio",
+            7: "julio",
+            8: "agosto",
+            9: "septiembre",
+            10: "octubre",
+            11: "noviembre",
+            12: "diciembre",
+        }
+
+        resumen_mes = f"{meses_es[inicio_mes.month].capitalize()} " f"{inicio_mes.year}"
+
+        # Utiliza la fecha real del gasto.
+        # Para registros antiguos sin fecha_transaccion, usa fecha.
+        filtro_mes_actual = Q(
+            fecha_transaccion__gte=inicio_mes,
+            fecha_transaccion__lt=inicio_mes_siguiente,
+        ) | Q(
+            fecha_transaccion__isnull=True,
+            fecha__date__gte=inicio_mes,
+            fecha__date__lt=inicio_mes_siguiente,
+        )
+
+        gastos = movimientos_qs.exclude(tipo__categoria="abono")
+        abonos = movimientos_qs.filter(tipo__categoria="abono")
+
+        # ========================================================
+        # Saldo histórico actualmente disponible
+        # ========================================================
+
+        total_abonos_aprobados = (
+            abonos.filter(status="aprobado_abono_usuario").aggregate(
+                total=Sum("abonos")
+            )["total"]
+            or 0
+        )
+
+        total_gastos_aprobados = (
+            gastos.filter(status="aprobado_finanzas").aggregate(total=Sum("cargos"))[
+                "total"
+            ]
+            or 0
+        )
+
+        saldo_disponible = total_abonos_aprobados - total_gastos_aprobados
+
+        # ========================================================
+        # Rendiciones del mes aprobadas por Finanzas
+        # ========================================================
+
+        saldo_rendido_mes = (
+            gastos.filter(
+                filtro_mes_actual,
+                status="aprobado_finanzas",
+            ).aggregate(
+                total=Sum("cargos")
+            )["total"]
+            or 0
+        )
+
+        # ========================================================
+        # Rendiciones del mes pendientes de aprobación
+        # ========================================================
+
+        estados_pendientes = [
+            "pendiente_supervisor",
+            "aprobado_supervisor",
+            "aprobado_pm",
+        ]
+
+        saldo_pendiente_mes = (
+            gastos.filter(
+                filtro_mes_actual,
+                status__in=estados_pendientes,
+            ).aggregate(
+                total=Sum("cargos")
+            )["total"]
+            or 0
+        )
+
+        # ========================================================
+        # Rendiciones del mes rechazadas
+        # ========================================================
+
+        estados_rechazados = [
+            "rechazado_supervisor",
+            "rechazado_pm",
+            "rechazado_finanzas",
+        ]
+
+        saldo_rechazado_mes = (
+            gastos.filter(
+                filtro_mes_actual,
+                status__in=estados_rechazados,
+            ).aggregate(
+                total=Sum("cargos")
+            )["total"]
+            or 0
+        )
+
+        # ========================================================
+        # Abonos que el usuario todavía no ha aceptado
+        # ========================================================
+
+        abonos_pendientes = (
+            abonos.filter(status="pendiente_abono_usuario").aggregate(
+                total=Sum("abonos")
+            )["total"]
+            or 0
+        )
+
+        return {
+            "saldo_disponible": saldo_disponible,
+            "saldo_rendido_mes": saldo_rendido_mes,
+            "saldo_pendiente_mes": saldo_pendiente_mes,
+            "saldo_rechazado_mes": saldo_rechazado_mes,
+            "abonos_pendientes": abonos_pendientes,
+            "resumen_mes": resumen_mes,
+        }
+
 
 def _sincronizar_asignaciones_sesion(servicio, tecnicos_actuales_ids, reset_para_ids=None):
     """
@@ -2378,38 +2542,135 @@ def exportar_servicios_supervisor(request):
 
 
 @login_required
-@rol_requerido('usuario')
+@rol_requerido("usuario")
 def mis_servicios_tecnico(request):
     usuario = request.user
 
-    # Estados de ajustes que NO deben aparecer aquí
-    AJUSTES_SET = {'ajuste_bono', 'ajuste_adelanto', 'ajuste_descuento'}
+    # Estados de ajustes que NO deben aparecer aquí.
+    AJUSTES_SET = {
+        "ajuste_bono",
+        "ajuste_adelanto",
+        "ajuste_descuento",
+    }
 
     estado_prioridad = Case(
-        When(estado='en_progreso', then=Value(1)),
-        When(estado='finalizado_trabajador', then=Value(2)),
-        When(estado='asignado', then=Value(3)),
+        When(estado="en_progreso", then=Value(1)),
+        When(estado="finalizado_trabajador", then=Value(2)),
+        When(estado="asignado", then=Value(3)),
         default=Value(4),
-        output_field=IntegerField()
+        output_field=IntegerField(),
     )
 
-    servicios = (
-        ServicioCotizado.objects
-        .filter(trabajadores_asignados=usuario)
-        # Oculta cotizados, aprobados por supervisor y TODOS los ajustes
-        .exclude(estado__in=['cotizado', 'aprobado_supervisor'] + list(AJUSTES_SET))
+    servicios = list(
+        ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
+        .exclude(
+            estado__in=[
+                "cotizado",
+                "aprobado_supervisor",
+            ]
+            + list(AJUSTES_SET)
+        )
+        .prefetch_related("trabajadores_asignados")
         .annotate(prioridad=estado_prioridad)
-        .order_by('prioridad', '-du')
+        .order_by("prioridad", "-du")
     )
+
+    # ============================================================
+    # Buscar en una sola consulta los sitios relacionados
+    # ============================================================
+
+    ids_claro = {
+        str(servicio.id_claro).strip() for servicio in servicios if servicio.id_claro
+    }
+
+    sitios_por_id_claro = {
+        str(sitio.id_claro).strip(): sitio
+        for sitio in SitioMovil.objects.filter(id_claro__in=ids_claro)
+    }
+
+    def _obtener_valor_coordenada(objeto, nombres_posibles):
+        """
+        Busca una coordenada considerando varios nombres de campo.
+
+        Esto permite mantener compatibilidad si en SitioMovil el campo
+        se llama, por ejemplo:
+        - latitud / longitud
+        - latitude / longitude
+        - lat / lng
+        """
+        if not objeto:
+            return None
+
+        for nombre in nombres_posibles:
+            valor = getattr(objeto, nombre, None)
+
+            if valor not in (None, ""):
+                return valor
+
+        return None
+
+    def _normalizar_coordenada(valor):
+        """
+        Convierte la coordenada a texto compatible con Google Maps.
+
+        También reemplaza coma decimal por punto:
+            -33,4489  ->  -33.4489
+        """
+        if valor in (None, ""):
+            return None
+
+        texto = str(valor).strip().replace(",", ".")
+
+        try:
+            return str(float(texto))
+        except (TypeError, ValueError):
+            return None
+
+    def _construir_google_maps_url(sitio):
+        """
+        Construye una URL directa de Google Maps usando latitud y longitud.
+
+        Retorna None cuando el sitio no tiene coordenadas válidas.
+        """
+        latitud = _obtener_valor_coordenada(
+            sitio,
+            [
+                "latitud",
+                "latitude",
+                "lat",
+                "coordenada_latitud",
+            ],
+        )
+
+        longitud = _obtener_valor_coordenada(
+            sitio,
+            [
+                "longitud",
+                "longitude",
+                "lng",
+                "lon",
+                "coordenada_longitud",
+            ],
+        )
+
+        latitud = _normalizar_coordenada(latitud)
+        longitud = _normalizar_coordenada(longitud)
+
+        if not latitud or not longitud:
+            return None
+
+        return (
+            "https://www.google.com/maps/search/" f"?api=1&query={latitud},{longitud}"
+        )
 
     servicios_info = []
+
     for servicio in servicios:
-        # ===== Monto MMOO por técnico con decimales =====
-        monto_total = (
-            servicio.monto_mmoo
-            or servicio.monto_cotizado
-            or Decimal("0")
-        )
+        # ========================================================
+        # Monto MMOO por técnico con decimales
+        # ========================================================
+
+        monto_total = servicio.monto_mmoo or servicio.monto_cotizado or Decimal("0")
 
         if not isinstance(monto_total, Decimal):
             try:
@@ -2427,35 +2688,55 @@ def mis_servicios_tecnico(request):
         except Exception:
             monto_tecnico = Decimal("0.00")
 
-        # string para el template (ej: "1.50")
         monto_str = f"{monto_tecnico:.2f}"
-        # ===============================================
+
+        # ========================================================
+        # Asignación individual del técnico
+        # ========================================================
 
         sesion = _get_or_create_sesion(servicio)
-        a = sesion.asignaciones.filter(tecnico=usuario).first()
-        if not a:
-            # si entro por primera vez, me creo mi asignación en "asignado"
-            a = SesionFotoTecnico.objects.create(
-                sesion=sesion, tecnico=usuario, estado='asignado'
+
+        asignacion = sesion.asignaciones.filter(tecnico=usuario).first()
+
+        if not asignacion:
+            asignacion = SesionFotoTecnico.objects.create(
+                sesion=sesion,
+                tecnico=usuario,
+                estado="asignado",
             )
 
-        # yo acepté ⇢ mi asignación en_proceso
-        yo_acepte = (a.estado == 'en_proceso')
-        # puedo aceptar ⇢ mi asignación aún está en "asignado"
-        puedo_aceptar = (a.estado == 'asignado')
+        # Yo acepté: mi asignación está en proceso.
+        yo_acepte = asignacion.estado == "en_proceso"
 
-        # 🔧 ARREGLO DE CONSISTENCIA:
-        # Si YO ya acepté pero el servicio sigue en 'asignado',
-        # lo promovemos a 'en_progreso' y marcamos tecnico_aceptado si falta.
-        if yo_acepte and servicio.estado == 'asignado':
-            servicio.estado = 'en_progreso'
+        # Puedo aceptar: mi asignación aún está asignada.
+        puedo_aceptar = asignacion.estado == "asignado"
+
+        # ========================================================
+        # Corrección de consistencia
+        # ========================================================
+
+        if yo_acepte and servicio.estado == "asignado":
+            servicio.estado = "en_progreso"
+
             if not servicio.tecnico_aceptado_id:
                 servicio.tecnico_aceptado = usuario
-            servicio.save(update_fields=['estado', 'tecnico_aceptado'])
 
-        # Solo contamos aceptados / total entre los técnicos actualmente asignados
+            servicio.save(
+                update_fields=[
+                    "estado",
+                    "tecnico_aceptado",
+                ]
+            )
+
+        # ========================================================
+        # Conteo de aceptaciones
+        # ========================================================
+
         assigned_ids = list(
-            servicio.trabajadores_asignados.values_list("id", flat=True)
+            servicio.trabajadores_asignados.values_list(
+                "id",
+                flat=True,
+            )
         )
 
         if assigned_ids:
@@ -2463,26 +2744,50 @@ def mis_servicios_tecnico(request):
                 aceptado_en__isnull=False,
                 tecnico_id__in=assigned_ids,
             ).count()
+
             total = sesion.asignaciones.filter(
                 tecnico_id__in=assigned_ids,
             ).count()
+
         else:
             aceptados = 0
             total = 0
 
-        servicios_info.append({
-            'servicio': servicio,
-            'monto_tecnico': monto_tecnico,   # por si lo quieres usar después
-            'monto_str': monto_str,           # 👈 este es el que usa tu template
-            'yo_acepte': yo_acepte,
-            'puedo_aceptar': puedo_aceptar,
-            'aceptados': aceptados,
-            'total': total,
-        })
+        # ========================================================
+        # Ubicación del sitio
+        # ========================================================
 
-    return render(request, 'operaciones/mis_servicios_tecnico.html', {
-        'servicios_info': servicios_info
-    })
+        id_claro_normalizado = (
+            str(servicio.id_claro).strip() if servicio.id_claro else ""
+        )
+
+        sitio = sitios_por_id_claro.get(id_claro_normalizado)
+
+        maps_url = _construir_google_maps_url(sitio)
+
+        servicios_info.append(
+            {
+                "servicio": servicio,
+                "monto_tecnico": monto_tecnico,
+                "monto_str": monto_str,
+                "yo_acepte": yo_acepte,
+                "puedo_aceptar": puedo_aceptar,
+                "aceptados": aceptados,
+                "total": total,
+                # Nuevos valores para el template.
+                "sitio": sitio,
+                "maps_url": maps_url,
+                "tiene_ubicacion": bool(maps_url),
+            }
+        )
+
+    return render(
+        request,
+        "operaciones/mis_servicios_tecnico.html",
+        {
+            "servicios_info": servicios_info,
+        },
+    )
 
 
 @login_required
@@ -2901,6 +3206,7 @@ def _confirmar_km_en_flota_si_aplica(movimiento, request_user=None):
 # Usuario
 # ==========================================================
 
+
 @login_required
 def mis_rendiciones(request):
     from datetime import datetime
@@ -2908,31 +3214,331 @@ def mis_rendiciones(request):
     from django.core.exceptions import ValidationError
     from django.core.paginator import Paginator
     from django.db import transaction
-    from django.db.models import Sum
+    from django.db.models import Q, Sum
     from django.utils import timezone
 
     from flota.models import VehicleService
 
     user = request.user
 
+    def _calcular_resumen_saldos(movimientos_qs):
+        """
+        Calcula los indicadores financieros mostrados al usuario.
+
+        Todos los movimientos recibidos pertenecen exclusivamente
+        al usuario autenticado porque el queryset se construye con:
+
+            CartolaMovimiento.objects.filter(usuario=user)
+
+        Indicadores:
+
+        - saldo_disponible:
+          histórico de abonos aprobados menos rendiciones aprobadas
+          por Finanzas.
+
+        - saldo_rendido_mes:
+          rendiciones del mes actual aprobadas por Finanzas.
+
+        - saldo_pendiente_mes:
+          rendiciones del mes actual que siguen en aprobación.
+
+        - saldo_pendiente_anterior:
+          rendiciones de meses anteriores que todavía siguen
+          pendientes de aprobación.
+
+        - saldo_rechazado_mes:
+          rendiciones del mes actual rechazadas.
+
+        - saldo_rechazado_anterior:
+          rendiciones rechazadas de meses anteriores que todavía
+          no han sido corregidas.
+
+        - abonos_pendientes:
+          abonos pendientes de aceptación por parte del usuario.
+
+        Para determinar el mes se utiliza fecha_transaccion.
+        En registros antiguos sin fecha_transaccion se utiliza fecha.
+        """
+        hoy = timezone.localdate()
+        inicio_mes = hoy.replace(day=1)
+
+        if inicio_mes.month == 12:
+            inicio_mes_siguiente = inicio_mes.replace(
+                year=inicio_mes.year + 1,
+                month=1,
+            )
+        else:
+            inicio_mes_siguiente = inicio_mes.replace(
+                month=inicio_mes.month + 1,
+            )
+
+        nombres_meses = {
+            1: "Enero",
+            2: "Febrero",
+            3: "Marzo",
+            4: "Abril",
+            5: "Mayo",
+            6: "Junio",
+            7: "Julio",
+            8: "Agosto",
+            9: "Septiembre",
+            10: "Octubre",
+            11: "Noviembre",
+            12: "Diciembre",
+        }
+
+        resumen_mes = f"{nombres_meses[inicio_mes.month]} " f"{inicio_mes.year}"
+
+        # ========================================================
+        # Filtros de fecha
+        # ========================================================
+
+        # Mes actual usando fecha real del gasto.
+        # Para registros antiguos sin fecha_transaccion se usa fecha.
+        filtro_mes_actual = Q(
+            fecha_transaccion__gte=inicio_mes,
+            fecha_transaccion__lt=inicio_mes_siguiente,
+        ) | Q(
+            fecha_transaccion__isnull=True,
+            fecha__date__gte=inicio_mes,
+            fecha__date__lt=inicio_mes_siguiente,
+        )
+
+        # Movimientos pertenecientes a meses anteriores.
+        filtro_meses_anteriores = Q(
+            fecha_transaccion__lt=inicio_mes,
+        ) | Q(
+            fecha_transaccion__isnull=True,
+            fecha__date__lt=inicio_mes,
+        )
+
+        # ========================================================
+        # Separar abonos y rendiciones
+        # ========================================================
+
+        abonos = movimientos_qs.filter(
+            tipo__categoria="abono",
+        )
+
+        rendiciones = movimientos_qs.exclude(
+            tipo__categoria="abono",
+        )
+
+        estados_pendientes = [
+            "pendiente_supervisor",
+            "aprobado_supervisor",
+            "aprobado_pm",
+        ]
+
+        estados_rechazados = [
+            "rechazado_supervisor",
+            "rechazado_pm",
+            "rechazado_finanzas",
+        ]
+
+        # ========================================================
+        # Saldo disponible histórico
+        # ========================================================
+
+        total_abonos_aprobados = (
+            abonos.filter(
+                status="aprobado_abono_usuario",
+            ).aggregate(
+                total=Sum("abonos"),
+            )["total"]
+            or 0
+        )
+
+        total_rendiciones_aprobadas = (
+            rendiciones.filter(
+                status="aprobado_finanzas",
+            ).aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        saldo_disponible = total_abonos_aprobados - total_rendiciones_aprobadas
+
+        # ========================================================
+        # Rendiciones aprobadas durante el mes actual
+        # ========================================================
+
+        rendidas_mes_qs = rendiciones.filter(
+            filtro_mes_actual,
+            status="aprobado_finanzas",
+        )
+
+        saldo_rendido_mes = (
+            rendidas_mes_qs.aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_rendido_mes = rendidas_mes_qs.count()
+
+        # ========================================================
+        # Rendiciones pendientes del mes actual
+        # ========================================================
+
+        pendientes_mes_qs = rendiciones.filter(
+            filtro_mes_actual,
+            status__in=estados_pendientes,
+        )
+
+        saldo_pendiente_mes = (
+            pendientes_mes_qs.aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_pendiente_mes = pendientes_mes_qs.count()
+
+        # ========================================================
+        # Rendiciones pendientes de meses anteriores
+        # ========================================================
+
+        pendientes_anteriores_qs = rendiciones.filter(
+            filtro_meses_anteriores,
+            status__in=estados_pendientes,
+        )
+
+        saldo_pendiente_anterior = (
+            pendientes_anteriores_qs.aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_pendiente_anterior = pendientes_anteriores_qs.count()
+
+        # Total de rendiciones que todavía siguen pendientes,
+        # sin importar el mes al que pertenecen.
+        saldo_pendiente_total = saldo_pendiente_mes + saldo_pendiente_anterior
+
+        cantidad_pendiente_total = cantidad_pendiente_mes + cantidad_pendiente_anterior
+
+        # ========================================================
+        # Rendiciones rechazadas durante el mes actual
+        # ========================================================
+
+        rechazadas_mes_qs = rendiciones.filter(
+            filtro_mes_actual,
+            status__in=estados_rechazados,
+        )
+
+        saldo_rechazado_mes = (
+            rechazadas_mes_qs.aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_rechazado_mes = rechazadas_mes_qs.count()
+
+        # ========================================================
+        # Rendiciones rechazadas de meses anteriores
+        # ========================================================
+
+        rechazadas_anteriores_qs = rendiciones.filter(
+            filtro_meses_anteriores,
+            status__in=estados_rechazados,
+        )
+
+        saldo_rechazado_anterior = (
+            rechazadas_anteriores_qs.aggregate(
+                total=Sum("cargos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_rechazado_anterior = rechazadas_anteriores_qs.count()
+
+        # Total de rendiciones que permanecen rechazadas,
+        # sin importar el mes al que pertenecen.
+        saldo_rechazado_total = saldo_rechazado_mes + saldo_rechazado_anterior
+
+        cantidad_rechazado_total = cantidad_rechazado_mes + cantidad_rechazado_anterior
+
+        # ========================================================
+        # Abonos pendientes de aceptación
+        # ========================================================
+
+        abonos_pendientes_qs = abonos.filter(
+            status="pendiente_abono_usuario",
+        )
+
+        abonos_pendientes = (
+            abonos_pendientes_qs.aggregate(
+                total=Sum("abonos"),
+            )["total"]
+            or 0
+        )
+
+        cantidad_abonos_pendientes = abonos_pendientes_qs.count()
+
+        return {
+            "saldo_disponible": saldo_disponible,
+            "saldo_rendido_mes": saldo_rendido_mes,
+            "cantidad_rendido_mes": cantidad_rendido_mes,
+            "saldo_pendiente_mes": saldo_pendiente_mes,
+            "cantidad_pendiente_mes": cantidad_pendiente_mes,
+            "saldo_pendiente_anterior": saldo_pendiente_anterior,
+            "cantidad_pendiente_anterior": cantidad_pendiente_anterior,
+            "saldo_pendiente_total": saldo_pendiente_total,
+            "cantidad_pendiente_total": cantidad_pendiente_total,
+            "saldo_rechazado_mes": saldo_rechazado_mes,
+            "cantidad_rechazado_mes": cantidad_rechazado_mes,
+            "saldo_rechazado_anterior": saldo_rechazado_anterior,
+            "cantidad_rechazado_anterior": cantidad_rechazado_anterior,
+            "saldo_rechazado_total": saldo_rechazado_total,
+            "cantidad_rechazado_total": cantidad_rechazado_total,
+            "abonos_pendientes": abonos_pendientes,
+            "cantidad_abonos_pendientes": cantidad_abonos_pendientes,
+            "resumen_mes": resumen_mes,
+        }
+
     def _map_legacy_service_type(tipo_servicio_obj):
         """
-        Mapea el tipo configurable de flota al choice legacy de VehicleService.service_type.
-        (VehicleService.service_type sigue siendo obligatorio)
+        Mapea el tipo configurable de flota al choice legacy de
+        VehicleService.service_type.
+
+        VehicleService.service_type continúa siendo obligatorio.
         """
         if not tipo_servicio_obj:
             return "otro"
 
-        n = (getattr(tipo_servicio_obj, "name", "") or "").strip().lower()
+        n = (
+            (
+                getattr(
+                    tipo_servicio_obj,
+                    "name",
+                    "",
+                )
+                or ""
+            )
+            .strip()
+            .lower()
+        )
 
         if "combustible" in n:
             return "combustible"
+
         if "aceite" in n:
             return "aceite"
+
         if "neumatic" in n or "neumát" in n:
             return "neumaticos"
-        if "revision tecnica" in n or "revisión técnica" in n or "revision_tecnica" in n:
+
+        if (
+            "revision tecnica" in n
+            or "revisión técnica" in n
+            or "revision_tecnica" in n
+        ):
             return "revision_tecnica"
+
         if "permiso" in n and "circul" in n:
             return "permiso_circulacion"
 
@@ -2940,100 +3546,143 @@ def mis_rendiciones(request):
 
     def _es_tipo_servicios(tipo_obj):
         """
-        Verifica si el tipo de movimiento corresponde a 'Servicios'
-        usando SOLO el nombre del TipoGasto.
+        Verifica si el tipo de movimiento corresponde a Servicios
+        utilizando únicamente el nombre del TipoGasto.
         """
         if not tipo_obj:
             return False
 
-        nombre = (getattr(tipo_obj, "nombre", None) or getattr(tipo_obj, "name", None) or "").strip().lower()
+        nombre = (
+            (
+                getattr(
+                    tipo_obj,
+                    "nombre",
+                    None,
+                )
+                or getattr(
+                    tipo_obj,
+                    "name",
+                    None,
+                )
+                or ""
+            )
+            .strip()
+            .lower()
+        )
+
         return "servicio" in nombre
 
-    def _validar_no_futuro(fecha_tx, hora_servicio=None, es_servicio=False):
+    def _validar_no_futuro(
+        fecha_tx,
+        hora_servicio=None,
+        es_servicio=False,
+    ):
         """
         Valida que:
-        - fecha_transaccion no sea futura
-        - si es servicio (flota), fecha+hora del servicio no sea futura
-        Devuelve: (ok: bool, mensaje: str|None)
+        - fecha_transaccion no sea futura.
+        - Si corresponde a flota, fecha y hora no sean futuras.
+
+        Devuelve:
+            (ok: bool, mensaje: str | None)
         """
         if not fecha_tx:
             return True, None
 
         now_local = timezone.localtime(timezone.now())
+
         hoy_local = now_local.date()
 
         if fecha_tx > hoy_local:
-            return False, "No puedes registrar una rendición con fecha futura."
+            return (
+                False,
+                "No puedes registrar una rendición con fecha futura.",
+            )
 
         if es_servicio and hora_servicio:
             try:
-                dt_servicio = datetime.combine(fecha_tx, hora_servicio)
+                dt_servicio = datetime.combine(
+                    fecha_tx,
+                    hora_servicio,
+                )
+
                 tz = timezone.get_current_timezone()
-                dt_servicio = timezone.make_aware(dt_servicio, tz) if timezone.is_naive(dt_servicio) else dt_servicio
+
+                if timezone.is_naive(dt_servicio):
+                    dt_servicio = timezone.make_aware(
+                        dt_servicio,
+                        tz,
+                    )
 
                 if dt_servicio > now_local:
-                    return False, "No puedes registrar una rendición con una hora de servicio futura."
+                    return (
+                        False,
+                        "No puedes registrar una rendición con una "
+                        "hora de servicio futura.",
+                    )
+
             except Exception:
                 pass
 
         return True, None
 
     def _render_con_error(form_obj):
+        """
+        Renderiza nuevamente la pantalla cuando el formulario tiene
+        un error, manteniendo tabla, paginación y resumen de saldos.
+        """
         movimientos_error = (
-            CartolaMovimiento.objects
-            .filter(usuario=user)
-            .select_related(
-                "proyecto", "tipo",
-                "vehiculo_flota", "tipo_servicio_flota", "servicio_flota"
+            CartolaMovimiento.objects.filter(
+                usuario=user,
             )
-            .order_by('-fecha')
+            .select_related(
+                "proyecto",
+                "tipo",
+                "vehiculo_flota",
+                "tipo_servicio_flota",
+                "servicio_flota",
+            )
+            .order_by("-fecha")
         )
 
-        paginator_error = Paginator(movimientos_error, 10)
+        paginator_error = Paginator(
+            movimientos_error,
+            10,
+        )
+
         pagina_error = paginator_error.get_page(1)
 
-        saldo_disponible_error = (
-            (movimientos_error.filter(tipo__categoria="abono", status="aprobado_abono_usuario")
-             .aggregate(total=Sum('abonos'))['total'] or 0)
-            -
-            (movimientos_error.exclude(tipo__categoria="abono")
-             .filter(status="aprobado_finanzas")
-             .aggregate(total=Sum('cargos'))['total'] or 0)
+        resumen_saldos_error = _calcular_resumen_saldos(movimientos_error)
+
+        return render(
+            request,
+            "operaciones/mis_rendiciones.html",
+            {
+                "pagina": pagina_error,
+                "cantidad": "10",
+                "form": form_obj,
+                **resumen_saldos_error,
+            },
         )
 
-        saldo_pendiente_error = (
-            movimientos_error.filter(tipo__categoria="abono")
-            .exclude(status="aprobado_abono_usuario")
-            .aggregate(total=Sum('abonos'))['total'] or 0
+    # ============================================================
+    # Crear nueva rendición
+    # ============================================================
+
+    if request.method == "POST":
+        form = MovimientoUsuarioForm(
+            request.POST,
+            request.FILES,
+            user=request.user,
         )
-
-        saldo_rendido_error = (
-            movimientos_error.exclude(tipo__categoria="abono")
-            .exclude(status="aprobado_finanzas")
-            .aggregate(total=Sum('cargos'))['total'] or 0
-        )
-
-        return render(request, 'operaciones/mis_rendiciones.html', {
-            'pagina': pagina_error,
-            'cantidad': '10',
-            'saldo_disponible': saldo_disponible_error,
-            'saldo_pendiente': saldo_pendiente_error,
-            'saldo_rendido': saldo_rendido_error,
-            'form': form_obj,
-        })
-
-    # --- Crear nueva rendición ---
-    if request.method == 'POST':
-        # ✅ IMPORTANTE: pasar POST + FILES + user
-        form = MovimientoUsuarioForm(request.POST, request.FILES, user=request.user)
 
         if form.is_valid():
             cd = form.cleaned_data
 
             last_mov = (
-                CartolaMovimiento.objects
-                .filter(usuario=user)
-                .order_by('-id')
+                CartolaMovimiento.objects.filter(
+                    usuario=user,
+                )
+                .order_by("-id")
                 .first()
             )
 
@@ -3041,83 +3690,161 @@ def mis_rendiciones(request):
                 return (value or "").strip()
 
             is_duplicate = False
+
             if last_mov:
                 is_duplicate = (
-                    getattr(last_mov, "proyecto_id", None) == getattr(cd.get("proyecto"), "id", None) and
-                    getattr(last_mov, "tipo_id", None) == getattr(cd.get("tipo"), "id", None) and
-                    getattr(last_mov, "numero_doc", None) == cd.get("numero_doc") and
-                    getattr(last_mov, "cargos", None) == cd.get("cargos") and
-                    norm(getattr(last_mov, "rut_factura", "")) == norm(cd.get("rut_factura")) and
-                    norm(getattr(last_mov, "observaciones", "")) == norm(cd.get("observaciones")) and
-                    getattr(last_mov, "fecha_transaccion", None) == cd.get("fecha_transaccion")
+                    getattr(
+                        last_mov,
+                        "proyecto_id",
+                        None,
+                    )
+                    == getattr(
+                        cd.get("proyecto"),
+                        "id",
+                        None,
+                    )
+                    and getattr(
+                        last_mov,
+                        "tipo_id",
+                        None,
+                    )
+                    == getattr(
+                        cd.get("tipo"),
+                        "id",
+                        None,
+                    )
+                    and getattr(
+                        last_mov,
+                        "numero_doc",
+                        None,
+                    )
+                    == cd.get("numero_doc")
+                    and getattr(
+                        last_mov,
+                        "cargos",
+                        None,
+                    )
+                    == cd.get("cargos")
+                    and norm(
+                        getattr(
+                            last_mov,
+                            "rut_factura",
+                            "",
+                        )
+                    )
+                    == norm(cd.get("rut_factura"))
+                    and norm(
+                        getattr(
+                            last_mov,
+                            "observaciones",
+                            "",
+                        )
+                    )
+                    == norm(cd.get("observaciones"))
+                    and getattr(
+                        last_mov,
+                        "fecha_transaccion",
+                        None,
+                    )
+                    == cd.get("fecha_transaccion")
                 )
 
             if is_duplicate:
                 messages.warning(
                     request,
-                    "Esta rendición ya fue registrada hace unos instantes. No se creó un duplicado."
+                    "Esta rendición ya fue registrada hace unos "
+                    "instantes. No se creó un duplicado.",
                 )
-                return redirect('operaciones:mis_rendiciones')
+
+                return redirect("operaciones:mis_rendiciones")
 
             try:
                 with transaction.atomic():
                     mov = form.save(commit=False)
                     mov.usuario = user
                     mov.fecha = timezone.now()
-                    mov.status = 'pendiente_supervisor'
+                    mov.status = "pendiente_supervisor"
                     mov.comprobante = cd.get("comprobante")
 
-                    # ✅ Validación de kilometraje no regresivo (campo antiguo, si existe)
+                    # Validación del kilometraje antiguo, si existe.
                     if _cartola_tiene_campo_km():
                         km_nuevo = _normalizar_km(cd.get("kilometraje"))
+
                         if km_nuevo is not None:
                             ok_km, msg_km = _validar_km_no_regresivo(
                                 usuario=user,
                                 fecha_transaccion=cd.get("fecha_transaccion"),
                                 km_nuevo=km_nuevo,
                             )
+
                             if not ok_km:
-                                form.add_error('kilometraje', msg_km)
+                                form.add_error(
+                                    "kilometraje",
+                                    msg_km,
+                                )
+
                                 return _render_con_error(form)
 
-                            setattr(mov, "kilometraje", km_nuevo)
+                            setattr(
+                                mov,
+                                "kilometraje",
+                                km_nuevo,
+                            )
 
                     tipo_mov = cd.get("tipo")
 
                     es_rendicion_flota = bool(
-                        _es_tipo_servicios(tipo_mov) and
-                        cd.get("vehiculo_flota") and
-                        cd.get("tipo_servicio_flota") and
-                        cd.get("fecha_servicio_flota") and
-                        (cd.get("hora_servicio_flota") is not None)
+                        _es_tipo_servicios(tipo_mov)
+                        and cd.get("vehiculo_flota")
+                        and cd.get("tipo_servicio_flota")
+                        and cd.get("fecha_servicio_flota")
+                        and (cd.get("hora_servicio_flota") is not None)
                     )
 
-                    # ✅ Validación fecha/hora no futura
+                    # Validación de fecha y hora futura.
                     ok_no_futuro, msg_no_futuro = _validar_no_futuro(
                         fecha_tx=cd.get("fecha_transaccion"),
                         hora_servicio=cd.get("hora_servicio_flota"),
                         es_servicio=es_rendicion_flota,
                     )
+
                     if not ok_no_futuro:
                         if es_rendicion_flota and cd.get("hora_servicio_flota"):
-                            form.add_error("hora_servicio_flota", msg_no_futuro)
+                            form.add_error(
+                                "hora_servicio_flota",
+                                msg_no_futuro,
+                            )
                         else:
-                            form.add_error("fecha_transaccion", msg_no_futuro)
+                            form.add_error(
+                                "fecha_transaccion",
+                                msg_no_futuro,
+                            )
+
                         raise ValidationError("Fecha/hora futura no permitida.")
 
-                    # ✅ Guardar rendición primero (para tener PK)
+                    # Guardar la rendición para obtener el PK.
                     mov.save()
 
-                    # ✅ Crear servicio en FLOTA automáticamente
+                    # Crear servicio de flota automáticamente.
                     if es_rendicion_flota:
                         vehiculo = cd.get("vehiculo_flota")
+
                         tipo_servicio_flota = cd.get("tipo_servicio_flota")
+
                         fecha_servicio = cd.get("fecha_servicio_flota")
+
                         hora_servicio = cd.get("hora_servicio_flota")
+
                         km_servicio = cd.get("kilometraje_servicio_flota")
+
                         monto_servicio = cd.get("cargos") or 0
 
-                        ok_flota_km, msg_flota_km, ultimo_ref, servicio_conflicto = _validar_km_servicio_flota_vs_ultimo(
+                        (
+                            ok_flota_km,
+                            msg_flota_km,
+                            ultimo_ref,
+                            servicio_conflicto,
+                        ) = _validar_km_servicio_flota_vs_ultimo(
                             vehicle_id=vehiculo.id,
                             fecha_servicio=fecha_servicio,
                             hora_servicio=hora_servicio,
@@ -3127,31 +3854,55 @@ def mis_rendiciones(request):
                         if not ok_flota_km:
                             try:
                                 rendicion_conflicto = (
-                                    CartolaMovimiento.objects
-                                    .filter(servicio_flota=servicio_conflicto)
-                                    .only("id", "status")
+                                    CartolaMovimiento.objects.filter(
+                                        servicio_flota=servicio_conflicto
+                                    )
+                                    .only(
+                                        "id",
+                                        "status",
+                                    )
                                     .first()
-                                ) if servicio_conflicto else None
+                                    if servicio_conflicto
+                                    else None
+                                )
+
                             except Exception:
                                 rendicion_conflicto = None
 
-                            if rendicion_conflicto and getattr(rendicion_conflicto, "status", None) in {
+                            estados_no_editables = {
                                 "aprobado_supervisor",
                                 "aprobado_finanzas",
                                 "aprobado_abono_usuario",
                                 "aprobado",
-                            }:
+                            }
+
+                            if (
+                                rendicion_conflicto
+                                and getattr(
+                                    rendicion_conflicto,
+                                    "status",
+                                    None,
+                                )
+                                in estados_no_editables
+                            ):
                                 form.add_error(
                                     "kilometraje_servicio_flota",
                                     (
-                                        f"{msg_flota_km} La rendición anterior ya fue aprobada y no se puede editar. "
-                                        f"Debes solicitar que la rechacen para corregirla."
-                                    )
+                                        f"{msg_flota_km} "
+                                        "La rendición anterior ya fue "
+                                        "aprobada y no se puede editar. "
+                                        "Debes solicitar que la rechacen "
+                                        "para corregirla."
+                                    ),
                                 )
                             else:
                                 form.add_error(
                                     "kilometraje_servicio_flota",
-                                    f"{msg_flota_km} Edita el registro anterior o modifica la hora del servicio."
+                                    (
+                                        f"{msg_flota_km} "
+                                        "Edita el registro anterior o "
+                                        "modifica la hora del servicio."
+                                    ),
                                 )
 
                             raise ValidationError("Kilometraje de flota inválido.")
@@ -3165,11 +3916,16 @@ def mis_rendiciones(request):
                             title=f"Rendición #{mov.pk}",
                             service_date=fecha_servicio,
                             service_time=hora_servicio,
-                            kilometraje_declarado=km_servicio if km_servicio not in (None, "") else None,
+                            kilometraje_declarado=(
+                                km_servicio if km_servicio not in (None, "") else None
+                            ),
                             monto=monto_servicio,
                             notes=(
-                                f"Creado desde rendición #{mov.pk} por {user.get_full_name() or user.username}. "
-                                f"Obs: {cd.get('observaciones') or ''}"
+                                f"Creado desde rendición "
+                                f"#{mov.pk} por "
+                                f"{user.get_full_name() or user.username}. "
+                                f"Obs: "
+                                f"{cd.get('observaciones') or ''}"
                             ).strip(),
                         )
 
@@ -3178,107 +3934,140 @@ def mis_rendiciones(request):
                         mov.tipo_servicio_flota = tipo_servicio_flota
                         mov.fecha_servicio_flota = fecha_servicio
                         mov.hora_servicio_flota = hora_servicio
-                        mov.kilometraje_servicio_flota = km_servicio if km_servicio not in (None, "") else None
-                        mov.tipo_servicio_flota_snapshot = getattr(tipo_servicio_flota, "name", None)
+                        mov.kilometraje_servicio_flota = (
+                            km_servicio if km_servicio not in (None, "") else None
+                        )
+                        mov.tipo_servicio_flota_snapshot = getattr(
+                            tipo_servicio_flota,
+                            "name",
+                            None,
+                        )
 
-                        mov.save(update_fields=[
-                            "servicio_flota",
-                            "vehiculo_flota",
-                            "tipo_servicio_flota",
-                            "fecha_servicio_flota",
-                            "hora_servicio_flota",
-                            "kilometraje_servicio_flota",
-                            "tipo_servicio_flota_snapshot",
-                        ])
+                        mov.save(
+                            update_fields=[
+                                "servicio_flota",
+                                "vehiculo_flota",
+                                "tipo_servicio_flota",
+                                "fecha_servicio_flota",
+                                "hora_servicio_flota",
+                                "kilometraje_servicio_flota",
+                                "tipo_servicio_flota_snapshot",
+                            ]
+                        )
 
-                    _registrar_km_en_flota_pendiente(mov, request_user=request.user)
+                    _registrar_km_en_flota_pendiente(
+                        mov,
+                        request_user=request.user,
+                    )
 
-                messages.success(request, "Rendición registrada correctamente.")
-                return redirect('operaciones:mis_rendiciones')
+                messages.success(
+                    request,
+                    "Rendición registrada correctamente.",
+                )
+
+                return redirect("operaciones:mis_rendiciones")
 
             except ValidationError as e:
                 try:
                     if hasattr(e, "message_dict"):
                         for field, errs in e.message_dict.items():
                             for err in errs:
-                                form.add_error(field if field in form.fields else None, str(err))
+                                form.add_error(
+                                    (field if field in form.fields else None),
+                                    str(err),
+                                )
                     else:
-                        if not form.non_field_errors() and not any(form.errors.values()):
-                            form.add_error(None, str(e))
+                        if not form.non_field_errors() and not any(
+                            form.errors.values()
+                        ):
+                            form.add_error(
+                                None,
+                                str(e),
+                            )
+
                 except Exception:
-                    form.add_error(None, str(e))
+                    form.add_error(
+                        None,
+                        str(e),
+                    )
 
                 return _render_con_error(form)
 
     else:
-        # ✅ IMPORTANTE: pasar user también en GET para filtrar vehículos asignados
+        # Pasar user en GET para filtrar vehículos asignados.
         form = MovimientoUsuarioForm(user=request.user)
 
-    # --- Filtros y Paginación ---
-    raw_cantidad = request.GET.get('cantidad', '10')
+    # ============================================================
+    # Paginación
+    # ============================================================
 
-    if raw_cantidad == 'todos':
+    raw_cantidad = request.GET.get(
+        "cantidad",
+        "10",
+    )
+
+    if raw_cantidad == "todos":
         per_page = 100
-        cantidad = '100'
+        cantidad = "100"
+
     else:
         try:
             per_page = int(raw_cantidad)
+
         except (TypeError, ValueError):
             per_page = 10
-            cantidad = '10'
+            cantidad = "10"
+
         else:
             if per_page < 1:
                 per_page = 10
-                cantidad = '10'
+                cantidad = "10"
+
             elif per_page > 100:
                 per_page = 100
-                cantidad = '100'
+                cantidad = "100"
+
             else:
                 cantidad = raw_cantidad
 
+    # Este filtro garantiza que cada usuario solo vea sus propios
+    # movimientos, saldos, pendientes y rechazos.
     movimientos = (
-        CartolaMovimiento.objects
-        .filter(usuario=user)
-        .select_related(
-            "proyecto", "tipo",
-            "vehiculo_flota", "tipo_servicio_flota", "servicio_flota"
+        CartolaMovimiento.objects.filter(
+            usuario=user,
         )
-        .order_by('-fecha')
+        .select_related(
+            "proyecto",
+            "tipo",
+            "vehiculo_flota",
+            "tipo_servicio_flota",
+            "servicio_flota",
+        )
+        .order_by("-fecha")
     )
 
-    paginator = Paginator(movimientos, per_page)
-    page_number = request.GET.get('page')
+    paginator = Paginator(
+        movimientos,
+        per_page,
+    )
+
+    page_number = request.GET.get("page")
+
     pagina = paginator.get_page(page_number)
 
-    saldo_disponible = (
-        (movimientos.filter(tipo__categoria="abono", status="aprobado_abono_usuario")
-         .aggregate(total=Sum('abonos'))['total'] or 0)
-        -
-        (movimientos.exclude(tipo__categoria="abono")
-         .filter(status="aprobado_finanzas")
-         .aggregate(total=Sum('cargos'))['total'] or 0)
+    resumen_saldos = _calcular_resumen_saldos(movimientos)
+
+    return render(
+        request,
+        "operaciones/mis_rendiciones.html",
+        {
+            "pagina": pagina,
+            "cantidad": cantidad,
+            "form": form,
+            **resumen_saldos,
+        },
     )
 
-    saldo_pendiente = (
-        movimientos.filter(tipo__categoria="abono")
-        .exclude(status="aprobado_abono_usuario")
-        .aggregate(total=Sum('abonos'))['total'] or 0
-    )
-
-    saldo_rendido = (
-        movimientos.exclude(tipo__categoria="abono")
-        .exclude(status="aprobado_finanzas")
-        .aggregate(total=Sum('cargos'))['total'] or 0
-    )
-
-    return render(request, 'operaciones/mis_rendiciones.html', {
-        'pagina': pagina,
-        'cantidad': cantidad,
-        'saldo_disponible': saldo_disponible,
-        'saldo_pendiente': saldo_pendiente,
-        'saldo_rendido': saldo_rendido,
-        'form': form,
-    })
 
 @login_required
 def aprobar_abono(request, pk):
@@ -3866,7 +4655,10 @@ def vista_rendiciones(request):
             )
 
         if es_pm:
-            q_roles |= Q(status__in=['aprobado_supervisor', 'rechazado_pm', 'aprobado_pm', 'aprobado_finanzas'])
+            q_roles |= (
+                Q(status="aprobado_supervisor")
+                & ~Q(tipo__categoria="abono")
+            )
 
         if es_facturacion:
             q_roles |= Q(status__in=['aprobado_pm', 'rechazado_finanzas', 'aprobado_finanzas'])
@@ -4351,69 +5143,744 @@ def exportar_rendiciones_pm(request):
 
 @login_required
 def exportar_mis_rendiciones(request):
+    """
+    Exporta exclusivamente las rendiciones y abonos del usuario autenticado.
+
+    El archivo incluye:
+    - una hoja de resumen con sus saldos;
+    - una hoja con el detalle de sus movimientos;
+    - estados pendientes;
+    - movimientos rechazados;
+    - motivo del rechazo.
+    """
+
     user = request.user
-    movimientos = CartolaMovimiento.objects.filter(usuario=user).order_by('-fecha')
 
-    response = HttpResponse(content_type='application/octet-stream')
-    response['Content-Disposition'] = 'attachment; filename="mis_rendiciones.xls"'
-    response['X-Content-Type-Options'] = 'nosniff'
+    # IMPORTANTE:
+    # La exportación queda limitada únicamente al usuario autenticado.
+    movimientos = list(
+        CartolaMovimiento.objects.filter(usuario=user)
+        .select_related(
+            "tipo",
+            "proyecto",
+            "vehiculo_flota",
+        )
+        .order_by("-fecha")
+    )
 
-    wb = xlwt.Workbook(encoding='utf-8')
-    ws = wb.add_sheet('Mis Rendiciones')
+    hoy = timezone.localdate()
+    anio_actual = hoy.year
+    mes_actual = hoy.month
 
-    header_style = xlwt.easyxf('font: bold on; align: horiz center')
-    date_style = xlwt.easyxf(num_format_str='DD-MM-YYYY')
+    estados_pendientes_gasto = {
+        "pendiente_supervisor",
+        "aprobado_supervisor",
+        "aprobado_pm",
+    }
+
+    estados_rechazados_gasto = {
+        "rechazado_supervisor",
+        "rechazado_pm",
+        "rechazado_finanzas",
+    }
+
+    # ============================================================
+    # Funciones auxiliares
+    # ============================================================
+
+    def normalizar_fecha(valor):
+        """
+        Convierte datetime o date en una fecha sin zona horaria,
+        compatible con xlwt.
+        """
+
+        if isinstance(valor, datetime):
+            if is_aware(valor):
+                valor = valor.astimezone().replace(tzinfo=None)
+
+            return valor.date()
+
+        return valor
+
+    def fecha_real_movimiento(movimiento):
+        """
+        Usa fecha_transaccion como fecha principal del gasto.
+
+        Para movimientos antiguos que no tengan fecha_transaccion,
+        utiliza la fecha de registro como respaldo.
+        """
+
+        fecha_real = getattr(movimiento, "fecha_transaccion", None)
+
+        if fecha_real:
+            return normalizar_fecha(fecha_real)
+
+        return normalizar_fecha(getattr(movimiento, "fecha", None))
+
+    def pertenece_mes_actual(movimiento):
+        """
+        Indica si el movimiento corresponde al mes actual usando
+        la fecha real del gasto.
+        """
+
+        fecha_real = fecha_real_movimiento(movimiento)
+
+        return bool(
+            fecha_real
+            and fecha_real.year == anio_actual
+            and fecha_real.month == mes_actual
+        )
+
+    def categoria_movimiento(movimiento):
+        """
+        Devuelve la categoría configurada en el tipo de movimiento:
+        normalmente 'abono' o una categoría de gasto.
+        """
+
+        tipo = getattr(movimiento, "tipo", None)
+        categoria = getattr(tipo, "categoria", "") or ""
+
+        return str(categoria).strip().lower()
+
+    def es_abono(movimiento):
+        return categoria_movimiento(movimiento) == "abono"
+
+    def monto_gasto(movimiento):
+        return float(getattr(movimiento, "cargos", 0) or 0)
+
+    def monto_abono(movimiento):
+        return float(getattr(movimiento, "abonos", 0) or 0)
+
+    def obtener_tipo_servicio_flota(movimiento):
+        """
+        Intenta mostrar el nombre legible del tipo de servicio.
+        Mantiene compatibilidad con registros que solo tengan el valor.
+        """
+
+        nombre = getattr(
+            movimiento,
+            "tipo_servicio_flota_nombre",
+            None,
+        )
+
+        if nombre:
+            return str(nombre)
+
+        display_method = getattr(
+            movimiento,
+            "get_tipo_servicio_flota_display",
+            None,
+        )
+
+        if callable(display_method):
+            try:
+                return str(display_method() or "")
+            except (AttributeError, TypeError, ValueError):
+                pass
+
+        return str(
+            getattr(
+                movimiento,
+                "tipo_servicio_flota",
+                "",
+            )
+            or ""
+        )
+
+    # ============================================================
+    # Cálculo de saldos
+    # ============================================================
+
+    abonos_aprobados_historicos = 0.0
+    gastos_aprobados_historicos = 0.0
+
+    rendido_mes = 0.0
+    pendiente_mes = 0.0
+    rechazado_mes = 0.0
+    abonos_pendientes = 0.0
+
+    cantidad_pendientes_mes = 0
+    cantidad_rechazados_mes = 0
+
+    for mov in movimientos:
+        status = str(getattr(mov, "status", "") or "")
+        movimiento_es_abono = es_abono(mov)
+        es_del_mes = pertenece_mes_actual(mov)
+
+        # --------------------------------------------------------
+        # Saldo histórico disponible
+        # --------------------------------------------------------
+
+        if movimiento_es_abono:
+            if status == "aprobado_abono_usuario":
+                abonos_aprobados_historicos += monto_abono(mov)
+
+            if status == "pendiente_abono_usuario":
+                abonos_pendientes += monto_abono(mov)
+
+        else:
+            if status == "aprobado_finanzas":
+                gastos_aprobados_historicos += monto_gasto(mov)
+
+        # --------------------------------------------------------
+        # Resumen del mes actual
+        # --------------------------------------------------------
+
+        if not es_del_mes or movimiento_es_abono:
+            continue
+
+        if status == "aprobado_finanzas":
+            rendido_mes += monto_gasto(mov)
+
+        elif status in estados_pendientes_gasto:
+            pendiente_mes += monto_gasto(mov)
+            cantidad_pendientes_mes += 1
+
+        elif status in estados_rechazados_gasto:
+            rechazado_mes += monto_gasto(mov)
+            cantidad_rechazados_mes += 1
+
+    saldo_disponible = abonos_aprobados_historicos - gastos_aprobados_historicos
+
+    # ============================================================
+    # Respuesta
+    # ============================================================
+
+    response = HttpResponse(content_type="application/vnd.ms-excel")
+
+    response["Content-Disposition"] = 'attachment; filename="mis_rendiciones.xls"'
+
+    response["X-Content-Type-Options"] = "nosniff"
+
+    wb = xlwt.Workbook(encoding="utf-8")
+
+    # ============================================================
+    # Estilos
+    # ============================================================
+
+    title_style = xlwt.easyxf(
+        "font: bold on, height 320, colour white;"
+        "pattern: pattern solid, fore_colour dark_blue;"
+        "align: horiz center, vert center;"
+    )
+
+    section_style = xlwt.easyxf(
+        "font: bold on, height 240, colour white;"
+        "pattern: pattern solid, fore_colour teal;"
+        "align: horiz left, vert center;"
+    )
+
+    header_style = xlwt.easyxf(
+        "font: bold on, colour white;"
+        "pattern: pattern solid, fore_colour blue_gray;"
+        "align: horiz center, vert center;"
+        "borders: left thin, right thin, top thin, bottom thin;"
+    )
+
+    label_style = xlwt.easyxf(
+        "font: bold on;"
+        "pattern: pattern solid, fore_colour gray25;"
+        "borders: left thin, right thin, top thin, bottom thin;"
+    )
+
+    value_style = xlwt.easyxf("borders: left thin, right thin, top thin, bottom thin;")
+
+    money_style = xlwt.easyxf(
+        "font: bold on;" "borders: left thin, right thin, top thin, bottom thin;",
+        num_format_str="$#,##0;[Red]-$#,##0",
+    )
+
+    money_normal_style = xlwt.easyxf(
+        "borders: left thin, right thin, top thin, bottom thin;",
+        num_format_str="$#,##0;[Red]-$#,##0",
+    )
+
+    date_style = xlwt.easyxf(
+        "borders: left thin, right thin, top thin, bottom thin;",
+        num_format_str="DD-MM-YYYY",
+    )
+
+    pending_style = xlwt.easyxf(
+        "pattern: pattern solid, fore_colour light_yellow;"
+        "borders: left thin, right thin, top thin, bottom thin;"
+    )
+
+    rejected_style = xlwt.easyxf(
+        "font: colour dark_red;"
+        "pattern: pattern solid, fore_colour rose;"
+        "borders: left thin, right thin, top thin, bottom thin;"
+    )
+
+    approved_style = xlwt.easyxf(
+        "font: colour dark_green;"
+        "pattern: pattern solid, fore_colour light_green;"
+        "borders: left thin, right thin, top thin, bottom thin;"
+    )
+
+    # ============================================================
+    # Hoja 1: Resumen
+    # ============================================================
+
+    ws_resumen = wb.add_sheet("Resumen")
+
+    ws_resumen.col(0).width = 9000
+    ws_resumen.col(1).width = 6000
+    ws_resumen.col(2).width = 11000
+
+    ws_resumen.write_merge(
+        0,
+        0,
+        0,
+        2,
+        "RESUMEN DE MIS RENDICIONES",
+        title_style,
+    )
+
+    nombre_usuario = user.get_full_name() or user.get_username()
+
+    ws_resumen.write(2, 0, "Usuario", label_style)
+    ws_resumen.write(2, 1, nombre_usuario, value_style)
+
+    ws_resumen.write(
+        3,
+        0,
+        "Mes del resumen",
+        label_style,
+    )
+
+    ws_resumen.write(
+        3,
+        1,
+        hoy.strftime("%m-%Y"),
+        value_style,
+    )
+
+    ws_resumen.write_merge(
+        5,
+        5,
+        0,
+        2,
+        "SALDOS",
+        section_style,
+    )
+
+    resumen_saldos = [
+        (
+            "Saldo disponible actual",
+            saldo_disponible,
+            (
+                "Abonos aprobados históricos menos "
+                "rendiciones aprobadas por Finanzas."
+            ),
+        ),
+        (
+            "Rendido este mes",
+            rendido_mes,
+            "Rendiciones aprobadas por Finanzas durante el mes.",
+        ),
+        (
+            "Pendiente este mes",
+            pendiente_mes,
+            (
+                f"{cantidad_pendientes_mes} movimiento(s) esperando "
+                "aprobación de Supervisor, PM o Finanzas."
+            ),
+        ),
+        (
+            "Rechazado este mes",
+            rechazado_mes,
+            (
+                f"{cantidad_rechazados_mes} movimiento(s) rechazado(s). "
+                "El motivo aparece en la hoja Movimientos."
+            ),
+        ),
+        (
+            "Abonos pendientes de aprobación",
+            abonos_pendientes,
+            "Abonos que todavía deben ser aceptados por el usuario.",
+        ),
+    ]
+
+    fila_resumen = 6
+
+    for titulo, monto, explicacion in resumen_saldos:
+        ws_resumen.write(
+            fila_resumen,
+            0,
+            titulo,
+            label_style,
+        )
+
+        ws_resumen.write(
+            fila_resumen,
+            1,
+            monto,
+            money_style,
+        )
+
+        ws_resumen.write(
+            fila_resumen,
+            2,
+            explicacion,
+            value_style,
+        )
+
+        fila_resumen += 1
+
+    ws_resumen.write_merge(
+        fila_resumen + 1,
+        fila_resumen + 1,
+        0,
+        2,
+        "ACLARACIONES",
+        section_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 2,
+        0,
+        "Pendiente",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 2,
+        1,
+        (
+            "El gasto sigue dentro del proceso de aprobación "
+            "y todavía no reduce el saldo disponible."
+        ),
+        pending_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 3,
+        0,
+        "Rechazado",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 3,
+        1,
+        ("El gasto necesita corrección y tampoco reduce " "el saldo disponible."),
+        rejected_style,
+    )
+
+    # ============================================================
+    # Hoja 2: Movimientos
+    # ============================================================
+
+    ws = wb.add_sheet("Movimientos")
 
     columns = [
         "Nombre",
         "Fecha registro",
         "Fecha real del gasto",
-        "Vehículo",               # ✅ nuevo
-        "Hora servicio",          # ✅ nuevo
-        "Kilometraje servicio",   # ✅ nuevo
+        "Vehículo",
+        "Hora servicio",
+        "Kilometraje servicio",
         "Proyecto",
         "Tipo",
-        "Tipo servicio (Flota)",  # ✅ nuevo
+        "Categoría",
+        "Tipo servicio (Flota)",
         "RUT Factura",
-        "Monto",
+        "Tipo documento",
+        "Número documento",
+        "Gasto",
+        "Abono",
         "Estado",
+        "Situación",
+        "Motivo del rechazo",
+        "Observaciones",
     ]
+
+    column_widths = [
+        7000,
+        4200,
+        4800,
+        7000,
+        3500,
+        5200,
+        8500,
+        6000,
+        4000,
+        6500,
+        4500,
+        5000,
+        5000,
+        4200,
+        4200,
+        8500,
+        4500,
+        11000,
+        11000,
+    ]
+
     for col_num, column_title in enumerate(columns):
-        ws.write(0, col_num, column_title, header_style)
+        ws.write(
+            0,
+            col_num,
+            column_title,
+            header_style,
+        )
+
+        ws.col(col_num).width = column_widths[col_num]
+
+    ws.set_panes_frozen(True)
+    ws.set_horz_split_pos(1)
 
     for row_num, mov in enumerate(movimientos, start=1):
-        fecha_registro = mov.fecha
-        if isinstance(fecha_registro, datetime):
-            if is_aware(fecha_registro):
-                fecha_registro = fecha_registro.astimezone().replace(tzinfo=None)
-            fecha_registro = fecha_registro.date()
+        fecha_registro = normalizar_fecha(getattr(mov, "fecha", None))
 
-        fecha_real = getattr(mov, "fecha_transaccion", None)
-        if isinstance(fecha_real, datetime):
-            if is_aware(fecha_real):
-                fecha_real = fecha_real.astimezone().replace(tzinfo=None)
-            fecha_real = fecha_real.date()
+        fecha_real = fecha_real_movimiento(mov)
 
-        hora_servicio = getattr(mov, "hora_servicio_flota", None)
+        hora_servicio = getattr(
+            mov,
+            "hora_servicio_flota",
+            None,
+        )
+
         hora_servicio_txt = hora_servicio.strftime("%H:%M") if hora_servicio else ""
 
-        ws.write(row_num, 0, mov.usuario.get_full_name())
-        ws.write(row_num, 1, fecha_registro, date_style)
-        ws.write(row_num, 2, fecha_real if fecha_real else "", date_style)
+        status = str(getattr(mov, "status", "") or "")
 
-        ws.write(row_num, 3, str(getattr(mov, "vehiculo_flota", "") or ""))
-        ws.write(row_num, 4, hora_servicio_txt)
-        ws.write(row_num, 5, float(getattr(mov, "kilometraje_servicio_flota", 0) or 0))
+        if status in estados_rechazados_gasto or status == "rechazado_abono_usuario":
+            situacion = "Rechazado"
+            row_status_style = rejected_style
 
-        ws.write(row_num, 6, str(getattr(mov, "proyecto", "") or ""))
-        ws.write(row_num, 7, str(getattr(mov, "tipo", "") or ""))
-        ws.write(row_num, 8, str(getattr(mov, "tipo_servicio_flota", "") or ""))
-        ws.write(row_num, 9, str(getattr(mov, "rut_factura", "") or ""))
-        ws.write(row_num, 10, float(getattr(mov, "cargos", 0) or 0))
-        ws.write(row_num, 11, mov.get_status_display())
+        elif status in estados_pendientes_gasto or status == "pendiente_abono_usuario":
+            situacion = "Pendiente"
+            row_status_style = pending_style
+
+        elif status in {
+            "aprobado_finanzas",
+            "aprobado_abono_usuario",
+        }:
+            situacion = "Aprobado"
+            row_status_style = approved_style
+
+        else:
+            situacion = "Otro"
+            row_status_style = value_style
+
+        ws.write(
+            row_num,
+            0,
+            nombre_usuario,
+            value_style,
+        )
+
+        if fecha_registro:
+            ws.write(
+                row_num,
+                1,
+                fecha_registro,
+                date_style,
+            )
+        else:
+            ws.write(
+                row_num,
+                1,
+                "",
+                value_style,
+            )
+
+        if fecha_real:
+            ws.write(
+                row_num,
+                2,
+                fecha_real,
+                date_style,
+            )
+        else:
+            ws.write(
+                row_num,
+                2,
+                "",
+                value_style,
+            )
+
+        ws.write(
+            row_num,
+            3,
+            str(
+                getattr(
+                    mov,
+                    "vehiculo_flota",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            4,
+            hora_servicio_txt,
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            5,
+            float(
+                getattr(
+                    mov,
+                    "kilometraje_servicio_flota",
+                    0,
+                )
+                or 0
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            6,
+            str(
+                getattr(
+                    mov,
+                    "proyecto",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            7,
+            str(
+                getattr(
+                    mov,
+                    "tipo",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            8,
+            categoria_movimiento(mov).title(),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            9,
+            obtener_tipo_servicio_flota(mov),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            10,
+            str(
+                getattr(
+                    mov,
+                    "rut_factura",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            11,
+            str(
+                getattr(
+                    mov,
+                    "tipo_doc",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            12,
+            str(
+                getattr(
+                    mov,
+                    "numero_doc",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
+
+        ws.write(
+            row_num,
+            13,
+            monto_gasto(mov),
+            money_normal_style,
+        )
+
+        ws.write(
+            row_num,
+            14,
+            monto_abono(mov),
+            money_normal_style,
+        )
+
+        ws.write(
+            row_num,
+            15,
+            mov.get_status_display(),
+            row_status_style,
+        )
+
+        ws.write(
+            row_num,
+            16,
+            situacion,
+            row_status_style,
+        )
+
+        ws.write(
+            row_num,
+            17,
+            str(
+                getattr(
+                    mov,
+                    "motivo_rechazo",
+                    "",
+                )
+                or ""
+            ),
+            row_status_style,
+        )
+
+        ws.write(
+            row_num,
+            18,
+            str(
+                getattr(
+                    mov,
+                    "observaciones",
+                    "",
+                )
+                or ""
+            ),
+            value_style,
+        )
 
     wb.save(response)
+
     return response
+
+
 # ==========================================================
 # Helpers KM Flota (por vehículo + fecha/hora de servicio)
 # ==========================================================

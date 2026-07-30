@@ -1,6 +1,7 @@
 # setiign-dev.py
 
 import os
+from datetime import date
 
 from .base import *
 
@@ -37,7 +38,7 @@ DATABASES = {
 }
 
 # 2FA
-TWO_FACTOR_ENFORCE_DATE = date(2026, 12, 1)
+TWO_FACTOR_ENFORCE_DATE = date(2027, 9, 1)
 
 # No forzar HTTPS en desarrollo
 
