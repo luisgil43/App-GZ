@@ -2232,6 +2232,7 @@ def listar_saldos_usuarios(request):
     Reglas principales:
     - Monto asignado: suma de todos los abonos.
     - Monto rendido: suma de cargos, excepto rendiciones rechazadas.
+    - Monto rechazado: suma de rendiciones que actualmente están rechazadas.
     - Monto disponible: monto asignado menos monto rendido válido.
     - Los estados pendientes se muestran separados según su etapa.
     """
@@ -2255,10 +2256,14 @@ def listar_saldos_usuarios(request):
     PM_PENDING = ["aprobado_supervisor"]
     FIN_PENDING = ["aprobado_pm"]
 
-    # Los movimientos con estos estados no cuentan como rendidos.
-    REJECTED_STATUSES = ["rechazado"]
+    # Las rendiciones con estos estados no cuentan como monto rendido.
+    REJECTED_STATUSES = [
+        "rechazado_supervisor",
+        "rechazado_pm",
+        "rechazado_finanzas",
+    ]
 
-    # Configuración decimal común para evitar resultados NULL
+    # Configuración decimal común para evitar resultados NULL.
     DEC = DecimalField(max_digits=12, decimal_places=2)
     V0 = Value(Decimal("0.00"), output_field=DEC)
 
@@ -2270,6 +2275,21 @@ def listar_saldos_usuarios(request):
         Case(
             When(
                 Q(cargos__gt=0) & ~Q(status__in=REJECTED_STATUSES),
+                then=F("cargos"),
+            ),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    # ============================================================
+    # Monto rechazado
+    # ============================================================
+
+    monto_rechazado_actual = Sum(
+        Case(
+            When(
+                Q(cargos__gt=0) & Q(status__in=REJECTED_STATUSES),
                 then=F("cargos"),
             ),
             default=V0,
@@ -2390,6 +2410,12 @@ def listar_saldos_usuarios(request):
                 V0,
                 output_field=DEC,
             ),
+            # Suma separadamente los cargos rechazados.
+            monto_rechazado=Coalesce(
+                monto_rechazado_actual,
+                V0,
+                output_field=DEC,
+            ),
             # Todos los abonos continúan representando dinero asignado.
             monto_asignado=Coalesce(
                 Sum("abonos"),
@@ -2448,7 +2474,7 @@ def listar_saldos_usuarios(request):
                 ),
                 output_field=DEC,
             ),
-            # El saldo disponible ya utiliza el monto rendido corregido.
+            # El saldo disponible utiliza únicamente el monto rendido válido.
             monto_disponible=ExpressionWrapper(
                 Coalesce(
                     F("monto_asignado"),
@@ -2478,12 +2504,19 @@ def listar_saldos_usuarios(request):
         per_page = qs.count() or 1
     else:
         try:
-            per_page = max(5, min(int(cantidad), 100))
+            per_page = max(
+                5,
+                min(int(cantidad), 100),
+            )
         except (TypeError, ValueError):
             per_page = 5
             cantidad = "5"
 
-    paginator = Paginator(qs, per_page)
+    paginator = Paginator(
+        qs,
+        per_page,
+    )
+
     pagina = paginator.get_page(request.GET.get("page"))
 
     return render(
@@ -2594,6 +2627,7 @@ def exportar_saldos_disponibles(request):
 
     Reglas:
     - Monto rendido: suma cargos válidos, excluyendo rechazados.
+    - Monto rechazado: suma cargos que permanecen rechazados.
     - Monto asignado: suma todos los abonos.
     - Monto disponible: asignado menos rendido válido.
     - Los pendientes se separan por etapa de aprobación.
@@ -2622,10 +2656,21 @@ def exportar_saldos_disponibles(request):
     FIN_PENDING = ["aprobado_pm"]
 
     # Estos estados no deben formar parte del monto rendido.
-    REJECTED_STATUSES = ["rechazado"]
+    REJECTED_STATUSES = [
+        "rechazado_supervisor",
+        "rechazado_pm",
+        "rechazado_finanzas",
+    ]
 
-    DEC = DecimalField(max_digits=12, decimal_places=2)
-    V0 = Value(Decimal("0.00"), output_field=DEC)
+    DEC = DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    V0 = Value(
+        Decimal("0.00"),
+        output_field=DEC,
+    )
 
     # ============================================================
     # Helpers de sumatoria
@@ -2670,6 +2715,21 @@ def exportar_saldos_disponibles(request):
             )
         )
 
+    def _sum_rejected_cargos():
+        """
+        Suma únicamente cargos que actualmente están rechazados.
+        """
+        return Sum(
+            Case(
+                When(
+                    Q(cargos__gt=0) & Q(status__in=REJECTED_STATUSES),
+                    then=F("cargos"),
+                ),
+                default=V0,
+                output_field=DEC,
+            )
+        )
+
     # ============================================================
     # Consulta agrupada por usuario
     # ============================================================
@@ -2684,6 +2744,11 @@ def exportar_saldos_disponibles(request):
         .annotate(
             monto_rendido=Coalesce(
                 _sum_valid_cargos(),
+                V0,
+                output_field=DEC,
+            ),
+            monto_rechazado=Coalesce(
+                _sum_rejected_cargos(),
                 V0,
                 output_field=DEC,
             ),
@@ -2742,19 +2807,28 @@ def exportar_saldos_disponibles(request):
     # Estilos
     # ============================================================
 
-    header_fill = PatternFill("solid", fgColor="1F2937")
+    header_fill = PatternFill(
+        "solid",
+        fgColor="1F2937",
+    )
+
     header_font = Font(
         bold=True,
         color="FFFFFF",
         size=11,
     )
+
     header_alignment = Alignment(
         horizontal="center",
         vertical="center",
         wrap_text=True,
     )
 
-    thin = Side(style="thin", color="D1D5DB")
+    thin = Side(
+        style="thin",
+        color="D1D5DB",
+    )
+
     border_all = Border(
         left=thin,
         right=thin,
@@ -2772,14 +2846,25 @@ def exportar_saldos_disponibles(request):
         vertical="center",
     )
 
-    center = Alignment(
-        horizontal="center",
-        vertical="center",
+    positive_fill = PatternFill(
+        "solid",
+        fgColor="ECFDF5",
     )
 
-    positive_fill = PatternFill("solid", fgColor="ECFDF5")
-    negative_fill = PatternFill("solid", fgColor="FEF2F2")
-    pending_fill = PatternFill("solid", fgColor="FFFBEB")
+    negative_fill = PatternFill(
+        "solid",
+        fgColor="FEF2F2",
+    )
+
+    rejected_fill = PatternFill(
+        "solid",
+        fgColor="FEF2F2",
+    )
+
+    pending_fill = PatternFill(
+        "solid",
+        fgColor="FFFBEB",
+    )
 
     positive_font = Font(
         bold=True,
@@ -2787,6 +2872,11 @@ def exportar_saldos_disponibles(request):
     )
 
     negative_font = Font(
+        bold=True,
+        color="B91C1C",
+    )
+
+    rejected_font = Font(
         bold=True,
         color="B91C1C",
     )
@@ -2803,6 +2893,7 @@ def exportar_saldos_disponibles(request):
         "Usuario",
         "Correo",
         "Monto Rendido",
+        "Monto Rechazado",
         "Monto Asignado",
         "Monto Disponible",
         "Pendiente Usuario",
@@ -2814,8 +2905,15 @@ def exportar_saldos_disponibles(request):
     ws.append(columns)
     ws.row_dimensions[1].height = 32
 
-    for col_num, title in enumerate(columns, start=1):
-        cell = ws.cell(row=1, column=col_num)
+    for col_num, title in enumerate(
+        columns,
+        start=1,
+    ):
+        cell = ws.cell(
+            row=1,
+            column=col_num,
+        )
+
         cell.value = title
         cell.fill = header_fill
         cell.font = header_font
@@ -2826,7 +2924,10 @@ def exportar_saldos_disponibles(request):
     # Filas
     # ============================================================
 
-    for row_number, balance in enumerate(balances, start=2):
+    for row_number, balance in enumerate(
+        balances,
+        start=2,
+    ):
         pend_sup = (balance["sup_abonos"] or Decimal("0.00")) + (
             balance["sup_cargos"] or Decimal("0.00")
         )
@@ -2840,7 +2941,9 @@ def exportar_saldos_disponibles(request):
         )
 
         first_name = balance["usuario__first_name"] or ""
+
         last_name = balance["usuario__last_name"] or ""
+
         email = balance["usuario__email"] or ""
 
         usuario = f"{first_name} {last_name}".strip()
@@ -2849,14 +2952,20 @@ def exportar_saldos_disponibles(request):
             usuario = email or "Usuario sin nombre"
 
         monto_rendido = balance["monto_rendido"] or Decimal("0.00")
+
+        monto_rechazado = balance["monto_rechazado"] or Decimal("0.00")
+
         monto_asignado = balance["monto_asignado"] or Decimal("0.00")
+
         monto_disponible = balance["monto_disponible"] or Decimal("0.00")
+
         pending_user = balance["pending_user"] or Decimal("0.00")
 
         values = [
             usuario,
             email,
             float(monto_rendido),
+            float(monto_rechazado),
             float(monto_asignado),
             float(monto_disponible),
             float(pending_user),
@@ -2865,7 +2974,10 @@ def exportar_saldos_disponibles(request):
             float(pend_fin),
         ]
 
-        for column_number, value in enumerate(values, start=1):
+        for column_number, value in enumerate(
+            values,
+            start=1,
+        ):
             cell = ws.cell(
                 row=row_number,
                 column=column_number,
@@ -2880,18 +2992,32 @@ def exportar_saldos_disponibles(request):
                 cell.alignment = right
                 cell.number_format = "$#,##0;[Red]-$#,##0"
 
-        # Monto disponible
-        available_cell = ws.cell(row=row_number, column=5)
+        # Monto rechazado: columna 4.
+        rejected_cell = ws.cell(
+            row=row_number,
+            column=4,
+        )
+
+        if monto_rechazado > 0:
+            rejected_cell.fill = rejected_fill
+            rejected_cell.font = rejected_font
+
+        # Monto disponible: columna 6.
+        available_cell = ws.cell(
+            row=row_number,
+            column=6,
+        )
 
         if monto_disponible > 0:
             available_cell.fill = positive_fill
             available_cell.font = positive_font
+
         elif monto_disponible < 0:
             available_cell.fill = negative_fill
             available_cell.font = negative_font
 
-        # Columnas pendientes
-        for column_number in range(6, 10):
+        # Columnas pendientes: 7 a 10.
+        for column_number in range(7, 11):
             pending_cell = ws.cell(
                 row=row_number,
                 column=column_number,
@@ -2916,8 +3042,16 @@ def exportar_saldos_disponibles(request):
             value="TOTAL",
         )
 
-        total_label = ws.cell(row=total_row, column=1)
-        total_label.font = Font(bold=True, color="FFFFFF")
+        total_label = ws.cell(
+            row=total_row,
+            column=1,
+        )
+
+        total_label.font = Font(
+            bold=True,
+            color="FFFFFF",
+        )
+
         total_label.fill = header_fill
         total_label.alignment = right
         total_label.border = border_all
@@ -2928,25 +3062,37 @@ def exportar_saldos_disponibles(request):
             value="",
         )
 
-        ws.cell(row=total_row, column=2).fill = header_fill
-        ws.cell(row=total_row, column=2).border = border_all
+        ws.cell(
+            row=total_row,
+            column=2,
+        ).fill = header_fill
 
-        for column_number in range(3, 10):
+        ws.cell(
+            row=total_row,
+            column=2,
+        ).border = border_all
+
+        for column_number in range(3, 11):
             column_letter = get_column_letter(column_number)
 
             total_cell = ws.cell(
                 row=total_row,
                 column=column_number,
-                value=f"=SUM({column_letter}2:{column_letter}{total_row - 1})",
+                value=(
+                    f"=SUM(" f"{column_letter}2:" f"{column_letter}{total_row - 1}" f")"
+                ),
             )
 
             total_cell.fill = header_fill
+
             total_cell.font = Font(
                 bold=True,
                 color="FFFFFF",
             )
+
             total_cell.alignment = right
             total_cell.border = border_all
+
             total_cell.number_format = "$#,##0;[Red]-$#,##0"
 
     # ============================================================
@@ -2957,21 +3103,22 @@ def exportar_saldos_disponibles(request):
         1: 30,
         2: 32,
         3: 18,
-        4: 18,
-        5: 19,
-        6: 20,
-        7: 24,
-        8: 18,
-        9: 24,
+        4: 19,
+        5: 18,
+        6: 19,
+        7: 20,
+        8: 24,
+        9: 18,
+        10: 24,
     }
 
     for column_number, width in widths.items():
         ws.column_dimensions[get_column_letter(column_number)].width = width
 
     ws.auto_filter.ref = (
-        f"A1:{get_column_letter(ws.max_column)}{ws.max_row - 1}"
+        f"A1:" f"{get_column_letter(ws.max_column)}" f"{ws.max_row - 1}"
         if ws.max_row > 1
-        else f"A1:{get_column_letter(ws.max_column)}1"
+        else (f"A1:" f"{get_column_letter(ws.max_column)}" f"1")
     )
 
     ws.sheet_properties.pageSetUpPr.fitToPage = True
@@ -2997,7 +3144,7 @@ def exportar_saldos_disponibles(request):
     )
 
     response["Content-Disposition"] = (
-        f'attachment; filename="saldos_disponibles_{now_str}.xlsx"'
+        f'attachment; filename="' f'saldos_disponibles_{now_str}.xlsx"'
     )
 
     return response

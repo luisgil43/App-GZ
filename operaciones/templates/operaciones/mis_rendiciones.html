@@ -48,9 +48,13 @@
     </div>
   </div>
 
-    <!-- Saldo disponible histórico -->
-  <div class="mb-6">
-    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl sm:rounded-3xl shadow-md px-5 py-6 sm:px-7 sm:py-7 text-white w-full lg:max-w-xl">
+    <!-- Resumen principal de saldo -->
+<div class="mb-6">
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    <!-- Saldo disponible actual -->
+    <div class="relative overflow-hidden bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-2xl sm:rounded-3xl shadow-md px-5 py-6 sm:px-7 sm:py-7 text-white">
 
       <div class="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-white opacity-10"></div>
       <div class="absolute -right-2 -bottom-16 w-44 h-44 rounded-full bg-white opacity-10"></div>
@@ -67,24 +71,98 @@
             ${{ saldo_disponible|floatformat:0|formato_clp }}
           </p>
 
-          <p class="text-sm text-emerald-100 mt-2 max-w-2xl">
-            Total histórico de abonos aprobados menos rendiciones aprobadas por Finanzas.
+          <p class="text-sm text-emerald-100 mt-2">
+            Saldo contable actual. Solo descuenta las rendiciones aprobadas por Finanzas.
           </p>
         </div>
 
         <div class="inline-flex self-start items-center gap-2 bg-white bg-opacity-15 border border-white border-opacity-20 rounded-xl px-3 py-2 text-sm">
-         <span class="text-emerald-100">
-          Tipo de saldo:
-        </span>
+          <span class="text-emerald-100">
+            Rendiciones en revisión:
+          </span>
 
-        <span class="font-semibold">
-          Histórico acumulado
-        </span>
+          <span class="font-semibold">
+            ${{ saldo_pendiente_total|floatformat:0|formato_clp }}
+          </span>
         </div>
 
       </div>
     </div>
+
+    <!-- Saldo pendiente por rendir -->
+    <div class="
+      relative overflow-hidden
+      rounded-2xl sm:rounded-3xl
+      border shadow-sm
+      px-5 py-6 sm:px-7 sm:py-7
+      {% if saldo_pendiente_por_rendir < 0 %}
+        bg-red-50 border-red-200
+      {% else %}
+        bg-white border-gray-200
+      {% endif %}
+    ">
+
+      <div class="flex flex-col gap-4">
+
+        <div>
+          <div class="
+            flex items-center gap-2 text-sm font-semibold
+            {% if saldo_pendiente_por_rendir < 0 %}
+              text-red-700
+            {% else %}
+              text-gray-600
+            {% endif %}
+          ">
+            <span>📊</span>
+            <span>Saldo pendiente por rendir</span>
+          </div>
+
+          <p class="
+            text-3xl sm:text-4xl font-bold mt-2 tracking-tight
+            {% if saldo_pendiente_por_rendir < 0 %}
+              text-red-700
+            {% else %}
+              text-gray-900
+            {% endif %}
+          ">
+            ${{ saldo_pendiente_por_rendir|floatformat:0|formato_clp }}
+          </p>
+
+          {% if saldo_pendiente_por_rendir < 0 %}
+            <p class="text-sm text-red-700 mt-2">
+              Tus rendiciones en revisión superan el saldo disponible actual.
+            </p>
+          {% else %}
+            <p class="text-sm text-gray-500 mt-2">
+              Es lo que te quedaría por rendir después de considerar también las rendiciones que están en revisión.
+            </p>
+          {% endif %}
+        </div>
+
+        <div class="
+          inline-flex self-start items-center gap-2
+          rounded-xl px-3 py-2 text-sm
+          {% if saldo_pendiente_por_rendir < 0 %}
+            bg-red-100 text-red-800
+          {% else %}
+            bg-slate-100 text-slate-700
+          {% endif %}
+        ">
+          <span>
+            Cálculo:
+          </span>
+
+          <span class="font-semibold">
+            saldo disponible menos pendientes
+          </span>
+        </div>
+
+      </div>
+    </div>
+
   </div>
+
+</div>
 
   <!-- Resumen mensual -->
 <div class="mb-6">

@@ -3416,9 +3416,26 @@ def mis_rendiciones(request):
 
         # Total de rendiciones que todavía siguen pendientes,
         # sin importar el mes al que pertenecen.
-        saldo_pendiente_total = saldo_pendiente_mes + saldo_pendiente_anterior
+        saldo_pendiente_total = (
+            saldo_pendiente_mes
+            + saldo_pendiente_anterior
+        )
 
-        cantidad_pendiente_total = cantidad_pendiente_mes + cantidad_pendiente_anterior
+        cantidad_pendiente_total = (
+            cantidad_pendiente_mes
+            + cantidad_pendiente_anterior
+        )
+
+        # Saldo pendiente por rendir:
+        # muestra cuánto quedaría disponible después de considerar
+        # también las rendiciones que siguen en revisión.
+        #
+        # Este valor es informativo y NO modifica el saldo disponible real.
+        # El saldo disponible real solo se descuenta cuando Finanzas aprueba.
+        saldo_pendiente_por_rendir = (
+            saldo_disponible
+            - saldo_pendiente_total
+        )
 
         # ========================================================
         # Rendiciones rechazadas durante el mes actual
@@ -3489,6 +3506,7 @@ def mis_rendiciones(request):
             "cantidad_pendiente_anterior": cantidad_pendiente_anterior,
             "saldo_pendiente_total": saldo_pendiente_total,
             "cantidad_pendiente_total": cantidad_pendiente_total,
+            "saldo_pendiente_por_rendir": saldo_pendiente_por_rendir,
             "saldo_rechazado_mes": saldo_rechazado_mes,
             "cantidad_rechazado_mes": cantidad_rechazado_mes,
             "saldo_rechazado_anterior": saldo_rechazado_anterior,
@@ -5148,10 +5166,19 @@ def exportar_mis_rendiciones(request):
 
     El archivo incluye:
     - una hoja de resumen con sus saldos;
-    - una hoja con el detalle de sus movimientos;
-    - estados pendientes;
-    - movimientos rechazados;
+    - saldo disponible actual;
+    - saldo pendiente por rendir;
+    - rendiciones pendientes del mes y de meses anteriores;
+    - rendiciones rechazadas del mes y de meses anteriores;
+    - una hoja con el detalle de todos sus movimientos;
     - motivo del rechazo.
+
+    Reglas financieras:
+    - El saldo disponible solo descuenta rendiciones aprobadas por Finanzas.
+    - Las rendiciones pendientes no descuentan todavía el saldo disponible.
+    - El saldo pendiente por rendir muestra cuánto quedaría después de
+      considerar también las rendiciones que siguen en revisión.
+    - Las rendiciones rechazadas no descuentan ningún saldo.
     """
 
     user = request.user
@@ -5159,7 +5186,9 @@ def exportar_mis_rendiciones(request):
     # IMPORTANTE:
     # La exportación queda limitada únicamente al usuario autenticado.
     movimientos = list(
-        CartolaMovimiento.objects.filter(usuario=user)
+        CartolaMovimiento.objects.filter(
+            usuario=user,
+        )
         .select_related(
             "tipo",
             "proyecto",
@@ -5193,7 +5222,6 @@ def exportar_mis_rendiciones(request):
         Convierte datetime o date en una fecha sin zona horaria,
         compatible con xlwt.
         """
-
         if isinstance(valor, datetime):
             if is_aware(valor):
                 valor = valor.astimezone().replace(tzinfo=None)
@@ -5209,20 +5237,28 @@ def exportar_mis_rendiciones(request):
         Para movimientos antiguos que no tengan fecha_transaccion,
         utiliza la fecha de registro como respaldo.
         """
-
-        fecha_real = getattr(movimiento, "fecha_transaccion", None)
+        fecha_real = getattr(
+            movimiento,
+            "fecha_transaccion",
+            None,
+        )
 
         if fecha_real:
             return normalizar_fecha(fecha_real)
 
-        return normalizar_fecha(getattr(movimiento, "fecha", None))
+        return normalizar_fecha(
+            getattr(
+                movimiento,
+                "fecha",
+                None,
+            )
+        )
 
     def pertenece_mes_actual(movimiento):
         """
         Indica si el movimiento corresponde al mes actual usando
         la fecha real del gasto.
         """
-
         fecha_real = fecha_real_movimiento(movimiento)
 
         return bool(
@@ -5231,14 +5267,43 @@ def exportar_mis_rendiciones(request):
             and fecha_real.month == mes_actual
         )
 
+    def pertenece_mes_anterior(movimiento):
+        """
+        Indica si el movimiento pertenece a un mes anterior
+        respecto del mes actual.
+        """
+        fecha_real = fecha_real_movimiento(movimiento)
+
+        if not fecha_real:
+            return False
+
+        return (
+            fecha_real.year,
+            fecha_real.month,
+        ) < (
+            anio_actual,
+            mes_actual,
+        )
+
     def categoria_movimiento(movimiento):
         """
         Devuelve la categoría configurada en el tipo de movimiento:
         normalmente 'abono' o una categoría de gasto.
         """
+        tipo = getattr(
+            movimiento,
+            "tipo",
+            None,
+        )
 
-        tipo = getattr(movimiento, "tipo", None)
-        categoria = getattr(tipo, "categoria", "") or ""
+        categoria = (
+            getattr(
+                tipo,
+                "categoria",
+                "",
+            )
+            or ""
+        )
 
         return str(categoria).strip().lower()
 
@@ -5246,17 +5311,38 @@ def exportar_mis_rendiciones(request):
         return categoria_movimiento(movimiento) == "abono"
 
     def monto_gasto(movimiento):
-        return float(getattr(movimiento, "cargos", 0) or 0)
+        return float(
+            getattr(
+                movimiento,
+                "cargos",
+                0,
+            )
+            or 0
+        )
 
     def monto_abono(movimiento):
-        return float(getattr(movimiento, "abonos", 0) or 0)
+        return float(
+            getattr(
+                movimiento,
+                "abonos",
+                0,
+            )
+            or 0
+        )
+
+    def texto_cantidad(cantidad, singular, plural):
+        """
+        Devuelve un texto simple con singular o plural correcto.
+        """
+        nombre = singular if cantidad == 1 else plural
+
+        return f"{cantidad} {nombre}"
 
     def obtener_tipo_servicio_flota(movimiento):
         """
         Intenta mostrar el nombre legible del tipo de servicio.
         Mantiene compatibilidad con registros que solo tengan el valor.
         """
-
         nombre = getattr(
             movimiento,
             "tipo_servicio_flota_nombre",
@@ -5288,71 +5374,135 @@ def exportar_mis_rendiciones(request):
         )
 
     # ============================================================
-    # Cálculo de saldos
+    # Cálculo de saldos históricos
     # ============================================================
 
     abonos_aprobados_historicos = 0.0
     gastos_aprobados_historicos = 0.0
 
+    # Mes actual
     rendido_mes = 0.0
     pendiente_mes = 0.0
     rechazado_mes = 0.0
-    abonos_pendientes = 0.0
 
-    cantidad_pendientes_mes = 0
-    cantidad_rechazados_mes = 0
+    cantidad_rendido_mes = 0
+    cantidad_pendiente_mes = 0
+    cantidad_rechazado_mes = 0
+
+    # Meses anteriores
+    pendiente_anterior = 0.0
+    rechazado_anterior = 0.0
+
+    cantidad_pendiente_anterior = 0
+    cantidad_rechazado_anterior = 0
+
+    # Abonos
+    abonos_pendientes = 0.0
+    cantidad_abonos_pendientes = 0
 
     for mov in movimientos:
-        status = str(getattr(mov, "status", "") or "")
+        status = str(
+            getattr(
+                mov,
+                "status",
+                "",
+            )
+            or ""
+        )
+
         movimiento_es_abono = es_abono(mov)
         es_del_mes = pertenece_mes_actual(mov)
+        es_anterior = pertenece_mes_anterior(mov)
+
+        monto_actual_gasto = monto_gasto(mov)
+        monto_actual_abono = monto_abono(mov)
 
         # --------------------------------------------------------
-        # Saldo histórico disponible
+        # Abonos históricos
         # --------------------------------------------------------
 
         if movimiento_es_abono:
             if status == "aprobado_abono_usuario":
-                abonos_aprobados_historicos += monto_abono(mov)
+                abonos_aprobados_historicos += monto_actual_abono
 
-            if status == "pendiente_abono_usuario":
-                abonos_pendientes += monto_abono(mov)
+            elif status == "pendiente_abono_usuario":
+                abonos_pendientes += monto_actual_abono
+                cantidad_abonos_pendientes += 1
 
-        else:
-            if status == "aprobado_finanzas":
-                gastos_aprobados_historicos += monto_gasto(mov)
-
-        # --------------------------------------------------------
-        # Resumen del mes actual
-        # --------------------------------------------------------
-
-        if not es_del_mes or movimiento_es_abono:
             continue
 
+        # --------------------------------------------------------
+        # Saldo disponible histórico
+        # --------------------------------------------------------
+
+        # El saldo disponible solo se descuenta cuando Finanzas aprueba.
         if status == "aprobado_finanzas":
-            rendido_mes += monto_gasto(mov)
+            gastos_aprobados_historicos += monto_actual_gasto
 
-        elif status in estados_pendientes_gasto:
-            pendiente_mes += monto_gasto(mov)
-            cantidad_pendientes_mes += 1
+        # --------------------------------------------------------
+        # Mes actual
+        # --------------------------------------------------------
 
-        elif status in estados_rechazados_gasto:
-            rechazado_mes += monto_gasto(mov)
-            cantidad_rechazados_mes += 1
+        if es_del_mes:
+            if status == "aprobado_finanzas":
+                rendido_mes += monto_actual_gasto
+                cantidad_rendido_mes += 1
+
+            elif status in estados_pendientes_gasto:
+                pendiente_mes += monto_actual_gasto
+                cantidad_pendiente_mes += 1
+
+            elif status in estados_rechazados_gasto:
+                rechazado_mes += monto_actual_gasto
+                cantidad_rechazado_mes += 1
+
+        # --------------------------------------------------------
+        # Meses anteriores que todavía requieren seguimiento
+        # --------------------------------------------------------
+
+        elif es_anterior:
+            if status in estados_pendientes_gasto:
+                pendiente_anterior += monto_actual_gasto
+                cantidad_pendiente_anterior += 1
+
+            elif status in estados_rechazados_gasto:
+                rechazado_anterior += monto_actual_gasto
+                cantidad_rechazado_anterior += 1
+
+    # ============================================================
+    # Totales principales
+    # ============================================================
 
     saldo_disponible = abonos_aprobados_historicos - gastos_aprobados_historicos
+
+    saldo_pendiente_total = pendiente_mes + pendiente_anterior
+
+    cantidad_pendiente_total = cantidad_pendiente_mes + cantidad_pendiente_anterior
+
+    saldo_rechazado_total = rechazado_mes + rechazado_anterior
+
+    cantidad_rechazado_total = cantidad_rechazado_mes + cantidad_rechazado_anterior
+
+    # Valor informativo:
+    # cuánto quedaría después de considerar todas las rendiciones
+    # que todavía están pendientes de aprobación.
+    saldo_pendiente_por_rendir = saldo_disponible - saldo_pendiente_total
 
     # ============================================================
     # Respuesta
     # ============================================================
 
-    response = HttpResponse(content_type="application/vnd.ms-excel")
+    response = HttpResponse(
+        content_type="application/vnd.ms-excel",
+    )
 
     response["Content-Disposition"] = 'attachment; filename="mis_rendiciones.xls"'
 
     response["X-Content-Type-Options"] = "nosniff"
 
-    wb = xlwt.Workbook(encoding="utf-8")
+    wb = xlwt.Workbook(
+        encoding="utf-8",
+    )
 
     # ============================================================
     # Estilos
@@ -5417,15 +5567,31 @@ def exportar_mis_rendiciones(request):
         "borders: left thin, right thin, top thin, bottom thin;"
     )
 
+    estimated_positive_style = xlwt.easyxf(
+        "font: bold on, colour dark_green;"
+        "pattern: pattern solid, fore_colour light_green;"
+        "borders: left thin, right thin, top thin, bottom thin;",
+        num_format_str="$#,##0;[Red]-$#,##0",
+    )
+
+    estimated_negative_style = xlwt.easyxf(
+        "font: bold on, colour dark_red;"
+        "pattern: pattern solid, fore_colour rose;"
+        "borders: left thin, right thin, top thin, bottom thin;",
+        num_format_str="$#,##0;[Red]-$#,##0",
+    )
+
     # ============================================================
     # Hoja 1: Resumen
     # ============================================================
 
-    ws_resumen = wb.add_sheet("Resumen")
+    ws_resumen = wb.add_sheet(
+        "Resumen",
+    )
 
-    ws_resumen.col(0).width = 9000
-    ws_resumen.col(1).width = 6000
-    ws_resumen.col(2).width = 11000
+    ws_resumen.col(0).width = 10000
+    ws_resumen.col(1).width = 6500
+    ws_resumen.col(2).width = 13000
 
     ws_resumen.write_merge(
         0,
@@ -5438,8 +5604,19 @@ def exportar_mis_rendiciones(request):
 
     nombre_usuario = user.get_full_name() or user.get_username()
 
-    ws_resumen.write(2, 0, "Usuario", label_style)
-    ws_resumen.write(2, 1, nombre_usuario, value_style)
+    ws_resumen.write(
+        2,
+        0,
+        "Usuario",
+        label_style,
+    )
+
+    ws_resumen.write(
+        2,
+        1,
+        nombre_usuario,
+        value_style,
+    )
 
     ws_resumen.write(
         3,
@@ -5460,7 +5637,7 @@ def exportar_mis_rendiciones(request):
         5,
         0,
         2,
-        "SALDOS",
+        "SALDOS PRINCIPALES",
         section_style,
     )
 
@@ -5469,41 +5646,38 @@ def exportar_mis_rendiciones(request):
             "Saldo disponible actual",
             saldo_disponible,
             (
-                "Abonos aprobados históricos menos "
-                "rendiciones aprobadas por Finanzas."
+                "Abonos aprobados históricos menos rendiciones "
+                "aprobadas por Finanzas."
             ),
+            money_style,
         ),
         (
-            "Rendido este mes",
-            rendido_mes,
-            "Rendiciones aprobadas por Finanzas durante el mes.",
-        ),
-        (
-            "Pendiente este mes",
-            pendiente_mes,
+            "Rendiciones pendientes de aprobación",
+            saldo_pendiente_total,
             (
-                f"{cantidad_pendientes_mes} movimiento(s) esperando "
-                "aprobación de Supervisor, PM o Finanzas."
+                f"{texto_cantidad(cantidad_pendiente_total, 'rendición', 'rendiciones')} "
+                "esperando aprobación de Supervisor, PM o Finanzas."
             ),
+            money_style,
         ),
         (
-            "Rechazado este mes",
-            rechazado_mes,
+            "Saldo pendiente por rendir",
+            saldo_pendiente_por_rendir,
             (
-                f"{cantidad_rechazados_mes} movimiento(s) rechazado(s). "
-                "El motivo aparece en la hoja Movimientos."
+                "Saldo disponible actual menos todas las rendiciones "
+                "que todavía están pendientes de aprobación."
             ),
-        ),
-        (
-            "Abonos pendientes de aprobación",
-            abonos_pendientes,
-            "Abonos que todavía deben ser aceptados por el usuario.",
+            (
+                estimated_negative_style
+                if saldo_pendiente_por_rendir < 0
+                else estimated_positive_style
+            ),
         ),
     ]
 
     fila_resumen = 6
 
-    for titulo, monto, explicacion in resumen_saldos:
+    for titulo, monto, explicacion, estilo_monto in resumen_saldos:
         ws_resumen.write(
             fila_resumen,
             0,
@@ -5515,7 +5689,7 @@ def exportar_mis_rendiciones(request):
             fila_resumen,
             1,
             monto,
-            money_style,
+            estilo_monto,
         )
 
         ws_resumen.write(
@@ -5526,6 +5700,175 @@ def exportar_mis_rendiciones(request):
         )
 
         fila_resumen += 1
+
+    # ============================================================
+    # Resumen del mes actual
+    # ============================================================
+
+    ws_resumen.write_merge(
+        fila_resumen + 1,
+        fila_resumen + 1,
+        0,
+        2,
+        "RESUMEN DEL MES ACTUAL",
+        section_style,
+    )
+
+    fila_resumen += 2
+
+    resumen_mes = [
+        (
+            "Rendido este mes",
+            rendido_mes,
+            (
+                f"{texto_cantidad(cantidad_rendido_mes, 'rendición', 'rendiciones')} "
+                "aprobada por Finanzas durante el mes."
+                if cantidad_rendido_mes == 1
+                else (
+                    f"{texto_cantidad(cantidad_rendido_mes, 'rendición', 'rendiciones')} "
+                    "aprobadas por Finanzas durante el mes."
+                )
+            ),
+            money_style,
+        ),
+        (
+            "Pendiente este mes",
+            pendiente_mes,
+            (
+                f"{texto_cantidad(cantidad_pendiente_mes, 'rendición', 'rendiciones')} "
+                "del mes esperando aprobación."
+            ),
+            money_style,
+        ),
+        (
+            "Rechazado este mes",
+            rechazado_mes,
+            (
+                f"{texto_cantidad(cantidad_rechazado_mes, 'rendición', 'rendiciones')} "
+                "del mes requiere corrección."
+                if cantidad_rechazado_mes == 1
+                else (
+                    f"{texto_cantidad(cantidad_rechazado_mes, 'rendición', 'rendiciones')} "
+                    "del mes requieren corrección."
+                )
+            ),
+            money_style,
+        ),
+        (
+            "Abonos pendientes de aprobación",
+            abonos_pendientes,
+            (
+                f"{texto_cantidad(cantidad_abonos_pendientes, 'abono', 'abonos')} "
+                "pendiente de aceptación."
+                if cantidad_abonos_pendientes == 1
+                else (
+                    f"{texto_cantidad(cantidad_abonos_pendientes, 'abono', 'abonos')} "
+                    "pendientes de aceptación."
+                )
+            ),
+            money_style,
+        ),
+    ]
+
+    for titulo, monto, explicacion, estilo_monto in resumen_mes:
+        ws_resumen.write(
+            fila_resumen,
+            0,
+            titulo,
+            label_style,
+        )
+
+        ws_resumen.write(
+            fila_resumen,
+            1,
+            monto,
+            estilo_monto,
+        )
+
+        ws_resumen.write(
+            fila_resumen,
+            2,
+            explicacion,
+            value_style,
+        )
+
+        fila_resumen += 1
+
+    # ============================================================
+    # Movimientos anteriores pendientes o rechazados
+    # ============================================================
+
+    ws_resumen.write_merge(
+        fila_resumen + 1,
+        fila_resumen + 1,
+        0,
+        2,
+        "MOVIMIENTOS DE MESES ANTERIORES",
+        section_style,
+    )
+
+    fila_resumen += 2
+
+    ws_resumen.write(
+        fila_resumen,
+        0,
+        "Pendientes de meses anteriores",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen,
+        1,
+        pendiente_anterior,
+        money_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen,
+        2,
+        (
+            f"{texto_cantidad(cantidad_pendiente_anterior, 'rendición', 'rendiciones')} "
+            "todavía en proceso de aprobación."
+        ),
+        pending_style,
+    )
+
+    fila_resumen += 1
+
+    ws_resumen.write(
+        fila_resumen,
+        0,
+        "Rechazadas de meses anteriores",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen,
+        1,
+        rechazado_anterior,
+        money_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen,
+        2,
+        (
+            f"{texto_cantidad(cantidad_rechazado_anterior, 'rendición', 'rendiciones')} "
+            "todavía requiere corrección."
+            if cantidad_rechazado_anterior == 1
+            else (
+                f"{texto_cantidad(cantidad_rechazado_anterior, 'rendición', 'rendiciones')} "
+                "todavía requieren corrección."
+            )
+        ),
+        rejected_style,
+    )
+
+    fila_resumen += 1
+
+    # ============================================================
+    # Aclaraciones
+    # ============================================================
 
     ws_resumen.write_merge(
         fila_resumen + 1,
@@ -5539,31 +5882,62 @@ def exportar_mis_rendiciones(request):
     ws_resumen.write(
         fila_resumen + 2,
         0,
-        "Pendiente",
+        "Saldo disponible",
         label_style,
     )
 
     ws_resumen.write(
         fila_resumen + 2,
         1,
-        (
-            "El gasto sigue dentro del proceso de aprobación "
-            "y todavía no reduce el saldo disponible."
-        ),
-        pending_style,
+        ("Solo disminuye cuando Finanzas aprueba definitivamente " "una rendición."),
+        approved_style,
     )
 
     ws_resumen.write(
         fila_resumen + 3,
         0,
-        "Rechazado",
+        "Saldo pendiente por rendir",
         label_style,
     )
 
     ws_resumen.write(
         fila_resumen + 3,
         1,
-        ("El gasto necesita corrección y tampoco reduce " "el saldo disponible."),
+        (
+            "Es una referencia de cuánto quedaría disponible después "
+            "de considerar también las rendiciones pendientes."
+        ),
+        pending_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 4,
+        0,
+        "Pendiente",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 4,
+        1,
+        (
+            "El gasto sigue dentro del proceso de aprobación y todavía "
+            "no reduce el saldo disponible actual."
+        ),
+        pending_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 5,
+        0,
+        "Rechazado",
+        label_style,
+    )
+
+    ws_resumen.write(
+        fila_resumen + 5,
+        1,
+        ("El gasto necesita corrección y no reduce el saldo " "disponible."),
         rejected_style,
     )
 
@@ -5571,7 +5945,9 @@ def exportar_mis_rendiciones(request):
     # Hoja 2: Movimientos
     # ============================================================
 
-    ws = wb.add_sheet("Movimientos")
+    ws = wb.add_sheet(
+        "Movimientos",
+    )
 
     columns = [
         "Nombre",
@@ -5630,8 +6006,17 @@ def exportar_mis_rendiciones(request):
     ws.set_panes_frozen(True)
     ws.set_horz_split_pos(1)
 
-    for row_num, mov in enumerate(movimientos, start=1):
-        fecha_registro = normalizar_fecha(getattr(mov, "fecha", None))
+    for row_num, mov in enumerate(
+        movimientos,
+        start=1,
+    ):
+        fecha_registro = normalizar_fecha(
+            getattr(
+                mov,
+                "fecha",
+                None,
+            )
+        )
 
         fecha_real = fecha_real_movimiento(mov)
 
@@ -5643,7 +6028,14 @@ def exportar_mis_rendiciones(request):
 
         hora_servicio_txt = hora_servicio.strftime("%H:%M") if hora_servicio else ""
 
-        status = str(getattr(mov, "status", "") or "")
+        status = str(
+            getattr(
+                mov,
+                "status",
+                "",
+            )
+            or ""
+        )
 
         if status in estados_rechazados_gasto or status == "rechazado_abono_usuario":
             situacion = "Rechazado"

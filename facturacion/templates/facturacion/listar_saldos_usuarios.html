@@ -1,5 +1,6 @@
 {% extends "dashboard_admin/base.html" %}
 {% load humanize %}
+{% load custom_filters %}
 
 {% block title %}Saldos Disponibles{% endblock %}
 
@@ -195,12 +196,29 @@
               <td class="px-4 py-4 text-right">
 
                 <div class="font-semibold text-gray-800 whitespace-nowrap">
-                  ${{ s.monto_rendido|default:0|floatformat:0|intcomma }}
+                  ${{ s.monto_rendido|default:0|floatformat:0|formato_clp }}
                 </div>
 
-                <div class="text-[11px] text-gray-400 mt-1">
-                  Sin rechazados
-                </div>
+                {% if s.monto_rechazado > 0 %}
+                  <div class="
+                    mt-1
+                    inline-flex items-center gap-1
+                    rounded-full
+                    bg-red-50
+                    px-2 py-1
+                    text-[11px]
+                    font-semibold
+                    text-red-700
+                    whitespace-nowrap
+                  ">
+                    ❌ Rechazado:
+                    ${{ s.monto_rechazado|default:0|floatformat:0|formato_clp }}
+                  </div>
+                {% else %}
+                  <div class="text-[11px] text-gray-400 mt-1">
+                    Sin rechazados
+                  </div>
+                {% endif %}
 
               </td>
 
@@ -219,7 +237,7 @@
                     whitespace-nowrap
                   ">
                     <span>●</span>
-                    ${{ s.monto_disponible|default:0|floatformat:0|intcomma }}
+                    ${{ s.monto_disponible|default:0|floatformat:0|formato_clp }}
                   </span>
 
                 {% elif s.monto_disponible < 0 %}
@@ -234,7 +252,7 @@
                     whitespace-nowrap
                   ">
                     <span>●</span>
-                    ${{ s.monto_disponible|default:0|floatformat:0|intcomma }}
+                    ${{ s.monto_disponible|default:0|floatformat:0|formato_clp }}
                   </span>
 
                 {% else %}
@@ -264,7 +282,7 @@
                     bg-amber-50 text-amber-700
                     font-semibold whitespace-nowrap
                   ">
-                    ${{ s.pend_user|default:0|floatformat:0|intcomma }}
+                    ${{ s.pend_user|default:0|floatformat:0|formato_clp }}
                   </span>
                 {% else %}
                   <span class="text-gray-400">$0</span>
@@ -281,7 +299,7 @@
                     bg-amber-50 text-amber-700
                     font-semibold whitespace-nowrap
                   ">
-                    ${{ s.pend_sup|default:0|floatformat:0|intcomma }}
+                    ${{ s.pend_sup|default:0|floatformat:0|formato_clp }}
                   </span>
                 {% else %}
                   <span class="text-gray-400">$0</span>
@@ -298,7 +316,7 @@
                     bg-amber-50 text-amber-700
                     font-semibold whitespace-nowrap
                   ">
-                    ${{ s.pend_pm|default:0|floatformat:0|intcomma }}
+                    ${{ s.pend_pm|default:0|floatformat:0|formato_clp }}
                   </span>
                 {% else %}
                   <span class="text-gray-400">$0</span>
@@ -315,7 +333,7 @@
                     bg-amber-50 text-amber-700
                     font-semibold whitespace-nowrap
                   ">
-                    ${{ s.pend_fin|default:0|floatformat:0|intcomma }}
+                    ${{ s.pend_fin|default:0|floatformat:0|formato_clp }}
                   </span>
                 {% else %}
                   <span class="text-gray-400">$0</span>
