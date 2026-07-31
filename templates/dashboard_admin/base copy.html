@@ -1,0 +1,2741 @@
+<!DOCTYPE html>
+{% load static %}
+{% load humanize %}
+
+<html lang="es">
+
+<head>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("admin-sidebar-collapsed") === "1") {
+          document.documentElement.classList.add(
+            "admin-sidebar-collapsed-init"
+          );
+        }
+      } catch (e) {}
+    })();
+  </script>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="csrf-token"
+    content="{{ csrf_token }}"
+  >
+
+  <!-- iOS / Apple Touch Icons -->
+  <link
+    rel="apple-touch-icon"
+    href="{% static 'icons/apple-touch-icon.png' %}"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    sizes="120x120"
+    href="{% static 'icons/apple-touch-icon-120x120.png' %}"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    sizes="180x180"
+    href="{% static 'icons/apple-touch-icon-180x180.png' %}"
+  >
+
+  <!-- Favicon clásico -->
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="32x32"
+    href="{% static 'icons/favicon-32x32.png' %}"
+  >
+
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="16x16"
+    href="{% static 'icons/favicon-16x16.png' %}"
+  >
+
+  <link
+    rel="icon"
+    href="{% static 'icons/favicon.ico' %}"
+    sizes="any"
+  >
+
+  <!-- PWA -->
+  <link
+    rel="manifest"
+    href="{% static 'icons/site.webmanifest' %}"
+  >
+
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
+
+  <meta
+    name="apple-mobile-web-app-title"
+    content="Miltel"
+  >
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* ====================================================== */
+    /* VARIABLES GENERALES */
+    /* ====================================================== */
+
+:root {
+  /* ====================================================== */
+  /* PALETA METÁLICA HOLOGRÁFICA */
+  /* ====================================================== */
+
+  --sidebar-metal-1: rgba(238, 244, 249, 0.94);
+  --sidebar-metal-2: rgba(207, 219, 229, 0.92);
+  --sidebar-metal-3: rgba(177, 192, 205, 0.94);
+  --sidebar-metal-4: rgba(224, 231, 238, 0.93);
+
+  --holo-cyan: #64d8e8;
+  --holo-blue: #7ca9e8;
+  --holo-violet: #b89de8;
+  --holo-pink: #e3a7c7;
+  --holo-mint: #91dccb;
+
+  --sidebar-text: #263746;
+  --sidebar-text-soft: #425665;
+  --sidebar-text-submenu: #405563;
+
+  --sidebar-border: rgba(255, 255, 255, 0.66);
+  --sidebar-border-dark: rgba(88, 112, 129, 0.20);
+
+  --sidebar-hover: rgba(255, 255, 255, 0.42);
+  --sidebar-hover-strong: rgba(255, 255, 255, 0.58);
+
+  --app-background: #f3f5f7;
+}
+
+/* ====================================================== */
+/* ESTRUCTURA GENERAL */
+/* ====================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.rotate-90 {
+  transform: rotate(90deg);
+}
+
+/* ====================================================== */
+/* EVITAR PARPADEO DEL SIDEBAR */
+/* ====================================================== */
+
+@media (min-width: 768px) {
+  html.admin-sidebar-collapsed-init #side-nav {
+    transform: translateX(-100%) !important;
+  }
+
+  html.admin-sidebar-collapsed-init
+  .content-wrapper
+  #main-content {
+    margin-left: 0 !important;
+  }
+}
+
+/* ====================================================== */
+/* CONTENEDOR PRINCIPAL */
+ /* ====================================================== */
+
+#app-wrapper {
+  background:
+    radial-gradient(
+      circle at 91% 5%,
+      rgba(126, 208, 219, 0.07),
+      transparent 27%
+    ),
+    radial-gradient(
+      circle at 12% 91%,
+      rgba(184, 157, 232, 0.06),
+      transparent 25%
+    ),
+    linear-gradient(
+      145deg,
+      #fafbfc 0%,
+      #f2f4f6 48%,
+      #edf1f4 100%
+    );
+}
+
+#main-content {
+  min-width: 0;
+
+  transition:
+    margin-left 0.25s ease,
+    padding 0.25s ease;
+}
+
+@media (min-width: 768px) {
+  .content-wrapper.with-sidebar #main-content {
+    margin-left: 18rem;
+  }
+
+  .content-wrapper.no-sidebar #main-content {
+    margin-left: 0;
+  }
+
+  #side-nav.collapsed {
+    transform: translateX(-100%) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  #main-content {
+    margin-left: 0 !important;
+  }
+}
+
+/* ====================================================== */
+/* HEADER METÁLICO CLARO */
+/* ====================================================== */
+
+#admin-header {
+  border-bottom:
+    1px solid
+    rgba(114, 132, 146, 0.18);
+
+  background:
+    linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.94) 0%,
+      rgba(235, 241, 245, 0.91) 35%,
+      rgba(255, 255, 255, 0.94) 58%,
+      rgba(231, 238, 243, 0.91) 100%
+    );
+
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+
+  box-shadow:
+    0 8px 28px rgba(53, 69, 82, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(98, 117, 132, 0.08);
+}
+
+.admin-header-logo-box {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+
+  flex-shrink: 0;
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.80);
+
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(214, 225, 233, 0.92)
+    );
+
+  box-shadow:
+    0 6px 16px rgba(64, 82, 96, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(95, 117, 133, 0.10);
+}
+
+.admin-header-logo-box::after {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      122deg,
+      transparent 14%,
+      rgba(100, 216, 232, 0.12) 32%,
+      rgba(227, 167, 199, 0.10) 50%,
+      rgba(184, 157, 232, 0.11) 68%,
+      transparent 86%
+    );
+}
+
+.admin-header-logo-box img {
+  display: block;
+
+  width: 40px;
+  height: 40px;
+
+  object-fit: contain;
+}
+
+/* ====================================================== */
+/* BOTÓN DEL MENÚ */
+/* ====================================================== */
+
+.admin-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 42px;
+  height: 42px;
+
+  flex-shrink: 0;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.80);
+
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(204, 216, 225, 0.92)
+    );
+
+  color: #405563;
+
+  font-size: 1.25rem;
+  line-height: 1;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 5px 14px rgba(61, 80, 95, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(77, 100, 117, 0.10);
+
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.admin-menu-button:hover {
+  color: #253a48;
+
+  border-color:
+    rgba(255, 255, 255, 0.96);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 1),
+      rgba(212, 224, 231, 0.96),
+      rgba(239, 226, 241, 0.92)
+    );
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 9px 22px rgba(55, 75, 90, 0.17),
+    0 0 17px rgba(100, 216, 232, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.admin-menu-button:focus {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(100, 216, 232, 0.14);
+}
+
+/* ====================================================== */
+/* USUARIO EN EL HEADER */
+/* ====================================================== */
+
+.admin-user-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  min-width: 0;
+  padding: 7px 11px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.74);
+
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.93),
+      rgba(214, 224, 232, 0.84)
+    );
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(91, 111, 127, 0.09),
+    0 5px 14px rgba(67, 84, 97, 0.09);
+}
+
+.admin-user-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 34px;
+  height: 34px;
+
+  flex-shrink: 0;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.86);
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #8ca6b5 0%,
+      #b7c7d0 28%,
+      #88c9cf 52%,
+      #b9a8d5 76%,
+      #829aaa 100%
+    );
+
+  color: #ffffff;
+
+  font-size: 0.76rem;
+  font-weight: 800;
+
+  box-shadow:
+    0 5px 13px rgba(59, 78, 92, 0.18),
+    0 0 12px rgba(100, 216, 232, 0.13),
+    inset 0 1px 1px rgba(255, 255, 255, 0.52);
+}
+
+/* ====================================================== */
+/* ACCIONES DEL HEADER */
+/* ====================================================== */
+
+.admin-header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  min-height: 38px;
+  padding: 8px 12px;
+
+  border-radius: 12px;
+
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.admin-header-action:hover {
+  transform: translateY(-1px);
+}
+
+.admin-header-action.mode {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.82);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(251, 253, 254, 0.98),
+      rgba(203, 218, 227, 0.92),
+      rgba(220, 213, 234, 0.86)
+    );
+
+  color: #425767;
+
+  box-shadow:
+    0 5px 14px rgba(62, 79, 93, 0.11),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.admin-header-action.mode:hover {
+  color: #293d4c;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 1),
+      rgba(203, 226, 228, 0.95),
+      rgba(226, 212, 237, 0.93)
+    );
+
+  box-shadow:
+    0 8px 20px rgba(60, 81, 97, 0.15),
+    0 0 16px rgba(100, 216, 232, 0.08);
+}
+
+.admin-header-action.logout {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.82);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(252, 253, 254, 0.98),
+      rgba(211, 220, 227, 0.92),
+      rgba(232, 215, 224, 0.87)
+    );
+
+  color: #5c4f61;
+
+  box-shadow:
+    0 5px 14px rgba(72, 63, 74, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+
+.admin-header-action.logout:hover {
+  color: #453845;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 1),
+      rgba(225, 229, 233, 0.95),
+      rgba(239, 211, 224, 0.92)
+    );
+
+  box-shadow:
+    0 8px 20px rgba(76, 63, 76, 0.14),
+    0 0 15px rgba(227, 167, 199, 0.08);
+}
+
+/* ====================================================== */
+/* CAMPANA */
+/* ====================================================== */
+
+.notification-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 40px;
+  height: 40px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.82);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(204, 217, 226, 0.92)
+    );
+
+  color: #425867;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 5px 14px rgba(59, 78, 93, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+
+  transition:
+    color 0.18s ease,
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.notification-button:hover {
+  color: #293f4e;
+
+  border-color:
+    rgba(255, 255, 255, 0.96);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 1),
+      rgba(206, 224, 229, 0.95),
+      rgba(226, 215, 238, 0.91)
+    );
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 8px 20px rgba(55, 76, 91, 0.16),
+    0 0 16px rgba(100, 216, 232, 0.08);
+}
+
+/* ====================================================== */
+/* SIDEBAR METÁLICO HOLOGRÁFICO */
+/* ====================================================== */
+
+#side-nav {
+  position: fixed;
+  isolation: isolate;
+
+  color: var(--sidebar-text);
+
+  border-right:
+    1px solid
+    rgba(255, 255, 255, 0.62);
+
+  background:
+    linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.25) 0%,
+      transparent 16%,
+      rgba(255, 255, 255, 0.14) 32%,
+      transparent 49%,
+      rgba(255, 255, 255, 0.20) 67%,
+      transparent 84%
+    ),
+    radial-gradient(
+      circle at 8% 4%,
+      rgba(100, 216, 232, 0.19),
+      transparent 27%
+    ),
+    radial-gradient(
+      circle at 92% 30%,
+      rgba(184, 157, 232, 0.17),
+      transparent 31%
+    ),
+    radial-gradient(
+      circle at 16% 86%,
+      rgba(227, 167, 199, 0.14),
+      transparent 29%
+    ),
+    linear-gradient(
+      145deg,
+      var(--sidebar-metal-1) 0%,
+      var(--sidebar-metal-2) 24%,
+      var(--sidebar-metal-4) 47%,
+      var(--sidebar-metal-3) 67%,
+      var(--sidebar-metal-1) 100%
+    );
+
+  background-size:
+    230% 100%,
+    auto,
+    auto,
+    auto,
+    auto;
+
+  backdrop-filter:
+    blur(22px)
+    saturate(125%);
+
+  -webkit-backdrop-filter:
+    blur(22px)
+    saturate(125%);
+
+  box-shadow:
+    14px 0 38px rgba(63, 79, 92, 0.16),
+    inset -1px 0 0 rgba(91, 112, 127, 0.13),
+    inset 1px 0 0 rgba(255, 255, 255, 0.66),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+
+  scrollbar-width: thin;
+
+  scrollbar-color:
+    rgba(95, 121, 139, 0.35)
+    transparent;
+
+  animation:
+    metallicBackgroundMove
+    18s
+    ease-in-out
+    infinite alternate;
+}
+
+@keyframes metallicBackgroundMove {
+  from {
+    background-position:
+      0% 0%,
+      center,
+      center,
+      center,
+      center;
+  }
+
+  to {
+    background-position:
+      100% 0%,
+      center,
+      center,
+      center,
+      center;
+  }
+}
+
+/* Textura metálica muy fina */
+#side-nav::before {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  z-index: -1;
+
+  pointer-events: none;
+
+  opacity: 0.22;
+
+  background:
+    repeating-linear-gradient(
+      96deg,
+      rgba(255, 255, 255, 0.14) 0,
+      rgba(255, 255, 255, 0.14) 1px,
+      rgba(73, 94, 109, 0.045) 1px,
+      rgba(73, 94, 109, 0.045) 3px,
+      transparent 3px,
+      transparent 7px
+    );
+
+  mix-blend-mode: soft-light;
+}
+
+/* Borde holográfico derecho */
+#side-nav::after {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  right: 0;
+
+  width: 2px;
+  height: 100%;
+
+  z-index: 3;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(100, 216, 232, 0.72) 16%,
+      rgba(145, 220, 203, 0.58) 34%,
+      rgba(184, 157, 232, 0.62) 54%,
+      rgba(227, 167, 199, 0.56) 74%,
+      rgba(124, 169, 232, 0.60) 89%,
+      transparent 100%
+    );
+
+  box-shadow:
+    -1px 0 8px rgba(100, 216, 232, 0.20),
+    1px 0 12px rgba(184, 157, 232, 0.17);
+}
+
+/* ====================================================== */
+/* SCROLLBAR DEL MENÚ */
+/* ====================================================== */
+
+#side-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+#side-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#side-nav::-webkit-scrollbar-thumb {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.46);
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(116, 143, 160, 0.62),
+      rgba(160, 184, 196, 0.56),
+      rgba(139, 134, 177, 0.48)
+    );
+}
+
+#side-nav::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(92, 122, 141, 0.76),
+      rgba(141, 171, 187, 0.70),
+      rgba(159, 145, 194, 0.65)
+    );
+}
+
+/* ====================================================== */
+/* ENCABEZADO DEL MENÚ */
+/* ====================================================== */
+
+#side-nav > div:first-child {
+  position: relative;
+  z-index: 2;
+
+  border-color:
+    rgba(88, 110, 126, 0.20)
+    !important;
+}
+
+#side-nav > div:first-child::after {
+  content: "";
+
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+
+  height: 1px;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(100, 216, 232, 0.44),
+      rgba(184, 157, 232, 0.34),
+      transparent
+    );
+}
+
+#side-nav > div:first-child > span {
+  color:
+    rgba(57, 78, 92, 0.70)
+    !important;
+
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.70);
+}
+
+#side-nav h2 {
+  color: #263b49;
+
+  font-weight: 850;
+  letter-spacing: 0.3px;
+
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88),
+    0 2px 8px rgba(73, 93, 107, 0.12);
+}
+
+#side-nav > ul {
+  position: relative;
+  z-index: 2;
+
+  gap: 0.28rem !important;
+
+  font-size: 0.98rem;
+}
+
+#side-nav > ul > li {
+  margin: 0 !important;
+}
+
+/* ====================================================== */
+/* OPCIONES PRINCIPALES */
+/* ====================================================== */
+
+#side-nav > ul > li > a,
+#side-nav > ul > li > div {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+
+  min-height: 43px;
+  padding: 9px 12px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.28);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.18),
+      rgba(255, 255, 255, 0.06) 42%,
+      rgba(98, 124, 142, 0.055)
+    );
+
+  color:
+    var(--sidebar-text)
+    !important;
+
+  font-weight: 700;
+  line-height: 1.3;
+
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.54);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Reflejo metálico */
+#side-nav > ul > li > a::before,
+#side-nav > ul > li > div::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  left: -115%;
+
+  width: 70%;
+  height: 100%;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      103deg,
+      transparent,
+      rgba(255, 255, 255, 0.54),
+      rgba(100, 216, 232, 0.12),
+      rgba(227, 167, 199, 0.10),
+      transparent
+    );
+
+  transform: skewX(-18deg);
+
+  transition:
+    left 0.60s ease;
+}
+
+#side-nav > ul > li > a:hover::before,
+#side-nav > ul > li > div:hover::before {
+  left: 150%;
+}
+
+#side-nav > ul > li > a:hover,
+#side-nav > ul > li > div:hover {
+  color: #1f3442 !important;
+
+  border-color:
+    rgba(255, 255, 255, 0.75);
+
+  background:
+    linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.64),
+      rgba(207, 231, 233, 0.46),
+      rgba(225, 216, 238, 0.45),
+      rgba(255, 255, 255, 0.58)
+    );
+
+  transform: translateX(3px);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -1px 0 rgba(88, 110, 126, 0.10),
+    0 7px 16px rgba(68, 86, 99, 0.11),
+    0 0 14px rgba(100, 216, 232, 0.06);
+}
+
+/* Línea iridiscente de selección */
+#side-nav > ul > li > a::after,
+#side-nav > ul > li > div::after {
+  content: "";
+
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+
+  width: 3px;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      to bottom,
+      var(--holo-cyan),
+      var(--holo-mint),
+      var(--holo-violet),
+      var(--holo-pink)
+    );
+
+  box-shadow:
+    0 0 8px rgba(100, 216, 232, 0.30);
+
+  opacity: 0;
+
+  transition:
+    opacity 0.18s ease;
+}
+
+#side-nav > ul > li > a:hover::after,
+#side-nav > ul > li > div:hover::after {
+  opacity: 1;
+}
+
+/* ====================================================== */
+/* SUBMENÚS */
+/* ====================================================== */
+
+#side-nav .submenu {
+  position: relative;
+
+  margin:
+    5px
+    0
+    7px
+    17px;
+
+  padding-left: 14px;
+
+  border-left:
+    1px solid
+    rgba(80, 109, 127, 0.24);
+}
+
+#side-nav .submenu::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+
+  width: 1px;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      to bottom,
+      transparent,
+      rgba(100, 216, 232, 0.60),
+      rgba(145, 220, 203, 0.48),
+      rgba(184, 157, 232, 0.50),
+      rgba(227, 167, 199, 0.44),
+      transparent
+    );
+
+  box-shadow:
+    0 0 7px rgba(100, 216, 232, 0.16);
+}
+
+#side-nav .submenu li {
+  margin: 0 !important;
+}
+
+#side-nav .submenu li a,
+#side-nav .submenu > a {
+  position: relative;
+
+  display: block;
+
+  padding: 7px 10px;
+
+  border:
+    1px solid
+    transparent;
+
+  border-radius: 9px;
+
+  color:
+    var(--sidebar-text-submenu)
+    !important;
+
+  font-size: 0.91rem;
+  font-weight: 600;
+  line-height: 1.3;
+
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.50);
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+#side-nav .submenu li a:hover,
+#side-nav .submenu > a:hover {
+  color: #203744 !important;
+
+  border-color:
+    rgba(255, 255, 255, 0.58);
+
+  background:
+    linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0.50),
+      rgba(205, 229, 232, 0.35),
+      rgba(227, 216, 239, 0.34)
+    );
+
+  transform: translateX(3px);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    0 5px 12px rgba(69, 87, 100, 0.08);
+}
+
+#side-nav .flecha {
+  color: #536f80;
+
+  font-size: 0.88rem;
+  font-weight: 800;
+
+  filter:
+    drop-shadow(
+      0 1px 0 rgba(255, 255, 255, 0.66)
+    );
+}
+
+#side-nav .text-gray-400 {
+  color: #526b7a !important;
+}
+
+#side-nav .text-xs {
+  letter-spacing: 0.25px;
+}
+
+/* ====================================================== */
+/* PIE DEL SIDEBAR */
+/* ====================================================== */
+
+.sidebar-footer {
+  position: relative;
+  z-index: 2;
+
+  margin-top: 2.5rem;
+  padding-top: 1.25rem;
+
+  color:
+    rgba(50, 70, 83, 0.76)
+    !important;
+
+  border-top:
+    1px solid
+    rgba(81, 105, 121, 0.20);
+}
+
+.sidebar-footer::before {
+  content: "";
+
+  position: absolute;
+  top: -1px;
+  left: 12%;
+  right: 12%;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(100, 216, 232, 0.45),
+      rgba(184, 157, 232, 0.38),
+      transparent
+    );
+}
+
+.sidebar-footer p {
+  color:
+    rgba(49, 70, 84, 0.74)
+    !important;
+
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.70);
+}
+
+.sidebar-footer-logo {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 106px;
+  min-height: 52px;
+
+  margin:
+    8px
+    auto
+    0;
+
+  padding:
+    5px
+    9px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.76);
+
+  border-radius: 12px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(203, 217, 226, 0.91)
+    );
+
+  box-shadow:
+    0 9px 21px rgba(63, 81, 95, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(82, 104, 120, 0.09);
+}
+
+.sidebar-footer-logo::after {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  left: -120%;
+
+  width: 62%;
+  height: 100%;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      103deg,
+      transparent,
+      rgba(255, 255, 255, 0.72),
+      rgba(100, 216, 232, 0.17),
+      rgba(227, 167, 199, 0.13),
+      transparent
+    );
+
+  transform: skewX(-18deg);
+
+  animation:
+    sidebarLogoShine
+    5s
+    ease-in-out
+    infinite;
+}
+
+.sidebar-footer-logo img {
+  display: block;
+
+  width: 100%;
+  max-width: 92px;
+  height: 42px;
+
+  object-fit: contain;
+}
+
+@keyframes sidebarLogoShine {
+  0% {
+    left: -120%;
+  }
+
+  30% {
+    left: 145%;
+  }
+
+  100% {
+    left: 145%;
+  }
+}
+    /* ====================================================== */
+    /* NOTIFICACIONES */
+    /* ====================================================== */
+
+    #notification-panel {
+      overflow: hidden;
+
+      border:
+        1px solid
+        #e2e8f0;
+
+      border-radius: 16px;
+
+      box-shadow:
+        0 20px 45px rgba(15, 23, 42, 0.16);
+    }
+
+    #notification-panel,
+    #notification-panel * {
+      color: #111827 !important;
+    }
+
+    #notification-panel .text-xs {
+      color: #6b7280 !important;
+    }
+
+    #notification-panel a {
+      transition:
+        background-color 0.18s ease;
+    }
+
+    /* ====================================================== */
+    /* MÓVIL */
+    /* ====================================================== */
+
+    @media (max-width: 767px) {
+      #side-nav {
+        box-shadow:
+          18px 0 45px rgba(69, 35, 20, 0.24);
+      }
+
+      .admin-header-action {
+        min-height: 36px;
+        padding: 7px 10px;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .admin-header-logo-box {
+        width: 40px;
+        height: 40px;
+      }
+
+      .admin-header-logo-box img {
+        width: 36px;
+        height: 36px;
+      }
+
+      .admin-menu-button {
+        width: 40px;
+        height: 40px;
+      }
+
+      .notification-button {
+        width: 38px;
+        height: 38px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
+
+  <!-- ====================================================== -->
+  <!-- HEADER FIJO -->
+  <!-- ====================================================== -->
+
+  <header
+    id="admin-header"
+    class="fixed top-0 left-0 z-50 w-full px-3 py-2 sm:px-5"
+  >
+    <div class="relative flex w-full items-center justify-between gap-3">
+
+      <!-- Izquierda -->
+      <div class="flex min-w-0 items-center gap-3">
+
+        <button
+          type="button"
+          onclick="toggleSidebar()"
+          aria-label="Abrir o cerrar menú"
+          class="admin-menu-button"
+        >
+          ☰
+        </button>
+
+        <div class="admin-header-logo-box">
+          <img
+            src="{% static 'images/logo.png' %}"
+            alt="Logo MILTEL"
+          >
+        </div>
+
+        <div class="min-w-0">
+          <strong class="block truncate text-sm font-extrabold tracking-wide text-slate-900 sm:text-base">
+            PLATAFORMA DE MILTEL
+          </strong>
+
+          <span class="hidden text-xs font-medium text-slate-500 sm:block">
+            Gestión operativa y administrativa
+          </span>
+        </div>
+
+      </div>
+
+      <!-- Derecha -->
+      <div class="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
+
+        <!-- Usuario -->
+        <div class="admin-user-card hidden sm:flex">
+
+          <div class="admin-user-avatar">
+            {% if request.user.first_name %}
+              {{ request.user.first_name|first|upper }}
+            {% else %}
+              {{ request.user.username|first|upper }}
+            {% endif %}
+          </div>
+
+          <div class="min-w-0 max-w-[220px] text-left leading-tight">
+
+            <span class="block truncate text-sm font-semibold text-slate-800">
+              {{ request.user.get_full_name|default:request.user.username }}
+            </span>
+
+            <span class="block text-[11px] text-slate-500">
+              Sesión activa
+            </span>
+
+          </div>
+
+        </div>
+
+        <!-- Cambiar a usuario -->
+        {% if request.user.is_authenticated and request.user.es_usuario %}
+
+          {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
+
+            <form
+              method="post"
+              action="{% url 'usuarios:switch_mode' %}"
+              class="inline-block"
+            >
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="admin-header-action mode"
+              >
+                <span>🔁</span>
+
+                <span class="hidden lg:inline">
+                  Cambiar a Usuario
+                </span>
+              </button>
+            </form>
+
+          {% endif %}
+
+        {% endif %}
+
+        <!-- Cerrar sesión -->
+        <form
+          method="post"
+          action="{% url 'dashboard_admin:logout' %}"
+          class="inline-block"
+        >
+          {% csrf_token %}
+
+          <button
+            type="submit"
+            class="admin-header-action logout"
+          >
+            <span>↪</span>
+
+            <span class="hidden lg:inline">
+              Cerrar sesión
+            </span>
+          </button>
+        </form>
+
+        <!-- Notificaciones -->
+        <div class="relative">
+
+          <button
+            type="button"
+            onclick="toggleNotifications()"
+            aria-label="Abrir notificaciones"
+            class="notification-button relative"
+          >
+            <i
+              data-lucide="bell"
+              class="h-5 w-5"
+            ></i>
+
+            {% if notificaciones_no_leidas > 0 %}
+              <span class="absolute -top-2 -right-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm">
+                {{ notificaciones_no_leidas }}
+              </span>
+            {% endif %}
+          </button>
+
+          <!-- Panel de notificaciones -->
+          <div
+            id="notification-panel"
+            class="absolute right-0 mt-3 hidden w-72 bg-white z-50 sm:w-80"
+          >
+            <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+
+              <div class="flex items-center justify-between gap-3">
+
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900">
+                    Notificaciones
+                  </h3>
+
+                  <p class="mt-0.5 text-[11px] text-slate-500">
+                    Actividad reciente de la plataforma
+                  </p>
+                </div>
+
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                  🔔
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="max-h-80 overflow-y-auto p-2">
+
+              {% for n in notificaciones_recientes %}
+
+                <div id="notificacion-{{ n.id }}">
+
+                  <a
+                    href="{% url 'usuarios:leer_notificacion' n.id %}"
+                    class="
+                      block w-full rounded-xl border-b border-slate-100 p-3 text-left text-sm
+                      {% if not n.leido %}
+                        bg-amber-50 hover:bg-amber-100
+                      {% else %}
+                        hover:bg-slate-50
+                      {% endif %}
+                    "
+                  >
+                    <div class="flex flex-col gap-1">
+
+                      <span class="leading-snug">
+                        {{ n.mensaje }}
+                      </span>
+
+                      <span class="text-xs text-gray-400">
+                        {{ n.fecha|naturaltime }}
+                      </span>
+
+                    </div>
+                  </a>
+
+                </div>
+
+              {% empty %}
+
+                <div class="px-4 py-8 text-center">
+
+                  <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-lg">
+                    🔕
+                  </div>
+
+                  <p class="mt-3 text-sm font-semibold text-slate-700">
+                    Sin notificaciones
+                  </p>
+
+                  <p class="mt-1 text-xs text-slate-500">
+                    No tienes actividad reciente.
+                  </p>
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ====================================================== -->
+  <!-- CONTENEDOR PRINCIPAL -->
+  <!-- ====================================================== -->
+
+  <div
+    id="app-wrapper"
+    class="content-wrapper with-sidebar relative flex min-h-screen flex-col md:flex-row"
+  >
+
+    <!-- ==================================================== -->
+    <!-- MENÚ LATERAL -->
+    <!-- ==================================================== -->
+
+    <nav
+      id="side-nav"
+      class="
+        fixed top-14 bottom-0 left-0 z-40
+        w-72
+        -translate-x-full
+        transform
+        overflow-y-auto
+        p-4
+        transition-transform
+        md:translate-x-0
+      "
+    >
+
+      <!-- Encabezado del menú -->
+      <div class="mb-5 border-b border-white/15 pb-4">
+
+        <span class="block text-[11px] font-bold uppercase tracking-[0.18em] text-white/70">
+          
+        </span>
+
+        <h2 class="mt-1 text-2xl font-extrabold text-white">
+          Menú principal
+        </h2>
+
+      </div>
+
+      <ul class="space-y-1 text-base">
+
+        <!-- Inicio -->
+        <li>
+          <a
+            href="{% url 'dashboard_admin:inicio_admin' %}"
+            class="flex items-center gap-2 font-bold"
+          >
+            <span>🏠</span>
+            <span>Inicio</span>
+          </a>
+        </li>
+
+        <!-- Operaciones -->
+        {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🛠</span>
+                <span>Operaciones</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Horas extras
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:listar_sitios' %}">
+                  Lista Sitios Móviles
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:produccion_admin' %}">
+                  Producciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:vista_rendiciones' %}">
+                  Rendiciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:listar_servicios_pm' %}">
+                  Crear Servicios
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:listar_servicios_supervisor' %}">
+                  Realizar Asignación
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'operaciones:resumen_operativo' %}">
+                  Resumen Operativo
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Prevención -->
+        {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🦺</span>
+                <span>Prevención</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'prevencion:dashboard' %}">
+                  Documentos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:document_create' %}">
+                  Crear documento
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:notifications_edit' %}">
+                  Notificaciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:type_manage' %}">
+                  Tipos de documento
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Flota -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🚗</span>
+                <span>Flota</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'flota:vehicle_list' %}">
+                  Lista de vehículos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'flota:assignment_list' %}">
+                  Asignaciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'flota:service_list' %}">
+                  Servicios
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- RR.HH -->
+        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🧑‍💼</span>
+                <span>RR.HH</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'liquidaciones:admin_lista' %}">
+                    Liquidaciones
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:contratos_trabajo' %}">
+                    Contratos de trabajo
+                  </a>
+                </li>
+
+              {% endif %}
+
+              {% if request.user.es_supervisor %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_supervisor' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_pm' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_rrhh %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_rrhh' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_admin_general %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_todas_vacaciones' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% endif %}
+
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}">
+                    Fichas de ingresos
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listado_documentos' %}">
+                    Documentos trabajadores
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:cronograma_pago_admin' %}">
+                    Cronograma de pago
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listar_adelanto_admin' %}">
+                    Avances de sueldos
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'dashboard_admin:listar_feriados' %}">
+                    Feriados
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listar_firmas' %}">
+                    Registro de firmas
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'usuarios:subir_firma_representante' %}">
+                    Subir Firma Representante Legal
+                  </a>
+                </li>
+
+              {% endif %}
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Subcontrato -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🤝</span>
+                <span>Subcontrato</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Contratos de servicios
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Contratos de trabajo
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Cursos de los trabajadores
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Facturas de producciones
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  F30 y F30-1
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Liquidaciones de sueldos
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Logística -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📦</span>
+                <span>Logística</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'logistica:herramientas_list' %}">
+                  Equipos y Herramientas
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'logistica:herramientas_asignaciones_panel' %}">
+                  Asignaciones de Herramientas
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Finanzas -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📑</span>
+                <span>Finanzas</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'facturacion:listar_oc_facturacion' %}">
+                  Lista de OC
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_facturas' %}">
+                  Lista de Facturas
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_cartola' %}">
+                  Cartola de Movimientos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_saldos_usuarios' %}">
+                  Saldos Disponibles
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:facturacion_resumen' %}">
+                  Resumen Finanzas
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Beneficios -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🎁</span>
+                <span>Beneficios</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Convenios disponibles
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Cámara GPS -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📷</span>
+                <span>Cámara GPS</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'geo_cam:capture' %}?next={{ request.get_full_path|urlencode }}">
+                  Cámara
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Bot GZ -->
+        {% if request.user.es_admin_general %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🤖</span>
+                <span>Bot GZ</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'bot_gz:training_dashboard' %}">
+                  Entrenamiento del bot
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Seguridad -->
+        {% if request.user.is_authenticated and request.user.is_staff %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🔐</span>
+                <span>Seguridad</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'usuarios:two_factor_setup' %}">
+                  Autenticación en dos pasos & dispositivos
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Administración de usuarios -->
+        {% if request.user.es_admin_general %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>👤</span>
+                <span>Administración de Usuarios</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Grupos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'dashboard_admin:listar_usuarios' %}">
+                  Usuarios
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+      </ul>
+
+      <!-- Pie del menú -->
+      <div class="sidebar-footer text-center text-xs text-white/80">
+
+        <p class="mb-1 font-medium">
+          Desarrollado por
+        </p>
+
+        <div class="sidebar-footer-logo">
+          <img
+            src="{% static 'images/planixb.png' %}"
+            alt="Planix"
+          >
+        </div>
+
+      </div>
+
+    </nav>
+
+    <!-- ==================================================== -->
+    <!-- CONTENIDO -->
+    <!-- ==================================================== -->
+
+    <main
+      id="main-content"
+      class="flex-1 min-w-0 px-3 py-4 sm:px-5 sm:py-6 lg:px-7"
+    >
+      {% block dashboard_content %}
+      {% endblock %}
+    </main>
+
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- MENSAJES EMERGENTES -->
+  <!-- ====================================================== -->
+
+  {% if messages %}
+
+    <div
+      id="mensajes"
+      class="fixed top-20 left-1/2 z-[70] w-full max-w-xl -translate-x-1/2 space-y-2 px-4"
+    >
+
+      {% for message in messages %}
+
+        <div
+          class="
+            flex items-center justify-between gap-3
+            rounded-2xl
+            border border-white/30
+            p-4
+            text-white
+            shadow-xl
+            backdrop-blur-md
+
+            {% if message.tags == 'success' %}
+              bg-green-600/95
+            {% elif message.tags == 'error' %}
+              bg-red-600/95
+            {% elif message.tags == 'warning' %}
+              bg-amber-500/95
+            {% else %}
+              bg-blue-600/95
+            {% endif %}
+          "
+        >
+          <span class="text-sm font-medium">
+            {{ message }}
+          </span>
+
+          <button
+            type="button"
+            onclick="this.parentElement.remove()"
+            aria-label="Cerrar mensaje"
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-bold text-white hover:bg-white/25"
+          >
+            &times;
+          </button>
+        </div>
+
+      {% endfor %}
+
+    </div>
+
+    <script>
+      setTimeout(() => {
+        const mensajes =
+          document.getElementById("mensajes");
+
+        if (mensajes) {
+          mensajes.remove();
+        }
+      }, 10000);
+    </script>
+
+  {% endif %}
+
+  <!-- ====================================================== -->
+  <!-- SIDEBAR -->
+  <!-- ====================================================== -->
+
+  <script>
+    const ADMIN_SIDEBAR_KEY =
+      "admin-sidebar-collapsed";
+
+    function applySidebarState() {
+      const nav =
+        document.getElementById("side-nav");
+
+      const wrapper =
+        document.querySelector(".content-wrapper");
+
+      if (!nav || !wrapper) {
+        return;
+      }
+
+      const isDesktop =
+        window
+          .matchMedia("(min-width: 768px)")
+          .matches;
+
+      let raw = null;
+
+      try {
+        raw =
+          localStorage.getItem(
+            ADMIN_SIDEBAR_KEY
+          );
+      } catch (e) {}
+
+      const savedCollapsed =
+        raw === "1";
+
+      if (isDesktop) {
+        nav.classList.toggle(
+          "collapsed",
+          savedCollapsed
+        );
+
+        wrapper.classList.toggle(
+          "no-sidebar",
+          savedCollapsed
+        );
+
+        wrapper.classList.toggle(
+          "with-sidebar",
+          !savedCollapsed
+        );
+
+        nav.classList.remove(
+          "-translate-x-full"
+        );
+      } else {
+        nav.classList.add(
+          "-translate-x-full"
+        );
+
+        nav.classList.remove(
+          "collapsed"
+        );
+
+        wrapper.classList.remove(
+          "no-sidebar"
+        );
+
+        wrapper.classList.add(
+          "with-sidebar"
+        );
+      }
+
+      document
+        .documentElement
+        .classList
+        .remove(
+          "admin-sidebar-collapsed-init"
+        );
+    }
+
+    function toggleSidebar() {
+      const nav =
+        document.getElementById("side-nav");
+
+      const wrapper =
+        document.querySelector(".content-wrapper");
+
+      if (!nav || !wrapper) {
+        return;
+      }
+
+      const isDesktop =
+        window
+          .matchMedia("(min-width: 768px)")
+          .matches;
+
+      if (isDesktop) {
+        const willCollapse =
+          !nav.classList.contains(
+            "collapsed"
+          );
+
+        nav.classList.toggle(
+          "collapsed",
+          willCollapse
+        );
+
+        wrapper.classList.toggle(
+          "no-sidebar",
+          willCollapse
+        );
+
+        wrapper.classList.toggle(
+          "with-sidebar",
+          !willCollapse
+        );
+
+        try {
+          localStorage.setItem(
+            ADMIN_SIDEBAR_KEY,
+            willCollapse ? "1" : "0"
+          );
+        } catch (e) {}
+      } else {
+        nav.classList.toggle(
+          "-translate-x-full"
+        );
+      }
+    }
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      applySidebarState
+    );
+
+    window.addEventListener(
+      "resize",
+      applySidebarState
+    );
+  </script>
+
+  <!-- ====================================================== -->
+  <!-- NOTIFICACIONES -->
+  <!-- ====================================================== -->
+
+  <script>
+    function leerNotificacion(
+      id,
+      urlDestino
+    ) {
+      fetch(
+        `/usuarios/notificacion/${id}/leer/`
+      )
+        .then((response) => {
+          if (!response.ok) {
+            return;
+          }
+
+          const item =
+            document.getElementById(
+              `notificacion-${id}`
+            );
+
+          if (item) {
+            item.remove();
+          }
+
+          const badge =
+            document.querySelector(
+              ".notification-button .bg-red-500"
+            );
+
+          if (badge) {
+            const count =
+              parseInt(
+                badge.innerText,
+                10
+              );
+
+            if (count > 1) {
+              badge.innerText =
+                count - 1;
+            } else {
+              badge.remove();
+            }
+          }
+
+          window.location.href =
+            urlDestino;
+        });
+    }
+
+    function toggleNotifications() {
+      const panel =
+        document.getElementById(
+          "notification-panel"
+        );
+
+      if (panel) {
+        panel.classList.toggle(
+          "hidden"
+        );
+      }
+    }
+
+    document.addEventListener(
+      "click",
+      function (event) {
+        const panel =
+          document.getElementById(
+            "notification-panel"
+          );
+
+        const notificationButton =
+          event.target.closest(
+            ".notification-button"
+          );
+
+        if (
+          !panel ||
+          panel.classList.contains("hidden")
+        ) {
+          return;
+        }
+
+        if (
+          panel.contains(event.target) ||
+          notificationButton
+        ) {
+          return;
+        }
+
+        panel.classList.add("hidden");
+      }
+    );
+  </script>
+
+  <!-- ====================================================== -->
+  <!-- ICONOS -->
+  <!-- ====================================================== -->
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    lucide.createIcons();
+  </script>
+
+  <!-- ====================================================== -->
+  <!-- SUBMENÚS -->
+  <!-- ====================================================== -->
+
+  <script>
+    function toggleMenu(element) {
+      const submenu =
+        element.nextElementSibling;
+
+      const flecha =
+        element.querySelector(
+          ".flecha"
+        );
+
+      if (!submenu) {
+        return;
+      }
+
+      const isHidden =
+        submenu.classList.contains(
+          "hidden"
+        ) ||
+        submenu.style.display === "none";
+
+      if (isHidden) {
+        submenu.classList.remove(
+          "hidden"
+        );
+
+        submenu.style.display =
+          "block";
+
+        if (flecha) {
+          flecha.classList.add(
+            "rotate-90"
+          );
+        }
+      } else {
+        submenu.classList.add(
+          "hidden"
+        );
+
+        submenu.style.display =
+          "none";
+
+        if (flecha) {
+          flecha.classList.remove(
+            "rotate-90"
+          );
+        }
+      }
+    }
+  </script>
+
+  <!-- ====================================================== -->
+  <!-- ALTURA DINÁMICA DEL HEADER -->
+  <!-- ====================================================== -->
+
+  <script>
+    (function () {
+      function applyHeaderOffset() {
+        const header =
+          document.querySelector(
+            "header"
+          );
+
+        const wrapper =
+          document.getElementById(
+            "app-wrapper"
+          );
+
+        if (!header || !wrapper) {
+          return;
+        }
+
+        const height =
+          Math.ceil(
+            header
+              .getBoundingClientRect()
+              .height || 0
+          );
+
+        wrapper.style.paddingTop =
+          `${height}px`;
+
+        const nav =
+          document.getElementById(
+            "side-nav"
+          );
+
+        if (nav) {
+          nav.style.top =
+            `${height}px`;
+
+          nav.style.height =
+            `calc(100vh - ${height}px)`;
+        }
+      }
+
+      window.addEventListener(
+        "load",
+        applyHeaderOffset
+      );
+
+      window.addEventListener(
+        "resize",
+        applyHeaderOffset
+      );
+
+      setTimeout(
+        applyHeaderOffset,
+        50
+      );
+
+      setTimeout(
+        applyHeaderOffset,
+        250
+      );
+    })();
+  </script>
+
+</body>
+</html>

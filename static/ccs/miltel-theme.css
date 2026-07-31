@@ -1,0 +1,222 @@
+/* ========================================================== */
+/* MILTEL THEME                                                */
+/* Paleta oficial metálica holográfica de la plataforma       */
+/* ========================================================== */
+
+:root {
+    /* ======================================================== */
+    /* FONDOS GENERALES                                         */
+    /* ======================================================== */
+
+    --miltel-app-background: #f3f5f7;
+    --miltel-page-background: #f8fafc;
+    --miltel-surface: #ffffff;
+    --miltel-surface-soft: #f1f5f9;
+    --miltel-surface-muted: #e9eef2;
+
+    --miltel-app-gradient:
+        radial-gradient(circle at 91% 5%,
+            rgba(126, 208, 219, 0.07),
+            transparent 27%),
+        radial-gradient(circle at 12% 91%,
+            rgba(184, 157, 232, 0.06),
+            transparent 25%),
+        linear-gradient(145deg,
+            #fafbfc 0%,
+            #f2f4f6 48%,
+            #edf1f4 100%);
+
+    /* ======================================================== */
+    /* PALETA METÁLICA                                          */
+    /* Valores tomados directamente del base actual             */
+    /* ======================================================== */
+
+    --miltel-metal-1: rgba(238, 244, 249, 0.94);
+    --miltel-metal-2: rgba(207, 219, 229, 0.92);
+    --miltel-metal-3: rgba(177, 192, 205, 0.94);
+    --miltel-metal-4: rgba(224, 231, 238, 0.93);
+
+    /* ======================================================== */
+    /* PALETA HOLOGRÁFICA                                       */
+    /* ======================================================== */
+
+    --miltel-holo-cyan: #64d8e8;
+    --miltel-holo-blue: #7ca9e8;
+    --miltel-holo-violet: #b89de8;
+    --miltel-holo-pink: #e3a7c7;
+    --miltel-holo-mint: #91dccb;
+
+    /* ======================================================== */
+    /* TEXTOS                                                   */
+    /* ======================================================== */
+
+    --miltel-text-primary: #263746;
+    --miltel-text-title: #263b49;
+    --miltel-text-secondary: #425665;
+    --miltel-text-submenu: #405563;
+    --miltel-text-hover: #1f3442;
+    --miltel-text-muted: #64748b;
+    --miltel-text-soft: #6b7280;
+    --miltel-text-disabled: #94a3b8;
+    --miltel-text-dark: #111827;
+    --miltel-text-white: #ffffff;
+
+    /* ======================================================== */
+    /* COLOR PRINCIPAL DE INTERACCIÓN                           */
+    /* Basado en el tono metálico azul del base actual          */
+    /* ======================================================== */
+
+    --miltel-primary: #425867;
+    --miltel-primary-hover: #293f4e;
+    --miltel-primary-dark: #253a48;
+
+    --miltel-primary-soft: #e0f2fe;
+    --miltel-primary-soft-hover: #d8edf5;
+    --miltel-primary-border: #bae6fd;
+    --miltel-primary-focus: rgba(100, 216, 232, 0.14);
+
+    /* ======================================================== */
+    /* ESTADOS                                                  */
+    /* Valores compatibles con los colores actuales Tailwind   */
+    /* ======================================================== */
+
+    --miltel-success: #059669;
+    --miltel-success-hover: #047857;
+    --miltel-success-dark: #065f46;
+    --miltel-success-soft: #ecfdf5;
+    --miltel-success-border: #a7f3d0;
+    --miltel-success-text: #047857;
+
+    --miltel-warning: #d97706;
+    --miltel-warning-hover: #b45309;
+    --miltel-warning-dark: #92400e;
+    --miltel-warning-soft: #fffbeb;
+    --miltel-warning-border: #fde68a;
+    --miltel-warning-text: #b45309;
+
+    --miltel-danger: #dc2626;
+    --miltel-danger-hover: #b91c1c;
+    --miltel-danger-dark: #991b1b;
+    --miltel-danger-soft: #fef2f2;
+    --miltel-danger-border: #fecaca;
+    --miltel-danger-text: #b91c1c;
+
+    --miltel-info: #0284c7;
+    --miltel-info-hover: #0369a1;
+    --miltel-info-dark: #075985;
+    --miltel-info-soft: #f0f9ff;
+    --miltel-info-border: #bae6fd;
+    --miltel-info-text: #0369a1;
+
+    --miltel-purple: #7e22ce;
+    --miltel-purple-hover: #6b21a8;
+    --miltel-purple-soft: #faf5ff;
+    --miltel-purple-border: #e9d5ff;
+    --miltel-purple-text: #7e22ce;
+
+    /* ======================================================== */
+    /* BORDES                                                   */
+    /* ======================================================== */
+
+    --miltel-border: #e2e8f0;
+    --miltel-border-soft: #e5e7eb;
+    --miltel-border-medium: #cbd5e1;
+    --miltel-border-dark: rgba(88, 112, 129, 0.20);
+
+    --miltel-border-glass: rgba(255, 255, 255, 0.66);
+    --miltel-border-glass-strong: rgba(255, 255, 255, 0.82);
+    --miltel-border-glass-bright: rgba(255, 255, 255, 0.96);
+
+    /* ======================================================== */
+    /* HOVER DE SUPERFICIES                                     */
+    /* ======================================================== */
+
+    --miltel-hover-glass: rgba(255, 255, 255, 0.42);
+    --miltel-hover-glass-strong: rgba(255, 255, 255, 0.58);
+
+    /* ======================================================== */
+    /* SOMBRAS                                                  */
+    /* ======================================================== */
+
+    --miltel-shadow-xs:
+        0 1px 2px rgba(15, 23, 42, 0.05);
+
+    --miltel-shadow-sm:
+        0 4px 12px rgba(53, 69, 82, 0.08);
+
+    --miltel-shadow-md:
+        0 8px 24px rgba(53, 69, 82, 0.11);
+
+    --miltel-shadow-lg:
+        0 18px 45px rgba(15, 23, 42, 0.16);
+
+    --miltel-shadow-panel:
+        0 10px 30px rgba(0, 0, 0, 0.15);
+
+    --miltel-shadow-header:
+        0 8px 28px rgba(53, 69, 82, 0.09),
+        inset 0 1px 0 rgba(255, 255, 255, 0.98),
+        inset 0 -1px 0 rgba(98, 117, 132, 0.08);
+
+    --miltel-shadow-sidebar:
+        14px 0 38px rgba(63, 79, 92, 0.16),
+        inset -1px 0 0 rgba(91, 112, 127, 0.13),
+        inset 1px 0 0 rgba(255, 255, 255, 0.66),
+        inset 0 1px 0 rgba(255, 255, 255, 0.78);
+
+    /* ======================================================== */
+    /* RADIOS                                                   */
+    /* ======================================================== */
+
+    --miltel-radius-xs: 0.375rem;
+    --miltel-radius-sm: 0.5rem;
+    --miltel-radius-md: 0.75rem;
+    --miltel-radius-lg: 1rem;
+    --miltel-radius-xl: 1.5rem;
+    --miltel-radius-pill: 999px;
+
+    /* ======================================================== */
+    /* DIMENSIONES                                              */
+    /* ======================================================== */
+
+    --miltel-sidebar-width: 18rem;
+    --miltel-table-min-width: 1100px;
+    --miltel-excel-panel-width: 260px;
+
+    /* ======================================================== */
+    /* TRANSICIONES                                             */
+    /* ======================================================== */
+
+    --miltel-transition-fast: 0.15s ease;
+    --miltel-transition: 0.18s ease;
+    --miltel-transition-medium: 0.20s ease;
+    --miltel-transition-layout: 0.25s ease;
+
+    /* ======================================================== */
+    /* ALIAS TEMPORALES                                        */
+    /* Mantienen compatibilidad mientras migramos plantillas    */
+    /* ======================================================== */
+
+    --sidebar-metal-1: var(--miltel-metal-1);
+    --sidebar-metal-2: var(--miltel-metal-2);
+    --sidebar-metal-3: var(--miltel-metal-3);
+    --sidebar-metal-4: var(--miltel-metal-4);
+
+    --holo-cyan: var(--miltel-holo-cyan);
+    --holo-blue: var(--miltel-holo-blue);
+    --holo-violet: var(--miltel-holo-violet);
+    --holo-pink: var(--miltel-holo-pink);
+    --holo-mint: var(--miltel-holo-mint);
+
+    --sidebar-text: var(--miltel-text-primary);
+    --sidebar-text-soft: var(--miltel-text-secondary);
+    --sidebar-text-submenu: var(--miltel-text-submenu);
+
+    --sidebar-border: var(--miltel-border-glass);
+    --sidebar-border-dark: var(--miltel-border-dark);
+
+    --sidebar-hover: var(--miltel-hover-glass);
+    --sidebar-hover-strong: var(--miltel-hover-glass-strong);
+
+    --app-background: var(--miltel-app-background);
+}

@@ -6,6 +6,8 @@ import io
 import json
 import locale
 import logging
+import re
+import unicodedata
 from datetime import datetime, time
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -2544,25 +2546,349 @@ def exportar_servicios_supervisor(request):
 @login_required
 @rol_requerido("usuario")
 def mis_servicios_tecnico(request):
-    usuario = request.user
+    """
+    Muestra todos los servicios asignados al técnico autenticado.
 
-    # Estados de ajustes que NO deben aparecer aquí.
+    Orden:
+    1. Mes actual.
+    2. Meses anteriores, desde el más reciente.
+    3. Meses futuros, desde el más cercano.
+    4. Meses que no puedan interpretarse.
+
+    Dentro de cada mes:
+    1. En progreso.
+    2. Finalizado por trabajador.
+    3. Asignado.
+    4. Otros estados.
+
+    También permite:
+    - filtrar por las columnas principales;
+    - seleccionar la cantidad de filas;
+    - paginar sin perder los filtros.
+    """
+
+    usuario = request.user
+    hoy = timezone.localdate()
+
+    # ============================================================
+    # CONFIGURACIÓN DE MESES
+    # ============================================================
+
+    MESES_ES = {
+        "enero": 1,
+        "febrero": 2,
+        "marzo": 3,
+        "abril": 4,
+        "mayo": 5,
+        "junio": 6,
+        "julio": 7,
+        "agosto": 8,
+        "septiembre": 9,
+        "setiembre": 9,
+        "octubre": 10,
+        "noviembre": 11,
+        "diciembre": 12,
+    }
+
+    indice_mes_actual = hoy.year * 12 + hoy.month
+
+    def _normalizar_texto(valor):
+        """
+        Normaliza un texto para comparar meses sin depender de
+        mayúsculas, espacios o tildes.
+        """
+
+        texto = str(valor or "").strip().lower()
+
+        texto = unicodedata.normalize(
+            "NFKD",
+            texto,
+        )
+
+        texto = "".join(
+            caracter for caracter in texto if not unicodedata.combining(caracter)
+        )
+
+        return re.sub(
+            r"\s+",
+            " ",
+            texto,
+        )
+
+    def _extraer_anio_mes(valor):
+        """
+        Convierte diferentes formatos de mes_produccion en:
+
+            (año, mes)
+
+        Reconoce:
+        - Julio 2026
+        - julio de 2026
+        - 2026-07
+        - 2026/07
+        - 07-2026
+        - 07/2026
+        """
+
+        texto = _normalizar_texto(valor)
+
+        if not texto:
+            return None
+
+        # YYYY-MM o YYYY/MM
+        coincidencia = re.fullmatch(
+            r"(\d{4})[-/](\d{1,2})",
+            texto,
+        )
+
+        if coincidencia:
+            anio = int(coincidencia.group(1))
+
+            mes = int(coincidencia.group(2))
+
+            if 1 <= mes <= 12:
+                return anio, mes
+
+        # MM-YYYY o MM/YYYY
+        coincidencia = re.fullmatch(
+            r"(\d{1,2})[-/](\d{4})",
+            texto,
+        )
+
+        if coincidencia:
+            mes = int(coincidencia.group(1))
+
+            anio = int(coincidencia.group(2))
+
+            if 1 <= mes <= 12:
+                return anio, mes
+
+        # Julio 2026 o Julio de 2026
+        coincidencia = re.fullmatch(
+            r"([a-z]+)(?:\s+de)?\s+(\d{4})",
+            texto,
+        )
+
+        if coincidencia:
+            nombre_mes = coincidencia.group(1)
+
+            anio = int(coincidencia.group(2))
+
+            mes = MESES_ES.get(nombre_mes)
+
+            if mes:
+                return anio, mes
+
+        return None
+
+    def _prioridad_estado(servicio):
+        """
+        Define el orden operativo dentro de cada mes.
+        """
+
+        prioridades = {
+            "en_progreso": 1,
+            "finalizado_trabajador": 2,
+            "asignado": 3,
+        }
+
+        return prioridades.get(
+            servicio.estado,
+            4,
+        )
+
+    def _du_numerico(servicio):
+        """
+        Convierte el DU a número para que 50 sea mayor que 9,
+        aunque el campo esté guardado como texto.
+        """
+
+        texto = str(servicio.du or "")
+
+        numeros = re.sub(
+            r"\D",
+            "",
+            texto,
+        )
+
+        try:
+            return int(numeros)
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+            return 0
+
+    def _clave_orden_servicio(servicio):
+        """
+        Categorías de orden:
+
+        0 = mes actual
+        1 = meses anteriores
+        2 = meses futuros
+        3 = mes no reconocido
+        """
+
+        anio_mes = _extraer_anio_mes(servicio.mes_produccion)
+
+        prioridad_estado = _prioridad_estado(servicio)
+
+        du_numerico = _du_numerico(servicio)
+
+        if not anio_mes:
+            return (
+                3,
+                0,
+                prioridad_estado,
+                -du_numerico,
+            )
+
+        anio, mes = anio_mes
+
+        indice_servicio = anio * 12 + mes
+
+        # Mes actual.
+        if indice_servicio == indice_mes_actual:
+            return (
+                0,
+                0,
+                prioridad_estado,
+                -du_numerico,
+            )
+
+        # Meses anteriores: más reciente primero.
+        if indice_servicio < indice_mes_actual:
+            return (
+                1,
+                -indice_servicio,
+                prioridad_estado,
+                -du_numerico,
+            )
+
+        # Meses futuros: más cercano primero.
+        return (
+            2,
+            indice_servicio,
+            prioridad_estado,
+            -du_numerico,
+        )
+
+    def _clave_orden_mes_texto(valor):
+        """
+        Ordena los valores del selector de meses.
+
+        Primero el mes actual, después los anteriores y finalmente
+        los futuros o no reconocidos.
+        """
+
+        anio_mes = _extraer_anio_mes(valor)
+
+        if not anio_mes:
+            return (
+                3,
+                0,
+                str(valor or ""),
+            )
+
+        anio, mes = anio_mes
+
+        indice = anio * 12 + mes
+
+        if indice == indice_mes_actual:
+            return (
+                0,
+                0,
+                "",
+            )
+
+        if indice < indice_mes_actual:
+            return (
+                1,
+                -indice,
+                "",
+            )
+
+        return (
+            2,
+            indice,
+            "",
+        )
+
+    # ============================================================
+    # FILTROS GET
+    # ============================================================
+
+    filtro_du = request.GET.get(
+        "du",
+        "",
+    ).strip()
+
+    filtro_id_claro = request.GET.get(
+        "id_claro",
+        "",
+    ).strip()
+
+    filtro_region = request.GET.get(
+        "region",
+        "",
+    ).strip()
+
+    filtro_mes = request.GET.get(
+        "mes_produccion",
+        "",
+    ).strip()
+
+    filtro_id_new = request.GET.get(
+        "id_new",
+        "",
+    ).strip()
+
+    filtro_detalle = request.GET.get(
+        "detalle",
+        "",
+    ).strip()
+
+    filtro_estado = request.GET.get(
+        "estado",
+        "",
+    ).strip()
+
+    cantidad = request.GET.get(
+        "cantidad",
+        "10",
+    ).strip()
+
+    cantidades_permitidas = {
+        "10",
+        "20",
+        "50",
+        "100",
+    }
+
+    if cantidad not in cantidades_permitidas:
+        cantidad = "20"
+
+    cantidad_int = int(cantidad)
+
+    # ============================================================
+    # ESTADOS QUE NO DEBEN APARECER
+    # ============================================================
+
     AJUSTES_SET = {
         "ajuste_bono",
         "ajuste_adelanto",
         "ajuste_descuento",
     }
 
-    estado_prioridad = Case(
-        When(estado="en_progreso", then=Value(1)),
-        When(estado="finalizado_trabajador", then=Value(2)),
-        When(estado="asignado", then=Value(3)),
-        default=Value(4),
-        output_field=IntegerField(),
-    )
+    # ============================================================
+    # CONSULTA BASE
+    # ============================================================
 
-    servicios = list(
-        ServicioCotizado.objects.filter(trabajadores_asignados=usuario)
+    queryset_base = (
+        ServicioCotizado.objects.filter(
+            trabajadores_asignados=usuario,
+        )
         .exclude(
             estado__in=[
                 "cotizado",
@@ -2570,68 +2896,196 @@ def mis_servicios_tecnico(request):
             ]
             + list(AJUSTES_SET)
         )
-        .prefetch_related("trabajadores_asignados")
-        .annotate(prioridad=estado_prioridad)
-        .order_by("prioridad", "-du")
+        .prefetch_related(
+            "trabajadores_asignados",
+        )
+        .select_related(
+            "tecnico_aceptado",
+            "tecnico_finalizo",
+            "supervisor_aprobo",
+            "supervisor_rechazo",
+        )
+        .distinct()
     )
 
+    # Opciones de meses antes de aplicar el filtro de mes.
+    meses_disponibles = list(
+        queryset_base.exclude(
+            mes_produccion__isnull=True,
+        )
+        .exclude(
+            mes_produccion="",
+        )
+        .values_list(
+            "mes_produccion",
+            flat=True,
+        )
+        .distinct()
+    )
+
+    meses_disponibles.sort(key=_clave_orden_mes_texto)
+
     # ============================================================
-    # Buscar en una sola consulta los sitios relacionados
+    # APLICAR FILTROS
+    # ============================================================
+
+    if filtro_du:
+        du_limpio = re.sub(
+            r"(?i)^du",
+            "",
+            filtro_du,
+        ).strip()
+
+        queryset_base = queryset_base.filter(
+            Q(du__icontains=filtro_du) | Q(du__icontains=du_limpio)
+        )
+
+    if filtro_id_claro:
+        queryset_base = queryset_base.filter(
+            id_claro__icontains=filtro_id_claro,
+        )
+
+    if filtro_region:
+        queryset_base = queryset_base.filter(
+            region__icontains=filtro_region,
+        )
+
+    if filtro_mes:
+        queryset_base = queryset_base.filter(
+            mes_produccion=filtro_mes,
+        )
+
+    if filtro_id_new:
+        queryset_base = queryset_base.filter(
+            id_new__icontains=filtro_id_new,
+        )
+
+    if filtro_detalle:
+        queryset_base = queryset_base.filter(
+            detalle_tarea__icontains=filtro_detalle,
+        )
+
+    if filtro_estado:
+        queryset_base = queryset_base.filter(
+            estado=filtro_estado,
+        )
+
+    # ============================================================
+    # CONVERTIR Y ORDENAR
+    # ============================================================
+
+    servicios_ordenados = list(queryset_base)
+
+    servicios_ordenados.sort(key=_clave_orden_servicio)
+
+    total_resultados = len(servicios_ordenados)
+
+    # ============================================================
+    # PAGINACIÓN
+    # ============================================================
+
+    paginator = Paginator(
+        servicios_ordenados,
+        cantidad_int,
+    )
+
+    pagina = paginator.get_page(
+        request.GET.get(
+            "page",
+            1,
+        )
+    )
+
+    servicios_pagina = list(pagina.object_list)
+
+    # Query string utilizado por los enlaces de paginación.
+    parametros_sin_pagina = request.GET.copy()
+
+    parametros_sin_pagina.pop(
+        "page",
+        None,
+    )
+
+    query_sin_pagina = parametros_sin_pagina.urlencode()
+
+    # ============================================================
+    # SITIOS RELACIONADOS DE LA PÁGINA ACTUAL
     # ============================================================
 
     ids_claro = {
-        str(servicio.id_claro).strip() for servicio in servicios if servicio.id_claro
+        str(servicio.id_claro).strip()
+        for servicio in servicios_pagina
+        if servicio.id_claro
     }
 
     sitios_por_id_claro = {
         str(sitio.id_claro).strip(): sitio
-        for sitio in SitioMovil.objects.filter(id_claro__in=ids_claro)
+        for sitio in SitioMovil.objects.filter(
+            id_claro__in=ids_claro,
+        )
     }
 
-    def _obtener_valor_coordenada(objeto, nombres_posibles):
+    def _obtener_valor_coordenada(
+        objeto,
+        nombres_posibles,
+    ):
         """
-        Busca una coordenada considerando varios nombres de campo.
+        Busca una coordenada considerando distintos nombres
+        posibles de campo.
+        """
 
-        Esto permite mantener compatibilidad si en SitioMovil el campo
-        se llama, por ejemplo:
-        - latitud / longitud
-        - latitude / longitude
-        - lat / lng
-        """
         if not objeto:
             return None
 
         for nombre in nombres_posibles:
-            valor = getattr(objeto, nombre, None)
+            valor = getattr(
+                objeto,
+                nombre,
+                None,
+            )
 
-            if valor not in (None, ""):
+            if valor not in (
+                None,
+                "",
+            ):
                 return valor
 
         return None
 
     def _normalizar_coordenada(valor):
         """
-        Convierte la coordenada a texto compatible con Google Maps.
-
-        También reemplaza coma decimal por punto:
-            -33,4489  ->  -33.4489
+        Convierte la coordenada a un texto válido para Google Maps.
         """
-        if valor in (None, ""):
+
+        if valor in (
+            None,
+            "",
+        ):
             return None
 
-        texto = str(valor).strip().replace(",", ".")
+        texto = (
+            str(valor)
+            .strip()
+            .replace(
+                ",",
+                ".",
+            )
+        )
 
         try:
             return str(float(texto))
-        except (TypeError, ValueError):
+
+        except (
+            TypeError,
+            ValueError,
+        ):
             return None
 
     def _construir_google_maps_url(sitio):
         """
-        Construye una URL directa de Google Maps usando latitud y longitud.
-
-        Retorna None cuando el sitio no tiene coordenadas válidas.
+        Construye el enlace directo a Google Maps.
         """
+
         latitud = _obtener_valor_coordenada(
             sitio,
             [
@@ -2654,6 +3108,7 @@ def mis_servicios_tecnico(request):
         )
 
         latitud = _normalizar_coordenada(latitud)
+
         longitud = _normalizar_coordenada(longitud)
 
         if not latitud or not longitud:
@@ -2663,18 +3118,27 @@ def mis_servicios_tecnico(request):
             "https://www.google.com/maps/search/" f"?api=1&query={latitud},{longitud}"
         )
 
+    # ============================================================
+    # PREPARAR INFORMACIÓN DE LA PÁGINA
+    # ============================================================
+
     servicios_info = []
 
-    for servicio in servicios:
+    for servicio in servicios_pagina:
+
         # ========================================================
-        # Monto MMOO por técnico con decimales
+        # MONTO MMOO POR TÉCNICO
         # ========================================================
 
         monto_total = servicio.monto_mmoo or servicio.monto_cotizado or Decimal("0")
 
-        if not isinstance(monto_total, Decimal):
+        if not isinstance(
+            monto_total,
+            Decimal,
+        ):
             try:
                 monto_total = Decimal(str(monto_total))
+
             except Exception:
                 monto_total = Decimal("0")
 
@@ -2685,18 +3149,21 @@ def mis_servicios_tecnico(request):
                 Decimal("0.01"),
                 rounding=ROUND_HALF_UP,
             )
+
         except Exception:
             monto_tecnico = Decimal("0.00")
 
         monto_str = f"{monto_tecnico:.2f}"
 
         # ========================================================
-        # Asignación individual del técnico
+        # ASIGNACIÓN INDIVIDUAL
         # ========================================================
 
         sesion = _get_or_create_sesion(servicio)
 
-        asignacion = sesion.asignaciones.filter(tecnico=usuario).first()
+        asignacion = sesion.asignaciones.filter(
+            tecnico=usuario,
+        ).first()
 
         if not asignacion:
             asignacion = SesionFotoTecnico.objects.create(
@@ -2705,14 +3172,12 @@ def mis_servicios_tecnico(request):
                 estado="asignado",
             )
 
-        # Yo acepté: mi asignación está en proceso.
         yo_acepte = asignacion.estado == "en_proceso"
 
-        # Puedo aceptar: mi asignación aún está asignada.
         puedo_aceptar = asignacion.estado == "asignado"
 
         # ========================================================
-        # Corrección de consistencia
+        # CORRECCIÓN DE CONSISTENCIA
         # ========================================================
 
         if yo_acepte and servicio.estado == "asignado":
@@ -2729,7 +3194,7 @@ def mis_servicios_tecnico(request):
             )
 
         # ========================================================
-        # Conteo de aceptaciones
+        # CONTEO DE ACEPTACIONES
         # ========================================================
 
         assigned_ids = list(
@@ -2754,7 +3219,7 @@ def mis_servicios_tecnico(request):
             total = 0
 
         # ========================================================
-        # Ubicación del sitio
+        # UBICACIÓN
         # ========================================================
 
         id_claro_normalizado = (
@@ -2765,6 +3230,28 @@ def mis_servicios_tecnico(request):
 
         maps_url = _construir_google_maps_url(sitio)
 
+        anio_mes_servicio = _extraer_anio_mes(servicio.mes_produccion)
+
+        es_mes_actual = anio_mes_servicio == (
+            hoy.year,
+            hoy.month,
+        )
+
+        # ========================================================
+        # TÉCNICO QUE FINALIZÓ
+        # ========================================================
+
+        nombre_tecnico_finalizo = ""
+
+        if servicio.tecnico_finalizo_id:
+            nombre_tecnico_finalizo = (
+                servicio.tecnico_finalizo.get_full_name()
+                or servicio.tecnico_finalizo.username
+            )
+
+        elif servicio.estado == "finalizado_trabajador":
+            nombre_tecnico_finalizo = usuario.get_full_name() or usuario.username
+
         servicios_info.append(
             {
                 "servicio": servicio,
@@ -2774,18 +3261,65 @@ def mis_servicios_tecnico(request):
                 "puedo_aceptar": puedo_aceptar,
                 "aceptados": aceptados,
                 "total": total,
-                # Nuevos valores para el template.
                 "sitio": sitio,
                 "maps_url": maps_url,
                 "tiene_ubicacion": bool(maps_url),
+                "es_mes_actual": es_mes_actual,
+                "nombre_tecnico_finalizo": (nombre_tecnico_finalizo),
             }
         )
+
+    # ============================================================
+    # CONTEXTO
+    # ============================================================
+
+    filtros = {
+        "du": filtro_du,
+        "id_claro": filtro_id_claro,
+        "region": filtro_region,
+        "mes_produccion": filtro_mes,
+        "id_new": filtro_id_new,
+        "detalle": filtro_detalle,
+        "estado": filtro_estado,
+    }
+
+    estados_disponibles = [
+        (
+            "en_progreso",
+            "En ejecución",
+        ),
+        (
+            "finalizado_trabajador",
+            "Pendiente revisión del supervisor",
+        ),
+        (
+            "asignado",
+            "Pendiente por aceptar",
+        ),
+        (
+            "en_revision_supervisor",
+            "En revisión supervisor",
+        ),
+        (
+            "rechazado_supervisor",
+            "Rechazado por supervisor",
+        ),
+    ]
 
     return render(
         request,
         "operaciones/mis_servicios_tecnico.html",
         {
             "servicios_info": servicios_info,
+            "pagina": pagina,
+            "paginator": paginator,
+            "filtros": filtros,
+            "cantidad": cantidad,
+            "total_resultados": total_resultados,
+            "meses_disponibles": meses_disponibles,
+            "estados_disponibles": estados_disponibles,
+            "query_sin_pagina": query_sin_pagina,
+            "mes_actual_fecha": hoy.replace(day=1),
         },
     )
 

@@ -1,0 +1,820 @@
+/* ========================================================== */
+/* MILTEL TABLES                                              */
+/* Tablas, columnas, filtros Excel y paginación               */
+/* ========================================================== */
+
+/* ========================================================== */
+/* CONTENEDOR RESPONSIVE                                      */
+/* ========================================================== */
+
+.miltel-table-wrapper,
+.tabla-responsive {
+    width: 100%;
+    max-width: 100%;
+
+    overflow-x: auto;
+
+    -webkit-overflow-scrolling: touch;
+}
+
+.miltel-table-wrapper {
+    position: relative;
+}
+
+.miltel-table,
+.tabla-responsive table {
+    width: 100%;
+    min-width: var(--miltel-table-min-width);
+
+    border-collapse: collapse;
+
+    white-space: nowrap;
+
+    font-size: 0.875rem;
+}
+
+/* ========================================================== */
+/* ENCABEZADO Y CELDAS                                        */
+/* ========================================================== */
+
+.miltel-table thead {
+    background:
+        linear-gradient(180deg,
+            #f5f7f9 0%,
+            #edf1f4 100%);
+
+    color:
+        #1f2937;
+
+    font-weight: 600;
+}
+
+.miltel-table th {
+    padding: 0.5rem;
+
+    border-bottom:
+        1px solid var(--miltel-border-medium);
+
+    text-align: center;
+    vertical-align: middle;
+}
+
+.miltel-table td {
+    padding: 0.5rem;
+
+    border-top:
+        1px solid var(--miltel-border);
+
+    text-align: center;
+    vertical-align: middle;
+}
+
+.miltel-table tbody tr {
+    transition:
+        background-color var(--miltel-transition-fast);
+}
+
+.miltel-table tbody tr:hover {
+    background:
+        rgba(248, 250, 252, 0.92);
+}
+
+.miltel-table-row-current {
+    background:
+        rgba(100, 216, 232, 0.07);
+}
+
+.miltel-table-row-current:hover {
+    background:
+        rgba(100, 216, 232, 0.11);
+}
+
+/* ========================================================== */
+/* CELDAS ESPECIALES                                          */
+/* ========================================================== */
+
+.miltel-table-cell-detail {
+    width: 350px;
+    min-width: 300px;
+    max-width: 400px;
+
+    white-space: pre-line;
+
+    overflow-wrap: anywhere;
+    word-break: break-word;
+
+    font-size: 0.75rem;
+    line-height: 1.3;
+
+    text-align: left;
+    vertical-align: top;
+}
+
+.miltel-table-cell-money {
+    color:
+        var(--miltel-success-text);
+
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.miltel-table-cell-actions {
+    white-space: nowrap;
+}
+
+.miltel-table-cell-status {
+    min-width: 220px;
+}
+
+.miltel-table-cell-left {
+    text-align: left !important;
+}
+
+.miltel-table-cell-center {
+    text-align: center !important;
+}
+
+.miltel-table-cell-top {
+    vertical-align: top !important;
+}
+
+.miltel-table-cell-wrap {
+    white-space: normal;
+
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* ========================================================== */
+/* BARRA DE HERRAMIENTAS                                      */
+/* ========================================================== */
+
+.miltel-table-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+
+    padding:
+        1rem 1rem 0.75rem;
+}
+
+.miltel-table-toolbar-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.miltel-table-toolbar-start {
+    justify-content: flex-start;
+}
+
+.miltel-table-toolbar-end {
+    justify-content: flex-end;
+}
+
+/* ========================================================== */
+/* MENÚ DE COLUMNAS                                           */
+/* ========================================================== */
+
+.miltel-column-details {
+    position: relative;
+}
+
+.miltel-column-summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+
+    padding:
+        0.35rem 0.8rem;
+
+    border:
+        1px solid var(--miltel-border-medium);
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    background:
+        var(--miltel-page-background);
+
+    color:
+        var(--miltel-text-secondary);
+
+    font-size: 0.8rem;
+    font-weight: 650;
+
+    cursor: pointer;
+
+    list-style: none;
+
+    user-select: none;
+
+    transition:
+        background var(--miltel-transition),
+        border-color var(--miltel-transition),
+        color var(--miltel-transition),
+        box-shadow var(--miltel-transition);
+}
+
+.miltel-column-summary::-webkit-details-marker {
+    display: none;
+}
+
+.miltel-column-summary:hover {
+    border-color:
+        var(--miltel-primary-border);
+
+    background:
+        var(--miltel-surface-soft);
+
+    color:
+        var(--miltel-primary-hover);
+}
+
+.miltel-column-details[open] .miltel-column-summary {
+    border-color:
+        var(--miltel-primary-border);
+
+    background:
+        var(--miltel-primary-soft);
+
+    color:
+        var(--miltel-primary-hover);
+
+    box-shadow:
+        0 0 0 3px rgba(100, 216, 232, 0.10);
+}
+
+.miltel-column-menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    z-index: 60;
+
+    width: 14rem;
+    padding: 0.75rem;
+
+    border:
+        1px solid var(--miltel-border);
+
+    border-radius:
+        var(--miltel-radius-md);
+
+    background:
+        var(--miltel-surface);
+
+    box-shadow:
+        var(--miltel-shadow-md);
+}
+
+.miltel-column-menu-title {
+    margin:
+        0 0 0.5rem;
+
+    color:
+        var(--miltel-text-muted);
+
+    font-size: 0.75rem;
+}
+
+.miltel-column-master {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.5rem;
+
+    border-bottom:
+        1px solid var(--miltel-border);
+
+    color:
+        var(--miltel-text-primary);
+
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.miltel-column-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.miltel-column-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    color:
+        var(--miltel-text-primary);
+
+    font-size: 0.8rem;
+}
+
+.miltel-column-option input,
+.miltel-column-master input {
+    accent-color:
+        var(--miltel-primary);
+}
+
+/* ========================================================== */
+/* BOTÓN DE ENCABEZADO EXCEL                                  */
+/* ========================================================== */
+
+.miltel-excel-header-btn,
+.excel-header-btn {
+    display: flex;
+
+    width: 100%;
+
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+
+    padding:
+        0.25rem 0.35rem;
+
+    border: 0;
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    background:
+        transparent;
+
+    color:
+        inherit;
+
+    font-size: 0.875rem;
+    font-weight: inherit;
+
+    cursor: pointer;
+
+    transition:
+        background var(--miltel-transition),
+        color var(--miltel-transition),
+        box-shadow var(--miltel-transition);
+}
+
+.miltel-excel-header-btn:hover,
+.excel-header-btn:hover {
+    background:
+        rgba(255, 255, 255, 0.62);
+}
+
+.miltel-excel-arrow,
+.excel-header-btn .excel-arrow {
+    margin-left: 2px;
+
+    color:
+        var(--miltel-text-muted);
+
+    font-size: 0.65rem;
+
+    transition:
+        color var(--miltel-transition),
+        transform var(--miltel-transition);
+}
+
+.miltel-excel-col-filtered .miltel-excel-header-btn,
+.excel-col-filtered .excel-header-btn {
+    background:
+        var(--miltel-primary-soft);
+
+    color:
+        var(--miltel-primary-hover);
+
+    box-shadow:
+        inset 0 0 0 1px var(--miltel-primary-border);
+}
+
+.miltel-excel-col-filtered .miltel-excel-arrow,
+.excel-col-filtered .excel-arrow {
+    color:
+        var(--miltel-primary-hover) !important;
+}
+
+/* ========================================================== */
+/* PANEL EXCEL                                                */
+/* ========================================================== */
+
+.miltel-excel-panel,
+.excel-panel {
+    position: fixed;
+    z-index: 80;
+
+    width:
+        var(--miltel-excel-panel-width);
+
+    padding: 0.75rem;
+
+    border:
+        1px solid #d1d5db;
+
+    border-radius:
+        var(--miltel-radius-md);
+
+    background:
+        var(--miltel-surface);
+
+    box-shadow:
+        var(--miltel-shadow-panel);
+
+    font-size: 0.8rem;
+}
+
+.miltel-excel-panel h3,
+.excel-panel h3 {
+    margin:
+        0 0 0.5rem;
+
+    color:
+        var(--miltel-text-primary);
+
+    font-weight: 600;
+}
+
+.miltel-excel-panel small,
+.excel-panel small {
+    color:
+        var(--miltel-text-soft);
+
+    font-size: 0.7rem;
+}
+
+.miltel-excel-search {
+    width: 100%;
+
+    margin-top: 0.5rem;
+    padding:
+        0.35rem 0.5rem;
+
+    border:
+        1px solid var(--miltel-border-medium);
+
+    border-radius:
+        var(--miltel-radius-sm);
+
+    background:
+        var(--miltel-surface);
+
+    color:
+        var(--miltel-text-primary);
+
+    font-size: 0.75rem;
+
+    transition:
+        border-color var(--miltel-transition),
+        box-shadow var(--miltel-transition);
+}
+
+.miltel-excel-search:focus {
+    border-color:
+        var(--miltel-holo-cyan);
+
+    outline: none;
+
+    box-shadow:
+        0 0 0 3px rgba(100, 216, 232, 0.14);
+}
+
+.miltel-excel-options,
+.excel-panel .excel-options {
+    max-height: 180px;
+
+    margin-top: 0.5rem;
+    padding:
+        0.35rem 0.5rem;
+
+    overflow-y: auto;
+
+    border:
+        1px solid var(--miltel-border-soft);
+
+    border-radius:
+        var(--miltel-radius-sm);
+
+    background:
+        #f9fafb;
+}
+
+.miltel-excel-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    margin-top: 0.3rem;
+
+    color:
+        var(--miltel-text-primary);
+
+    font-size: 0.75rem;
+}
+
+.miltel-excel-option input {
+    accent-color:
+        var(--miltel-primary);
+}
+
+.miltel-excel-panel-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+
+    margin-top: 0.75rem;
+}
+
+/* ========================================================== */
+/* BOTÓN LIMPIAR FILTROS                                      */
+/* ========================================================== */
+
+.miltel-table-clear-filters {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+
+    min-height: 1.9rem;
+    padding:
+        0.35rem 0.75rem;
+
+    border:
+        1px solid var(--miltel-border-medium);
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    background:
+        var(--miltel-surface);
+
+    color:
+        var(--miltel-text-secondary);
+
+    font-size: 0.75rem;
+    font-weight: 650;
+
+    cursor: pointer;
+
+    transition:
+        background var(--miltel-transition),
+        border-color var(--miltel-transition),
+        color var(--miltel-transition);
+}
+
+.miltel-table-clear-filters:hover {
+    border-color:
+        var(--miltel-primary-border);
+
+    background:
+        var(--miltel-primary-soft);
+
+    color:
+        var(--miltel-primary-hover);
+}
+
+/* ========================================================== */
+/* PIE DE LA TABLA                                            */
+/* ========================================================== */
+
+.miltel-table-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+
+    padding: 1rem;
+
+    border-top:
+        1px solid var(--miltel-border);
+
+    background:
+        var(--miltel-page-background);
+}
+
+.miltel-table-results {
+    color:
+        var(--miltel-text-secondary);
+
+    font-size: 0.8rem;
+}
+
+.miltel-table-results strong {
+    color:
+        var(--miltel-text-primary);
+}
+
+/* ========================================================== */
+/* SELECTOR DE CANTIDAD                                       */
+/* ========================================================== */
+
+.miltel-page-size {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+
+    color:
+        var(--miltel-text-secondary);
+
+    font-size: 0.875rem;
+}
+
+.miltel-page-size label {
+    font-weight: 650;
+}
+
+.miltel-page-size select {
+    min-width: 4.5rem;
+
+    padding:
+        0.3rem 0.65rem;
+
+    border:
+        1px solid var(--miltel-border-medium);
+
+    border-radius:
+        var(--miltel-radius-sm);
+
+    background:
+        var(--miltel-surface);
+
+    color:
+        var(--miltel-text-primary);
+
+    cursor: pointer;
+
+    transition:
+        border-color var(--miltel-transition),
+        box-shadow var(--miltel-transition);
+}
+
+.miltel-page-size select:focus {
+    border-color:
+        var(--miltel-holo-cyan);
+
+    outline: none;
+
+    box-shadow:
+        0 0 0 3px rgba(100, 216, 232, 0.14);
+}
+
+/* ========================================================== */
+/* PAGINACIÓN                                                 */
+/* ========================================================== */
+
+.miltel-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+
+    font-size: 0.8rem;
+}
+
+.miltel-pagination-link,
+.miltel-pagination-current,
+.miltel-pagination-label {
+    display: inline-flex;
+    min-height: 2rem;
+
+    align-items: center;
+    justify-content: center;
+
+    padding:
+        0.3rem 0.75rem;
+
+    border-radius:
+        var(--miltel-radius-sm);
+
+    font-weight: 700;
+}
+
+.miltel-pagination-link {
+    border:
+        1px solid var(--miltel-border-medium);
+
+    background:
+        var(--miltel-surface-soft);
+
+    color:
+        var(--miltel-text-secondary);
+
+    transition:
+        background var(--miltel-transition),
+        border-color var(--miltel-transition),
+        color var(--miltel-transition),
+        transform var(--miltel-transition);
+}
+
+.miltel-pagination-link:hover {
+    border-color:
+        var(--miltel-primary-border);
+
+    background:
+        var(--miltel-primary-soft);
+
+    color:
+        var(--miltel-primary-hover);
+
+    transform:
+        translateY(-1px);
+}
+
+.miltel-pagination-current {
+    border:
+        1px solid var(--miltel-primary);
+
+    background:
+        var(--miltel-primary);
+
+    color:
+        var(--miltel-text-white);
+}
+
+.miltel-pagination-label {
+    color:
+        var(--miltel-text-secondary);
+}
+
+/* ========================================================== */
+/* MENSAJE SIN RESULTADOS                                     */
+/* ========================================================== */
+
+.miltel-table-empty-cell {
+    padding:
+        2rem 1rem !important;
+
+    color:
+        var(--miltel-text-muted);
+}
+
+/* ========================================================== */
+/* RESPONSIVE                                                 */
+/* ========================================================== */
+
+@media (max-width: 767px) {
+
+    .miltel-table,
+    .tabla-responsive table {
+        min-width:
+            var(--miltel-table-min-width);
+    }
+}
+
+@media (max-width: 639px) {
+    .miltel-table-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+
+        padding:
+            0.75rem;
+    }
+
+    .miltel-table-toolbar-group {
+        width: 100%;
+    }
+
+    .miltel-table-footer {
+        align-items: flex-start;
+        flex-direction: column;
+
+        padding:
+            0.75rem;
+    }
+
+    .miltel-pagination {
+        width: 100%;
+    }
+
+    .miltel-column-menu {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+
+        width:
+            min(calc(100vw - 2rem),
+                18rem);
+
+        max-height:
+            calc(100vh - 2rem);
+
+        overflow-y: auto;
+
+        transform:
+            translate(-50%,
+                -50%);
+    }
+
+    .miltel-excel-panel,
+    .excel-panel {
+        width:
+            min(calc(100vw - 1rem),
+                var(--miltel-excel-panel-width));
+    }
+}

@@ -5,23 +5,43 @@
 {% block title %}Servicios Cotizados - Supervisor{% endblock %}
 
 {% block dashboard_content %}
-<div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:mx-0 sm:p-6">
 
 <style>
+  /* ======================================================== */
+  /* CAMPOS Y CONTROLES                                       */
+  /* ======================================================== */
+
   .campo-filtro {
-    border: 2px solid #1f2937;
-    padding: 0.25rem 0.75rem;
+    width: 100%;
+    min-height: 2.5rem;
+
+    padding: 0.55rem 0.75rem;
+
+    border: 1px solid #cbd5e1;
     border-radius: 0.75rem;
+
+    background: #ffffff;
+    color: #1e293b;
+
     font-size: 0.875rem;
-    height: 2.25rem;
-    background-color: white;
-    transition: border-color 0.2s ease-in-out;
+
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04);
+
+    outline: none;
+
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background-color 0.2s ease;
   }
 
   .campo-filtro:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-    outline: none;
+    border-color: #22d3ee;
+
+    box-shadow:
+      0 0 0 3px rgba(34, 211, 238, 0.15);
   }
 
   .filtros-compactos .campo-filtro {
@@ -30,219 +50,671 @@
     max-width: 12rem;
   }
 
-  @media (max-width: 640px) {
-    .filtros-compactos .campo-filtro {
-      max-width: 10.5rem;
-    }
-  }
+  /* ======================================================== */
+  /* TABLA                                                    */
+  /* ======================================================== */
 
-  .tabla-responsive{
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .tabla-responsive {
     width: 100%;
     max-width: 100%;
+
+    overflow-x: auto;
+
+    -webkit-overflow-scrolling: touch;
   }
 
-  .tabla-responsive table{
+  .tabla-responsive table {
+    min-width: 1200px;
     white-space: nowrap;
-    min-width: 1100px;
   }
 
-  .modal-copy{
+  #servicios-supervisor-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #servicios-supervisor-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+
+    border-bottom: 1px solid #cbd5e1;
+
+    background:
+      linear-gradient(
+        180deg,
+        #f8fafc 0%,
+        #f1f5f9 100%
+      );
+
+    color: #334155;
+
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+  }
+
+  #servicios-supervisor-table tbody tr {
+    transition:
+      background-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  #servicios-supervisor-table tbody tr:hover {
+    background: rgba(240, 249, 255, 0.72);
+  }
+
+  #servicios-supervisor-table tbody td {
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: middle;
+  }
+
+  /* ======================================================== */
+  /* MODAL                                                    */
+  /* ======================================================== */
+
+  .modal-copy {
     overflow-wrap: anywhere;
     word-break: break-word;
     hyphens: auto;
   }
 
-  .excel-header-btn{
-    width:100%;
-    justify-content:center;
-    font-size:0.875rem;
+  /* ======================================================== */
+  /* FILTROS TIPO EXCEL                                       */
+  /* ======================================================== */
+
+  .excel-header-btn {
+    width: 100%;
+    min-height: 2.25rem;
+
+    justify-content: center;
+
+    padding: 0.35rem 0.45rem;
+
+    border-radius: 0.65rem;
+
+    font-size: 0.75rem;
+    font-weight: 800;
+    line-height: 1.15;
+
+    transition:
+      color 0.18s ease,
+      background-color 0.18s ease,
+      box-shadow 0.18s ease;
   }
 
-  .excel-header-btn .excel-arrow{
-    font-size:0.65rem;
-    margin-left:2px;
+  .excel-header-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
   }
 
-  .excel-panel{
-    position:fixed;
-    z-index:50;
-    width:260px;
-    background:#fff;
-    border-radius:0.75rem;
-    border:1px solid #d1d5db;
-    box-shadow:0 10px 30px rgba(0,0,0,.15);
-    padding:0.75rem;
-    font-size:0.8rem;
+  .excel-header-btn .excel-arrow {
+    margin-left: 2px;
+
+    color: #64748b;
+
+    font-size: 0.6rem;
+
+    transition:
+      color 0.18s ease,
+      transform 0.18s ease;
   }
 
-  .excel-panel h3{
-    font-weight:600;
-    margin-bottom:0.5rem;
+  .excel-header-btn:hover .excel-arrow {
+    color: #0891b2;
   }
 
-  .excel-panel small{
-    font-size:0.7rem;
-    color:#6b7280;
+  .excel-panel {
+    position: fixed;
+    z-index: 70;
+
+    width: 280px;
+
+    padding: 0.9rem;
+
+    overflow: hidden;
+
+    border: 1px solid #cbd5e1;
+    border-radius: 1rem;
+
+    background:
+      rgba(255, 255, 255, 0.98);
+
+    box-shadow:
+      0 22px 48px rgba(15, 23, 42, 0.18);
+
+    font-size: 0.8rem;
+
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
-  .excel-panel .excel-options{
-    max-height:180px;
-    overflow-y:auto;
-    border:1px solid #e5e7eb;
-    border-radius:0.5rem;
-    padding:0.25rem 0.5rem;
-    margin-top:0.25rem;
-    background:#f9fafb;
+  .excel-panel h3 {
+    margin-bottom: 0.25rem;
+
+    color: #0f172a;
+
+    font-size: 0.9rem;
+    font-weight: 800;
   }
 
-  .excel-col-filtered .excel-header-btn{
-    background:#e0f2fe;
-    border-radius:999px;
+  .excel-panel small {
+    color: #64748b;
+
+    font-size: 0.7rem;
+    font-weight: 600;
   }
 
-  .excel-col-filtered .excel-arrow{
-    color:#2563eb !important;
+  .excel-panel .excel-options {
+    max-height: 210px;
+
+    margin-top: 0.4rem;
+    padding: 0.45rem 0.55rem;
+
+    overflow-y: auto;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+
+    background: #f8fafc;
+  }
+
+  .excel-panel .excel-options label {
+    padding: 0.2rem 0;
+
+    color: #334155;
+  }
+
+  .excel-panel input[type="checkbox"] {
+    accent-color: #0891b2;
+  }
+
+  .excel-col-filtered .excel-header-btn {
+    border: 1px solid #a5f3fc;
+
+    background:
+      linear-gradient(
+        135deg,
+        #ecfeff,
+        #e0f2fe
+      );
+
+    color: #0e7490;
+
+    box-shadow:
+      0 0 0 2px rgba(34, 211, 238, 0.08);
+  }
+
+  .excel-col-filtered .excel-arrow {
+    color: #0284c7 !important;
+  }
+
+  /* ======================================================== */
+  /* SCROLLBAR HORIZONTAL                                     */
+  /* ======================================================== */
+
+  #zonaTabla .overflow-x-auto {
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  #zonaTabla .overflow-x-auto::-webkit-scrollbar {
+    height: 9px;
+  }
+
+  #zonaTabla .overflow-x-auto::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  #zonaTabla .overflow-x-auto::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+
+    background: #94a3b8;
+  }
+
+  #zonaTabla .overflow-x-auto::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+
+  @media (max-width: 640px) {
+    .filtros-compactos .campo-filtro {
+      max-width: 10.5rem;
+    }
+
+    .excel-panel {
+      width:
+        min(
+          280px,
+          calc(100vw - 1rem)
+        );
+    }
   }
 </style>
 
-<div class="flex flex-col sm:flex-row justify-start items-start sm:items-center mb-4 gap-4 sm:gap-4">
-  <h2 class="text-2xl font-bold text-gray-800">📋 Servicios Cotizados - Supervisor</h2>
+<div
+  class="
+    overflow-hidden
+    rounded-2xl
+    border border-slate-200
+    bg-white
+    shadow-sm
+    sm:rounded-3xl
+  "
+>
+<!-- ====================================================== -->
+<!-- ENCABEZADO                                             -->
+<!-- ====================================================== -->
 
-  <a href="{% url 'operaciones:exportar_servicios_supervisor' %}"
-     class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-amber-600 transition">
-    📤 Exportar a Excel
-  </a>
-</div>
+<div
+  class="
+    border-b border-slate-100
+    bg-gradient-to-r
+    from-slate-50
+    via-white
+    to-cyan-50/40
+    px-4 py-5
+    sm:px-6 sm:py-6
+  "
+>
 
+  <div
+    class="
+      flex
+      flex-col
+      gap-4
+      sm:flex-row
+      sm:items-center
+      sm:justify-between
+    "
+  >
 
+    <div class="flex items-center gap-3">
 
-<!-- Selector columnas -->
-<div class="flex justify-start mb-2">
-  <details class="relative">
-  <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-  ⚙️ Columnas
-</summary>
-
-    <div id="columnToggles" class="absolute left-0 mt-1 w-56 bg-white border rounded-xl shadow-lg p-3 z-10">
-      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
-
-      <label class="flex items-center gap-2 mb-2 pb-2 border-b">
-        <input type="checkbox" id="col-toggle-all" checked>
-        <span class="font-semibold text-xs">Mostrar todas las columnas</span>
-      </label>
-
-      <div class="space-y-1 text-sm">
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="0" checked>
-          <span>DU</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="1" checked>
-          <span>ID CLARO</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="2" checked>
-          <span>REGIÓN</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="3" checked>
-          <span>MES PRODUCCIÓN</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="4" checked>
-          <span>ID NEW</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="5" checked>
-          <span>DETALLE TAREA</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="6" checked>
-          <span>MONTO MMOO</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="7" checked>
-          <span>ASIGNADOS</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="8" checked>
-          <span>FECHA FIN</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="9" checked>
-          <span>ESTADO</span>
-        </label>
-
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="10" checked>
-          <span>ACCIONES</span>
-        </label>
+      <div
+        class="
+          flex
+          h-12 w-12
+          shrink-0
+          items-center
+          justify-center
+          rounded-2xl
+          border border-cyan-100
+          bg-gradient-to-br
+          from-cyan-50
+          to-blue-100
+          text-2xl
+          shadow-sm
+          sm:h-14 sm:w-14
+          sm:text-3xl
+        "
+      >
+        📋
       </div>
+
+      <div>
+
+        <h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+          Servicios Cotizados
+        </h1>
+
+        <p class="mt-1 text-sm text-slate-500">
+          Asigna técnicos, revisa evidencias y controla el estado de
+          los servicios.
+        </p>
+
+      </div>
+
     </div>
-  </details>
-</div>
 
-<!-- Clear filtros Excel -->
-<div class="flex justify-start mb-2">
-<button type="button"
-        id="btnExcelClearAll"
-        class="px-3 py-1 text-xs border rounded-full bg-white hover:bg-blue-50">
-  ❌ Limpiar filtros
-</button>
-</div>
-
-<!-- Panel filtros Excel -->
-<div id="excelFilterPanel" class="excel-panel hidden">
-
-  <h3 id="excelPanelTitle">Columna</h3>
-
-  <small>Filtrar valores</small>
-
-  <div class="mt-2">
-
-    <input id="excelFilterSearch"
-
-           type="text"
-
-           placeholder="Buscar..."
-
-           class="w-full border border-gray-300 rounded-md px-2 py-1 text-xs">
+    <a
+      href="{% url 'operaciones:exportar_servicios_supervisor' %}"
+      class="
+        inline-flex
+        w-fit
+        items-center
+        justify-center
+        gap-2
+        rounded-xl
+        border border-emerald-200
+        bg-gradient-to-r
+        from-emerald-600
+        to-teal-600
+        px-4 py-2.5
+        text-sm
+        font-black
+        text-white
+        shadow-md
+        transition
+        hover:-translate-y-0.5
+        hover:shadow-lg
+      "
+    >
+      📤 Exportar a Excel
+    </a>
 
   </div>
 
-  <div class="mt-2 excel-options" id="excelFilterOptions"></div>
+</div>
 
-  <div class="mt-3 flex justify-end gap-2">
 
-    <button type="button"
 
-            id="excelFilterClearAll"
+<!-- ====================================================== -->
+<!-- CONTROLES DE LA TABLA                                  -->
+<!-- ====================================================== -->
 
-            class="px-2 py-1 border rounded-md text-xs">
+<div
+  class="
+    flex
+    flex-col
+    gap-3
+    border-b border-slate-200
+    bg-gradient-to-br
+    from-slate-50
+    via-white
+    to-slate-100
+    px-4 py-4
+    sm:flex-row
+    sm:items-center
+    sm:justify-between
+    sm:px-6
+  "
+>
 
-      Limpiar
+  <div>
 
+    <div class="flex items-center gap-2">
+
+      <div
+        class="
+          flex
+          h-9 w-9
+          items-center
+          justify-center
+          rounded-xl
+          border border-white
+          bg-white
+          text-lg
+          shadow-sm
+        "
+      >
+        🔎
+      </div>
+
+      <div>
+
+        <h2 class="font-black text-slate-800">
+          Filtros de la tabla
+        </h2>
+
+        <p class="text-xs text-slate-500">
+          Filtra valores directamente desde los encabezados.
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2">
+
+    <!-- Selector columnas -->
+    <details class="relative">
+
+      <summary
+        class="
+          inline-flex
+          cursor-pointer
+          list-none
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-3 py-2
+          text-xs
+          font-bold
+          text-slate-600
+          shadow-sm
+          transition
+          hover:bg-slate-100
+        "
+      >
+        ⚙️ Columnas
+      </summary>
+
+      <div
+        id="columnToggles"
+        class="
+          absolute
+          right-0
+          z-30
+          mt-2
+          w-64
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          p-4
+          shadow-xl
+          sm:right-0
+        "
+      >
+
+        <p class="mb-3 text-xs font-semibold text-slate-500">
+          Mostrar u ocultar columnas
+        </p>
+
+        <label
+          class="
+            mb-2
+            flex
+            items-center
+            gap-2
+            border-b border-slate-100
+            pb-3
+          "
+        >
+          <input
+            type="checkbox"
+            id="col-toggle-all"
+            checked
+            class="accent-cyan-600"
+          >
+
+          <span class="text-xs font-black text-slate-700">
+            Mostrar todas
+          </span>
+        </label>
+
+        <div class="max-h-72 space-y-1 overflow-y-auto text-sm">
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="0" checked>
+            <span>DU</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="1" checked>
+            <span>ID CLARO</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="2" checked>
+            <span>REGIÓN</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="3" checked>
+            <span>MES PRODUCCIÓN</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="4" checked>
+            <span>ID NEW</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="5" checked>
+            <span>DETALLE TAREA</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="6" checked>
+            <span>MONTO MMOO</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="7" checked>
+            <span>ASIGNADOS</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="8" checked>
+            <span>FECHA FIN</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="9" checked>
+            <span>ESTADO</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="10" checked>
+            <span>ACCIONES</span>
+          </label>
+
+        </div>
+
+      </div>
+
+    </details>
+
+    <button
+      type="button"
+      id="btnExcelClearAll"
+      class="
+        inline-flex
+        items-center
+        justify-center
+        gap-2
+        rounded-xl
+        border border-slate-300
+        bg-white
+        px-3 py-2
+        text-xs
+        font-bold
+        text-slate-600
+        shadow-sm
+        transition
+        hover:border-red-200
+        hover:bg-red-50
+        hover:text-red-700
+      "
+    >
+      ❌ Limpiar filtros
     </button>
 
-    <button type="button"
+  </div>
 
-            id="excelFilterApply"
+</div>
+<!-- Panel filtros Excel -->
+<div
+  id="excelFilterPanel"
+  class="excel-panel hidden"
+>
 
-            class="px-2 py-1 bg-blue-600 text-white rounded-md text-xs">
+  <div class="mb-3 border-b border-slate-100 pb-3">
 
+    <h3 id="excelPanelTitle">
+      Columna
+    </h3>
+
+    <small>
+      Selecciona uno o varios valores
+    </small>
+
+  </div>
+
+  <div>
+
+    <input
+      id="excelFilterSearch"
+      type="text"
+      placeholder="Buscar valor..."
+      class="
+        w-full
+        rounded-xl
+        border border-slate-300
+        bg-white
+        px-3 py-2
+        text-xs
+        text-slate-700
+        shadow-sm
+        outline-none
+        transition
+        focus:border-cyan-400
+        focus:ring-2
+        focus:ring-cyan-100
+      "
+    >
+
+  </div>
+
+  <div
+    class="excel-options"
+    id="excelFilterOptions"
+  ></div>
+
+  <div
+    class="
+      mt-3
+      flex
+      items-center
+      justify-end
+      gap-2
+      border-t border-slate-100
+      pt-3
+    "
+  >
+
+    <button
+      type="button"
+      id="excelFilterClearAll"
+      class="
+        rounded-lg
+        border border-slate-300
+        bg-white
+        px-3 py-2
+        text-xs
+        font-bold
+        text-slate-600
+        transition
+        hover:bg-slate-100
+      "
+    >
+      Limpiar
+    </button>
+
+    <button
+      type="button"
+      id="excelFilterApply"
+      class="
+        rounded-lg
+        border border-cyan-600
+        bg-cyan-600
+        px-3 py-2
+        text-xs
+        font-black
+        text-white
+        shadow-sm
+        transition
+        hover:bg-cyan-700
+      "
+    >
       Aplicar
-
     </button>
 
   </div>
@@ -253,76 +725,82 @@
 <div id="zonaTabla" data-excel-global='{{ excel_global_json|safe }}'>
 
   <!-- Tabla -->
-  <div class="overflow-x-auto">
+  <div class="overflow-x-auto bg-white">
     <table id="servicios-supervisor-table"
            data-columns-table="servicios-supervisor"
            data-columns-offset="0"
-           class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+           class="
+  table-auto
+  w-full
+  min-w-full
+  text-sm
+  sm:min-w-[1200px]
+"
            style="white-space: nowrap;">
 
-      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
+      <thead class="text-center">
         <tr>
-          <th class="p-2" data-excel-col data-excel-key="0">
+          <th class="px-2 py-3" data-excel-col data-excel-key="0">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>DU</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="1">
+          <th class="px-2 py-3" data-excel-col data-excel-key="1">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ID CLARO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="2">
+          <th class="px-2 py-3" data-excel-col data-excel-key="2">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>REGIÓN</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="3">
+          <th class="px-2 py-3" data-excel-col data-excel-key="3">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>MES PRODUCCIÓN</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="4">
+          <th class="px-2 py-3" data-excel-col data-excel-key="4">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ID NEW</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="5">
+          <th class="px-2 py-3" data-excel-col data-excel-key="5">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>DETALLE TAREA</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="6">
+          <th class="px-2 py-3" data-excel-col data-excel-key="6">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="7">
+          <th class="px-2 py-3" data-excel-col data-excel-key="7">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ASIGNADOS</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="8">
+          <th class="px-2 py-3" data-excel-col data-excel-key="8">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>FECHA FIN</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="9">
+          <th class="px-2 py-3"lass="p-2" data-excel-col data-excel-key="9">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ESTADO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="p-2" data-excel-col data-excel-key="10">
+          <th class="px-2 py-3" data-excel-col data-excel-key="10">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ACCIONES</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
@@ -333,7 +811,7 @@
       <tbody class="text-center">
         {% for row in pagina_info %}
           {% with servicio=row.servicio %}
-            <tr class="border-t">
+            <tr class="transition hover:bg-cyan-50/40">
               <td class="p-2 font-mono">DU{{ servicio.du }}</td>
               <td class="p-2">{{ servicio.id_claro }}</td>
               <td class="p-2">{{ servicio.region }}</td>
@@ -601,12 +1079,40 @@
   </div>
 
   <!-- Selector cantidad -->
-  <form method="get" class="mt-4 flex items-center gap-2">
+  <form
+  method="get"
+  class="
+    flex
+    flex-wrap
+    items-center
+    gap-2
+    border-t border-slate-200
+    bg-slate-50
+    px-4 py-4
+    sm:px-6
+  "
+>
     <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
 
-    <select name="cantidad"
-            id="cantidad"
-            class="border rounded-lg px-3 py-1">
+    <select
+  name="cantidad"
+  id="cantidad"
+  class="
+    rounded-xl
+    border border-slate-300
+    bg-white
+    px-3 py-2
+    text-sm
+    font-semibold
+    text-slate-700
+    shadow-sm
+    outline-none
+    transition
+    focus:border-cyan-400
+    focus:ring-2
+    focus:ring-cyan-100
+  "
+>
       <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
       <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
       <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
@@ -622,20 +1128,77 @@
   </form>
 
   <!-- Paginación -->
-  <div id="pager" class="mt-4 flex justify-center gap-2 text-sm">
+  <div
+  id="pager"
+  class="
+    flex
+    flex-wrap
+    items-center
+    justify-center
+    gap-2
+    border-t border-slate-200
+    bg-slate-50
+    px-4 py-4
+    text-sm
+    sm:px-6
+  "
+>
     {% if pagina.has_previous %}
       <a href="?page=1&{{ qs_keep }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+         class="
+  inline-flex
+  h-9
+  items-center
+  justify-center
+  rounded-lg
+  border border-slate-300
+  bg-white
+  px-3
+  text-sm
+  font-bold
+  text-slate-600
+  shadow-sm
+  transition
+  hover:bg-slate-100
+">
         « Primero
       </a>
 
       <a href="?page={{ pagina.previous_page_number }}&{{ qs_keep }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+         class="
+  inline-flex
+  h-9
+  items-center
+  justify-center
+  rounded-lg
+  border border-slate-300
+  bg-white
+  px-3
+  text-sm
+  font-bold
+  text-slate-600
+  shadow-sm
+  transition
+  hover:bg-slate-100
+">
         ‹ Anterior
       </a>
     {% endif %}
 
-    <span class="px-3 py-1">
+   <span
+  class="
+    inline-flex
+    h-9
+    items-center
+    justify-center
+    rounded-lg
+    border border-cyan-200
+    bg-cyan-50
+    px-4
+    font-black
+    text-cyan-800
+  "
+>
       Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
     </span>
 
@@ -1484,6 +2047,6 @@ btnApply.addEventListener('click', async () => {
   });
 })();
 </script>
-
+</div>
 </div>
 {% endblock %}

@@ -1,0 +1,1417 @@
+/* ========================================================== */
+/* MILTEL AUTH                                                 */
+/* Login, selector de acceso y futuras vistas de autenticación */
+/* ========================================================== */
+
+/*
+ * La imagen de fondo se asignará desde el HTML mediante:
+ *
+ * style="
+ *   --miltel-auth-background-image:
+ *   url('/static/images/invierno.png?v=6');
+ * "
+ *
+ * En las plantillas Django utilizaremos:
+ *
+ * style="
+ *   --miltel-auth-background-image:
+ *   url('{% static "images/invierno.png" %}?v=6');
+ * "
+ */
+
+/* ========================================================== */
+/* VARIABLES EXCLUSIVAS DE AUTENTICACIÓN                       */
+/* ========================================================== */
+
+.miltel-auth-page {
+    --miltel-auth-metal-white:
+        rgba(255, 255, 255, 0.96);
+
+    --miltel-auth-metal-light:
+        rgba(226, 234, 240, 0.92);
+
+    --miltel-auth-metal-medium:
+        rgba(178, 193, 204, 0.88);
+
+    --miltel-auth-metal-dark:
+        rgba(26, 34, 43, 0.78);
+
+    --miltel-auth-holo-cyan:
+        rgba(111, 219, 224, 0.78);
+
+    --miltel-auth-holo-mint:
+        rgba(151, 220, 200, 0.72);
+
+    --miltel-auth-holo-violet:
+        rgba(183, 163, 221, 0.72);
+
+    --miltel-auth-holo-pink:
+        rgba(223, 173, 203, 0.68);
+
+    --miltel-auth-text-main:
+        #ffffff;
+
+    --miltel-auth-text-soft:
+        rgba(255, 255, 255, 0.78);
+
+    --miltel-auth-text-metal:
+        #394b58;
+
+    --miltel-auth-card-radius:
+        32px;
+
+    --miltel-auth-card-radius-mobile:
+        28px;
+
+    --miltel-auth-background-image:
+        none;
+}
+
+/* ========================================================== */
+/* PÁGINA GENERAL                                              */
+/* ========================================================== */
+
+html:has(.miltel-auth-page),
+body.miltel-auth-page {
+    min-height: 100%;
+}
+
+body.miltel-auth-page {
+    position: relative;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    min-height: 100vh;
+    min-height: 100svh;
+
+    margin: 0;
+    padding: 24px;
+
+    overflow: hidden;
+
+    background-color:
+        #dfe7ec;
+
+    background-image:
+        linear-gradient(115deg,
+            rgba(10, 17, 24, 0.16),
+            rgba(30, 39, 47, 0.05),
+            rgba(10, 17, 24, 0.18)),
+        var(--miltel-auth-background-image);
+
+    background-repeat:
+        no-repeat,
+        no-repeat;
+
+    background-position:
+        center,
+        center;
+
+    background-size:
+        cover,
+        cover;
+
+    background-attachment:
+        fixed,
+        fixed;
+
+    font-family:
+        "Segoe UI",
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
+}
+
+/* Sombreado exterior */
+
+body.miltel-auth-page::after {
+    content: "";
+
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+
+    pointer-events: none;
+
+    background:
+        radial-gradient(circle at center,
+            transparent 52%,
+            rgba(5, 12, 18, 0.30) 100%),
+        linear-gradient(to bottom,
+            rgba(5, 11, 17, 0.07),
+            rgba(5, 11, 17, 0.18));
+}
+
+/* Reflejos perlados */
+
+body.miltel-auth-page::before {
+    content: "";
+
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+
+    pointer-events: none;
+
+    background:
+        radial-gradient(circle at 50% 31%,
+            rgba(255, 255, 255, 0.11),
+            transparent 35%),
+        radial-gradient(circle at 38% 76%,
+            rgba(111, 219, 224, 0.05),
+            transparent 30%),
+        radial-gradient(circle at 72% 68%,
+            rgba(183, 163, 221, 0.05),
+            transparent 32%);
+}
+
+/* ========================================================== */
+/* LÍNEAS HOLOGRÁFICAS                                        */
+/* ========================================================== */
+
+.miltel-auth-page .data-stream {
+    position: fixed;
+    inset: 0;
+    z-index: 2;
+
+    overflow: hidden;
+
+    pointer-events: none;
+}
+
+.miltel-auth-page .data-stream span {
+    position: absolute;
+    left: -45%;
+
+    width: 38vw;
+    min-width: 310px;
+    height: 1px;
+
+    opacity: 0.38;
+
+    background:
+        linear-gradient(90deg,
+            transparent 0%,
+            rgba(111, 219, 224, 0.12) 18%,
+            rgba(255, 255, 255, 0.86) 40%,
+            rgba(183, 163, 221, 0.62) 58%,
+            rgba(223, 173, 203, 0.38) 74%,
+            transparent 100%);
+
+    filter:
+        drop-shadow(0 0 7px rgba(111, 219, 224, 0.30));
+
+    animation:
+        miltelAuthStreamMove 7.5s linear infinite;
+}
+
+.miltel-auth-page .data-stream span:nth-child(1) {
+    top: 18%;
+
+    animation-delay: 0s;
+}
+
+.miltel-auth-page .data-stream span:nth-child(2) {
+    top: 41%;
+
+    animation-delay: 1.8s;
+}
+
+.miltel-auth-page .data-stream span:nth-child(3) {
+    top: 65%;
+
+    animation-delay: 3.6s;
+}
+
+.miltel-auth-page .data-stream span:nth-child(4) {
+    top: 84%;
+
+    animation-delay: 5.4s;
+}
+
+@keyframes miltelAuthStreamMove {
+    from {
+        transform:
+            translateX(0) rotate(-4deg);
+    }
+
+    to {
+        transform:
+            translateX(155vw) rotate(-4deg);
+    }
+}
+
+/* ========================================================== */
+/* CONTENEDORES PRINCIPALES                                    */
+/* ========================================================== */
+
+.miltel-auth-shell,
+.login-shell,
+.role-shell {
+    position: relative;
+    z-index: 5;
+
+    width: 100%;
+    max-width: 440px;
+}
+
+.miltel-auth-card,
+.login-container,
+.role-card {
+    position: relative;
+
+    width: 100%;
+
+    overflow: visible;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.42);
+
+    border-radius:
+        var(--miltel-auth-card-radius);
+
+    background:
+        linear-gradient(145deg,
+            rgba(36, 43, 50, 0.70) 0%,
+            rgba(17, 23, 29, 0.66) 46%,
+            rgba(36, 40, 48, 0.68) 100%);
+
+    backdrop-filter:
+        blur(22px) saturate(115%);
+
+    -webkit-backdrop-filter:
+        blur(22px) saturate(115%);
+
+    box-shadow:
+        0 34px 90px rgba(0, 0, 0, 0.48),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+        0 0 28px rgba(111, 219, 224, 0.07);
+
+    animation:
+        miltelAuthFadeUp 0.42s ease;
+}
+
+.login-container {
+    padding:
+        100px 34px 44px;
+
+    text-align: center;
+}
+
+.role-card {
+    padding:
+        96px 34px 34px;
+}
+
+/* Reflejo metálico interno */
+
+.miltel-auth-card::before,
+.login-container::before,
+.role-card::before {
+    content: "";
+
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+
+    pointer-events: none;
+
+    border-radius:
+        var(--miltel-auth-card-radius);
+
+    background:
+        linear-gradient(122deg,
+            rgba(255, 255, 255, 0.18) 0%,
+            rgba(255, 255, 255, 0.035) 22%,
+            transparent 39%,
+            rgba(111, 219, 224, 0.05) 56%,
+            rgba(183, 163, 221, 0.06) 74%,
+            transparent 100%),
+        radial-gradient(circle at 50% 0%,
+            rgba(255, 255, 255, 0.13),
+            transparent 39%);
+}
+
+/* Línea iridiscente inferior */
+
+.miltel-auth-card::after,
+.login-container::after,
+.role-card::after {
+    content: "";
+
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: -1px;
+
+    height: 1px;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(90deg,
+            transparent,
+            var(--miltel-auth-holo-cyan),
+            var(--miltel-auth-holo-mint),
+            var(--miltel-auth-holo-violet),
+            var(--miltel-auth-holo-pink),
+            transparent);
+
+    box-shadow:
+        0 0 10px rgba(111, 219, 224, 0.16);
+}
+
+.miltel-auth-card>*,
+.login-container>*,
+.role-card>* {
+    position: relative;
+    z-index: 1;
+}
+
+/* ========================================================== */
+/* LOGO REDONDO                                                */
+/* ========================================================== */
+
+.miltel-auth-logo,
+.logo-box {
+    position: absolute;
+    top: -78px;
+    left: 50%;
+    z-index: 4;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 156px;
+    height: 156px;
+    padding: 5px;
+
+    overflow: hidden;
+
+    transform:
+        translateX(-50%);
+
+    border:
+        4px solid rgba(233, 241, 245, 0.92);
+
+    border-radius: 50%;
+
+    background:
+        linear-gradient(145deg,
+            rgba(255, 255, 255, 1),
+            rgba(202, 215, 224, 0.98) 48%,
+            rgba(245, 248, 250, 1));
+
+    backdrop-filter:
+        blur(12px);
+
+    -webkit-backdrop-filter:
+        blur(12px);
+
+    box-shadow:
+        0 22px 44px rgba(0, 0, 0, 0.38),
+        inset 0 2px 2px rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(85, 103, 116, 0.18),
+        0 0 25px rgba(111, 219, 224, 0.14);
+}
+
+/* Reflejo holográfico */
+
+.miltel-auth-logo::before,
+.logo-box::before {
+    content: "";
+
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+
+    pointer-events: none;
+
+    border-radius: 50%;
+
+    background:
+        linear-gradient(125deg,
+            rgba(255, 255, 255, 0.32) 0%,
+            rgba(255, 255, 255, 0.06) 28%,
+            transparent 44%,
+            rgba(111, 219, 224, 0.07) 58%,
+            rgba(183, 163, 221, 0.08) 72%,
+            transparent 100%);
+}
+
+/* Aro interior */
+
+.miltel-auth-logo::after,
+.logo-box::after {
+    content: "";
+
+    position: absolute;
+    inset: 5px;
+    z-index: 3;
+
+    pointer-events: none;
+
+    border:
+        1px solid rgba(114, 137, 151, 0.18);
+
+    border-radius: 50%;
+}
+
+.miltel-auth-logo img,
+.logo-box img {
+    position: relative;
+    z-index: 1;
+
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+    object-position: center;
+
+    background:
+        #ffffff;
+}
+
+/* ========================================================== */
+/* MARCA DEL LOGIN                                             */
+/* ========================================================== */
+
+.miltel-auth-brand,
+.brand {
+    margin-bottom: 30px;
+
+    text-align: center;
+}
+
+.miltel-auth-brand h1,
+.miltel-auth-brand h2,
+.brand h1,
+.brand h2 {
+    margin:
+        0 0 8px;
+
+    color:
+        var(--miltel-auth-text-main);
+
+    font-size: 1.62rem;
+    font-weight: 950;
+    line-height: 1.12;
+    letter-spacing: 0.02em;
+
+    text-transform: uppercase;
+
+    text-shadow:
+        0 2px 15px rgba(0, 0, 0, 0.58),
+        0 0 14px rgba(111, 219, 224, 0.08);
+}
+
+.miltel-auth-brand p,
+.brand p {
+    margin: 0;
+
+    color:
+        rgba(255, 255, 255, 0.76);
+
+    font-size: 0.96rem;
+    font-weight: 600;
+}
+
+.miltel-auth-brand strong,
+.brand strong {
+    color:
+        #d9e5ea;
+
+    font-weight: 900;
+
+    text-shadow:
+        0 0 12px rgba(111, 219, 224, 0.16);
+}
+
+/* ========================================================== */
+/* ENCABEZADO DEL SELECTOR DE ROL                              */
+/* ========================================================== */
+
+.miltel-role-header,
+.role-header {
+    margin-bottom: 28px;
+
+    text-align: center;
+}
+
+.miltel-role-header p,
+.role-header p {
+    margin:
+        0 0 7px;
+
+    color:
+        rgba(255, 255, 255, 0.60);
+
+    font-size: 0.76rem;
+    font-weight: 900;
+    letter-spacing: 0.18em;
+
+    text-transform: uppercase;
+}
+
+.miltel-role-header h1,
+.miltel-role-header h2,
+.role-header h1,
+.role-header h2 {
+    margin: 0;
+
+    color:
+        var(--miltel-auth-text-main);
+
+    font-size: 1.62rem;
+    font-weight: 950;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+
+    text-transform: uppercase;
+
+    text-shadow:
+        0 2px 15px rgba(0, 0, 0, 0.58),
+        0 0 14px rgba(111, 219, 224, 0.08);
+}
+
+.miltel-role-body,
+.role-body {
+    text-align: center;
+}
+
+.miltel-role-body>p,
+.role-body>p {
+    margin:
+        0 0 22px;
+
+    color:
+        rgba(255, 255, 255, 0.78);
+
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* ========================================================== */
+/* FORMULARIO                                                  */
+/* ========================================================== */
+
+.miltel-auth-page form {
+    margin: 0;
+}
+
+.login-container form {
+    text-align: left;
+}
+
+.miltel-auth-field,
+.login-container .field {
+    margin-bottom: 18px;
+}
+
+.miltel-auth-field label,
+.login-container .field label {
+    display: block;
+
+    margin-bottom: 7px;
+
+    color:
+        rgba(255, 255, 255, 0.92);
+
+    font-size: 0.98rem;
+    font-weight: 800;
+}
+
+.miltel-auth-input-wrap,
+.input-wrap,
+.password-wrapper {
+    position: relative;
+}
+
+.miltel-auth-page form input[type="text"],
+.miltel-auth-page form input[type="password"],
+.miltel-auth-page form input[type="email"],
+.miltel-auth-page form input[type="number"],
+.miltel-auth-page form input[type="tel"] {
+    width: 100%;
+    height: 50px;
+
+    padding:
+        0 48px 0 49px;
+
+    border:
+        1px solid rgba(213, 225, 232, 0.24);
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    outline: none;
+
+    background:
+        linear-gradient(145deg,
+            rgba(15, 21, 27, 0.68),
+            rgba(37, 45, 52, 0.58));
+
+    color:
+        var(--miltel-auth-text-main);
+
+    font-size: 1rem;
+
+    box-shadow:
+        inset 0 1px 8px rgba(0, 0, 0, 0.34),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+        0 9px 20px rgba(0, 0, 0, 0.15);
+
+    transition:
+        border-color var(--miltel-transition),
+        background var(--miltel-transition),
+        box-shadow var(--miltel-transition),
+        transform var(--miltel-transition);
+}
+
+.miltel-auth-page form input::placeholder {
+    color:
+        rgba(255, 255, 255, 0.43);
+}
+
+.miltel-auth-page form input[type="text"]:focus,
+.miltel-auth-page form input[type="password"]:focus,
+.miltel-auth-page form input[type="email"]:focus,
+.miltel-auth-page form input[type="number"]:focus,
+.miltel-auth-page form input[type="tel"]:focus {
+    border-color:
+        rgba(181, 214, 220, 0.72);
+
+    background:
+        linear-gradient(145deg,
+            rgba(20, 27, 33, 0.82),
+            rgba(47, 55, 63, 0.72));
+
+    box-shadow:
+        0 0 0 4px rgba(111, 219, 224, 0.09),
+        0 0 23px rgba(111, 219, 224, 0.10),
+        inset 0 1px 7px rgba(0, 0, 0, 0.31);
+
+    transform:
+        translateY(-1px);
+}
+
+/* Campo sin icono */
+
+.miltel-auth-page form input.miltel-auth-input-simple {
+    padding:
+        0 20px;
+}
+
+/* ========================================================== */
+/* ÍCONOS DE CAMPOS                                            */
+/* ========================================================== */
+
+.miltel-auth-input-icon,
+.input-icon {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    z-index: 2;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transform:
+        translateY(-50%);
+
+    color:
+        #dce9ed;
+
+    font-size: 1rem;
+
+    pointer-events: none;
+
+    filter:
+        drop-shadow(0 0 6px rgba(111, 219, 224, 0.16));
+}
+
+.miltel-auth-password-toggle,
+.toggle-password {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    z-index: 2;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 0;
+
+    border: 0;
+
+    background:
+        transparent;
+
+    color:
+        rgba(255, 255, 255, 0.72);
+
+    cursor: pointer;
+    user-select: none;
+
+    line-height: 1;
+    font-size: 1rem;
+
+    transform:
+        translateY(-50%);
+
+    transition:
+        color var(--miltel-transition),
+        transform var(--miltel-transition);
+}
+
+.miltel-auth-password-toggle:hover,
+.toggle-password:hover {
+    color:
+        var(--miltel-auth-text-main);
+
+    transform:
+        translateY(-50%) scale(1.06);
+}
+
+/* ========================================================== */
+/* MENSAJES Y ERRORES                                          */
+/* ========================================================== */
+
+.miltel-auth-page .errorlist {
+    margin:
+        0 0 14px;
+
+    padding: 0;
+
+    list-style: none;
+
+    color:
+        #ffc2c2;
+
+    text-align: left;
+
+    font-size: 0.92rem;
+}
+
+.miltel-auth-message,
+.message-box {
+    margin-bottom: 14px;
+
+    padding:
+        11px 13px;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.46);
+
+    border-radius:
+        13px;
+
+    text-align: left;
+
+    font-size: 0.92rem;
+
+    opacity: 1;
+
+    box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
+    transition:
+        opacity 0.5s ease-out;
+}
+
+.miltel-auth-message.error,
+.message-box.error {
+    color:
+        #a82020;
+
+    background:
+        rgba(255, 235, 238, 0.96);
+}
+
+.miltel-auth-message.success,
+.message-box.success {
+    color:
+        #17763a;
+
+    background:
+        rgba(230, 255, 237, 0.96);
+}
+
+.miltel-auth-message.info,
+.message-box.info {
+    color:
+        #315d7d;
+
+    background:
+        rgba(233, 242, 247, 0.97);
+}
+
+.miltel-auth-message.warning,
+.message-box.warning {
+    color:
+        #795d18;
+
+    background:
+        rgba(250, 247, 227, 0.97);
+}
+
+/* ========================================================== */
+/* RECUPERACIÓN DE CONTRASEÑA                                  */
+/* ========================================================== */
+
+.miltel-auth-forgot,
+.forgot-password {
+    margin:
+        6px 0 22px;
+
+    text-align: center;
+}
+
+.miltel-auth-forgot a,
+.forgot-password a {
+    color:
+        #d6e5e9;
+
+    text-decoration:
+        none;
+
+    font-size: 0.95rem;
+    font-weight: 800;
+
+    transition:
+        color var(--miltel-transition),
+        text-shadow var(--miltel-transition);
+}
+
+.miltel-auth-forgot a:hover,
+.forgot-password a:hover {
+    color:
+        var(--miltel-auth-text-main);
+
+    text-decoration:
+        underline;
+
+    text-shadow:
+        0 0 10px rgba(111, 219, 224, 0.16);
+}
+
+/* ========================================================== */
+/* BOTÓN METÁLICO PRINCIPAL                                    */
+/* ========================================================== */
+
+.miltel-auth-submit {
+    position: relative;
+
+    width: 100%;
+
+    padding:
+        15px 16px;
+
+    overflow: hidden;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.64);
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    background:
+        linear-gradient(105deg,
+            rgba(255, 255, 255, 0.98) 0%,
+            rgba(196, 211, 220, 0.96) 24%,
+            rgba(235, 241, 244, 0.98) 47%,
+            rgba(205, 220, 226, 0.95) 66%,
+            rgba(231, 224, 239, 0.94) 84%,
+            rgba(255, 255, 255, 0.98) 100%);
+
+    background-size:
+        210% 100%;
+
+    color:
+        #314551;
+
+    cursor: pointer;
+
+    font-size: 1.05rem;
+    font-weight: 950;
+
+    box-shadow:
+        0 17px 32px rgba(0, 0, 0, 0.23),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.14),
+        0 0 18px rgba(111, 219, 224, 0.08);
+
+    transition:
+        transform 0.16s ease,
+        filter 0.16s ease,
+        box-shadow 0.16s ease,
+        background-position 0.25s ease;
+}
+
+.miltel-auth-submit::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    left: -120%;
+
+    width: 55%;
+    height: 100%;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(90deg,
+            transparent,
+            rgba(255, 255, 255, 0.88),
+            rgba(111, 219, 224, 0.12),
+            rgba(183, 163, 221, 0.13),
+            transparent);
+
+    transform:
+        skewX(-20deg);
+
+    animation:
+        miltelAuthButtonShine 3.6s ease-in-out infinite;
+}
+
+.miltel-auth-submit:hover {
+    transform:
+        translateY(-1px);
+
+    background-position:
+        100% 0;
+
+    filter:
+        brightness(1.03);
+
+    box-shadow:
+        0 20px 38px rgba(0, 0, 0, 0.28),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.12),
+        0 0 24px rgba(111, 219, 224, 0.11);
+}
+
+.miltel-auth-submit:active {
+    transform:
+        translateY(0);
+
+    box-shadow:
+        0 10px 22px rgba(0, 0, 0, 0.20),
+        inset 0 2px 5px rgba(72, 91, 104, 0.14);
+}
+
+/* ========================================================== */
+/* SELECTOR DE ROLES                                           */
+/* ========================================================== */
+
+.miltel-role-actions,
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.miltel-role-button,
+.btn-role {
+    position: relative;
+
+    width: 100%;
+    min-height: 54px;
+
+    padding:
+        14px 18px;
+
+    overflow: hidden;
+
+    border:
+        1px solid rgba(255, 255, 255, 0.60);
+
+    border-radius:
+        var(--miltel-radius-pill);
+
+    cursor: pointer;
+
+    font-size: 1rem;
+    font-weight: 900;
+
+    transition:
+        transform 0.16s ease,
+        filter 0.16s ease,
+        box-shadow 0.16s ease,
+        background-position 0.25s ease;
+}
+
+.miltel-role-button::before,
+.btn-role::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    left: -120%;
+
+    width: 55%;
+    height: 100%;
+
+    pointer-events: none;
+
+    background:
+        linear-gradient(90deg,
+            transparent,
+            rgba(255, 255, 255, 0.82),
+            rgba(111, 219, 224, 0.11),
+            rgba(183, 163, 221, 0.12),
+            transparent);
+
+    transform:
+        skewX(-20deg);
+
+    animation:
+        miltelAuthButtonShine 3.8s ease-in-out infinite;
+}
+
+.miltel-role-button:hover,
+.btn-role:hover {
+    transform:
+        translateY(-1px);
+
+    filter:
+        brightness(1.03);
+
+    background-position:
+        100% 0;
+}
+
+.miltel-role-button:active,
+.btn-role:active {
+    transform:
+        translateY(0);
+}
+
+/* Rol usuario */
+
+.miltel-role-button-user,
+.btn-user {
+    color:
+        #314551;
+
+    background:
+        linear-gradient(105deg,
+            rgba(255, 255, 255, 0.98) 0%,
+            rgba(196, 211, 220, 0.96) 24%,
+            rgba(235, 241, 244, 0.98) 47%,
+            rgba(205, 220, 226, 0.95) 66%,
+            rgba(231, 224, 239, 0.94) 84%,
+            rgba(255, 255, 255, 0.98) 100%);
+
+    background-size:
+        210% 100%;
+
+    box-shadow:
+        0 17px 32px rgba(0, 0, 0, 0.23),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.14),
+        0 0 18px rgba(111, 219, 224, 0.08);
+}
+
+.miltel-role-button-user:hover,
+.btn-user:hover {
+    box-shadow:
+        0 20px 38px rgba(0, 0, 0, 0.28),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.12),
+        0 0 24px rgba(111, 219, 224, 0.11);
+}
+
+/* Rol administrador */
+
+.miltel-role-button-admin,
+.btn-admin {
+    color:
+        var(--miltel-auth-text-main);
+
+    border-color:
+        rgba(210, 225, 231, 0.34);
+
+    background:
+        linear-gradient(105deg,
+            rgba(38, 47, 55, 0.95) 0%,
+            rgba(63, 74, 83, 0.96) 26%,
+            rgba(31, 39, 47, 0.97) 52%,
+            rgba(74, 83, 93, 0.95) 77%,
+            rgba(42, 50, 58, 0.96) 100%);
+
+    background-size:
+        210% 100%;
+
+    box-shadow:
+        0 17px 32px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+        0 0 18px rgba(183, 163, 221, 0.07);
+}
+
+.miltel-role-button-admin:hover,
+.btn-admin:hover {
+    box-shadow:
+        0 20px 38px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.17),
+        0 0 24px rgba(183, 163, 221, 0.10);
+}
+
+/* ========================================================== */
+/* PIE                                                         */
+/* ========================================================== */
+
+.miltel-auth-footer,
+.miltel-auth-page .footer {
+    position: relative;
+    z-index: 5;
+
+    margin-top: 16px;
+
+    color:
+        rgba(255, 255, 255, 0.90);
+
+    text-align: center;
+
+    font-size: 0.84rem;
+    font-weight: 600;
+
+    text-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.50);
+}
+
+.miltel-auth-footer img,
+.miltel-auth-page .footer img {
+    display: inline-block;
+
+    width: auto;
+    height: 40px;
+
+    margin-left: 5px;
+
+    vertical-align: middle;
+
+    filter:
+        drop-shadow(0 3px 9px rgba(0, 0, 0, 0.42));
+}
+
+/* ========================================================== */
+/* ANIMACIONES                                                 */
+/* ========================================================== */
+
+@keyframes miltelAuthFadeUp {
+    from {
+        opacity: 0;
+
+        transform:
+            translateY(20px) scale(0.985);
+    }
+
+    to {
+        opacity: 1;
+
+        transform:
+            translateY(0) scale(1);
+    }
+}
+
+@keyframes miltelAuthButtonShine {
+    0% {
+        left: -120%;
+    }
+
+    45% {
+        left: 140%;
+    }
+
+    100% {
+        left: 140%;
+    }
+}
+
+/* ========================================================== */
+/* TABLET                                                      */
+/* ========================================================== */
+
+@media (max-width: 980px) {
+    body.miltel-auth-page {
+        background-position:
+            center,
+            center;
+    }
+}
+
+/* ========================================================== */
+/* CELULAR                                                     */
+/* ========================================================== */
+
+@media (max-width: 520px) {
+    body.miltel-auth-page {
+        align-items: center;
+
+        min-height: 100svh;
+
+        padding:
+            74px 16px 24px;
+
+        overflow-y: auto;
+
+        background-position:
+            center,
+            center;
+
+        background-attachment:
+            scroll,
+            scroll;
+    }
+
+    .miltel-auth-shell,
+    .login-shell,
+    .role-shell {
+        max-width: 100%;
+    }
+
+    .miltel-auth-card,
+    .login-container,
+    .role-card {
+        border-radius:
+            var(--miltel-auth-card-radius-mobile);
+    }
+
+    .miltel-auth-card::before,
+    .login-container::before,
+    .role-card::before {
+        border-radius:
+            var(--miltel-auth-card-radius-mobile);
+    }
+
+    .login-container {
+        padding:
+            86px 22px 32px;
+    }
+
+    .role-card {
+        padding:
+            86px 22px 28px;
+    }
+
+    .miltel-auth-logo,
+    .logo-box {
+        top: -64px;
+
+        width: 132px;
+        height: 132px;
+
+        padding: 4px;
+
+        border-width: 4px;
+    }
+
+    .miltel-auth-brand,
+    .brand {
+        margin-bottom: 26px;
+    }
+
+    .miltel-auth-brand h1,
+    .miltel-auth-brand h2,
+    .brand h1,
+    .brand h2 {
+        font-size: 1.32rem;
+    }
+
+    .miltel-auth-brand p,
+    .brand p {
+        font-size: 0.91rem;
+    }
+
+    .miltel-role-header,
+    .role-header {
+        margin-bottom: 24px;
+    }
+
+    .miltel-role-header h1,
+    .miltel-role-header h2,
+    .role-header h1,
+    .role-header h2 {
+        font-size: 1.34rem;
+    }
+
+    .miltel-role-body>p,
+    .role-body>p {
+        font-size: 0.94rem;
+    }
+
+    .miltel-auth-page form input[type="text"],
+    .miltel-auth-page form input[type="password"],
+    .miltel-auth-page form input[type="email"],
+    .miltel-auth-page form input[type="number"],
+    .miltel-auth-page form input[type="tel"] {
+        height: 48px;
+    }
+
+    .miltel-role-button,
+    .btn-role {
+        min-height: 50px;
+
+        padding:
+            13px 14px;
+
+        font-size: 0.96rem;
+    }
+
+    .miltel-auth-footer img,
+    .miltel-auth-page .footer img {
+        height: 36px;
+    }
+
+    .miltel-auth-page .data-stream span {
+        min-width: 220px;
+
+        opacity: 0.27;
+    }
+}
+
+/* ========================================================== */
+/* PANTALLAS PEQUEÑAS EN ALTURA                               */
+/* ========================================================== */
+
+@media (max-height: 700px) and (min-width: 521px) {
+    body.miltel-auth-page {
+        align-items: flex-start;
+
+        overflow-y: auto;
+
+        padding-top: 92px;
+        padding-bottom: 30px;
+    }
+}
+
+/* ========================================================== */
+/* REDUCCIÓN DE MOVIMIENTO                                    */
+/* ========================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+    .miltel-auth-card,
+    .login-container,
+    .role-card,
+    .miltel-auth-page .data-stream span,
+    .miltel-auth-submit::before,
+    .miltel-role-button::before,
+    .btn-role::before {
+        animation: none;
+    }
+}

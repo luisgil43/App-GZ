@@ -1,594 +1,1077 @@
 <!DOCTYPE html>
 {% load static %}
 {% load humanize %}
+
 <html lang="es">
 
 <head>
+  <!-- ====================================================== -->
+  <!-- ESTADO INICIAL DEL SIDEBAR -->
+  <!-- Usa la misma estructura visual del panel administrativo -->
+  <!-- ====================================================== -->
+
   <script>
     (function () {
       try {
-        if (localStorage.getItem('user-sidebar-collapsed') === '1') {
-          document.documentElement.classList.add('user-sidebar-collapsed-init');
+        if (
+          localStorage.getItem(
+            "admin-sidebar-collapsed"
+          ) === "1"
+        ) {
+          document.documentElement.classList.add(
+            "admin-sidebar-collapsed-init"
+          );
         }
       } catch (e) {}
     })();
   </script>
 
   <meta charset="UTF-8">
-  <title>{% block title %}Dashboard{% endblock %}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- iOS / Apple Touch Icons -->
-<link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
-<link rel="apple-touch-icon" sizes="120x120" href="{% static 'icons/apple-touch-icon-120x120.png' %}">
-<link rel="apple-touch-icon" sizes="180x180" href="{% static 'icons/apple-touch-icon-180x180.png' %}">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-<!-- Favicon clásico -->
-<link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32x32.png' %}">
-<link rel="icon" type="image/png" sizes="16x16" href="{% static 'icons/favicon-16x16.png' %}">
-<link rel="icon" href="{% static 'icons/favicon.ico' %}" sizes="any">
+  <meta
+    name="csrf-token"
+    content="{{ csrf_token }}"
+  >
 
-<!-- PWA (opcional pero recomendado) -->
-<link rel="manifest" href="{% static 'icons/site.webmanifest' %}">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Miltel">
+  <title>
+    {% block title %}
+      Plataforma de Miltel
+    {% endblock %}
+  </title>
 
-  <!-- TailwindCSS -->
+  <!-- ====================================================== -->
+  <!-- ICONOS IOS -->
+  <!-- ====================================================== -->
+
+  <link
+    rel="apple-touch-icon"
+    href="{% static 'icons/apple-touch-icon.png' %}"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    sizes="120x120"
+    href="{% static 'icons/apple-touch-icon-120x120.png' %}"
+  >
+
+  <link
+    rel="apple-touch-icon"
+    sizes="180x180"
+    href="{% static 'icons/apple-touch-icon-180x180.png' %}"
+  >
+
+  <!-- ====================================================== -->
+  <!-- FAVICON -->
+  <!-- ====================================================== -->
+
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="32x32"
+    href="{% static 'icons/favicon-32x32.png' %}"
+  >
+
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="16x16"
+    href="{% static 'icons/favicon-16x16.png' %}"
+  >
+
+  <link
+    rel="icon"
+    href="{% static 'icons/favicon.ico' %}"
+    sizes="any"
+  >
+
+  <!-- ====================================================== -->
+  <!-- PWA -->
+  <!-- ====================================================== -->
+
+  <link
+    rel="manifest"
+    href="{% static 'icons/site.webmanifest' %}"
+  >
+
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
+
+  <meta
+    name="apple-mobile-web-app-title"
+    content="Miltel"
+  >
+
+  <!-- ====================================================== -->
+  <!-- TAILWIND -->
+  <!-- ====================================================== -->
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
 
-  <!-- Tu hoja de estilos personalizada -->
-  <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+  <!-- ====================================================== -->
+  <!-- ESTILOS GENERALES MILTEL -->
+  <!-- Mismos archivos utilizados por el panel administrativo -->
+  <!-- ====================================================== -->
 
-  <style>
-  .rotate-90 {
-    transform: rotate(90deg);
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-theme.css' %}"
+  >
 
-  :root{
-    /* mismos tonos del login, suavizados */
-    --sidebar-bg-1: #ef6a60;
-    --sidebar-bg-2: #f28759;
-    --sidebar-bg-3: #e4ab53;
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-base.css' %}"
+  >
 
-    --sidebar-text: #fffaf7;
-    --sidebar-text-soft: #fff2ea;
-    --sidebar-text-submenu: #fff7f2;
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-layout.css' %}"
+  >
 
-    --sidebar-hover: rgba(255,255,255,0.10);
-    --sidebar-hover-strong: rgba(255,255,255,0.16);
-    --sidebar-border: rgba(255,255,255,0.10);
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-components.css' %}"
+  >
 
-  /*
-    Evita el parpadeo del sidebar al recargar:
-    si el usuario lo dejó cerrado, se oculta desde el primer pintado.
-  */
-  @media (min-width: 768px) {
-    html.user-sidebar-collapsed-init #side-nav {
-      transform: translateX(-100%) !important;
-    }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-tables.css' %}"
+  >
 
-    html.user-sidebar-collapsed-init .content-wrapper #main-content {
-      margin-left: 0 !important;
-    }
-  }
-
-  /* === COLAPSAR MENÚ EN PC (>=768px) === */
-  @media (min-width: 768px) {
-    .content-wrapper.with-sidebar #main-content {
-      margin-left: 18rem;
-    }
-
-    .content-wrapper.no-sidebar #main-content {
-      margin-left: 0;
-    }
-
-    #side-nav.collapsed {
-      transform: translateX(-100%) !important;
-    }
-  }
-
-  /* === MÓVIL === */
-  @media (max-width: 767px) {
-    #main-content {
-      margin-left: 0 !important;
-    }
-  }
-
-  /* === TEXTO OSCURO EN PANEL DE NOTIFICACIONES === */
-  #notification-panel,
-  #notification-panel * {
-    color: #111827 !important;
-  }
-
-  #notification-panel .text-xs {
-    color: #6b7280 !important;
-  }
-
-  /* === NAV USUARIO COHERENTE CON LOGIN === */
-  #side-nav {
-    background:
-      radial-gradient(circle at 15% 10%, rgba(255,255,255,0.13), transparent 22%),
-      radial-gradient(circle at 82% 88%, rgba(255,255,255,0.07), transparent 24%),
-      linear-gradient(
-        180deg,
-        var(--sidebar-bg-1) 0%,
-        var(--sidebar-bg-2) 52%,
-        var(--sidebar-bg-3) 100%
-      );
-    color: var(--sidebar-text);
-    border-right: 1px solid var(--sidebar-border);
-    box-shadow:
-      10px 0 22px rgba(242, 135, 89, 0.10),
-      inset -1px 0 0 rgba(255,255,255,0.04);
-  }
-
-  #side-nav h2 {
-    color: #ffffff;
-    font-weight: 800;
-    letter-spacing: 0.2px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.10);
-    font-size: 2rem;
-    margin-bottom: 1.2rem !important;
-  }
-
-  /* menos separación general */
-  #side-nav > ul {
-    font-size: 0.98rem;
-    gap: 0.22rem !important;
-  }
-
-  #side-nav > ul > li {
-    margin: 0 !important;
-  }
-
-  #side-nav > ul > li > a,
-  #side-nav > ul > li > span,
-  #side-nav > ul > li > div {
-    color: var(--sidebar-text) !important;
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-weight: 700;
-    line-height: 1.3;
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-  }
-
-  #side-nav > ul > li > a:hover,
-  #side-nav > ul > li > span:hover,
-  #side-nav > ul > li > div:hover {
-    background: var(--sidebar-hover);
-    color: #ffffff !important;
-    transform: translateX(2px);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-  }
-
-  #side-nav .submenu {
-    margin-top: 3px;
-    margin-bottom: 2px;
-  }
-
-  #side-nav .submenu li {
-    margin: 0 !important;
-  }
-
-  #side-nav .submenu li a,
-  #side-nav .submenu > a {
-    display: block;
-    color: var(--sidebar-text-submenu) !important;
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-weight: 600;
-    font-size: 0.93rem;
-    line-height: 1.28;
-    text-shadow: 0 1px 1px rgba(0,0,0,0.08);
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-  }
-
-  #side-nav .submenu li a:hover,
-  #side-nav .submenu > a:hover {
-    background: var(--sidebar-hover-strong);
-    color: #ffffff !important;
-    transform: translateX(2px);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-  }
-
-  #side-nav .arrow,
-  #side-nav .flecha {
-    color: #fff5ef;
-    font-weight: 800;
-    font-size: 0.95rem;
-    transition: transform 0.2s ease;
-  }
-
-  #side-nav .text-gray-400 {
-    color: #fff0e6 !important;
-  }
-
-  #side-nav .text-xs {
-    letter-spacing: 0.2px;
-  }
-</style>
+  {% block extra_css %}
+  {% endblock %}
 </head>
 
-<body class="bg-gray-100 text-gray-900">
+<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
 
-<!-- Header fijo -->
-<header class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2">
-  <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+  <!-- ====================================================== -->
+  <!-- HEADER FIJO -->
+  <!-- Reutiliza los selectores visuales del administrativo -->
+  <!-- ====================================================== -->
 
-    <!-- Campana SIEMPRE ARRIBA A LA DERECHA -->
-    <div class="absolute top-3 right-4 z-50">
-      <button onclick="toggleNotifications()" class="relative text-gray-700">
-        <i data-lucide="bell" class="w-6 h-6"></i>
-        {% if notificaciones_no_leidas > 0 %}
-          <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-            {{ notificaciones_no_leidas }}
-          </span>
-        {% endif %}
-      </button>
+  <header
+    id="admin-header"
+    class="fixed top-0 left-0 z-50 w-full px-3 py-2 sm:px-5"
+  >
+    <div class="relative flex w-full items-center justify-between gap-3">
 
-      <!-- Panel de notificaciones -->
-      <div id="notification-panel"
-           class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
-        <div class="p-2 max-h-80 overflow-y-auto">
-          {% for n in notificaciones_recientes %}
-            <div id="notificacion-{{ n.id }}">
-              <button onclick="leerNotificacion({{ n.id }}, '{{ n.url }}')"
-                      class="w-full text-left block p-2 text-sm border-b {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
-                <div class="flex flex-col">
-                  <span>{{ n.mensaje }}</span>
-                  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
-                </div>
-              </button>
-            </div>
-          {% empty %}
-            <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
-          {% endfor %}
+      <!-- Izquierda -->
+      <div class="flex min-w-0 items-center gap-3">
+
+        <button
+          type="button"
+          onclick="toggleSidebar()"
+          aria-label="Abrir o cerrar menú"
+          class="admin-menu-button"
+        >
+          ☰
+        </button>
+
+        <div class="admin-header-logo-box">
+          <img
+            src="{% static 'images/logoredondo.png' %}?v=1"
+            alt="Logo MILTEL"
+          >
         </div>
+
+        <div class="min-w-0">
+
+          <strong class="block truncate text-sm font-extrabold tracking-wide text-slate-900 sm:text-base">
+            PLATAFORMA DE MILTEL
+          </strong>
+
+          <span class="hidden text-xs font-medium text-slate-500 sm:block">
+            Gestión personal y operativa
+          </span>
+
+        </div>
+
       </div>
-    </div>
 
-    <!-- CONTENIDO DEL HEADER -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full pr-16 gap-2 sm:gap-0 mt-[-8px]">
+      <!-- Derecha -->
+      <div class="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
 
-      <!-- IZQUIERDA: Logo + texto -->
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
-        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
-        <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
+        <!-- Usuario -->
+        <div class="admin-user-card hidden sm:flex">
+
+          <div class="admin-user-avatar">
+            {% if request.user.first_name %}
+              {{ request.user.first_name|first|upper }}
+            {% else %}
+              {{ request.user.username|first|upper }}
+            {% endif %}
+          </div>
+
+          <div class="min-w-0 max-w-[220px] text-left leading-tight">
+
+            <span class="block truncate text-sm font-semibold text-slate-800">
+              {{ request.user.get_full_name|default:request.user.username }}
+            </span>
+
+            <span class="block text-[11px] text-slate-500">
+              Sesión de usuario
+            </span>
+
+          </div>
+
+        </div>
+
+        <!-- Cambiar a administrador -->
+        {% if request.user.is_authenticated and request.user.es_usuario %}
+
+          {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
+
+            <form
+              method="post"
+              action="{% url 'usuarios:switch_mode' %}"
+              class="inline-block"
+            >
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="admin-header-action mode"
+              >
+                <span aria-hidden="true">
+                  🔁
+                </span>
+
+                <span class="hidden lg:inline">
+                  Cambiar a Admin
+                </span>
+              </button>
+            </form>
+
+          {% endif %}
+
+        {% endif %}
+
+        <!-- Cerrar sesión -->
+        <form
+          method="post"
+          action="{% url 'logout' %}"
+          class="inline-block"
+        >
+          {% csrf_token %}
+
+          <button
+            type="submit"
+            class="admin-header-action logout"
+          >
+            <span aria-hidden="true">
+              ↪
+            </span>
+
+            <span class="hidden lg:inline">
+              Cerrar sesión
+            </span>
+          </button>
+        </form>
+
+        <!-- Notificaciones -->
+        <div class="relative">
+
+          <button
+            type="button"
+            onclick="toggleNotifications()"
+            aria-label="Abrir notificaciones"
+            class="notification-button relative"
+          >
+            <i
+              data-lucide="bell"
+              class="h-5 w-5"
+            ></i>
+
+            {% if notificaciones_no_leidas > 0 %}
+              <span
+                class="
+                  absolute -top-2 -right-2
+                  flex h-5 min-w-[20px]
+                  items-center justify-center
+                  rounded-full
+                  bg-red-500
+                  px-1
+                  text-[10px]
+                  font-bold
+                  text-white
+                  shadow-sm
+                "
+              >
+                {{ notificaciones_no_leidas }}
+              </span>
+            {% endif %}
+          </button>
+
+          <!-- Panel de notificaciones -->
+          <div
+            id="notification-panel"
+            class="absolute right-0 z-50 mt-3 hidden w-72 bg-white sm:w-80"
+          >
+
+            <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+
+              <div class="flex items-center justify-between gap-3">
+
+                <div>
+
+                  <h3 class="text-sm font-bold text-slate-900">
+                    Notificaciones
+                  </h3>
+
+                  <p class="mt-0.5 text-[11px] text-slate-500">
+                    Actividad reciente de la plataforma
+                  </p>
+
+                </div>
+
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                  🔔
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="max-h-80 overflow-y-auto p-2">
+
+              {% for n in notificaciones_recientes %}
+
+                <div id="notificacion-{{ n.id }}">
+
+                  <button
+                    type="button"
+                    onclick="leerNotificacion({{ n.id }}, '{{ n.url|escapejs }}')"
+                    class="
+                      block
+                      w-full
+                      rounded-xl
+                      border-b
+                      border-slate-100
+                      p-3
+                      text-left
+                      text-sm
+
+                      {% if not n.leido %}
+                        bg-amber-50
+                        hover:bg-amber-100
+                      {% else %}
+                        bg-white
+                        hover:bg-slate-50
+                      {% endif %}
+                    "
+                  >
+                    <span class="flex flex-col gap-1">
+
+                      <span class="leading-snug">
+                        {{ n.mensaje }}
+                      </span>
+
+                      <span class="text-xs text-gray-400">
+                        {{ n.fecha|naturaltime }}
+                      </span>
+
+                    </span>
+                  </button>
+
+                </div>
+
+              {% empty %}
+
+                <div class="px-4 py-8 text-center">
+
+                  <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-lg">
+                    🔕
+                  </div>
+
+                  <p class="mt-3 text-sm font-semibold text-slate-700">
+                    Sin notificaciones
+                  </p>
+
+                  <p class="mt-1 text-xs text-slate-500">
+                    No tienes actividad reciente.
+                  </p>
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
-   <!-- DERECHA: Nombre + switch + cerrar sesión -->
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-3 items-start text-sm md:text-base text-right leading-tight">
-  <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
-    {{ request.user.get_full_name|default:request.user.username }}
-  </span>
-
-  {# ✅ Botón solo si tiene rol usuario + admin #}
- {# ✅ Botón SOLO si tiene rol usuario + rol admin #}
-{% if request.user.is_authenticated and request.user.es_usuario %}
-  {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
-    <form method="post" action="{% url 'usuarios:switch_mode' %}" class="inline-block">
-      {% csrf_token %}
-      <button type="submit"
-              class="px-3 py-1 rounded-full text-xs border bg-white hover:bg-gray-50 text-gray-800 whitespace-nowrap">
-        🔁 Cambiar a Admin
-      </button>
-    </form>
-  {% endif %}
-{% endif %}
-<form method="post" action="{% url 'logout' %}">
-  {% csrf_token %}
-  <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-    Cerrar Sesión
-  </button>
-</form>
-</div>
     </div>
+  </header>
 
-  </div>
-</header>
+  <!-- ====================================================== -->
+  <!-- CONTENEDOR PRINCIPAL -->
+  <!-- ====================================================== -->
 
+  <div
+    id="app-wrapper"
+    class="content-wrapper with-sidebar relative flex min-h-screen flex-col md:flex-row"
+  >
 
-  <!-- Contenedor principal -->
-<div id="app-wrapper" class="flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+    <!-- ==================================================== -->
+    <!-- MENÚ LATERAL -->
+    <!-- ==================================================== -->
 
-    <!-- Menú lateral con animación -->
-    <nav id="side-nav" class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
-      <h2 class="text-2xl font-bold mb-8">Menú</h2>
-      <ul class="space-y-4 text-base">
+    <nav
+      id="side-nav"
+      aria-label="Menú de usuario"
+      class="
+        fixed
+        top-14
+        bottom-0
+        left-0
+        z-40
+        w-72
+        -translate-x-full
+        transform
+        overflow-y-auto
+        p-4
+        transition-transform
+        md:translate-x-0
+      "
+    >
+
+      <!-- Encabezado del menú -->
+      <div class="mb-5 border-b border-white/15 pb-4">
+
+        <span class="block text-[11px] font-bold uppercase tracking-[0.18em] text-white/70">
+        </span>
+
+        <h2 class="mt-1 text-2xl font-extrabold text-white">
+          Menú principal
+        </h2>
+
+      </div>
+
+      <ul class="space-y-1 text-base">
+
+        <!-- Inicio -->
         <li>
-          <a href="{% url 'dashboard:inicio_tecnico' %}" class="font-bold flex items-center hover:text-emerald-400">🏠
-            Inicio</a>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🎁
-            Beneficios <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="#" class="hover:text-emerald-400">Convenios disponibles</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🚐 Flota
-            <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li>
-  <a href="{% url 'flota:my_vehicle' %}" class="hover:text-emerald-400">Mi vehículo asignado</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Documentación del Vehiculo</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">📄
-            Facturación <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="#" class="hover:text-emerald-400">Mis facturas</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">📦
-            Logística <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="{% url 'logistica:mis_herramientas' %}" class="hover:text-emerald-400">Mis herramientas asignadas</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🛠
-            Operaciones <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-		<li><a href="{% url 'operaciones:buscar_mi_sitio' %}" class="hover:text-emerald-400">Buscar Mi Sitio</a></li>
-<li><a href="{% url 'operaciones:mis_servicios_tecnico' %}" class="hover:text-emerald-400">Mi Asignación</a></li>
-            <li>
-  <a href="{% url 'operaciones:produccion_tecnico' %}" class="hover:text-emerald-400">
-    Mi Producción
-  </a>
-</li>
-            <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
-            <li><a href="{% url 'operaciones:mis_rendiciones' %}" class="hover:text-emerald-400">Mis Rendiciones</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🦺
-            Prevención de Riesgo <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li>
-  <a href="{% url 'prevencion:mis_documentos' %}" class="hover:text-emerald-400">
-    Mis Cursos y Documentos
-  </a>
-</li>
-            <li><a href="#" class="hover:text-emerald-400">Firma de documentos</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Mis EPP asignados</a></li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🧑‍💼
-            RR.HH <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="{% url 'rrhh:mis_vacaciones' %}" class="hover:text-emerald-400">Mis Vacaciones</a></li>
-            <li><a href="{% url 'liquidaciones:listar' %}" class="hover:text-emerald-400">Mis liquidaciones</a></li>
-            <li><a href="{% url 'rrhh:mis_contratos' %}" class="hover:text-emerald-400">Mis contratos de trabajos</a>
-            </li>
-            <li><a href="{% url 'rrhh:mis_fichas_ingreso' %}" class="hover:text-emerald-400">Mi Ficha de Ingreso</a>
-            </li>
-            <li><a href="{% url 'rrhh:mis_documentos' %}" class="hover:text-emerald-400">Mis Documentos</a></li>
-            <li><a href="{% url 'dashboard:registrar_firma_usuario' %}" class="hover:text-emerald-400">Mi Firma
-                Digital</a></li>
-            <li><a href="{% url 'rrhh:ver_cronograma' %}" class="hover:text-emerald-400">Mi cronograma de pago</a></li>
-            <li><a href="{% url 'rrhh:listar_adelantos_usuario' %}" class="hover:text-emerald-400">Solicitud de
-                adelanto de sueldo</a>
-            </li>
-          </ul>
-        </li>
-        <li data-toggle class="group">
-          <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">🤝
-            Subcontrato <span class="arrow">▶</span></span>
-          <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-            <li><a href="#" class="hover:text-emerald-400">Cargar producción</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Cargar factura de producción</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Cargar contrato de los trabajadores</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Cargar F30 y F30-1</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Cargar liquidaciones de sueldo</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Cargar curso de los trabajadores</a></li>
-            <li><a href="#" class="hover:text-emerald-400">Contrato de servicio</a></li>
-          </ul>
-        </li>
-     
-     
-      <!-- ✅ AQUÍ VA: Activar Telegram (DENTRO DEL UL, NO AFUERA) -->
-      {% if request.user.is_authenticated and request.user.telegram_activo %}
-      <li data-toggle class="group">
-        <span class="font-bold flex items-center cursor-pointer justify-between" onclick="toggleMenu(this)">📲 Activar Telegram <span class="arrow">▶</span></span>
-        <ul class="submenu ml-4 space-y-1 hidden" style="display: none;">
-          <li>
-            <a href="{% url 'bot_gz:activar_telegram' %}" class="hover:text-emerald-400">
-              Activar
-            </a>
-          </li>
-        </ul>
-      </li>
-      {% endif %}
-    </ul>
+          <a
+            href="{% url 'dashboard:inicio_tecnico' %}"
+            class="flex items-center gap-2 font-bold"
+          >
+            <span aria-hidden="true">
+              🏠
+            </span>
 
-<div class="mt-10 text-center text-gray-400 text-xs">
-  <p class="mb-1">Desarrollado por</p>
-  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-14 mx-auto max-w-[100px] object-contain">
-</div>
+            <span>
+              Inicio
+            </span>
+          </a>
+        </li>
+
+        <!-- Beneficios -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🎁
+              </span>
+
+              <span>
+                Beneficios
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="#">
+                Convenios disponibles
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Flota -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🚐
+              </span>
+
+              <span>
+                Flota
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="{% url 'flota:my_vehicle' %}">
+                Mi vehículo asignado
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Documentación del vehículo
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Facturación -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                📄
+              </span>
+
+              <span>
+                Facturación
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="#">
+                Mis facturas
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Logística -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                📦
+              </span>
+
+              <span>
+                Logística
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="{% url 'logistica:mis_herramientas' %}">
+                Mis herramientas asignadas
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Operaciones -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🛠
+              </span>
+
+              <span>
+                Operaciones
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="{% url 'operaciones:buscar_mi_sitio' %}">
+                Buscar mi sitio
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'operaciones:mis_servicios_tecnico' %}">
+                Mi asignación
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'operaciones:produccion_tecnico' %}">
+                Mi producción
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Horas extras
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'operaciones:mis_rendiciones' %}">
+                Mis rendiciones
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Prevención -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🦺
+              </span>
+
+              <span>
+                Prevención de Riesgo
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="{% url 'prevencion:mis_documentos' %}">
+                Mis cursos y documentos
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Firma de documentos
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Mis EPP asignados
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- RR.HH -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🧑‍💼
+              </span>
+
+              <span>
+                RR.HH
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="{% url 'rrhh:mis_vacaciones' %}">
+                Mis vacaciones
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'liquidaciones:listar' %}">
+                Mis liquidaciones
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'rrhh:mis_contratos' %}">
+                Mis contratos de trabajo
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'rrhh:mis_fichas_ingreso' %}">
+                Mi ficha de ingreso
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'rrhh:mis_documentos' %}">
+                Mis documentos
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'dashboard:registrar_firma_usuario' %}">
+                Mi firma digital
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'rrhh:ver_cronograma' %}">
+                Mi cronograma de pago
+              </a>
+            </li>
+
+            <li>
+              <a href="{% url 'rrhh:listar_adelantos_usuario' %}">
+                Solicitud de adelanto de sueldo
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Subcontrato -->
+        <li class="group">
+
+          <div
+            class="flex cursor-pointer items-center justify-between"
+            onclick="toggleMenu(this)"
+            role="button"
+            tabindex="0"
+            aria-expanded="false"
+          >
+            <span class="flex items-center gap-2">
+
+              <span aria-hidden="true">
+                🤝
+              </span>
+
+              <span>
+                Subcontrato
+              </span>
+
+            </span>
+
+            <span class="flecha transition-transform duration-200">
+              ▶
+            </span>
+          </div>
+
+          <ul class="submenu hidden space-y-1">
+
+            <li>
+              <a href="#">
+                Cargar producción
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Cargar factura de producción
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Cargar contratos de trabajadores
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Cargar F30 y F30-1
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Cargar liquidaciones de sueldo
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Cargar cursos de trabajadores
+              </a>
+            </li>
+
+            <li>
+              <a href="#">
+                Contrato de servicio
+              </a>
+            </li>
+
+          </ul>
+
+        </li>
+
+        <!-- Telegram -->
+        {% if request.user.is_authenticated and request.user.telegram_activo %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+              role="button"
+              tabindex="0"
+              aria-expanded="false"
+            >
+              <span class="flex items-center gap-2">
+
+                <span aria-hidden="true">
+                  📲
+                </span>
+
+                <span>
+                  Activar Telegram
+                </span>
+
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'bot_gz:activar_telegram' %}">
+                  Activar
+                </a>
+              </li>
+
+            </ul>
+
+          </li>
+
+        {% endif %}
+
+      </ul>
+
+      <!-- Pie del menú -->
+      <div class="sidebar-footer text-center text-xs text-white/80">
+
+        <p class="mb-1 font-medium">
+          Desarrollado por
+        </p>
+
+        <div class="sidebar-footer-logo">
+          <img
+            src="{% static 'images/planixb.png' %}"
+            alt="Planix"
+          >
+        </div>
+
+      </div>
+
     </nav>
 
-    <!-- Contenido principal -->
-    <main id="main-content" class="flex-1 p-6">
-      {% block content %}{% endblock %}
+    <!-- ==================================================== -->
+    <!-- CONTENIDO -->
+    <!-- ==================================================== -->
+
+    <main
+      id="main-content"
+      class="flex-1 min-w-0 px-3 py-4 sm:px-5 sm:py-6 lg:px-7"
+    >
+      {% block content %}
+      {% endblock %}
     </main>
 
-  </div> <!-- ← Aquí se cierra correctamente el contenedor principal -->
+  </div>
 
-  <!-- Submenús y mensajes -->
-  <script>
-    const USER_SIDEBAR_KEY = 'user-sidebar-collapsed';
-
-    function applySidebarState() {
-      const nav = document.getElementById('side-nav');
-      const wrapper = document.querySelector('.content-wrapper');
-      if (!nav || !wrapper) return;
-
-      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-      const savedCollapsed = localStorage.getItem(USER_SIDEBAR_KEY) === '1';
-
-      if (isDesktop) {
-        nav.classList.toggle('collapsed', savedCollapsed);
-        wrapper.classList.toggle('no-sidebar', savedCollapsed);
-        wrapper.classList.toggle('with-sidebar', !savedCollapsed);
-
-        nav.classList.remove('-translate-x-full');
-      } else {
-        nav.classList.add('-translate-x-full');
-        nav.classList.remove('collapsed');
-
-        wrapper.classList.remove('no-sidebar');
-        wrapper.classList.add('with-sidebar');
-      }
-
-      document.documentElement.classList.remove('user-sidebar-collapsed-init');
-    }
-
-    function toggleMenu(el) {
-      const submenu = el.nextElementSibling;
-      const flecha = el.querySelector(".arrow");
-
-      if (submenu) {
-        const isHidden = submenu.style.display === "none" || submenu.classList.contains("hidden");
-
-        if (isHidden) {
-          submenu.classList.remove("hidden");
-          submenu.style.display = "block";
-          if (flecha) flecha.classList.add("rotate-90");
-        } else {
-          submenu.classList.add("hidden");
-          submenu.style.display = "none";
-          if (flecha) flecha.classList.remove("rotate-90");
-        }
-      }
-    }
-
-    function toggleSidebar() {
-      const nav = document.getElementById('side-nav');
-      const wrapper = document.querySelector('.content-wrapper');
-      if (!nav || !wrapper) return;
-
-      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-
-      if (isDesktop) {
-        const willCollapse = !nav.classList.contains('collapsed');
-
-        nav.classList.toggle('collapsed', willCollapse);
-        wrapper.classList.toggle('no-sidebar', willCollapse);
-        wrapper.classList.toggle('with-sidebar', !willCollapse);
-
-        localStorage.setItem(USER_SIDEBAR_KEY, willCollapse ? '1' : '0');
-      } else {
-        nav.classList.toggle('-translate-x-full');
-      }
-    }
-
-    document.addEventListener('DOMContentLoaded', applySidebarState);
-    window.addEventListener('resize', applySidebarState);
-  </script>
+  <!-- ====================================================== -->
+  <!-- MENSAJES EMERGENTES -->
+  <!-- ====================================================== -->
 
   {% if messages %}
-  <div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
-    {% for message in messages %}
-    <div class="flex items-center justify-between p-4 rounded-md shadow text-white
-                {% if message.tags == 'success' %}bg-green-600
-                {% elif message.tags == 'error' %}bg-red-600
-                {% elif message.tags == 'warning' %}bg-yellow-500
-                {% else %}bg-blue-600{% endif %}">
-      <span>{{ message }}</span>
-      <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
+
+    <div
+      id="mensajes"
+      class="fixed top-20 left-1/2 z-[70] w-full max-w-xl -translate-x-1/2 space-y-2 px-4"
+    >
+
+      {% for message in messages %}
+
+        <div
+          class="
+            flex
+            items-center
+            justify-between
+            gap-3
+            rounded-2xl
+            border
+            border-white/30
+            p-4
+            text-white
+            shadow-xl
+            backdrop-blur-md
+
+            {% if message.tags == 'success' %}
+              bg-green-600/95
+            {% elif message.tags == 'error' %}
+              bg-red-600/95
+            {% elif message.tags == 'warning' %}
+              bg-amber-500/95
+            {% else %}
+              bg-blue-600/95
+            {% endif %}
+          "
+        >
+          <span class="text-sm font-medium">
+            {{ message }}
+          </span>
+
+          <button
+            type="button"
+            onclick="this.parentElement.remove()"
+            aria-label="Cerrar mensaje"
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-bold text-white hover:bg-white/25"
+          >
+            &times;
+          </button>
+        </div>
+
+      {% endfor %}
+
     </div>
-    {% endfor %}
-  </div>
-  <script>
-    setTimeout(() => {
-      const mensajes = document.getElementById('mensajes');
-      if (mensajes) mensajes.remove();
-    }, 5000);
-  </script>
+
   {% endif %}
-<script>
-// Marcar notificación como leída y redirigir
-function leerNotificacion(id, urlDestino) {
-  fetch(`/usuarios/notificacion/${id}/leer/`)
-    .then(response => {
-      if (response.ok) {
-        // Eliminar la notificación del DOM
-        const item = document.getElementById(`notificacion-${id}`);
-        if (item) item.remove();
 
-        // Actualizar contador del badge
-        const badge = document.querySelector('.relative .bg-red-500');
-        if (badge) {
-          let count = parseInt(badge.innerText);
-          if (count > 1) {
-            badge.innerText = count - 1;
-          } else {
-            badge.remove();
-          }
-        }
+  <!-- ====================================================== -->
+  <!-- ICONOS -->
+  <!-- ====================================================== -->
 
-        // Redirigir a la URL de la notificación
-        window.location.href = urlDestino;
-      }
-    });
-}
+  <script src="https://unpkg.com/lucide@latest"></script>
 
-// Mostrar u ocultar el panel de notificaciones
-function toggleNotifications() {
-  const panel = document.getElementById('notification-panel');
-  if (panel) {
-    panel.classList.toggle('hidden');
-  }
-}
-</script>
+  <!-- ====================================================== -->
+  <!-- JAVASCRIPT GENERAL MILTEL -->
+  <!-- Mismos archivos utilizados por el administrativo -->
+  <!-- ====================================================== -->
 
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-  lucide.createIcons();
-</script>
-<script>
-  (function () {
-    function applyHeaderOffset(){
-      const header = document.querySelector('header');
-      const wrapper = document.getElementById('app-wrapper');
-      if (!header || !wrapper) return;
+  <script src="{% static 'js/miltel-layout.js' %}"></script>
 
-      const h = Math.ceil(header.getBoundingClientRect().height || 0);
+  <script src="{% static 'js/miltel-notifications.js' %}"></script>
 
-      // Empujar TODO el contenido hacia abajo (incluye main)
-      wrapper.style.paddingTop = h + 'px';
+  <script src="{% static 'js/miltel-scroll-memory.js' %}"></script>
 
-      // Sidebar pegado debajo del header
-      const nav = document.getElementById('side-nav');
-      if (nav) {
-        nav.style.top = h + 'px';
-        nav.style.height = `calc(100vh - ${h}px)`;
-      }
+  <script src="{% static 'js/miltel-ui.js' %}"></script>
+
+  <!-- ====================================================== -->
+  <!-- INICIALIZACIÓN DE ICONOS -->
+  <!-- ====================================================== -->
+
+  <script>
+    if (typeof lucide !== "undefined") {
+      lucide.createIcons();
     }
+  </script>
 
-    window.addEventListener('load', applyHeaderOffset);
-    window.addEventListener('resize', applyHeaderOffset);
-    setTimeout(applyHeaderOffset, 50);
-    setTimeout(applyHeaderOffset, 250);
-  })();
-</script>
+  {% block extra_js %}
+  {% endblock %}
 
 </body>
 </html>

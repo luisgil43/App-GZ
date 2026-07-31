@@ -6,7 +6,7 @@
 
 {% block dashboard_content %}
 
-<div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-0 py-6">
+<div class="w-full max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6 py-6">
 
   <!-- ====================================================== -->
   <!-- CONTENEDOR PRINCIPAL -->
@@ -68,7 +68,7 @@
       </div>
     </div>
 
-    <!-- ==================================================== -->
+        <!-- ==================================================== -->
     <!-- LEYENDA -->
     <!-- ==================================================== -->
 
@@ -77,13 +77,18 @@
       <div class="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs sm:text-sm">
 
         <div class="flex items-center gap-2 text-gray-600">
-          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-          Saldo disponible positivo
+          <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+          Monto asignado incluye todos los abonos
         </div>
 
         <div class="flex items-center gap-2 text-gray-600">
-          <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-          Saldo disponible negativo
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          Saldo disponible después de aprobaciones de Finanzas
+        </div>
+
+        <div class="flex items-center gap-2 text-gray-600">
+          <span class="w-2.5 h-2.5 rounded-full bg-violet-500"></span>
+          Saldo pendiente por rendir considera gastos en aprobación
         </div>
 
         <div class="flex items-center gap-2 text-gray-600">
@@ -93,7 +98,7 @@
 
         <div class="flex items-center gap-2 text-gray-600">
           <span class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
-          Rendiciones rechazadas no se consideran rendidas
+          Rendiciones rechazadas no reducen los saldos
         </div>
 
       </div>
@@ -105,7 +110,7 @@
 
     <div class="overflow-x-auto">
 
-      <table class="w-full min-w-[1050px] text-sm border-collapse">
+      <table class="w-full min-w-[1400px] text-sm border-collapse">
 
         <thead>
           <tr class="bg-slate-50 border-b border-gray-200">
@@ -115,11 +120,19 @@
             </th>
 
             <th class="px-4 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-600">
+              Monto asignado
+            </th>
+
+            <th class="px-4 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-600">
               Monto rendido
             </th>
 
             <th class="px-4 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-600">
               Monto disponible
+            </th>
+
+            <th class="px-4 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-600">
+              Saldo pendiente por rendir
             </th>
 
             <th class="px-4 py-4 text-right text-xs font-bold uppercase tracking-wide text-gray-600">
@@ -188,6 +201,28 @@
 
                   </div>
 
+                </div>
+
+              </td>
+
+              <!-- Monto asignado -->
+              <td class="px-4 py-4 text-right">
+
+                <div class="
+                  inline-flex items-center justify-end gap-1
+                  px-3 py-1.5
+                  rounded-full
+                  bg-blue-50
+                  text-blue-700
+                  font-bold
+                  whitespace-nowrap
+                ">
+                  <span>●</span>
+                  ${{ s.monto_asignado|default:0|floatformat:0|formato_clp }}
+                </div>
+
+                <div class="text-[11px] text-gray-400 mt-1 whitespace-nowrap">
+                  Todos los abonos
                 </div>
 
               </td>
@@ -271,6 +306,65 @@
 
                 {% endif %}
 
+                <div class="text-[11px] text-gray-400 mt-1 whitespace-nowrap">
+                  Después de Finanzas
+                </div>
+
+              </td>
+
+              <!-- Saldo pendiente por rendir -->
+              <td class="px-4 py-4 text-right">
+
+                {% if s.saldo_pendiente_por_rendir > 0 %}
+
+                  <span class="
+                    inline-flex items-center justify-end gap-1
+                    px-3 py-1.5
+                    rounded-full
+                    bg-violet-50
+                    text-violet-700
+                    font-bold
+                    whitespace-nowrap
+                  ">
+                    <span>●</span>
+                    ${{ s.saldo_pendiente_por_rendir|default:0|floatformat:0|formato_clp }}
+                  </span>
+
+                {% elif s.saldo_pendiente_por_rendir < 0 %}
+
+                  <span class="
+                    inline-flex items-center justify-end gap-1
+                    px-3 py-1.5
+                    rounded-full
+                    bg-red-50
+                    text-red-700
+                    font-bold
+                    whitespace-nowrap
+                  ">
+                    <span>●</span>
+                    ${{ s.saldo_pendiente_por_rendir|default:0|floatformat:0|formato_clp }}
+                  </span>
+
+                {% else %}
+
+                  <span class="
+                    inline-flex items-center justify-end
+                    px-3 py-1.5
+                    rounded-full
+                    bg-gray-100
+                    text-gray-600
+                    font-semibold
+                    whitespace-nowrap
+                  ">
+                    $0
+                  </span>
+
+                {% endif %}
+
+                <div class="text-[11px] text-gray-400 mt-1 whitespace-nowrap">
+                  Considerando pendientes
+                </div>
+
               </td>
 
               <!-- Pendiente usuario -->
@@ -346,7 +440,7 @@
           {% empty %}
 
             <tr>
-              <td colspan="7" class="px-6 py-16 text-center">
+              <td colspan="9" class="px-6 py-16 text-center">
 
                 <div class="mx-auto w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center text-3xl mb-4">
                   💳

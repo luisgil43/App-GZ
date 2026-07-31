@@ -5,741 +5,1193 @@
 <html lang="es">
 
 <head>
-    <script>
-      (function () {
-        try {
-          if (localStorage.getItem('admin-sidebar-collapsed') === '1') {
-            document.documentElement.classList.add('admin-sidebar-collapsed-init');
-          }
-        } catch (e) {}
-      })();
-    </script>
+  <!-- ====================================================== -->
+  <!-- ESTADO INICIAL DEL SIDEBAR -->
+  <!-- Debe ejecutarse antes de pintar la página -->
+  <!-- ====================================================== -->
 
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token }}">
+  <script>
+    (function () {
+      try {
+        if (
+          localStorage.getItem(
+            "admin-sidebar-collapsed"
+          ) === "1"
+        ) {
+          document.documentElement.classList.add(
+            "admin-sidebar-collapsed-init"
+          );
+        }
+      } catch (e) {}
+    })();
+  </script>
 
-<!-- iOS / Apple Touch Icons -->
-<link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
-<link rel="apple-touch-icon" sizes="120x120" href="{% static 'icons/apple-touch-icon-120x120.png' %}">
-<link rel="apple-touch-icon" sizes="180x180" href="{% static 'icons/apple-touch-icon-180x180.png' %}">
+  <meta charset="UTF-8">
 
-<!-- Favicon clásico -->
-<link rel="icon" type="image/png" sizes="32x32" href="{% static 'icons/favicon-32x32.png' %}">
-<link rel="icon" type="image/png" sizes="16x16" href="{% static 'icons/favicon-16x16.png' %}">
-<link rel="icon" href="{% static 'icons/favicon.ico' %}" sizes="any">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
-<!-- PWA (opcional pero recomendado) -->
-<link rel="manifest" href="{% static 'icons/site.webmanifest' %}">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Miltel">
+  <meta
+    name="csrf-token"
+    content="{{ csrf_token }}"
+  >
 
-    <script src="https://cdn.tailwindcss.com"></script>
-<style>
-  .rotate-90 {
-    transform: rotate(90deg);
-  }
+  <title>
+    {% block title %}
+      Plataforma de Miltel
+    {% endblock %}
+  </title>
 
-  :root{
-    /* tonos del login, suavizados para sidebar */
-    --sidebar-bg-1: #ef6a60;
-    --sidebar-bg-2: #f28759;
-    --sidebar-bg-3: #e5ad54;
+  <!-- ====================================================== -->
+  <!-- ICONOS IOS -->
+  <!-- ====================================================== -->
 
-    --sidebar-text: #fffaf7;
-    --sidebar-text-soft: #fff3eb;
-    --sidebar-text-submenu: #fff7f2;
+  <link
+    rel="apple-touch-icon"
+    href="{% static 'icons/apple-touch-icon.png' %}"
+  >
 
-    --sidebar-hover: rgba(255,255,255,0.10);
-    --sidebar-hover-strong: rgba(255,255,255,0.16);
-    --sidebar-border: rgba(255,255,255,0.10);
-  }
+  <link
+    rel="apple-touch-icon"
+    sizes="120x120"
+    href="{% static 'icons/apple-touch-icon-120x120.png' %}"
+  >
 
-  /*
-    Evita el parpadeo del sidebar al recargar:
-    si el usuario lo dejó cerrado, lo ocultamos desde el primer pintado.
-  */
-  @media (min-width: 768px) {
-    html.admin-sidebar-collapsed-init #side-nav {
-      transform: translateX(-100%) !important;
-    }
+  <link
+    rel="apple-touch-icon"
+    sizes="180x180"
+    href="{% static 'icons/apple-touch-icon-180x180.png' %}"
+  >
 
-    html.admin-sidebar-collapsed-init .content-wrapper #main-content {
-      margin-left: 0 !important;
-    }
-  }
+  <!-- ====================================================== -->
+  <!-- FAVICON -->
+  <!-- ====================================================== -->
 
-  @media (min-width: 768px) {
-    .content-wrapper.with-sidebar #main-content {
-      margin-left: 18rem;
-    }
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="32x32"
+    href="{% static 'icons/favicon-32x32.png' %}"
+  >
 
-    .content-wrapper.no-sidebar #main-content {
-      margin-left: 0;
-    }
+  <link
+    rel="icon"
+    type="image/png"
+    sizes="16x16"
+    href="{% static 'icons/favicon-16x16.png' %}"
+  >
 
-    #side-nav.collapsed {
-      transform: translateX(-100%) !important;
-    }
-  }
+  <link
+    rel="icon"
+    href="{% static 'icons/favicon.ico' %}"
+    sizes="any"
+  >
 
-  @media (max-width: 767px) {
-    #main-content {
-      margin-left: 0 !important;
-    }
-  }
+  <!-- ====================================================== -->
+  <!-- PWA -->
+  <!-- ====================================================== -->
 
-  /* NAV más suave y con efecto difuminado */
-  #side-nav {
-    background:
-      radial-gradient(circle at 15% 10%, rgba(255,255,255,0.13), transparent 22%),
-      radial-gradient(circle at 82% 88%, rgba(255,255,255,0.07), transparent 24%),
-      linear-gradient(
-        180deg,
-        var(--sidebar-bg-1) 0%,
-        var(--sidebar-bg-2) 52%,
-        var(--sidebar-bg-3) 100%
-      );
-    color: var(--sidebar-text);
-    border-right: 1px solid var(--sidebar-border);
-    box-shadow:
-      10px 0 22px rgba(242, 135, 89, 0.10),
-      inset -1px 0 0 rgba(255,255,255,0.04);
-  }
+  <link
+    rel="manifest"
+    href="{% static 'icons/site.webmanifest' %}"
+  >
 
-  #side-nav h2 {
-    color: #ffffff;
-    font-weight: 800;
-    letter-spacing: 0.2px;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.10);
-    font-size: 2rem;
-    margin-bottom: 1.2rem !important;
-  }
+  <meta
+    name="apple-mobile-web-app-capable"
+    content="yes"
+  >
 
-  /* menos separación general */
-  #side-nav > ul {
-    font-size: 0.98rem;
-    gap: 0.22rem !important;
-  }
+  <meta
+    name="apple-mobile-web-app-title"
+    content="Miltel"
+  >
 
-  #side-nav > ul > li {
-    margin: 0 !important;
-  }
+  <!-- ====================================================== -->
+  <!-- TAILWIND -->
+  <!-- ====================================================== -->
 
-  #side-nav > ul > li > a,
-  #side-nav > ul > li > div {
-    color: var(--sidebar-text) !important;
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-weight: 700;
-    line-height: 1.3;
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-  }
+  <script src="https://cdn.tailwindcss.com"></script>
 
-  #side-nav > ul > li > a:hover,
-  #side-nav > ul > li > div:hover {
-    background: var(--sidebar-hover);
-    color: #ffffff !important;
-    transform: translateX(2px);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-  }
+  <!-- ====================================================== -->
+  <!-- ESTILOS GENERALES MILTEL -->
+  <!-- El orden de carga es importante -->
+  <!-- ====================================================== -->
 
-  #side-nav .submenu {
-    margin-top: 3px;
-    margin-bottom: 2px;
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-theme.css' %}"
+  >
 
-  #side-nav .submenu li {
-    margin: 0 !important;
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-base.css' %}"
+  >
 
-  #side-nav .submenu li a,
-  #side-nav .submenu > a {
-    display: block;
-    color: var(--sidebar-text-submenu) !important;
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-weight: 600;
-    font-size: 0.93rem;
-    line-height: 1.28;
-    text-shadow: 0 1px 1px rgba(0,0,0,0.08);
-    transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      transform 0.2s ease,
-      box-shadow 0.2s ease;
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-layout.css' %}"
+  >
 
-  #side-nav .submenu li a:hover,
-  #side-nav .submenu > a:hover {
-    background: var(--sidebar-hover-strong);
-    color: #ffffff !important;
-    transform: translateX(2px);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-components.css' %}"
+  >
 
-  #side-nav .flecha {
-    color: #fff5ef;
-    font-weight: 800;
-    font-size: 0.95rem;
-  }
+  <link
+    rel="stylesheet"
+    href="{% static 'ccs/miltel-tables.css' %}"
+  >
 
-  #side-nav .text-gray-400 {
-    color: #fff0e6 !important;
-  }
-
-  #side-nav .text-xs {
-    letter-spacing: 0.2px;
-  }
-
-  /* notificaciones */
-  #notification-panel,
-  #notification-panel * {
-    color: #111827 !important;
-  }
-
-  #notification-panel .text-xs {
-    color: #6b7280 !important;
-  }
-</style>
+  {% block extra_css %}
+  {% endblock %}
 </head>
 
-<body class="bg-gray-100 text-gray-900 min-h-screen">
+<body class="min-h-screen bg-slate-100 text-slate-900 antialiased">
 
-<!-- Header fijo -->
-<header class="bg-white shadow-md fixed top-0 left-0 w-full z-50 px-4 py-2">
-  <div class="relative flex flex-col sm:flex-row sm:items-center sm:justify-between w-full">
+  <!-- ====================================================== -->
+  <!-- HEADER FIJO -->
+  <!-- ====================================================== -->
 
-    <!-- Campanita SIEMPRE arriba a la derecha -->
-    <div class="absolute top-2 right-4 z-50">
-      <button onclick="toggleNotifications()" class="relative text-gray-700">
-        <i data-lucide="bell" class="w-6 h-6"></i>
-        {% if notificaciones_no_leidas > 0 %}
-          <span class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-            {{ notificaciones_no_leidas }}
-          </span>
-        {% endif %}
-      </button>
+  <header
+    id="admin-header"
+    class="fixed top-0 left-0 z-50 w-full px-3 py-2 sm:px-5"
+  >
+    <div class="relative flex w-full items-center justify-between gap-3">
 
-      <!-- Panel de notificaciones -->
-      <div id="notification-panel"
-           class="hidden absolute right-0 mt-2 w-72 bg-white border rounded-lg shadow-lg z-50">
-        <div class="p-2 max-h-80 overflow-y-auto">
-          {% for n in notificaciones_recientes %}
-            <div id="notificacion-{{ n.id }}">
-              <a href="{% url 'usuarios:leer_notificacion' n.id %}"
-                 class="block p-2 text-sm border-b w-full text-left {% if not n.leido %}bg-yellow-100{% else %}hover:bg-gray-100{% endif %}">
-                <div class="flex flex-col">
-                  <span>{{ n.mensaje }}</span>
-                  <span class="text-xs text-gray-400">{{ n.fecha|naturaltime }}</span>
-                </div>
-              </a>
-            </div>
-          {% empty %}
-            <p class="text-sm text-gray-500 p-2">Sin historial de notificaciones.</p>
-          {% endfor %}
+      <!-- Izquierda -->
+      <div class="flex min-w-0 items-center gap-3">
+
+        <button
+          type="button"
+          onclick="toggleSidebar()"
+          aria-label="Abrir o cerrar menú"
+          class="admin-menu-button"
+        >
+          ☰
+        </button>
+
+        <div class="admin-header-logo-box">
+          <img
+            src="{% static 'images/logo.png' %}"
+            alt="Logo MILTEL"
+          >
         </div>
+
+        <div class="min-w-0">
+
+          <strong class="block truncate text-sm font-extrabold tracking-wide text-slate-900 sm:text-base">
+            PLATAFORMA DE MILTEL
+          </strong>
+
+          <span class="hidden text-xs font-medium text-slate-500 sm:block">
+            Gestión operativa y administrativa
+          </span>
+
+        </div>
+
       </div>
-    </div>
 
-    <!-- Contenido del header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between w-full pr-16 gap-2 sm:gap-0 mt-[-8px]">
+      <!-- Derecha -->
+      <div class="flex shrink-0 items-center justify-end gap-2 sm:gap-3">
 
-      <!-- Izquierda: Logo -->
-      <div class="flex items-center gap-3">
-        <button onclick="toggleSidebar()" class="text-gray-800 text-2xl md:text-xl mr-1">☰</button>
-        <img src="{% static 'images/logo.png' %}" alt="Logo" class="h-12">
-        <strong class="text-gray-800 text-sm md:text-base whitespace-nowrap">PLATAFORMA DE MILTEL</strong>
+        <!-- Usuario -->
+        <div class="admin-user-card hidden sm:flex">
+
+          <div class="admin-user-avatar">
+            {% if request.user.first_name %}
+              {{ request.user.first_name|first|upper }}
+            {% else %}
+              {{ request.user.username|first|upper }}
+            {% endif %}
+          </div>
+
+          <div class="min-w-0 max-w-[220px] text-left leading-tight">
+
+            <span class="block truncate text-sm font-semibold text-slate-800">
+              {{ request.user.get_full_name|default:request.user.username }}
+            </span>
+
+            <span class="block text-[11px] text-slate-500">
+              Sesión activa
+            </span>
+
+          </div>
+
+        </div>
+
+        <!-- Cambiar a usuario -->
+        {% if request.user.is_authenticated and request.user.es_usuario %}
+
+          {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
+
+            <form
+              method="post"
+              action="{% url 'usuarios:switch_mode' %}"
+              class="inline-block"
+            >
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="admin-header-action mode"
+              >
+                <span>🔁</span>
+
+                <span class="hidden lg:inline">
+                  Cambiar a Usuario
+                </span>
+              </button>
+            </form>
+
+          {% endif %}
+
+        {% endif %}
+
+        <!-- Cerrar sesión -->
+        <form
+          method="post"
+          action="{% url 'dashboard_admin:logout' %}"
+          class="inline-block"
+        >
+          {% csrf_token %}
+
+          <button
+            type="submit"
+            class="admin-header-action logout"
+          >
+            <span>↪</span>
+
+            <span class="hidden lg:inline">
+              Cerrar sesión
+            </span>
+          </button>
+        </form>
+
+        <!-- Notificaciones -->
+        <div class="relative">
+
+          <button
+            type="button"
+            onclick="toggleNotifications()"
+            aria-label="Abrir notificaciones"
+            class="notification-button relative"
+          >
+            <i
+              data-lucide="bell"
+              class="h-5 w-5"
+            ></i>
+
+            {% if notificaciones_no_leidas > 0 %}
+              <span
+                class="
+                  absolute -top-2 -right-2
+                  flex h-5 min-w-[20px]
+                  items-center justify-center
+                  rounded-full
+                  bg-red-500
+                  px-1
+                  text-[10px]
+                  font-bold
+                  text-white
+                  shadow-sm
+                "
+              >
+                {{ notificaciones_no_leidas }}
+              </span>
+            {% endif %}
+          </button>
+
+          <!-- Panel de notificaciones -->
+          <div
+            id="notification-panel"
+            class="absolute right-0 z-50 mt-3 hidden w-72 bg-white sm:w-80"
+          >
+
+            <div class="border-b border-slate-100 bg-slate-50 px-4 py-3">
+
+              <div class="flex items-center justify-between gap-3">
+
+                <div>
+
+                  <h3 class="text-sm font-bold text-slate-900">
+                    Notificaciones
+                  </h3>
+
+                  <p class="mt-0.5 text-[11px] text-slate-500">
+                    Actividad reciente de la plataforma
+                  </p>
+
+                </div>
+
+                <div class="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                  🔔
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="max-h-80 overflow-y-auto p-2">
+
+              {% for n in notificaciones_recientes %}
+
+                <div id="notificacion-{{ n.id }}">
+
+                  <a
+                    href="{% url 'usuarios:leer_notificacion' n.id %}"
+                    class="
+                      block
+                      w-full
+                      rounded-xl
+                      border-b
+                      border-slate-100
+                      p-3
+                      text-left
+                      text-sm
+
+                      {% if not n.leido %}
+                        bg-amber-50
+                        hover:bg-amber-100
+                      {% else %}
+                        hover:bg-slate-50
+                      {% endif %}
+                    "
+                  >
+                    <div class="flex flex-col gap-1">
+
+                      <span class="leading-snug">
+                        {{ n.mensaje }}
+                      </span>
+
+                      <span class="text-xs text-gray-400">
+                        {{ n.fecha|naturaltime }}
+                      </span>
+
+                    </div>
+                  </a>
+
+                </div>
+
+              {% empty %}
+
+                <div class="px-4 py-8 text-center">
+
+                  <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-lg">
+                    🔕
+                  </div>
+
+                  <p class="mt-3 text-sm font-semibold text-slate-700">
+                    Sin notificaciones
+                  </p>
+
+                  <p class="mt-1 text-xs text-slate-500">
+                    No tienes actividad reciente.
+                  </p>
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+        </div>
+
       </div>
 
-<!-- Derecha: Nombre + switch + cerrar sesión -->
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:gap-3 items-start text-sm md:text-base text-right leading-tight">
-  <span class="text-gray-800 font-medium break-words sm:whitespace-nowrap">
-    {{ request.user.get_full_name|default:request.user.username }}
-  </span>
-
-{# ✅ Botón SOLO si tiene rol usuario + rol admin #}
-{% if request.user.is_authenticated and request.user.es_usuario %}
-  {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_rrhh or request.user.es_logistica or request.user.es_prevencion or request.user.es_facturacion or request.user.es_subcontrato or request.user.is_staff %}
-    <form method="post" action="{% url 'usuarios:switch_mode' %}" class="inline-block">
-      {% csrf_token %}
-      <button type="submit"
-              class="px-3 py-1 rounded-full text-xs border bg-white hover:bg-gray-50 text-gray-800 whitespace-nowrap">
-        🔁 Cambiar a Usuario
-      </button>
-    </form>
-  {% endif %}
-{% endif %}
-
-  <form method="post" action="{% url 'dashboard_admin:logout' %}">
-    {% csrf_token %}
-    <button type="submit" class="text-red-600 font-semibold hover:text-red-800 whitespace-nowrap">
-      Cerrar Sesión
-    </button>
-  </form>
-</div>
-
     </div>
-  </div>
-</header>
+  </header>
 
+  <!-- ====================================================== -->
+  <!-- CONTENEDOR PRINCIPAL -->
+  <!-- ====================================================== -->
 
+  <div
+    id="app-wrapper"
+    class="content-wrapper with-sidebar relative flex min-h-screen flex-col md:flex-row"
+  >
 
-    <!-- Contenedor principal -->
-    <div id="app-wrapper" class="flex flex-col md:flex-row min-h-screen relative content-wrapper with-sidebar">
+    <!-- ==================================================== -->
+    <!-- MENÚ LATERAL -->
+    <!-- ==================================================== -->
 
-  <!-- Menú lateral con animación -->
-    <nav id="side-nav"
-      class="bg-gray-800 text-white w-72 p-4 fixed top-14 left-0 bottom-0 overflow-y-auto z-40 transition-transform transform -translate-x-full md:translate-x-0">
-      <h2 class="text-2xl font-bold mb-8">Menú</h2>
-      <ul class="space-y-4 text-base">
+    <nav
+      id="side-nav"
+      class="
+        fixed
+        top-14
+        bottom-0
+        left-0
+        z-40
+        w-72
+        -translate-x-full
+        transform
+        overflow-y-auto
+        p-4
+        transition-transform
+        md:translate-x-0
+      "
+    >
+
+      <!-- Encabezado del menú -->
+      <div class="mb-5 border-b border-white/15 pb-4">
+
+        <span class="block text-[11px] font-bold uppercase tracking-[0.18em] text-white/70">
+        </span>
+
+        <h2 class="mt-1 text-2xl font-extrabold text-white">
+          Menú principal
+        </h2>
+
+      </div>
+
+      <ul class="space-y-1 text-base">
+
+        <!-- Inicio -->
         <li>
-          <a href="{% url 'dashboard_admin:inicio_admin' %}" class="font-bold flex items-center hover:text-emerald-400">🏠 Inicio</a>
+          <a
+            href="{% url 'dashboard_admin:inicio_admin' %}"
+            class="flex items-center gap-2 font-bold"
+          >
+            <span>🏠</span>
+            <span>Inicio</span>
+          </a>
         </li>
-                {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">🛠 Operaciones</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
 
-                        
-                        <li><a href="#" class="hover:text-emerald-400">Horas extras</a></li>
-<li><a href="{% url 'operaciones:listar_sitios' %}" class="hover:text-emerald-400">Lista Sitios Móviles</a></li>
-<li><a href="{% url 'operaciones:produccion_admin' %}" class="hover:text-emerald-400">Producciones</a></li>
-<li><a href="{% url 'operaciones:vista_rendiciones' %}" class="hover:text-emerald-400">Rendiciones</a></li>
-<li><a href="{% url 'operaciones:listar_servicios_pm' %}" class="hover:text-emerald-400">Crear Servicios</a></li>
-<li><a href="{% url 'operaciones:listar_servicios_supervisor' %}" class="hover:text-emerald-400">Realizar Asignación</a></li>
-<li><a href="{% url 'operaciones:resumen_operativo' %}" class="hover:text-emerald-400">Resumen Operativo</a></li>
-                    </ul>
-                </li>
-                {% endif %}
+        <!-- Operaciones -->
+        {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
 
-      {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-       onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🦺 Prevención</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
+          <li class="group">
 
-  <ul class="ml-4 submenu space-y-1 hidden">
-    <li>
-      <a href="{% url 'prevencion:dashboard' %}" class="hover:text-emerald-400">
-        Documentos
-      </a>
-    </li>
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🛠</span>
+                <span>Operaciones</span>
+              </span>
 
-    <li>
-      <a href="{% url 'prevencion:document_create' %}" class="hover:text-emerald-400">
-        Crear documento
-      </a>
-    </li>
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
 
-    <li>
-      <a href="{% url 'prevencion:notifications_edit' %}" class="hover:text-emerald-400">
-        Notificaciones
-      </a>
-    </li>
+            <ul class="submenu hidden space-y-1">
 
-    <li>
-      <a href="{% url 'prevencion:type_manage' %}" class="hover:text-emerald-400">
-        Tipos de documento
-      </a>
-    </li>
-  </ul>
-</li>
-{% endif %}
+              <li>
+                <a href="#">
+                  Horas extras
+                </a>
+              </li>
 
+              <li>
+                <a href="{% url 'operaciones:listar_sitios' %}">
+                  Lista Sitios Móviles
+                </a>
+              </li>
 
-{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-       onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🚗 Flota</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
+              <li>
+                <a href="{% url 'operaciones:produccion_admin' %}">
+                  Producciones
+                </a>
+              </li>
 
-  <ul class="ml-4 submenu space-y-1 hidden">
-    <li>
-      <a href="{% url 'flota:vehicle_list' %}" class="hover:text-emerald-400">
-        Lista de vehículos
-      </a>
-    </li>
+              <li>
+                <a href="{% url 'operaciones:vista_rendiciones' %}">
+                  Rendiciones
+                </a>
+              </li>
 
-    <li>
-      <a href="{% url 'flota:assignment_list' %}" class="hover:text-emerald-400">
-        Asignaciones
-      </a>
-    </li>
+              <li>
+                <a href="{% url 'operaciones:listar_servicios_pm' %}">
+                  Crear Servicios
+                </a>
+              </li>
 
-    <li>
-      <a href="{% url 'flota:service_list' %}" class="hover:text-emerald-400">
-        Servicios
-      </a>
-    </li>
-  </ul>
-</li>
-{% endif %}
+              <li>
+                <a href="{% url 'operaciones:listar_servicios_supervisor' %}">
+                  Realizar Asignación
+                </a>
+              </li>
 
-{% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🧑‍💼 RR.HH</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
-  <ul class="ml-4 submenu space-y-1 hidden">
-    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
-      <li><a href="{% url 'liquidaciones:admin_lista' %}" class="hover:text-emerald-400">Liquidaciones</a></li>
-      <li><a href="{% url 'rrhh:contratos_trabajo' %}" class="hover:text-emerald-400">Contratos de trabajo</a></li>
-    {% endif %}
+              <li>
+                <a href="{% url 'operaciones:resumen_operativo' %}">
+                  Resumen Operativo
+                </a>
+              </li>
 
-    {% if request.user.es_supervisor %}
-      <li><a href="{% url 'rrhh:revisar_supervisor' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
-    {% elif request.user.es_pm %}
-      <li><a href="{% url 'rrhh:revisar_pm' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
-    {% elif request.user.es_rrhh %}
-      <li><a href="{% url 'rrhh:revisar_rrhh' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
-    {% elif request.user.es_admin_general %}
-      <li><a href="{% url 'rrhh:revisar_todas_vacaciones' %}" class="hover:text-emerald-400">Solicitudes de vacaciones</a></li>
-    {% endif %}
-
-    {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
-      <li><a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}" class="hover:text-emerald-400">Fichas de ingresos</a></li>
-      <li><a href="{% url 'rrhh:listado_documentos' %}" class="hover:text-emerald-400">Documentos trabajadores</a></li>
-      <li><a href="{% url 'rrhh:cronograma_pago_admin' %}" class="hover:text-emerald-400">Cronograma de pago</a></li>
-      <li><a href="{% url 'rrhh:listar_adelanto_admin' %}" class="hover:text-emerald-400">Avances de sueldos</a></li>
-      <li><a href="{% url 'dashboard_admin:listar_feriados' %}" class="hover:text-emerald-400">Feriados</a></li>
-      <li><a href="{% url 'rrhh:listar_firmas' %}" class="hover:text-emerald-400">Registro de firmas</a></li>
-      <li><a href="{% url 'usuarios:subir_firma_representante' %}" class="hover:text-emerald-400">Subir Firma Representante Legal</a></li>
-    {% endif %}
-  </ul>
-</li>
-{% endif %}
-
-		{% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
-<li class="group">
-    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400" onclick="toggleMenu(this)">
-        <span class="flex items-center gap-2">🤝 Subcontrato</span>
-        <span class="flecha transition-transform duration-200">▶</span>
-    </div>
-    <ul class="ml-4 submenu space-y-1 hidden">
-        <li><a href="#" class="hover:text-emerald-400">Contratos de servicios</a></li>
-<li><a href="#" class="hover:text-emerald-400">Contratos de trabajo</a></li>
-<li><a href="#" class="hover:text-emerald-400">Cursos de los trabajadores</a></li>
-<li><a href="#" class="hover:text-emerald-400">Facturas de producciones</a></li> 
-   <li><a href="#" class="hover:text-emerald-400">F30 y F30-1</a></li>
-        <li><a href="#" class="hover:text-emerald-400">Liquidaciones de sueldos</a></li>     
-    </ul>
-</li>
-{% endif %}
-
-                {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">📦 Logística</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
-<li><a href="{% url 'logistica:herramientas_list' %}" class="hover:text-emerald-400">Equipos y Herramientas </a></li>
-<li><a href="{% url 'logistica:herramientas_asignaciones_panel' %}" class="hover:text-emerald-400">Asignaciones de Herramientas</a></li>
-                    </ul>
-                </li>
-                {% endif %}
-
-                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">📑 Finanzas</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="{% url 'facturacion:listar_oc_facturacion' %}" class="hover:text-emerald-400">Lista de OC</a></li>
-<li><a href="{% url 'facturacion:listar_facturas' %}" class="hover:text-emerald-400">Lista de Facturas</a></li>
-                    
-<li>
-    <a href="{% url 'facturacion:listar_cartola' %}" class="hover:text-emerald-400">Cartola de Movimientos</a></li>
-<a href="{% url 'facturacion:listar_saldos_usuarios' %}" class="hover:text-emerald-400">Saldos Disponibles</a></li>
-<li><a href="{% url 'facturacion:facturacion_resumen' %}" class="hover:text-emerald-400">Resumen Finanzas</a></li>
-
-
-</ul></li>
-                {% endif %}
-
-                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">🎁 Beneficios</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Convenios disponibles</a></li>
-                    </ul>
-                </li>
-{% endif %}
-
-{% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-       onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">📷 Cámara GPS</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
-  <ul class="ml-4 submenu space-y-1 hidden">
-    <li>
-      <a href="{% url 'geo_cam:capture' %}?next={{ request.get_full_path|urlencode }}"
-         class="hover:text-emerald-400">Cámara</a>
-    </li>
-  </ul>
-</li>
-{% endif %}
-
-
-{% if request.user.es_admin_general %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-       onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🤖 Bot GZ</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
-  <ul class="ml-4 submenu space-y-1 hidden">
-    <li>
-      <a href="{% url 'bot_gz:training_dashboard' %}"
-         class="hover:text-emerald-400">
-        Entrenamiento del bot
-      </a>
-    </li>
-  </ul>
-</li>
-{% endif %}
-
-
-{% if request.user.is_authenticated and request.user.is_staff %}
-<li class="group">
-  <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-       onclick="toggleMenu(this)">
-    <span class="flex items-center gap-2">🔐 Seguridad</span>
-    <span class="flecha transition-transform duration-200">▶</span>
-  </div>
-  <ul class="ml-4 submenu space-y-1 hidden">
-    <li>
-      <a href="{% url 'usuarios:two_factor_setup' %}" class="hover:text-emerald-400">
-        Autenticación en dos pasos & dispositivos
-      </a>
-    </li>
-  </ul>
-</li>
-{% endif %}
-
-
-
-                {% if request.user.es_admin_general %}
-                <li class="group">
-                    <div class="flex justify-between items-center cursor-pointer hover:text-emerald-400"
-                        onclick="toggleMenu(this)">
-                        <span class="flex items-center gap-2">👤 Administración de Usuarios</span>
-                        <span class="flecha transition-transform duration-200">▶</span>
-                    </div>
-                    <ul class="ml-4 submenu space-y-1 hidden">
-                        <li><a href="#" class="hover:text-emerald-400">Grupos</a></li>
-                        <li><a href="{% url 'dashboard_admin:listar_usuarios' %}"
-                                class="hover:text-emerald-400">Usuarios</a></li>
-                    </ul>
-                </li>
-                {% endif %}
             </ul>
-<!-- Contenedor inferior del menú -->
-<div class="mt-10 text-center text-gray-400 text-xs">
-  <p class="mb-1">Desarrollado por</p>
-  <img src="{% static 'images/planixb.png' %}" alt="Planix" class="h-12 mx-auto max-w-[100px] object-contain">
-</div>
-        </nav>
+          </li>
 
-        <!-- Contenido -->
-       <main id="main-content" class="flex-1 p-6">
-{% block dashboard_content %}{% endblock %}
-        </main>
+        {% endif %}
+
+        <!-- Prevención -->
+        {% if request.user.es_admin_general or request.user.es_prevencion or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🦺</span>
+                <span>Prevención</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'prevencion:dashboard' %}">
+                  Documentos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:document_create' %}">
+                  Crear documento
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:notifications_edit' %}">
+                  Notificaciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'prevencion:type_manage' %}">
+                  Tipos de documento
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Flota -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🚗</span>
+                <span>Flota</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'flota:vehicle_list' %}">
+                  Lista de vehículos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'flota:assignment_list' %}">
+                  Asignaciones
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'flota:service_list' %}">
+                  Servicios
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- RR.HH -->
+        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🧑‍💼</span>
+                <span>RR.HH</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'liquidaciones:admin_lista' %}">
+                    Liquidaciones
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:contratos_trabajo' %}">
+                    Contratos de trabajo
+                  </a>
+                </li>
+
+              {% endif %}
+
+              {% if request.user.es_supervisor %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_supervisor' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_pm' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_rrhh %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_rrhh' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% elif request.user.es_admin_general %}
+
+                <li>
+                  <a href="{% url 'rrhh:revisar_todas_vacaciones' %}">
+                    Solicitudes de vacaciones
+                  </a>
+                </li>
+
+              {% endif %}
+
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
+
+                <li>
+                  <a href="{% url 'rrhh:listar_fichas_ingreso_admin' %}">
+                    Fichas de ingresos
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listado_documentos' %}">
+                    Documentos trabajadores
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:cronograma_pago_admin' %}">
+                    Cronograma de pago
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listar_adelanto_admin' %}">
+                    Avances de sueldos
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'dashboard_admin:listar_feriados' %}">
+                    Feriados
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'rrhh:listar_firmas' %}">
+                    Registro de firmas
+                  </a>
+                </li>
+
+                <li>
+                  <a href="{% url 'usuarios:subir_firma_representante' %}">
+                    Subir Firma Representante Legal
+                  </a>
+                </li>
+
+              {% endif %}
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Subcontrato -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_subcontrato or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🤝</span>
+                <span>Subcontrato</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Contratos de servicios
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Contratos de trabajo
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Cursos de los trabajadores
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Facturas de producciones
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  F30 y F30-1
+                </a>
+              </li>
+
+              <li>
+                <a href="#">
+                  Liquidaciones de sueldos
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Logística -->
+        {% if request.user.es_admin_general or request.user.es_logistica or request.user.es_pm %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📦</span>
+                <span>Logística</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'logistica:herramientas_list' %}">
+                  Equipos y Herramientas
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'logistica:herramientas_asignaciones_panel' %}">
+                  Asignaciones de Herramientas
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Finanzas -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📑</span>
+                <span>Finanzas</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'facturacion:listar_oc_facturacion' %}">
+                  Lista de OC
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_facturas' %}">
+                  Lista de Facturas
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_cartola' %}">
+                  Cartola de Movimientos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:listar_saldos_usuarios' %}">
+                  Saldos Disponibles
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'facturacion:facturacion_resumen' %}">
+                  Resumen Finanzas
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Beneficios -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🎁</span>
+                <span>Beneficios</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Convenios disponibles
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Cámara GPS -->
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>📷</span>
+                <span>Cámara GPS</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'geo_cam:capture' %}?next={{ request.get_full_path|urlencode }}">
+                  Cámara
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Bot GZ -->
+        {% if request.user.es_admin_general %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🤖</span>
+                <span>Bot GZ</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'bot_gz:training_dashboard' %}">
+                  Entrenamiento del bot
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Seguridad -->
+        {% if request.user.is_authenticated and request.user.is_staff %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>🔐</span>
+                <span>Seguridad</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="{% url 'usuarios:two_factor_setup' %}">
+                  Autenticación en dos pasos & dispositivos
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+        <!-- Administración de usuarios -->
+        {% if request.user.es_admin_general %}
+
+          <li class="group">
+
+            <div
+              class="flex cursor-pointer items-center justify-between"
+              onclick="toggleMenu(this)"
+            >
+              <span class="flex items-center gap-2">
+                <span>👤</span>
+                <span>Administración de Usuarios</span>
+              </span>
+
+              <span class="flecha transition-transform duration-200">
+                ▶
+              </span>
+            </div>
+
+            <ul class="submenu hidden space-y-1">
+
+              <li>
+                <a href="#">
+                  Grupos
+                </a>
+              </li>
+
+              <li>
+                <a href="{% url 'dashboard_admin:listar_usuarios' %}">
+                  Usuarios
+                </a>
+              </li>
+
+            </ul>
+          </li>
+
+        {% endif %}
+
+      </ul>
+
+      <!-- Pie del menú -->
+      <div class="sidebar-footer text-center text-xs text-white/80">
+
+        <p class="mb-1 font-medium">
+          Desarrollado por
+        </p>
+
+        <div class="sidebar-footer-logo">
+
+          <img
+            src="{% static 'images/planixb.png' %}"
+            alt="Planix"
+          >
+
+        </div>
+
+      </div>
+
+    </nav>
+
+    <!-- ==================================================== -->
+    <!-- CONTENIDO -->
+    <!-- ==================================================== -->
+
+    <main
+      id="main-content"
+      class="flex-1 min-w-0 px-3 py-4 sm:px-5 sm:py-6 lg:px-7"
+    >
+      {% block dashboard_content %}
+      {% endblock %}
+    </main>
+
+  </div>
+
+  <!-- ====================================================== -->
+  <!-- MENSAJES EMERGENTES -->
+  <!-- ====================================================== -->
+
+  {% if messages %}
+
+    <div
+      id="mensajes"
+      class="fixed top-20 left-1/2 z-[70] w-full max-w-xl -translate-x-1/2 space-y-2 px-4"
+    >
+
+      {% for message in messages %}
+
+        <div
+          class="
+            flex
+            items-center
+            justify-between
+            gap-3
+            rounded-2xl
+            border
+            border-white/30
+            p-4
+            text-white
+            shadow-xl
+            backdrop-blur-md
+
+            {% if message.tags == 'success' %}
+              bg-green-600/95
+            {% elif message.tags == 'error' %}
+              bg-red-600/95
+            {% elif message.tags == 'warning' %}
+              bg-amber-500/95
+            {% else %}
+              bg-blue-600/95
+            {% endif %}
+          "
+        >
+          <span class="text-sm font-medium">
+            {{ message }}
+          </span>
+
+          <button
+            type="button"
+            onclick="this.parentElement.remove()"
+            aria-label="Cerrar mensaje"
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-bold text-white hover:bg-white/25"
+          >
+            &times;
+          </button>
+        </div>
+
+      {% endfor %}
+
     </div>
-    <!-- Scripts -->
-   <script>
-  // Clave distinta solo para el admin
-  const ADMIN_SIDEBAR_KEY = 'admin-sidebar-collapsed';
 
-  function applySidebarState() {
-    const nav     = document.getElementById('side-nav');
-    const wrapper = document.querySelector('.content-wrapper');
-    if (!nav || !wrapper) return;
+  {% endif %}
 
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-    const raw = localStorage.getItem(ADMIN_SIDEBAR_KEY);
-    const savedCollapsed = raw === '1';
+  <!-- ====================================================== -->
+  <!-- ICONOS -->
+  <!-- ====================================================== -->
 
-    if (isDesktop) {
-      // En escritorio: respetamos lo último que hizo el usuario
-      nav.classList.toggle('collapsed', savedCollapsed);
-      wrapper.classList.toggle('no-sidebar', savedCollapsed);
-      wrapper.classList.toggle('with-sidebar', !savedCollapsed);
-      // En desktop no usamos -translate-x-full
-      nav.classList.remove('-translate-x-full');
-    } else {
-      // En móvil el menú empieza oculto
-      nav.classList.add('-translate-x-full');
-      nav.classList.remove('collapsed');
-      wrapper.classList.remove('no-sidebar');
-      wrapper.classList.add('with-sidebar');
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- ====================================================== -->
+  <!-- JAVASCRIPT GENERAL MILTEL -->
+  <!-- El orden de carga es importante -->
+  <!-- ====================================================== -->
+
+  <script src="{% static 'js/miltel-layout.js' %}"></script>
+
+  <script src="{% static 'js/miltel-notifications.js' %}"></script>
+
+  <script src="{% static 'js/miltel-scroll-memory.js' %}"></script>
+
+  <script src="{% static 'js/miltel-ui.js' %}"></script>
+
+  <!-- ====================================================== -->
+  <!-- INICIALIZACIÓN DE ICONOS -->
+  <!-- ====================================================== -->
+
+  <script>
+    if (typeof lucide !== "undefined") {
+      lucide.createIcons();
     }
+  </script>
 
-    document.documentElement.classList.remove('admin-sidebar-collapsed-init');
-  }
-
-  function toggleSidebar() {
-    const nav     = document.getElementById('side-nav');
-    const wrapper = document.querySelector('.content-wrapper');
-    if (!nav || !wrapper) return;
-
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches;
-
-    if (isDesktop) {
-      // Colapsar / expandir en escritorio
-      const willCollapse = !nav.classList.contains('collapsed');
-      nav.classList.toggle('collapsed', willCollapse);
-      wrapper.classList.toggle('no-sidebar', willCollapse);
-      wrapper.classList.toggle('with-sidebar', !willCollapse);
-
-      // Guardar preferencia solo del ADMIN
-      localStorage.setItem(ADMIN_SIDEBAR_KEY, willCollapse ? '1' : '0');
-    } else {
-      // En móvil es off-canvas
-      nav.classList.toggle('-translate-x-full');
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', applySidebarState);
-  window.addEventListener('resize', applySidebarState);
-</script>
-
- <!-- Mensajes emergentes -->
-    {% if messages %}
-<div id="mensajes" class="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl space-y-2 px-4">
-  {% for message in messages %}
-    <div class="flex items-center justify-between p-4 rounded-md shadow text-white
-      {% if message.tags == 'success' %}bg-green-600
-      {% elif message.tags == 'error' %}bg-red-600
-      {% elif message.tags == 'warning' %}bg-yellow-500
-      {% else %}bg-blue-600{% endif %}">
-      <span>{{ message }}</span>
-      <button onclick="this.parentElement.remove()" class="text-white font-bold text-lg">&times;</button>
-    </div>
-  {% endfor %}
-</div>
-
-<script>
-  setTimeout(() => {
-    const mensajes = document.getElementById('mensajes');
-    if (mensajes) mensajes.remove();
-  }, 10000);
-</script>
-{% endif %}
-
-
-<script>
-// Marcar notificación como leída y redirigir
-function leerNotificacion(id, urlDestino) {
-  fetch(`/usuarios/notificacion/${id}/leer/`)
-    .then(response => {
-      if (response.ok) {
-        // Eliminar la notificación del DOM
-        const item = document.getElementById(`notificacion-${id}`);
-        if (item) item.remove();
-
-        // Actualizar contador del badge
-        const badge = document.querySelector('.relative .bg-red-500');
-        if (badge) {
-          let count = parseInt(badge.innerText);
-          if (count > 1) {
-            badge.innerText = count - 1;
-          } else {
-            badge.remove();
-          }
-        }
-
-        // Redirigir a la URL de la notificación
-        window.location.href = urlDestino;
-      }
-    });
-}
-
-// Mostrar u ocultar el panel de notificaciones
-function toggleNotifications() {
-  const panel = document.getElementById('notification-panel');
-  if (panel) {
-    panel.classList.toggle('hidden');
-  }
-}
-</script>
-
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-  lucide.createIcons();
-</script>
-
-<script>
-  // Abrir/cerrar submenús del sidebar
-  function toggleMenu(el) {
-    const submenu = el.nextElementSibling;        // <ul class="submenu">
-    const flecha  = el.querySelector('.flecha');  // <span class="flecha">▶</span>
-
-    if (!submenu) return;
-
-    const isHidden = submenu.classList.contains('hidden') || submenu.style.display === 'none';
-
-    if (isHidden) {
-      submenu.classList.remove('hidden');
-      submenu.style.display = 'block';
-      if (flecha) flecha.classList.add('rotate-90');
-    } else {
-      submenu.classList.add('hidden');
-      submenu.style.display = 'none';
-      if (flecha) flecha.classList.remove('rotate-90');
-    }
-  }
-</script>
-
-<script>
-  (function () {
-    function applyHeaderOffset(){
-      const header = document.querySelector('header');
-      const wrapper = document.getElementById('app-wrapper');
-      if (!header || !wrapper) return;
-
-      const h = Math.ceil(header.getBoundingClientRect().height || 0);
-      wrapper.style.paddingTop = h + 'px';
-
-      // Mantener el sidebar pegado justo debajo del header
-      const nav = document.getElementById('side-nav');
-      if (nav) {
-        nav.style.top = h + 'px';
-        nav.style.height = `calc(100vh - ${h}px)`;
-      }
-    }
-
-    window.addEventListener('load', applyHeaderOffset);
-    window.addEventListener('resize', applyHeaderOffset);
-
-    // Por si el header cambia al cargar fuentes/iconos
-    setTimeout(applyHeaderOffset, 50);
-    setTimeout(applyHeaderOffset, 250);
-  })();
-</script>
+  {% block extra_js %}
+  {% endblock %}
 
 </body>
 </html>

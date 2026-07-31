@@ -2230,10 +2230,24 @@ def listar_saldos_usuarios(request):
     Muestra el resumen financiero agrupado por usuario.
 
     Reglas principales:
-    - Monto asignado: suma de todos los abonos.
-    - Monto rendido: suma de cargos, excepto rendiciones rechazadas.
-    - Monto rechazado: suma de rendiciones que actualmente están rechazadas.
-    - Monto disponible: monto asignado menos monto rendido válido.
+    - Monto asignado:
+      suma de todos los abonos, sin importar su estado.
+
+    - Monto rendido:
+      suma de todas las rendiciones no rechazadas, incluyendo:
+      pendiente de Supervisor, pendiente de PM, pendiente de Finanzas
+      y aprobadas por Finanzas.
+
+    - Monto rechazado:
+      suma de las rendiciones que actualmente están rechazadas.
+
+    - Monto disponible:
+      monto asignado menos rendiciones aprobadas por Finanzas.
+
+    - Saldo pendiente por rendir:
+      monto disponible menos las rendiciones que todavía están
+      pendientes de aprobación.
+
     - Los estados pendientes se muestran separados según su etapa.
     """
     from decimal import Decimal
@@ -2251,30 +2265,97 @@ def listar_saldos_usuarios(request):
     # Estados del flujo
     # ============================================================
 
-    USER_PENDING = ["pendiente_abono_usuario"]
-    SUP_PENDING = ["pendiente_supervisor"]
-    PM_PENDING = ["aprobado_supervisor"]
-    FIN_PENDING = ["aprobado_pm"]
+    USER_PENDING = [
+        "pendiente_abono_usuario",
+    ]
 
-    # Las rendiciones con estos estados no cuentan como monto rendido.
+    SUP_PENDING = [
+        "pendiente_supervisor",
+    ]
+
+    PM_PENDING = [
+        "aprobado_supervisor",
+    ]
+
+    FIN_PENDING = [
+        "aprobado_pm",
+    ]
+
+    PENDING_EXPENSE_STATUSES = [
+        "pendiente_supervisor",
+        "aprobado_supervisor",
+        "aprobado_pm",
+    ]
+
     REJECTED_STATUSES = [
         "rechazado_supervisor",
         "rechazado_pm",
         "rechazado_finanzas",
     ]
 
+    FINANCE_APPROVED_STATUSES = [
+        "aprobado_finanzas",
+    ]
+
     # Configuración decimal común para evitar resultados NULL.
-    DEC = DecimalField(max_digits=12, decimal_places=2)
-    V0 = Value(Decimal("0.00"), output_field=DEC)
+    DEC = DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    V0 = Value(
+        Decimal("0.00"),
+        output_field=DEC,
+    )
 
     # ============================================================
-    # Monto rendido válido
+    # Monto rendido
+    #
+    # Incluye todas las rendiciones no rechazadas:
+    # - pendiente Supervisor;
+    # - pendiente PM;
+    # - pendiente Finanzas;
+    # - aprobadas por Finanzas.
     # ============================================================
 
     monto_rendido_valido = Sum(
         Case(
             When(
                 Q(cargos__gt=0) & ~Q(status__in=REJECTED_STATUSES),
+                then=F("cargos"),
+            ),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    # ============================================================
+    # Rendiciones aprobadas por Finanzas
+    #
+    # Solamente estas reducen el monto disponible actual.
+    # ============================================================
+
+    monto_aprobado_finanzas = Sum(
+        Case(
+            When(
+                Q(cargos__gt=0) & Q(status__in=FINANCE_APPROVED_STATUSES),
+                then=F("cargos"),
+            ),
+            default=V0,
+            output_field=DEC,
+        )
+    )
+
+    # ============================================================
+    # Rendiciones pendientes de aprobación
+    #
+    # Se utilizan para calcular el saldo pendiente por rendir.
+    # ============================================================
+
+    monto_pendiente_aprobacion = Sum(
+        Case(
+            When(
+                Q(cargos__gt=0) & Q(status__in=PENDING_EXPENSE_STATUSES),
                 then=F("cargos"),
             ),
             default=V0,
@@ -2299,6 +2380,10 @@ def listar_saldos_usuarios(request):
 
     # ============================================================
     # Pendiente del usuario
+    #
+    # Esta columna muestra abonos pendientes de aceptación.
+    # Sin embargo, esos abonos igualmente forman parte del
+    # monto asignado, tal como fue definido.
     # ============================================================
 
     pend_user_abonos = Sum(
@@ -2404,21 +2489,34 @@ def listar_saldos_usuarios(request):
             "usuario__email",
         )
         .annotate(
-            # Solo suma cargos que no estén rechazados.
+            # Todos los abonos se consideran dinero asignado,
+            # sin importar su estado.
+            monto_asignado=Coalesce(
+                Sum("abonos"),
+                V0,
+                output_field=DEC,
+            ),
+            # Todas las rendiciones no rechazadas.
             monto_rendido=Coalesce(
                 monto_rendido_valido,
                 V0,
                 output_field=DEC,
             ),
-            # Suma separadamente los cargos rechazados.
-            monto_rechazado=Coalesce(
-                monto_rechazado_actual,
+            # Rendiciones que ya fueron aprobadas por Finanzas.
+            monto_aprobado_finanzas=Coalesce(
+                monto_aprobado_finanzas,
                 V0,
                 output_field=DEC,
             ),
-            # Todos los abonos continúan representando dinero asignado.
-            monto_asignado=Coalesce(
-                Sum("abonos"),
+            # Rendiciones que siguen en aprobación.
+            monto_pendiente_aprobacion=Coalesce(
+                monto_pendiente_aprobacion,
+                V0,
+                output_field=DEC,
+            ),
+            # Rendiciones rechazadas.
+            monto_rechazado=Coalesce(
+                monto_rechazado_actual,
                 V0,
                 output_field=DEC,
             ),
@@ -2474,7 +2572,8 @@ def listar_saldos_usuarios(request):
                 ),
                 output_field=DEC,
             ),
-            # El saldo disponible utiliza únicamente el monto rendido válido.
+            # Saldo real que aún permanece disponible porque
+            # solamente Finanzas descuenta definitivamente el gasto.
             monto_disponible=ExpressionWrapper(
                 Coalesce(
                     F("monto_asignado"),
@@ -2482,7 +2581,24 @@ def listar_saldos_usuarios(request):
                     output_field=DEC,
                 )
                 - Coalesce(
-                    F("monto_rendido"),
+                    F("monto_aprobado_finanzas"),
+                    V0,
+                    output_field=DEC,
+                ),
+                output_field=DEC,
+            ),
+        )
+        .annotate(
+            # Saldo que quedaría libre considerando también
+            # las rendiciones que todavía están en aprobación.
+            saldo_pendiente_por_rendir=ExpressionWrapper(
+                Coalesce(
+                    F("monto_disponible"),
+                    V0,
+                    output_field=DEC,
+                )
+                - Coalesce(
+                    F("monto_pendiente_aprobacion"),
                     V0,
                     output_field=DEC,
                 ),
@@ -2502,12 +2618,17 @@ def listar_saldos_usuarios(request):
 
     if cantidad == "todos":
         per_page = qs.count() or 1
+
     else:
         try:
             per_page = max(
                 5,
-                min(int(cantidad), 100),
+                min(
+                    int(cantidad),
+                    100,
+                ),
             )
+
         except (TypeError, ValueError):
             per_page = 5
             cantidad = "5"
@@ -2517,7 +2638,9 @@ def listar_saldos_usuarios(request):
         per_page,
     )
 
-    pagina = paginator.get_page(request.GET.get("page"))
+    pagina = paginator.get_page(
+        request.GET.get("page"),
+    )
 
     return render(
         request,

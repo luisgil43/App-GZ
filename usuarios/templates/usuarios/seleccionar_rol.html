@@ -1,68 +1,486 @@
 {% load static %}
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Seleccionar Rol</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    * { box-sizing: border-box; }
 
-    html, body {
+  <title>Seleccionar acceso - Plataforma de MILTEL</title>
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <style>
+    /* ====================================================== */
+    /* VARIABLES */
+    /* ====================================================== */
+
+    :root {
+      --holo-cyan: rgba(111, 219, 224, 0.78);
+      --holo-mint: rgba(151, 220, 200, 0.72);
+      --holo-violet: rgba(183, 163, 221, 0.72);
+      --holo-pink: rgba(223, 173, 203, 0.68);
+
+      --text-main: #ffffff;
+      --text-soft: rgba(255, 255, 255, 0.76);
+      --text-dark: #33434e;
+    }
+
+    /* ====================================================== */
+    /* CONFIGURACIÓN GENERAL */
+    /* ====================================================== */
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
       margin: 0;
       padding: 0;
       min-height: 100vh;
-      font-family: "Segoe UI", sans-serif;
+
+      font-family:
+        "Segoe UI",
+        -apple-system,
+        BlinkMacSystemFont,
+        sans-serif;
     }
 
     body {
-      background: linear-gradient(135deg, #f4f6f9 0%, #eef1f6 100%);
+      position: relative;
+
       display: flex;
       align-items: center;
       justify-content: center;
+
+      min-height: 100vh;
       padding: 24px;
+
+      overflow: hidden;
+
+      background-image:
+        linear-gradient(
+          115deg,
+          rgba(10, 17, 24, 0.16),
+          rgba(30, 39, 47, 0.05),
+          rgba(10, 17, 24, 0.18)
+        ),
+        url("{% static 'images/invierno.png' %}?v=6");
+
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+
+      background-color: #dfe7ec;
     }
 
+    /* Sombra exterior */
+    body::after {
+      content: "";
+
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+
+      pointer-events: none;
+
+      background:
+        radial-gradient(
+          circle at center,
+          transparent 52%,
+          rgba(5, 12, 18, 0.30) 100%
+        ),
+        linear-gradient(
+          to bottom,
+          rgba(5, 11, 17, 0.07),
+          rgba(5, 11, 17, 0.18)
+        );
+    }
+
+    /* Reflejos suaves */
+    body::before {
+      content: "";
+
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+
+      pointer-events: none;
+
+      background:
+        radial-gradient(
+          circle at 50% 31%,
+          rgba(255, 255, 255, 0.11),
+          transparent 35%
+        ),
+        radial-gradient(
+          circle at 38% 76%,
+          rgba(111, 219, 224, 0.05),
+          transparent 30%
+        ),
+        radial-gradient(
+          circle at 72% 68%,
+          rgba(183, 163, 221, 0.05),
+          transparent 32%
+        );
+    }
+
+    /* ====================================================== */
+    /* LÍNEAS HOLOGRÁFICAS */
+    /* ====================================================== */
+
+    .data-stream {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .data-stream span {
+      position: absolute;
+      left: -45%;
+
+      width: 38vw;
+      min-width: 310px;
+      height: 1px;
+
+      opacity: 0.34;
+
+      background:
+        linear-gradient(
+          90deg,
+          transparent 0%,
+          rgba(111, 219, 224, 0.12) 18%,
+          rgba(255, 255, 255, 0.82) 40%,
+          rgba(183, 163, 221, 0.58) 58%,
+          rgba(223, 173, 203, 0.34) 74%,
+          transparent 100%
+        );
+
+      filter:
+        drop-shadow(
+          0 0 7px rgba(111, 219, 224, 0.28)
+        );
+
+      animation:
+        streamMove
+        7.5s
+        linear
+        infinite;
+    }
+
+    .data-stream span:nth-child(1) {
+      top: 20%;
+      animation-delay: 0s;
+    }
+
+    .data-stream span:nth-child(2) {
+      top: 46%;
+      animation-delay: 2s;
+    }
+
+    .data-stream span:nth-child(3) {
+      top: 72%;
+      animation-delay: 4s;
+    }
+
+    @keyframes streamMove {
+      from {
+        transform:
+          translateX(0)
+          rotate(-4deg);
+      }
+
+      to {
+        transform:
+          translateX(155vw)
+          rotate(-4deg);
+      }
+    }
+
+    /* ====================================================== */
+    /* CONTENEDOR */
+    /* ====================================================== */
+
     .role-shell {
+      position: relative;
+      z-index: 5;
+
       width: 100%;
-      max-width: 410px;
+      max-width: 440px;
     }
 
     .role-card {
-      background: rgba(255, 255, 255, 0.96);
-      border-radius: 24px;
-      border: 1px solid rgba(0,0,0,0.05);
+      position: relative;
+
+      width: 100%;
+      padding:
+        96px
+        34px
+        34px;
+
+      overflow: visible;
+
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.42);
+
+      border-radius: 32px;
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(36, 43, 50, 0.70) 0%,
+          rgba(17, 23, 29, 0.66) 46%,
+          rgba(36, 40, 48, 0.68) 100%
+        );
+
+      backdrop-filter:
+        blur(22px)
+        saturate(115%);
+
+      -webkit-backdrop-filter:
+        blur(22px)
+        saturate(115%);
+
       box-shadow:
-        0 22px 50px rgba(0,0,0,0.12),
-        0 8px 18px rgba(0,0,0,0.06);
-      overflow: hidden;
-      animation: fadeUp .35s ease;
+        0 34px 90px rgba(0, 0, 0, 0.48),
+        inset 0 1px 0 rgba(255, 255, 255, 0.22),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+        0 0 28px rgba(111, 219, 224, 0.07);
+
+      animation:
+        fadeUp
+        0.42s
+        ease;
     }
 
+    .role-card::before {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+
+      pointer-events: none;
+
+      border-radius: 32px;
+
+      background:
+        linear-gradient(
+          122deg,
+          rgba(255, 255, 255, 0.18) 0%,
+          rgba(255, 255, 255, 0.035) 22%,
+          transparent 39%,
+          rgba(111, 219, 224, 0.05) 56%,
+          rgba(183, 163, 221, 0.06) 74%,
+          transparent 100%
+        ),
+        radial-gradient(
+          circle at 50% 0%,
+          rgba(255, 255, 255, 0.13),
+          transparent 39%
+        );
+    }
+
+    .role-card::after {
+      content: "";
+
+      position: absolute;
+      left: 10%;
+      right: 10%;
+      bottom: -1px;
+
+      height: 1px;
+
+      pointer-events: none;
+
+      background:
+        linear-gradient(
+          90deg,
+          transparent,
+          var(--holo-cyan),
+          var(--holo-mint),
+          var(--holo-violet),
+          var(--holo-pink),
+          transparent
+        );
+
+      box-shadow:
+        0 0 10px rgba(111, 219, 224, 0.16);
+    }
+
+    .role-card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ====================================================== */
+    /* LOGO */
+    /* ====================================================== */
+
+    .logo-box {
+      position: absolute;
+      top: -78px;
+      left: 50%;
+      z-index: 4;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      width: 156px;
+      height: 156px;
+      padding: 5px;
+
+      overflow: hidden;
+
+      transform:
+        translateX(-50%);
+
+      border:
+        4px solid
+        rgba(233, 241, 245, 0.92);
+
+      border-radius: 50%;
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(255, 255, 255, 1),
+          rgba(202, 215, 224, 0.98) 48%,
+          rgba(245, 248, 250, 1)
+        );
+
+      box-shadow:
+        0 22px 44px rgba(0, 0, 0, 0.38),
+        inset 0 2px 2px rgba(255, 255, 255, 1),
+        inset 0 -2px 3px rgba(85, 103, 116, 0.18),
+        0 0 25px rgba(111, 219, 224, 0.14);
+    }
+
+    .logo-box::before {
+      content: "";
+
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+
+      pointer-events: none;
+
+      border-radius: 50%;
+
+      background:
+        linear-gradient(
+          125deg,
+          rgba(255, 255, 255, 0.32) 0%,
+          rgba(255, 255, 255, 0.06) 28%,
+          transparent 44%,
+          rgba(111, 219, 224, 0.07) 58%,
+          rgba(183, 163, 221, 0.08) 72%,
+          transparent 100%
+        );
+    }
+
+    .logo-box::after {
+      content: "";
+
+      position: absolute;
+      inset: 5px;
+      z-index: 3;
+
+      pointer-events: none;
+
+      border:
+        1px solid
+        rgba(114, 137, 151, 0.18);
+
+      border-radius: 50%;
+    }
+
+    .logo-box img {
+      position: relative;
+      z-index: 1;
+
+      display: block;
+
+      width: 100%;
+      height: 100%;
+
+      border-radius: 50%;
+
+      object-fit: cover;
+      object-position: center;
+
+      background: #ffffff;
+    }
+
+    /* ====================================================== */
+    /* ENCABEZADO */
+    /* ====================================================== */
+
     .role-header {
-      background: linear-gradient(90deg, #f6a623 0%, #ff7a45 52%, #ff5a47 100%);
-      padding: 22px 24px;
+      margin-bottom: 28px;
       text-align: center;
+    }
+
+    .role-header p {
+      margin:
+        0
+        0
+        7px;
+
+      color:
+        rgba(255, 255, 255, 0.60);
+
+      font-size: 0.76rem;
+      font-weight: 900;
+      letter-spacing: 0.18em;
+
+      text-transform: uppercase;
     }
 
     .role-header h2 {
       margin: 0;
-      color: #fff;
-      font-size: 1.45rem;
-      font-weight: 900;
-      letter-spacing: .02em;
+
+      color: #ffffff;
+
+      font-size: 1.62rem;
+      font-weight: 950;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+
       text-transform: uppercase;
+
+      text-shadow:
+        0 2px 15px rgba(0, 0, 0, 0.58),
+        0 0 14px rgba(111, 219, 224, 0.08);
     }
 
+    /* ====================================================== */
+    /* CUERPO */
+    /* ====================================================== */
+
     .role-body {
-      padding: 28px 24px 24px;
       text-align: center;
     }
 
-    .role-body p {
-      margin: 0 0 22px;
+    .role-body > p {
+      margin:
+        0
+        0
+        22px;
+
+      color:
+        rgba(255, 255, 255, 0.78);
+
       font-size: 1rem;
-      color: #5f6673;
       font-weight: 600;
     }
 
@@ -76,117 +494,417 @@
       gap: 14px;
     }
 
+    /* ====================================================== */
+    /* BOTONES */
+    /* ====================================================== */
+
     .btn-role {
+      position: relative;
+
       width: 100%;
-      border: none;
+      min-height: 54px;
+      padding:
+        14px
+        18px;
+
+      overflow: hidden;
+
+      border:
+        1px solid
+        rgba(255, 255, 255, 0.60);
+
       border-radius: 999px;
-      padding: 14px 16px;
-      font-size: 1rem;
-      font-weight: 800;
+
       cursor: pointer;
-      transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+
+      font-size: 1rem;
+      font-weight: 900;
+
+      transition:
+        transform 0.16s ease,
+        filter 0.16s ease,
+        box-shadow 0.16s ease,
+        background-position 0.25s ease;
+    }
+
+    .btn-role::before {
+      content: "";
+
+      position: absolute;
+      top: 0;
+      left: -120%;
+
+      width: 55%;
+      height: 100%;
+
+      pointer-events: none;
+
+      background:
+        linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.82),
+          rgba(111, 219, 224, 0.11),
+          rgba(183, 163, 221, 0.12),
+          transparent
+        );
+
+      transform:
+        skewX(-20deg);
+
+      animation:
+        buttonShine
+        3.8s
+        ease-in-out
+        infinite;
     }
 
     .btn-role:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.02);
+      transform:
+        translateY(-1px);
+
+      filter:
+        brightness(1.03);
+
+      background-position:
+        100%
+        0;
     }
 
+    .btn-role:active {
+      transform:
+        translateY(0);
+    }
+
+    /* Usuario */
     .btn-user {
-      color: #fff;
-      background: linear-gradient(90deg, #ff4b4b 0%, #ff7445 48%, #f6b13a 100%);
+      color: #314551;
+
+      background:
+        linear-gradient(
+          105deg,
+          rgba(255, 255, 255, 0.98) 0%,
+          rgba(196, 211, 220, 0.96) 24%,
+          rgba(235, 241, 244, 0.98) 47%,
+          rgba(205, 220, 226, 0.95) 66%,
+          rgba(231, 224, 239, 0.94) 84%,
+          rgba(255, 255, 255, 0.98) 100%
+        );
+
+      background-size:
+        210%
+        100%;
+
       box-shadow:
-        0 14px 28px rgba(255, 90, 71, 0.22),
-        0 6px 14px rgba(0,0,0,0.08);
+        0 17px 32px rgba(0, 0, 0, 0.23),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.14),
+        0 0 18px rgba(111, 219, 224, 0.08);
     }
 
     .btn-user:hover {
       box-shadow:
-        0 18px 32px rgba(255, 90, 71, 0.28),
-        0 10px 18px rgba(0,0,0,0.12);
+        0 20px 38px rgba(0, 0, 0, 0.28),
+        inset 0 2px 1px rgba(255, 255, 255, 1),
+        inset 0 -2px 2px rgba(74, 96, 111, 0.12),
+        0 0 24px rgba(111, 219, 224, 0.11);
     }
 
+    /* Administrador */
     .btn-admin {
-      color: #fff;
-      background: linear-gradient(90deg, #454d5b 0%, #596170 52%, #6b7280 100%);
+      color: #ffffff;
+
+      border-color:
+        rgba(210, 225, 231, 0.34);
+
+      background:
+        linear-gradient(
+          105deg,
+          rgba(38, 47, 55, 0.95) 0%,
+          rgba(63, 74, 83, 0.96) 26%,
+          rgba(31, 39, 47, 0.97) 52%,
+          rgba(74, 83, 93, 0.95) 77%,
+          rgba(42, 50, 58, 0.96) 100%
+        );
+
+      background-size:
+        210%
+        100%;
+
       box-shadow:
-        0 14px 28px rgba(69, 77, 91, 0.20),
-        0 6px 14px rgba(0,0,0,0.08);
+        0 17px 32px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.04),
+        0 0 18px rgba(183, 163, 221, 0.07);
     }
 
     .btn-admin:hover {
       box-shadow:
-        0 18px 32px rgba(69, 77, 91, 0.26),
-        0 10px 18px rgba(0,0,0,0.12);
+        0 20px 38px rgba(0, 0, 0, 0.34),
+        inset 0 1px 0 rgba(255, 255, 255, 0.17),
+        0 0 24px rgba(183, 163, 221, 0.10);
     }
+
+    /* ====================================================== */
+    /* PIE */
+    /* ====================================================== */
+
+    .footer {
+      position: relative;
+      z-index: 5;
+
+      margin-top: 16px;
+
+      color:
+        rgba(255, 255, 255, 0.90);
+
+      text-align: center;
+      font-size: 0.84rem;
+      font-weight: 600;
+
+      text-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.50);
+    }
+
+    .footer img {
+      height: 40px;
+      margin-left: 5px;
+
+      vertical-align: middle;
+
+      filter:
+        drop-shadow(
+          0 3px 9px rgba(0, 0, 0, 0.42)
+        );
+    }
+
+    /* ====================================================== */
+    /* ANIMACIONES */
+    /* ====================================================== */
 
     @keyframes fadeUp {
       from {
         opacity: 0;
-        transform: translateY(16px);
+
+        transform:
+          translateY(18px)
+          scale(0.985);
       }
+
       to {
         opacity: 1;
-        transform: translateY(0);
+
+        transform:
+          translateY(0)
+          scale(1);
       }
     }
 
+    @keyframes buttonShine {
+      0% {
+        left: -120%;
+      }
+
+      45% {
+        left: 140%;
+      }
+
+      100% {
+        left: 140%;
+      }
+    }
+
+    /* ====================================================== */
+    /* CELULAR */
+    /* ====================================================== */
+
     @media (max-width: 520px) {
       body {
-        padding: 18px;
+        min-height: 100svh;
+
+        padding:
+          74px
+          16px
+          24px;
+
+        overflow-y: auto;
+
+        background-position: center;
+        background-attachment: scroll;
+      }
+
+      .role-shell {
+        max-width: 100%;
+      }
+
+      .role-card {
+        padding:
+          86px
+          22px
+          28px;
+
+        border-radius: 28px;
+      }
+
+      .role-card::before {
+        border-radius: 28px;
+      }
+
+      .logo-box {
+        top: -64px;
+
+        width: 132px;
+        height: 132px;
+
+        padding: 4px;
+        border-width: 4px;
       }
 
       .role-header {
-        padding: 20px 18px;
+        margin-bottom: 24px;
       }
 
       .role-header h2 {
-        font-size: 1.2rem;
+        font-size: 1.34rem;
       }
 
-      .role-body {
-        padding: 22px 18px 20px;
+      .role-body > p {
+        font-size: 0.94rem;
       }
 
       .btn-role {
-        font-size: .96rem;
-        padding: 13px 14px;
+        min-height: 50px;
+
+        padding:
+          13px
+          14px;
+
+        font-size: 0.96rem;
+      }
+
+      .footer img {
+        height: 36px;
+      }
+
+      .data-stream span {
+        min-width: 220px;
+        opacity: 0.25;
+      }
+    }
+
+    /* Pantallas pequeñas en altura */
+    @media (max-height: 650px) and (min-width: 521px) {
+      body {
+        align-items: flex-start;
+        overflow-y: auto;
+
+        padding-top: 92px;
+        padding-bottom: 30px;
+      }
+    }
+
+    /* Reduce movimiento */
+    @media (prefers-reduced-motion: reduce) {
+      .role-card,
+      .data-stream span,
+      .btn-role::before {
+        animation: none;
       }
     }
   </style>
 </head>
+
 <body>
 
-  <div class="role-shell">
-    <div class="role-card">
-      <div class="role-header">
-        <h2>Seleccionar acceso</h2>
+  <!-- Líneas holográficas -->
+  <div
+    class="data-stream"
+    aria-hidden="true"
+  >
+    <span></span>
+    <span></span>
+    <span></span>
+  </div>
+
+  <main class="role-shell">
+
+    <section class="role-card">
+
+      <!-- Logo -->
+      <div class="logo-box">
+        <img
+          src="{% static 'images/logoredondo.png' %}?v=1"
+          alt="Logo MILTEL Grupo GZS"
+        >
       </div>
 
+      <!-- Encabezado -->
+      <header class="role-header">
+
+        <p>
+          Plataforma MILTEL
+        </p>
+
+        <h2>
+          Seleccionar acceso
+        </h2>
+
+      </header>
+
+      <!-- Opciones -->
       <div class="role-body">
-        <p>¿Cómo deseas ingresar?</p>
+
+        <p>
+          ¿Cómo deseas ingresar?
+        </p>
 
         <form method="post">
           {% csrf_token %}
+
           <div class="actions">
 
             {% if can_user %}
-            <button type="submit" name="opcion" value="usuario" class="btn-role btn-user">
-              Entrar como Usuario
-            </button>
+              <button
+                type="submit"
+                name="opcion"
+                value="usuario"
+                class="btn-role btn-user"
+              >
+                Entrar como Usuario
+              </button>
             {% endif %}
 
             {% if can_admin %}
-            <button type="submit" name="opcion" value="admin" class="btn-role btn-admin">
-              Entrar como Administrador
-            </button>
+              <button
+                type="submit"
+                name="opcion"
+                value="admin"
+                class="btn-role btn-admin"
+              >
+                Entrar como Administrador
+              </button>
             {% endif %}
 
           </div>
         </form>
+
       </div>
-    </div>
-  </div>
+
+    </section>
+
+    <!-- Pie -->
+    <footer class="footer">
+
+      Desarrollado por
+
+      <img
+        src="{% static 'images/planixl.png' %}"
+        alt="Planix"
+      >
+
+    </footer>
+
+  </main>
 
 </body>
 </html>

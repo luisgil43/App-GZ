@@ -1,0 +1,172 @@
+/* ========================================================== */
+/* MILTEL BASE                                                 */
+/* Normalización y comportamiento común de toda la plataforma  */
+/* ========================================================== */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    min-height: 100%;
+}
+
+html {
+    background: var(--miltel-app-background);
+}
+
+body {
+    margin: 0;
+
+    background: var(--miltel-app-background);
+    color: var(--miltel-text-primary);
+
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+
+button {
+    color: inherit;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+img {
+    display: block;
+    max-width: 100%;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+.rotate-90 {
+    transform: rotate(90deg);
+}
+
+/* ========================================================== */
+/* ENFOQUE Y ACCESIBILIDAD                                     */
+/* ========================================================== */
+
+:focus-visible {
+    outline: 2px solid var(--miltel-holo-cyan);
+    outline-offset: 2px;
+}
+
+::selection {
+    background: rgba(100, 216, 232, 0.30);
+    color: var(--miltel-text-primary);
+}
+
+/* ========================================================== */
+/* UTILIDADES MILTEL                                          */
+/* ========================================================== */
+
+.miltel-hidden {
+    display: none !important;
+}
+
+.miltel-no-scroll {
+    overflow: hidden !important;
+}
+
+.miltel-text-muted {
+    color: var(--miltel-text-muted);
+}
+
+.miltel-text-secondary {
+    color: var(--miltel-text-secondary);
+}
+
+.miltel-text-success {
+    color: var(--miltel-success-text);
+}
+
+.miltel-text-warning {
+    color: var(--miltel-warning-text);
+}
+
+.miltel-text-danger {
+    color: var(--miltel-danger-text);
+}
+
+.miltel-text-info {
+    color: var(--miltel-info-text);
+}
+
+/* ========================================================== */
+/* SCROLLBAR GENERAL                                          */
+/* ========================================================== */
+
+* {
+    scrollbar-width: thin;
+
+    scrollbar-color:
+        rgba(95, 121, 139, 0.35) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    border-radius: var(--miltel-radius-pill);
+
+    background:
+        linear-gradient(135deg,
+            rgba(116, 143, 160, 0.60),
+            rgba(160, 184, 196, 0.56),
+            rgba(139, 134, 177, 0.48));
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background:
+        linear-gradient(135deg,
+            rgba(92, 122, 141, 0.76),
+            rgba(141, 171, 187, 0.70),
+            rgba(159, 145, 194, 0.65));
+}
+
+/* ========================================================== */
+/* MOVIMIENTO REDUCIDO                                        */
+/* ========================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+
+        transition-duration: 0.01ms !important;
+    }
+}

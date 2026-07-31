@@ -1,40 +1,123 @@
-import uuid
 import base64
-from django.core.files.base import ContentFile
-from rrhh.utils import generar_ficha_ingreso_pdf
-from rrhh.models import FichaIngreso
-from usuarios.decoradores import rol_requerido
-from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from django.template.loader import render_to_string
-from django.contrib.auth import logout
-from weasyprint import HTML
-from django.db.models import Sum
-from django.utils import timezone
-from datetime import date
 import os
 import tempfile
-from django.contrib.auth import authenticate, login
+import uuid
+from datetime import date
 
+from django.contrib import messages
+from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
+from django.core.files.base import ContentFile
+from django.db.models import Sum
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
+from django.utils import timezone
+from weasyprint import HTML
+
 from dashboard.models import ProduccionTecnico
-from usuarios.models import CustomUser
-from usuarios.models import Notificacion
+from operaciones.models import ServicioCotizado, SesionFotos, SesionFotoTecnico
+from rrhh.models import FichaIngreso
+from rrhh.utils import generar_ficha_ingreso_pdf
+from usuarios.decoradores import rol_requerido
+from usuarios.models import CustomUser, Notificacion
 
 
-@login_required
+@login_required(login_url="usuarios:login")
 def inicio(request):
-    notificaciones = Notificacion.objects.filter(
-        usuario=request.user
-    ).order_by('leido', '-fecha')[:10]
+    """
+    Panel principal del técnico.
 
-    return render(request, 'dashboard/inicio.html', {
-        'notificaciones': notificaciones
-    })
+    La gráfica toma el estado individual del usuario autenticado desde
+    SesionFotoTecnico. De esta manera cuenta los mismos trabajos que
+    aparecen en la pantalla de Actividades asignadas.
+    """
+
+    # ========================================================
+    # NOTIFICACIONES
+    # ========================================================
+
+    queryset_notificaciones = Notificacion.objects.filter(
+        usuario=request.user
+    ).order_by(
+        "leido",
+        "-fecha",
+    )
+
+    notificaciones = queryset_notificaciones[:10]
+
+    notificaciones_no_leidas = queryset_notificaciones.filter(
+        leido=False,
+    ).count()
+
+    # ========================================================
+    # FECHA ACTUAL
+    # ========================================================
+
+    hoy = timezone.localdate()
+
+    # ========================================================
+    # ASIGNACIONES DEL TÉCNICO
+    # ========================================================
+
+    asignaciones_tecnico = (
+        SesionFotoTecnico.objects.filter(
+            tecnico=request.user,
+        )
+        .select_related(
+            "sesion",
+            "sesion__servicio",
+        )
+        .distinct()
+    )
+
+    # ========================================================
+    # CONTEOS
+    # ========================================================
+
+    # En ejecución.
+    sitios_en_proceso = asignaciones_tecnico.filter(
+        estado="en_proceso",
+    ).count()
+
+    # Enviados al supervisor.
+    sitios_en_revision = asignaciones_tecnico.filter(
+        estado="en_revision_supervisor",
+    ).count()
+
+    # Aprobados por el supervisor.
+    sitios_aprobados = asignaciones_tecnico.filter(
+        estado="aprobado_supervisor",
+    ).count()
+
+    # ========================================================
+    # CONTEXTO
+    # ========================================================
+
+    context = {
+        "notificaciones": notificaciones,
+        "notificaciones_no_leidas": notificaciones_no_leidas,
+        "sitios_en_proceso": sitios_en_proceso,
+        "sitios_en_revision": sitios_en_revision,
+        "sitios_aprobados": sitios_aprobados,
+        "mes_grafica": hoy.replace(day=1),
+    }
+
+    return render(
+        request,
+        "dashboard/inicio.html",
+        context,
+    )
+
+
+@login_required(login_url="usuarios:login")
+def inicio_tecnico(request):
+    """
+    La ruta dashboard:inicio_tecnico reutiliza la vista principal para
+    no renderizar dashboard/inicio.html sin los datos de la gráfica.
+    """
+
+    return inicio(request)
 
 
 @login_required
@@ -116,11 +199,6 @@ def logout_view(request):
 
 
 @login_required
-def inicio_tecnico(request):
-    return render(request, 'dashboard/inicio.html')
-
-
-@login_required
 def produccion_tecnico(request):
     return render(request, 'dashboard_admin/produccion_tecnico.html')
 
@@ -153,7 +231,3 @@ def registrar_firma_usuario(request):
         'tecnico': user,
         'solo_lectura': False
     })
-
-
-def index(request):
-    return render(request, 'dashboard/index.html')

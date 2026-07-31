@@ -15,9 +15,11 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from dashboard.models import ProduccionTecnico
+from operaciones.models import ServicioCotizado, SesionFotos
 from rrhh.forms import FeriadoForm
 from rrhh.models import Feriado
 from usuarios.decoradores import rol_requerido
@@ -41,19 +43,123 @@ def logout_view(request):
     return redirect('usuarios:login_unificado')
 
 
-@login_required(login_url='usuarios:login')
+@login_required(login_url="usuarios:login")
 def inicio_admin(request):
-    queryset = Notificacion.objects.filter(
-        usuario=request.user
-    ).order_by('leido', '-fecha')
+    """
+    Panel administrativo principal.
 
-    notificaciones = queryset[:10]
-    no_leidas = queryset.filter(leido=False).count()
+    La gráfica cuenta los servicios del mes actual utilizando
+    ServicioCotizado, que es el mismo modelo del cual sale el estado
+    general mostrado en las actividades:
 
-    return render(request, 'dashboard_admin/inicio_admin.html', {
-        'notificaciones': notificaciones,
-        'notificaciones_no_leidas': no_leidas,
-    })
+    - en_progreso
+    - en_revision_supervisor
+    - aprobado_supervisor
+    """
+
+    # ========================================================
+    # NOTIFICACIONES
+    # ========================================================
+
+    queryset_notificaciones = Notificacion.objects.filter(
+        usuario=request.user,
+    ).order_by(
+        "leido",
+        "-fecha",
+    )
+
+    notificaciones = queryset_notificaciones[:10]
+
+    notificaciones_no_leidas = queryset_notificaciones.filter(
+        leido=False,
+    ).count()
+
+    # ========================================================
+    # MES ACTUAL
+    # ========================================================
+
+    hoy = timezone.localdate()
+
+    anio_actual = hoy.year
+    numero_mes_actual = hoy.month
+
+    nombres_meses = {
+        1: "enero",
+        2: "febrero",
+        3: "marzo",
+        4: "abril",
+        5: "mayo",
+        6: "junio",
+        7: "julio",
+        8: "agosto",
+        9: "septiembre",
+        10: "octubre",
+        11: "noviembre",
+        12: "diciembre",
+    }
+
+    nombre_mes_actual = nombres_meses[numero_mes_actual]
+
+    # Como mes_produccion es CharField, aceptamos los formatos
+    # que pueden existir actualmente en la base de datos.
+    formatos_mes_actual = [
+        f"{anio_actual}-{numero_mes_actual:02d}",
+        f"{anio_actual}/{numero_mes_actual:02d}",
+        f"{numero_mes_actual:02d}-{anio_actual}",
+        f"{numero_mes_actual:02d}/{anio_actual}",
+        f"{nombre_mes_actual} {anio_actual}",
+        f"{nombre_mes_actual.capitalize()} {anio_actual}",
+        f"{nombre_mes_actual} de {anio_actual}",
+        f"{nombre_mes_actual.capitalize()} de {anio_actual}",
+    ]
+
+    # ========================================================
+    # SERVICIOS DEL MES ACTUAL
+    # ========================================================
+
+    servicios_mes = ServicioCotizado.objects.filter(
+        mes_produccion__in=formatos_mes_actual,
+    ).distinct()
+
+    # ========================================================
+    # CONTEOS
+    # ========================================================
+
+    # ServicioCotizado usa "en_progreso", no "en_proceso".
+    sitios_en_proceso = servicios_mes.filter(
+        estado="en_progreso",
+    ).count()
+
+    sitios_en_revision = servicios_mes.filter(
+        estado="en_revision_supervisor",
+    ).count()
+
+    sitios_aprobados = servicios_mes.filter(
+        estado="aprobado_supervisor",
+    ).count()
+
+    # ========================================================
+    # CONTEXTO
+    # ========================================================
+
+    context = {
+        "notificaciones": notificaciones,
+        # Tu base administrativo utiliza esta variable.
+        "notificaciones_recientes": notificaciones,
+        "notificaciones_no_leidas": (notificaciones_no_leidas),
+        "sitios_en_proceso": sitios_en_proceso,
+        "sitios_en_revision": sitios_en_revision,
+        "sitios_aprobados": sitios_aprobados,
+        "mes_grafica": hoy.replace(
+            day=1,
+        ),
+    }
+
+    return render(
+        request,
+        "dashboard_admin/inicio_admin.html",
+        context,
+    )
 
 
 @login_required(login_url='usuarios:login')
