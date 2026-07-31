@@ -566,25 +566,72 @@
 
   </div>
   </div>
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3 px-1">
+   <div
+  class="
+    relative
+    z-50
+    mb-3
+    px-1
+  "
+>
 
-    <div>
-      <h2 class="text-lg font-bold text-gray-900">
-        Historial de movimientos
-      </h2>
+  <div>
 
-      <p class="text-sm text-gray-500 mt-0.5">
-        Consulta el detalle y estado de tus rendiciones y abonos.
-      </p>
-    </div>
+    <h2 class="text-lg font-bold text-gray-900">
+      Historial de movimientos
+    </h2>
 
-    <div class="flex justify-start sm:justify-end">
-      <details class="relative">
-    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
-      ⚙️ Columnas
-    </summary>
+    <p class="mt-0.5 text-sm text-gray-500">
+      Consulta el detalle y estado de tus rendiciones y abonos.
+    </p>
 
-    <div id="columnToggles" class="absolute right-0 mt-1 w-72 max-h-[70vh] overflow-y-auto bg-white border rounded-xl shadow-lg p-3 z-20">
+  </div>
+
+  <!-- Selector de columnas debajo del texto y a la izquierda -->
+  <div class="relative z-50 mt-3 flex justify-start">
+
+    <details class="relative z-50">
+
+      <summary
+        class="
+          inline-flex
+          cursor-pointer
+          select-none
+          items-center
+          gap-2
+          rounded-full
+          border border-slate-200
+          bg-white
+          px-3 py-1.5
+          text-sm
+          font-medium
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-50
+        "
+      >
+        ⚙️ Columnas
+      </summary>
+
+      <div
+        id="columnToggles"
+        class="
+          absolute
+          left-0
+          top-full
+          z-[999]
+          mt-2
+          max-h-[70vh]
+          w-72
+          overflow-y-auto
+          rounded-xl
+          border border-slate-200
+          bg-white
+          p-3
+          shadow-[0_20px_50px_rgba(15,23,42,0.22)]
+        "
+      >
       <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
 
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
@@ -677,7 +724,17 @@
   </div>
 
   <!-- Tabla responsive -->
-    <div class="overflow-x-auto bg-white border border-gray-200 rounded-2xl shadow-sm">
+    <div
+  class="
+    relative
+    z-0
+    overflow-x-auto
+    rounded-2xl
+    border border-gray-200
+    bg-white
+    shadow-sm
+  "
+>
     <table class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]" style="white-space: nowrap;" data-columns-table="mis-rendiciones">
      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
   <tr>

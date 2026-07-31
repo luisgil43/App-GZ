@@ -28,9 +28,11 @@ def inicio(request):
     """
     Panel principal del técnico.
 
-    La gráfica toma el estado individual del usuario autenticado desde
-    SesionFotoTecnico. De esta manera cuenta los mismos trabajos que
-    aparecen en la pantalla de Actividades asignadas.
+    La gráfica muestra únicamente los trabajos correspondientes
+    al mes de producción actual del usuario autenticado.
+
+    Los estados se toman desde SesionFotoTecnico para mantener
+    consistencia con la pantalla de actividades asignadas.
     """
 
     # ========================================================
@@ -38,7 +40,7 @@ def inicio(request):
     # ========================================================
 
     queryset_notificaciones = Notificacion.objects.filter(
-        usuario=request.user
+        usuario=request.user,
     ).order_by(
         "leido",
         "-fecha",
@@ -51,18 +53,38 @@ def inicio(request):
     ).count()
 
     # ========================================================
-    # FECHA ACTUAL
+    # FECHA Y MES ACTUAL
     # ========================================================
 
     hoy = timezone.localdate()
 
+    nombres_meses = {
+        1: "Enero",
+        2: "Febrero",
+        3: "Marzo",
+        4: "Abril",
+        5: "Mayo",
+        6: "Junio",
+        7: "Julio",
+        8: "Agosto",
+        9: "Septiembre",
+        10: "Octubre",
+        11: "Noviembre",
+        12: "Diciembre",
+    }
+
+    mes_actual_texto = f"{nombres_meses[hoy.month]} {hoy.year}"
+
     # ========================================================
-    # ASIGNACIONES DEL TÉCNICO
+    # ASIGNACIONES DEL TÉCNICO DEL MES ACTUAL
     # ========================================================
 
     asignaciones_tecnico = (
         SesionFotoTecnico.objects.filter(
             tecnico=request.user,
+            # Limita los conteos al mes que se muestra
+            # en el encabezado de la gráfica.
+            sesion__servicio__mes_produccion__iexact=(mes_actual_texto),
         )
         .select_related(
             "sesion",
@@ -72,20 +94,17 @@ def inicio(request):
     )
 
     # ========================================================
-    # CONTEOS
+    # CONTEOS DEL MES ACTUAL
     # ========================================================
 
-    # En ejecución.
     sitios_en_proceso = asignaciones_tecnico.filter(
         estado="en_proceso",
     ).count()
 
-    # Enviados al supervisor.
     sitios_en_revision = asignaciones_tecnico.filter(
         estado="en_revision_supervisor",
     ).count()
 
-    # Aprobados por el supervisor.
     sitios_aprobados = asignaciones_tecnico.filter(
         estado="aprobado_supervisor",
     ).count()
@@ -96,7 +115,7 @@ def inicio(request):
 
     context = {
         "notificaciones": notificaciones,
-        "notificaciones_no_leidas": notificaciones_no_leidas,
+        "notificaciones_no_leidas": (notificaciones_no_leidas),
         "sitios_en_proceso": sitios_en_proceso,
         "sitios_en_revision": sitios_en_revision,
         "sitios_aprobados": sitios_aprobados,
