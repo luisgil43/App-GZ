@@ -28,6 +28,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from openpyxl.drawing.image import Image as XLImage
@@ -199,29 +200,43 @@ def _dedupe_requisitos(asig, allowed_norms: set | None = None):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def configurar_requisitos(request, servicio_id):
+    from django.utils.http import url_has_allowed_host_and_scheme
+
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
     sesion = _get_or_create_sesion(servicio)
 
-    next_url = (
-        request.POST.get("next")
-        or request.GET.get("next")
-        or reverse("operaciones:listar_servicios_supervisor")
-    )
+    session_key = f"fotos_requisitos_next_{servicio_id}"
+
+    next_recibido = (request.POST.get("next") or request.GET.get("next") or "").strip()
+
+    if next_recibido and url_has_allowed_host_and_scheme(
+        url=next_recibido,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        next_url = next_recibido
+        request.session[session_key] = next_url
+    else:
+        next_url = request.session.get(session_key) or reverse(
+            "operaciones:listar_servicios_supervisor"
+        )
 
     asignaciones = list(
-        sesion.asignaciones
-        .select_related("tecnico")
-        .prefetch_related(
+        sesion.asignaciones.select_related("tecnico").prefetch_related(
             Prefetch(
                 "requisitos",
-                queryset=RequisitoFoto.objects.filter(activo=True).order_by("orden", "id")
+                queryset=RequisitoFoto.objects.filter(activo=True).order_by(
+                    "orden",
+                    "id",
+                ),
             )
         )
     )
 
     canonical = []
+
     if asignaciones and asignaciones[0].requisitos.exists():
         canonical = list(asignaciones[0].requisitos.all())
 
@@ -229,17 +244,23 @@ def configurar_requisitos(request, servicio_id):
         try:
             with transaction.atomic():
                 sesion.proyecto_especial = bool(request.POST.get("proyecto_especial"))
-                sesion.save(update_fields=["proyecto_especial"])
 
-                ids    = request.POST.getlist("id[]")
-                names  = request.POST.getlist("name[]")
+                sesion.save(
+                    update_fields=[
+                        "proyecto_especial",
+                    ]
+                )
+
+                ids = request.POST.getlist("id[]")
+                names = request.POST.getlist("name[]")
                 orders = request.POST.getlist("order[]")
-                mand   = request.POST.getlist("mandatory[]")
+                mand = request.POST.getlist("mandatory[]")
 
                 desired = []
 
                 for i, nm in enumerate(names):
                     titulo = (nm or "").strip()
+
                     if not titulo:
                         continue
 
@@ -248,15 +269,25 @@ def configurar_requisitos(request, servicio_id):
                     except Exception:
                         orden = i
 
-                    obligatorio = (mand[i] == "1") if i < len(mand) else True
+                    obligatorio = mand[i] == "1" if i < len(mand) else True
+
                     rid = ids[i] if i < len(ids) else ""
 
-                    desired.append((rid, orden, titulo, obligatorio, _norm_title(titulo)))
+                    desired.append(
+                        (
+                            rid,
+                            orden,
+                            titulo,
+                            obligatorio,
+                            _norm_title(titulo),
+                        )
+                    )
 
                 desired_norms = {x[4] for x in desired}
 
                 for a in asignaciones:
                     existentes = list(RequisitoFoto.objects.filter(tecnico_sesion=a))
+
                     by_id = {str(r.id): r for r in existentes}
 
                     by_norm = {}
@@ -271,17 +302,23 @@ def configurar_requisitos(request, servicio_id):
                             if (
                                 getattr(r, "activo", True),
                                 r.orden,
-                                r.id
+                                r.id,
                             ) < (
                                 getattr(cur, "activo", True),
                                 cur.orden,
-                                cur.id
+                                cur.id,
                             ):
                                 by_norm[key] = r
 
                     vistos_ids = set()
 
-                    for rid, orden, titulo, obligatorio, norm in desired:
+                    for (
+                        rid,
+                        orden,
+                        titulo,
+                        obligatorio,
+                        norm,
+                    ) in desired:
                         if rid and rid in by_id:
                             r = by_id[rid]
                             collision = by_norm.get(norm)
@@ -298,7 +335,14 @@ def configurar_requisitos(request, servicio_id):
                                     c.orden = orden
                                     upds.append("orden")
 
-                                if getattr(c, "titulo_norm", None) != norm:
+                                if (
+                                    getattr(
+                                        c,
+                                        "titulo_norm",
+                                        None,
+                                    )
+                                    != norm
+                                ):
                                     c.titulo_norm = norm
                                     upds.append("titulo_norm")
 
@@ -309,11 +353,20 @@ def configurar_requisitos(request, servicio_id):
                                 if upds:
                                     c.save(update_fields=upds)
 
-                                if getattr(r, "activo", True):
+                                if getattr(
+                                    r,
+                                    "activo",
+                                    True,
+                                ):
                                     r.activo = False
-                                    r.save(update_fields=["activo"])
+                                    r.save(
+                                        update_fields=[
+                                            "activo",
+                                        ]
+                                    )
 
                                 vistos_ids.add(str(c.id))
+
                                 by_norm[norm] = c
                                 continue
 
@@ -331,7 +384,14 @@ def configurar_requisitos(request, servicio_id):
                                 r.obligatorio = obligatorio
                                 cambios.append("obligatorio")
 
-                            if getattr(r, "titulo_norm", None) != norm:
+                            if (
+                                getattr(
+                                    r,
+                                    "titulo_norm",
+                                    None,
+                                )
+                                != norm
+                            ):
                                 r.titulo_norm = norm
                                 cambios.append("titulo_norm")
 
@@ -343,6 +403,7 @@ def configurar_requisitos(request, servicio_id):
                                 r.save(update_fields=cambios)
 
                             vistos_ids.add(str(r.id))
+
                             by_norm[norm] = r
 
                         else:
@@ -353,17 +414,31 @@ def configurar_requisitos(request, servicio_id):
 
                                 if exist.obligatorio != obligatorio:
                                     exist.obligatorio = obligatorio
+
                                     cambios.append("obligatorio")
 
                                 if exist.orden != orden:
                                     exist.orden = orden
                                     cambios.append("orden")
 
-                                if getattr(exist, "titulo_norm", None) != norm:
+                                if (
+                                    getattr(
+                                        exist,
+                                        "titulo_norm",
+                                        None,
+                                    )
+                                    != norm
+                                ):
                                     exist.titulo_norm = norm
                                     cambios.append("titulo_norm")
 
-                                if hasattr(exist, "activo") and not exist.activo:
+                                if (
+                                    hasattr(
+                                        exist,
+                                        "activo",
+                                    )
+                                    and not exist.activo
+                                ):
                                     exist.activo = True
                                     cambios.append("activo")
 
@@ -384,20 +459,39 @@ def configurar_requisitos(request, servicio_id):
                                 )
 
                                 vistos_ids.add(str(nuevo.id))
+
                                 by_norm[norm] = nuevo
 
                     for r in existentes:
-                        if str(r.id) not in vistos_ids and getattr(r, "activo", True):
+                        if str(r.id) not in vistos_ids and getattr(
+                            r,
+                            "activo",
+                            True,
+                        ):
                             r.activo = False
-                            r.save(update_fields=["activo"])
+                            r.save(
+                                update_fields=[
+                                    "activo",
+                                ]
+                            )
 
-                    _dedupe_requisitos(a, allowed_norms=desired_norms)
+                    _dedupe_requisitos(
+                        a,
+                        allowed_norms=desired_norms,
+                    )
 
-            messages.success(request, "Requerimientos actualizados.")
+            messages.success(
+                request,
+                "Requerimientos actualizados.",
+            )
+
             return redirect(next_url)
 
         except Exception as e:
-            messages.error(request, f"No se pudo guardar la lista: {e}")
+            messages.error(
+                request,
+                f"No se pudo guardar la lista: {e}",
+            )
 
     return render(
         request,
