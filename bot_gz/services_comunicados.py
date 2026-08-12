@@ -56,14 +56,16 @@ def _usuarios_con_telegram_activo():
 
 def obtener_destinatarios_comunicados() -> dict:
     """
-    Separa usuarios con Telegram activo en dos grupos:
+    Separa usuarios con Telegram activo en dos grupos.
 
     TÉCNICOS:
-    - Usuarios que poseen el rol 'usuario'.
+    - Usuarios cuyo único rol es 'usuario'.
 
     ADMINISTRATIVOS:
     - Superusuarios.
-    - Usuarios que NO poseen el rol 'usuario'.
+    - Usuarios que poseen cualquier rol distinto de 'usuario'.
+    - Si una persona tiene 'usuario' + cualquier otro rol,
+      se considera administrativo.
 
     Cada persona aparece una sola vez.
     """
@@ -75,25 +77,73 @@ def obtener_destinatarios_comunicados() -> dict:
 
     for usuario in usuarios:
 
-        roles = {(rol.nombre or "").strip().lower() for rol in usuario.roles.all()}
+        roles = {
+            (rol.nombre or "").strip().lower()
+            for rol in usuario.roles.all()
+            if (rol.nombre or "").strip()
+        }
 
-        # Superusuario siempre se considera administrativo.
+        # ====================================================
+        # SUPERUSUARIO
+        # ====================================================
+        #
+        # Siempre administrativo, independientemente
+        # de los roles que tenga asignados.
+        # ====================================================
+
         if usuario.is_superuser:
             administrativos.append(usuario)
             continue
 
-        # Técnico.
-        if "usuario" in roles:
-            tecnicos.append(usuario)
+        # ====================================================
+        # ROLES ADMINISTRATIVOS
+        # ====================================================
+        #
+        # Cualquier rol diferente de "usuario" convierte
+        # a la persona en administrativa.
+        #
+        # Ejemplo:
+        #
+        # usuario + facturacion
+        # usuario + supervisor
+        # usuario + rrhh
+        #
+        # => ADMINISTRATIVO
+        # ====================================================
 
-        # Cualquier otro rol se considera administrativo.
-        else:
+        roles_administrativos = roles - {"usuario"}
+
+        if roles_administrativos:
             administrativos.append(usuario)
+            continue
+
+        # ====================================================
+        # TÉCNICO
+        # ====================================================
+        #
+        # Solo se considera técnico cuando su único
+        # rol real es "usuario".
+        # ====================================================
+
+        if roles == {"usuario"}:
+            tecnicos.append(usuario)
+            continue
+
+        # ====================================================
+        # SIN ROL RECONOCIBLE
+        # ====================================================
+        #
+        # Si por alguna razón existe un usuario con Telegram
+        # activo pero sin roles, lo tratamos como administrativo
+        # para no clasificarlo falsamente como técnico.
+        # ====================================================
+
+        administrativos.append(usuario)
 
     return {
         "tecnicos": tecnicos,
         "administrativos": administrativos,
-        "total": len(tecnicos) + len(administrativos),
+        "total": (len(tecnicos) + len(administrativos)),
     }
 
 
