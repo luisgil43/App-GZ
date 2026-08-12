@@ -1,0 +1,2391 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+
+{% block title %}Comunicados por Telegram{% endblock %}
+
+{% block dashboard_content %}
+
+<style>
+  /* ======================================================== */
+  /* PANTALLA COMUNICADOS                                     */
+  /* ======================================================== */
+
+  #comunicados-page-scroll {
+    height: calc(100vh - 4.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  #comunicados-page-scroll::-webkit-scrollbar {
+    width: 9px;
+  }
+
+  #comunicados-page-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  #comunicados-page-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  #comunicados-page-scroll::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+
+
+  /* ======================================================== */
+  /* LISTAS DE DESTINATARIOS                                  */
+  /* ======================================================== */
+
+  .destinatarios-scroll {
+    max-height: 20rem;
+    overflow-y: auto;
+
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+  }
+
+  .destinatarios-scroll::-webkit-scrollbar {
+    width: 7px;
+  }
+
+  .destinatarios-scroll::-webkit-scrollbar-track {
+    background: #f8fafc;
+  }
+
+  .destinatarios-scroll::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #cbd5e1;
+  }
+
+  .destinatarios-scroll::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+
+  /* ======================================================== */
+  /* CAMPOS                                                   */
+  /* ======================================================== */
+
+  .comunicado-input {
+    width: 100%;
+
+    border: 1px solid #cbd5e1;
+    border-radius: 0.9rem;
+
+    background: #ffffff;
+
+    padding: 0.75rem 0.9rem;
+
+    color: #1e293b;
+
+    outline: none;
+
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .comunicado-input:focus {
+    border-color: #22d3ee;
+
+    box-shadow:
+      0 0 0 3px rgba(34, 211, 238, 0.14);
+  }
+
+
+  /* ======================================================== */
+  /* HISTORIAL                                                */
+  /* ======================================================== */
+
+  .comunicado-message {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+
+  /* ======================================================== */
+  /* MÓVIL                                                    */
+  /* ======================================================== */
+
+  @media (max-width: 640px) {
+    #comunicados-page-scroll {
+      height: calc(100vh - 4rem);
+    }
+  }
+</style>
+
+
+<div
+  id="comunicados-page-scroll"
+  class="
+    -mx-3
+    -my-4
+    bg-slate-50
+    px-3
+    py-4
+
+    sm:-mx-5
+    sm:-my-6
+    sm:px-5
+    sm:py-6
+
+    lg:-mx-7
+    lg:px-7
+  "
+>
+
+  <div class="mx-auto w-full max-w-7xl space-y-6">
+
+
+    <!-- ====================================================== -->
+    <!-- TARJETA PRINCIPAL                                      -->
+    <!-- ====================================================== -->
+
+    <div
+      class="
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+        sm:rounded-3xl
+      "
+    >
+
+
+      <!-- ==================================================== -->
+      <!-- ENCABEZADO                                           -->
+      <!-- ==================================================== -->
+
+      <div
+        class="
+          border-b border-slate-100
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-cyan-50/40
+          px-4 py-5
+          sm:px-6 sm:py-6
+        "
+      >
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-4
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+
+          <div class="flex items-center gap-3">
+
+            <div
+              class="
+                flex
+                h-12 w-12
+                shrink-0
+                items-center
+                justify-center
+                rounded-2xl
+                border border-cyan-100
+                bg-gradient-to-br
+                from-cyan-50
+                to-blue-100
+                text-2xl
+                shadow-sm
+                sm:h-14
+                sm:w-14
+                sm:text-3xl
+              "
+            >
+              📢
+            </div>
+
+            <div>
+
+              <h1
+                class="
+                  text-2xl
+                  font-black
+                  tracking-tight
+                  text-slate-900
+                  sm:text-3xl
+                "
+              >
+                Comunicados por Telegram
+              </h1>
+
+              <p class="mt-1 text-sm text-slate-500">
+                Envía información oficial a los usuarios de GZ Services
+                que tengan Telegram habilitado.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div class="shrink-0">
+
+            <span
+              class="
+                inline-flex
+                items-center
+                gap-2
+                rounded-xl
+                border border-blue-200
+                bg-blue-50
+                px-3 py-2
+                text-sm
+                font-black
+                text-blue-700
+              "
+            >
+              👥 {{ total_destinatarios }}
+              disponible{{ total_destinatarios|pluralize }}
+            </span>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- CONTENIDO                                            -->
+      <!-- ==================================================== -->
+
+      <div class="px-4 py-5 sm:px-6 sm:py-6">
+
+        {% if total_destinatarios == 0 %}
+
+          <div
+            class="
+              mb-6
+              rounded-2xl
+              border border-amber-200
+              bg-amber-50
+              p-4
+              text-sm
+              font-medium
+              text-amber-800
+            "
+          >
+            ⚠️ Actualmente no hay usuarios activos con Telegram habilitado.
+          </div>
+
+        {% endif %}
+
+
+        <form
+          method="post"
+          id="comunicado-form"
+        >
+          {% csrf_token %}
+
+
+          <!-- ================================================= -->
+          <!-- DESTINATARIOS                                     -->
+          <!-- ================================================= -->
+
+          <section class="mb-8">
+
+            <div
+              class="
+                mb-4
+                flex
+                flex-col
+                gap-3
+                sm:flex-row
+                sm:items-end
+                sm:justify-between
+              "
+            >
+
+              <div>
+
+                <div class="flex items-center gap-2">
+
+                  <div
+                    class="
+                      flex
+                      h-9 w-9
+                      items-center
+                      justify-center
+                      rounded-xl
+                      bg-slate-100
+                      text-lg
+                    "
+                  >
+                    👥
+                  </div>
+
+                  <div>
+
+                    <h2 class="font-black text-slate-800">
+                      Destinatarios
+                    </h2>
+
+                    <p class="text-xs text-slate-500">
+                      Todos aparecen seleccionados inicialmente.
+                      Puedes retirar personas o grupos completos.
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div class="flex flex-wrap gap-2">
+
+                <button
+                  type="button"
+                  id="select-all"
+                  class="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    border border-blue-200
+                    bg-blue-50
+                    px-3 py-2
+                    text-xs
+                    font-bold
+                    text-blue-700
+                    transition
+                    hover:bg-blue-100
+                  "
+                >
+                  ✅ Seleccionar todos
+                </button>
+
+
+                <button
+                  type="button"
+                  id="clear-all"
+                  class="
+                    inline-flex
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    border border-slate-300
+                    bg-white
+                    px-3 py-2
+                    text-xs
+                    font-bold
+                    text-slate-600
+                    transition
+                    hover:bg-slate-100
+                  "
+                >
+                  ⬜ Quitar todos
+                </button>
+
+              </div>
+
+            </div>
+
+
+            <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+
+              <!-- ============================================= -->
+              <!-- ADMINISTRATIVOS                               -->
+              <!-- ============================================= -->
+
+              <div
+                class="
+                  overflow-hidden
+                  rounded-2xl
+                  border border-slate-200
+                  bg-white
+                  shadow-sm
+                "
+              >
+
+                <div
+                  class="
+                    flex
+                    items-center
+                    justify-between
+                    gap-3
+                    border-b border-slate-200
+                    bg-gradient-to-r
+                    from-slate-50
+                    to-white
+                    px-4 py-3
+                  "
+                >
+
+                  <div>
+
+                    <div class="font-black text-slate-800">
+                      🧑‍💼 Administrativos
+                    </div>
+
+                    <div class="mt-0.5 text-xs text-slate-500">
+                      {{ administrativos|length }} con Telegram activo
+                    </div>
+
+                  </div>
+
+
+                  <label
+                    class="
+                      inline-flex
+                      cursor-pointer
+                      select-none
+                      items-center
+                      gap-2
+                      text-xs
+                      font-bold
+                      text-slate-600
+                    "
+                  >
+
+                    <input
+                      type="checkbox"
+                      id="toggle-administrativos"
+                      class="accent-cyan-600"
+                      {% if administrativos %}checked{% endif %}
+                    >
+
+                    <span>Todos</span>
+
+                  </label>
+
+                </div>
+
+
+                <div
+                  class="
+                    destinatarios-scroll
+                    divide-y
+                    divide-slate-100
+                  "
+                >
+
+                  {% for u in administrativos %}
+
+                    <label
+                      class="
+                        flex
+                        cursor-pointer
+                        items-center
+                        gap-3
+                        px-4 py-3
+                        transition
+                        hover:bg-cyan-50/40
+                      "
+                    >
+
+                      <input
+                        type="checkbox"
+                        name="destinatarios"
+                        value="{{ u.id }}"
+                        data-group="administrativos"
+                        class="
+                          destinatario-checkbox
+                          shrink-0
+                          accent-cyan-600
+                        "
+                        {% if u.id in seleccionados_ids %}checked{% endif %}
+                      >
+
+
+                      <div class="min-w-0 flex-1">
+
+                        <div
+                          class="
+                            truncate
+                            text-sm
+                            font-bold
+                            text-slate-800
+                          "
+                        >
+                          {% if u.get_full_name %}
+                            {{ u.get_full_name }}
+                          {% else %}
+                            {{ u.username }}
+                          {% endif %}
+                        </div>
+
+
+                        <div class="mt-0.5 truncate text-xs text-slate-500">
+
+                          {% if u.is_superuser %}
+                            Superusuario
+                            {% if u.roles.all %}
+                              ·
+                            {% endif %}
+                          {% endif %}
+
+                          {% for rol in u.roles.all %}
+                            {{ rol.nombre }}
+                            {% if not forloop.last %}
+                              ,
+                            {% endif %}
+                          {% empty %}
+                            {% if not u.is_superuser %}
+                              Administrativo
+                            {% endif %}
+                          {% endfor %}
+
+                        </div>
+
+                      </div>
+
+
+                      <span
+                        class="
+                          shrink-0
+                          rounded-full
+                          border border-emerald-100
+                          bg-emerald-50
+                          px-2 py-0.5
+                          text-[10px]
+                          font-bold
+                          text-emerald-700
+                        "
+                      >
+                        Telegram
+                      </span>
+
+                    </label>
+
+                  {% empty %}
+
+                    <div
+                      class="
+                        px-4
+                        py-10
+                        text-center
+                        text-sm
+                        text-slate-500
+                      "
+                    >
+                      No hay administrativos con Telegram activo.
+                    </div>
+
+                  {% endfor %}
+
+                </div>
+
+              </div>
+
+
+              <!-- ============================================= -->
+              <!-- TÉCNICOS                                      -->
+              <!-- ============================================= -->
+
+              <div
+                class="
+                  overflow-hidden
+                  rounded-2xl
+                  border border-slate-200
+                  bg-white
+                  shadow-sm
+                "
+              >
+
+                <div
+                  class="
+                    flex
+                    items-center
+                    justify-between
+                    gap-3
+                    border-b border-slate-200
+                    bg-gradient-to-r
+                    from-slate-50
+                    to-white
+                    px-4 py-3
+                  "
+                >
+
+                  <div>
+
+                    <div class="font-black text-slate-800">
+                      👷 Técnicos
+                    </div>
+
+                    <div class="mt-0.5 text-xs text-slate-500">
+                      {{ tecnicos|length }} con Telegram activo
+                    </div>
+
+                  </div>
+
+
+                  <label
+                    class="
+                      inline-flex
+                      cursor-pointer
+                      select-none
+                      items-center
+                      gap-2
+                      text-xs
+                      font-bold
+                      text-slate-600
+                    "
+                  >
+
+                    <input
+                      type="checkbox"
+                      id="toggle-tecnicos"
+                      class="accent-cyan-600"
+                      {% if tecnicos %}checked{% endif %}
+                    >
+
+                    <span>Todos</span>
+
+                  </label>
+
+                </div>
+
+
+                <div
+                  class="
+                    destinatarios-scroll
+                    divide-y
+                    divide-slate-100
+                  "
+                >
+
+                  {% for u in tecnicos %}
+
+                    <label
+                      class="
+                        flex
+                        cursor-pointer
+                        items-center
+                        gap-3
+                        px-4 py-3
+                        transition
+                        hover:bg-cyan-50/40
+                      "
+                    >
+
+                      <input
+                        type="checkbox"
+                        name="destinatarios"
+                        value="{{ u.id }}"
+                        data-group="tecnicos"
+                        class="
+                          destinatario-checkbox
+                          shrink-0
+                          accent-cyan-600
+                        "
+                        {% if u.id in seleccionados_ids %}checked{% endif %}
+                      >
+
+
+                      <div class="min-w-0 flex-1">
+
+                        <div
+                          class="
+                            truncate
+                            text-sm
+                            font-bold
+                            text-slate-800
+                          "
+                        >
+                          {% if u.get_full_name %}
+                            {{ u.get_full_name }}
+                          {% else %}
+                            {{ u.username }}
+                          {% endif %}
+                        </div>
+
+                        <div class="mt-0.5 text-xs text-slate-500">
+                          Técnico
+                        </div>
+
+                      </div>
+
+
+                      <span
+                        class="
+                          shrink-0
+                          rounded-full
+                          border border-emerald-100
+                          bg-emerald-50
+                          px-2 py-0.5
+                          text-[10px]
+                          font-bold
+                          text-emerald-700
+                        "
+                      >
+                        Telegram
+                      </span>
+
+                    </label>
+
+                  {% empty %}
+
+                    <div
+                      class="
+                        px-4
+                        py-10
+                        text-center
+                        text-sm
+                        text-slate-500
+                      "
+                    >
+                      No hay técnicos con Telegram activo.
+                    </div>
+
+                  {% endfor %}
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- =============================================== -->
+            <!-- RESUMEN SELECCIÓN                               -->
+            <!-- =============================================== -->
+
+            <div
+              class="
+                mt-4
+                flex
+                flex-col
+                gap-2
+                rounded-xl
+                border border-blue-100
+                bg-blue-50
+                p-3
+                sm:flex-row
+                sm:items-center
+                sm:justify-between
+              "
+            >
+
+              <div class="text-xs font-medium text-slate-600">
+                Solo aparecen usuarios activos con Telegram habilitado.
+              </div>
+
+              <div class="text-sm font-black text-blue-800">
+                Seleccionados:
+                <span id="selected-count">0</span>
+                de
+                {{ total_destinatarios }}
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- ================================================= -->
+          <!-- INFORMACIÓN DEL COMUNICADO                         -->
+          <!-- ================================================= -->
+
+          <section
+            class="
+              mb-8
+              rounded-2xl
+              border border-slate-200
+              bg-slate-50/60
+              p-4
+              sm:p-5
+            "
+          >
+
+            <div class="mb-5">
+
+              <div class="flex items-center gap-2">
+
+                <div
+                  class="
+                    flex
+                    h-9 w-9
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-cyan-100
+                  "
+                >
+                  ✍️
+                </div>
+
+                <div>
+
+                  <h2 class="font-black text-slate-800">
+                    Contenido del comunicado
+                  </h2>
+
+                  <p class="text-xs text-slate-500">
+                    Este será el texto que recibirán por Telegram.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- Título -->
+
+            <div class="mb-5">
+
+              <label
+                for="titulo"
+                class="
+                  mb-1.5
+                  block
+                  text-sm
+                  font-bold
+                  text-slate-700
+                "
+              >
+                Título del comunicado
+              </label>
+
+              <input
+                type="text"
+                name="titulo"
+                id="titulo"
+                value="{{ titulo }}"
+                maxlength="255"
+                required
+                placeholder="Ej: Nómina agosto pagada"
+                class="comunicado-input"
+              >
+
+            </div>
+
+
+            <!-- Mensaje -->
+
+            <div>
+
+              <label
+                for="mensaje"
+                class="
+                  mb-1.5
+                  block
+                  text-sm
+                  font-bold
+                  text-slate-700
+                "
+              >
+                Mensaje
+              </label>
+
+              <textarea
+                name="mensaje"
+                id="mensaje"
+                rows="7"
+                required
+                placeholder="Escribe aquí el comunicado..."
+                class="
+                  comunicado-input
+                  resize-y
+                "
+              >{{ mensaje }}</textarea>
+
+              <div class="mt-1.5 text-xs text-slate-500">
+                Se enviará únicamente a los destinatarios seleccionados.
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- ================================================= -->
+          <!-- VISTA PREVIA                                      -->
+          <!-- ================================================= -->
+
+          <section class="mb-6">
+
+            <div class="mb-2 text-sm font-black text-slate-700">
+              Vista previa
+            </div>
+
+
+            <div
+              class="
+                rounded-2xl
+                border border-slate-200
+                bg-gradient-to-br
+                from-slate-50
+                to-white
+                p-5
+                shadow-sm
+              "
+            >
+
+              <div class="font-black text-slate-800">
+                📢 COMUNICADO MILTEL
+              </div>
+
+
+              <div
+                id="preview-title"
+                class="
+                  mt-4
+                  text-base
+                  font-black
+                  text-slate-900
+                "
+              >
+                Título del comunicado
+              </div>
+
+
+              <div
+                id="preview-message"
+                class="
+                  comunicado-message
+                  mt-4
+                  whitespace-pre-wrap
+                  text-sm
+                  leading-6
+                  text-slate-700
+                "
+              >
+                El mensaje aparecerá aquí.
+              </div>
+
+
+              <div
+                class="
+                  mt-5
+                  border-t border-slate-200
+                  pt-3
+                  text-xs
+                  font-bold
+                  text-slate-500
+                "
+              >
+                GRUPO GZS
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- ================================================= -->
+          <!-- ADVERTENCIA                                       -->
+          <!-- ================================================= -->
+
+          <div
+            class="
+              mb-6
+              rounded-2xl
+              border border-red-200
+              bg-red-50
+              p-4
+              text-sm
+              text-red-800
+            "
+          >
+
+            <strong>Importante:</strong>
+
+            este comunicado será enviado a
+
+            <strong id="warning-selected-count">0</strong>
+
+            usuario<span id="warning-selected-plural">s</span>
+            seleccionado<span id="warning-selected-plural-2">s</span>.
+
+          </div>
+
+
+          <!-- ================================================= -->
+          <!-- BOTONES                                           -->
+          <!-- ================================================= -->
+
+          <div
+            class="
+              flex
+              flex-col-reverse
+              gap-3
+              border-t border-slate-100
+              pt-5
+              sm:flex-row
+              sm:justify-end
+            "
+          >
+
+            <button
+              type="button"
+              onclick="history.back()"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                border border-slate-300
+                bg-white
+                px-5 py-2.5
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              Cancelar
+            </button>
+
+
+            <button
+              type="button"
+              id="btn-open-confirm"
+              {% if total_destinatarios == 0 %}disabled{% endif %}
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                px-5 py-2.5
+                text-sm
+                font-black
+                shadow-md
+                transition
+
+                {% if total_destinatarios == 0 %}
+                  cursor-not-allowed
+                  bg-slate-300
+                  text-white
+                {% else %}
+                  bg-gradient-to-r
+                  from-blue-600
+                  to-cyan-600
+                  text-white
+                  hover:-translate-y-0.5
+                  hover:shadow-lg
+                {% endif %}
+              "
+            >
+              📢 Enviar comunicado
+            </button>
+
+          </div>
+
+        </form>
+
+      </div>
+
+    </div>
+
+
+
+    <!-- ====================================================== -->
+    <!-- HISTORIAL DE COMUNICADOS                               -->
+    <!-- ====================================================== -->
+
+    <div
+      class="
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+        sm:rounded-3xl
+      "
+    >
+
+      <!-- Header historial -->
+
+      <div
+        class="
+          border-b border-slate-200
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-indigo-50/40
+          px-4 py-5
+          sm:px-6
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <div
+            class="
+              flex
+              h-11 w-11
+              shrink-0
+              items-center
+              justify-center
+              rounded-2xl
+              border border-indigo-100
+              bg-indigo-50
+              text-xl
+            "
+          >
+            🗂️
+          </div>
+
+          <div>
+
+            <h2
+              class="
+                text-lg
+                font-black
+                text-slate-900
+                sm:text-xl
+              "
+            >
+              Historial de comunicados
+            </h2>
+
+            <p class="mt-0.5 text-xs text-slate-500">
+              Comunicados enviados anteriormente desde la plataforma.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- Tabla historial -->
+
+      <div class="overflow-x-auto">
+
+        <table class="w-full min-w-[900px] text-sm">
+
+          <thead
+            class="
+              border-b border-slate-200
+              bg-slate-50
+              text-left
+              text-xs
+              font-black
+              uppercase
+              tracking-wide
+              text-slate-500
+            "
+          >
+
+            <tr>
+
+              <th class="px-4 py-3 sm:px-6">
+                Fecha
+              </th>
+
+              <th class="px-4 py-3">
+                Título
+              </th>
+
+              <th class="px-4 py-3">
+                Mensaje
+              </th>
+
+              <th class="px-4 py-3">
+                Enviado por
+              </th>
+
+              <th class="px-4 py-3 text-center">
+                Destinatarios
+              </th>
+
+              <th class="px-4 py-3 text-center">
+                Resultado
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody class="divide-y divide-slate-100">
+
+            {% for comunicado in pagina_comunicados %}
+
+              <tr
+                class="
+                  transition
+                  hover:bg-cyan-50/30
+                "
+              >
+
+                <!-- Fecha -->
+
+                <td
+                  class="
+                    whitespace-nowrap
+                    px-4 py-4
+                    text-xs
+                    font-medium
+                    text-slate-500
+                    sm:px-6
+                  "
+                >
+                  {% if comunicado.creado_en %}
+                    {{ comunicado.creado_en|date:"d/m/Y H:i" }}
+                  {% elif comunicado.fecha %}
+                    {{ comunicado.fecha|date:"d/m/Y H:i" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+
+                <!-- Título -->
+
+                <td class="px-4 py-4">
+
+                  <div class="font-black text-slate-800">
+                    {{ comunicado.titulo|default:"Sin título" }}
+                  </div>
+
+                </td>
+
+
+                <!-- Mensaje -->
+
+                <td class="px-4 py-4">
+
+                  <div
+                    class="
+                      comunicado-message
+                      max-w-xl
+                      whitespace-pre-line
+                      text-xs
+                      leading-5
+                      text-slate-600
+                    "
+                  >
+                    {{ comunicado.mensaje|default:"—"|truncatechars:260 }}
+                  </div>
+
+                </td>
+
+
+                <!-- Actor -->
+
+                <td class="px-4 py-4">
+
+                  {% if comunicado.actor %}
+
+                    <div class="font-semibold text-slate-700">
+                      {{ comunicado.actor.get_full_name|default:comunicado.actor.username }}
+                    </div>
+
+                  {% elif comunicado.enviado_por %}
+
+                    <div class="font-semibold text-slate-700">
+                      {{ comunicado.enviado_por.get_full_name|default:comunicado.enviado_por.username }}
+                    </div>
+
+                  {% else %}
+
+                    <span class="text-slate-400">
+                      Sistema
+                    </span>
+
+                  {% endif %}
+
+                </td>
+
+
+                <!-- Destinatarios -->
+
+                <td class="px-4 py-4 text-center">
+
+                  <span
+                    class="
+                      inline-flex
+                      min-w-[42px]
+                      items-center
+                      justify-center
+                      rounded-full
+                      border border-blue-100
+                      bg-blue-50
+                      px-2.5 py-1
+                      text-xs
+                      font-black
+                      text-blue-700
+                    "
+                  >
+                    {{ comunicado.total_destinatarios|default:"0" }}
+                  </span>
+
+                </td>
+
+
+                <!-- Resultado -->
+
+                <td class="px-4 py-4">
+
+                  <div
+                    class="
+                      flex
+                      items-center
+                      justify-center
+                      gap-2
+                    "
+                  >
+
+                    {% if comunicado.enviados %}
+
+                      <span
+                        class="
+                          inline-flex
+                          items-center
+                          gap-1
+                          rounded-full
+                          border border-emerald-100
+                          bg-emerald-50
+                          px-2.5 py-1
+                          text-[11px]
+                          font-black
+                          text-emerald-700
+                        "
+                      >
+                        ✅ {{ comunicado.enviados }}
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if comunicado.fallidos %}
+
+                      <span
+                        class="
+                          inline-flex
+                          items-center
+                          gap-1
+                          rounded-full
+                          border border-red-100
+                          bg-red-50
+                          px-2.5 py-1
+                          text-[11px]
+                          font-black
+                          text-red-700
+                        "
+                      >
+                        ❌ {{ comunicado.fallidos }}
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if not comunicado.enviados and not comunicado.fallidos %}
+
+                      <span class="text-xs text-slate-400">
+                        —
+                      </span>
+
+                    {% endif %}
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+
+                <td
+                  colspan="6"
+                  class="
+                    px-6
+                    py-12
+                    text-center
+                  "
+                >
+
+                  <div
+                    class="
+                      mx-auto
+                      flex
+                      h-12 w-12
+                      items-center
+                      justify-center
+                      rounded-full
+                      bg-slate-100
+                      text-xl
+                    "
+                  >
+                    📭
+                  </div>
+
+                  <div
+                    class="
+                      mt-3
+                      font-black
+                      text-slate-700
+                    "
+                  >
+                    No hay comunicados enviados
+                  </div>
+
+                  <p class="mt-1 text-xs text-slate-500">
+                    Los comunicados enviados aparecerán aquí.
+                  </p>
+
+                </td>
+
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- PAGINACIÓN HISTORIAL                                 -->
+      <!-- ==================================================== -->
+
+      {% if pagina_comunicados.paginator %}
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-3
+            border-t border-slate-200
+            bg-slate-50
+            px-4 py-4
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+            sm:px-6
+          "
+        >
+
+          <div class="text-xs font-medium text-slate-500">
+
+            Página
+            <strong class="text-slate-700">
+              {{ pagina_comunicados.number }}
+            </strong>
+
+            de
+
+            <strong class="text-slate-700">
+              {{ pagina_comunicados.paginator.num_pages }}
+            </strong>
+
+            ·
+
+            {{ pagina_comunicados.paginator.count }}
+            comunicado{{ pagina_comunicados.paginator.count|pluralize }}
+
+          </div>
+
+
+          <div class="flex flex-wrap items-center gap-2">
+
+            {% if pagina_comunicados.has_previous %}
+
+              <a
+                href="?page_comunicados=1"
+                class="
+                  inline-flex
+                  h-9
+                  items-center
+                  justify-center
+                  rounded-lg
+                  border border-slate-300
+                  bg-white
+                  px-3
+                  text-xs
+                  font-bold
+                  text-slate-600
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                « Primero
+              </a>
+
+
+              <a
+                href="?page_comunicados={{ pagina_comunicados.previous_page_number }}"
+                class="
+                  inline-flex
+                  h-9
+                  items-center
+                  justify-center
+                  rounded-lg
+                  border border-slate-300
+                  bg-white
+                  px-3
+                  text-xs
+                  font-bold
+                  text-slate-600
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                ‹ Anterior
+              </a>
+
+            {% endif %}
+
+
+            <span
+              class="
+                inline-flex
+                h-9
+                items-center
+                justify-center
+                rounded-lg
+                border border-cyan-200
+                bg-cyan-50
+                px-4
+                text-xs
+                font-black
+                text-cyan-800
+              "
+            >
+              {{ pagina_comunicados.number }}
+              /
+              {{ pagina_comunicados.paginator.num_pages }}
+            </span>
+
+
+            {% if pagina_comunicados.has_next %}
+
+              <a
+                href="?page_comunicados={{ pagina_comunicados.next_page_number }}"
+                class="
+                  inline-flex
+                  h-9
+                  items-center
+                  justify-center
+                  rounded-lg
+                  border border-slate-300
+                  bg-white
+                  px-3
+                  text-xs
+                  font-bold
+                  text-slate-600
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                Siguiente ›
+              </a>
+
+
+              <a
+                href="?page_comunicados={{ pagina_comunicados.paginator.num_pages }}"
+                class="
+                  inline-flex
+                  h-9
+                  items-center
+                  justify-center
+                  rounded-lg
+                  border border-slate-300
+                  bg-white
+                  px-3
+                  text-xs
+                  font-bold
+                  text-slate-600
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                Último »
+              </a>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <!-- Espacio inferior para que el último contenido no quede pegado -->
+    <div class="h-6"></div>
+
+  </div>
+
+</div>
+
+
+
+<!-- ========================================================= -->
+<!-- MODAL DE CONFIRMACIÓN                                     -->
+<!-- ========================================================= -->
+
+<div
+  id="confirm-modal"
+  class="fixed inset-0 z-[80] hidden"
+>
+
+  <div
+    id="confirm-backdrop"
+    class="
+      absolute
+      inset-0
+      bg-black/40
+      backdrop-blur-[2px]
+    "
+  ></div>
+
+
+  <div
+    class="
+      relative
+      flex
+      h-full
+      w-full
+      items-center
+      justify-center
+      p-4
+    "
+  >
+
+    <div
+      class="
+        w-full
+        max-w-md
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-2xl
+      "
+    >
+
+      <div
+        class="
+          border-b border-slate-100
+          bg-slate-50
+          px-5 py-4
+        "
+      >
+
+        <h2
+          class="
+            text-lg
+            font-black
+            text-slate-900
+          "
+        >
+          📢 Confirmar comunicado
+        </h2>
+
+      </div>
+
+
+      <div class="p-5">
+
+        <p class="text-sm leading-6 text-slate-600">
+
+          Este mensaje será enviado por Telegram a
+
+          <strong
+            id="modal-selected-count"
+            class="text-slate-900"
+          >
+            0
+          </strong>
+
+          usuario<span id="modal-selected-plural">s</span>.
+
+        </p>
+
+
+        <div
+          class="
+            mt-4
+            rounded-xl
+            border border-amber-200
+            bg-amber-50
+            p-3
+            text-xs
+            leading-5
+            text-amber-800
+          "
+        >
+          ⚠️ Verifica el título, mensaje y destinatarios antes de continuar.
+        </div>
+
+
+        <p
+          class="
+            mt-4
+            text-sm
+            font-black
+            text-red-600
+          "
+        >
+          ¿Deseas continuar?
+        </p>
+
+
+        <div
+          class="
+            mt-6
+            flex
+            justify-end
+            gap-2
+          "
+        >
+
+          <button
+            type="button"
+            id="btn-cancel-confirm"
+            class="
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4 py-2
+              text-sm
+              font-bold
+              text-slate-600
+              transition
+              hover:bg-slate-100
+            "
+          >
+            Cancelar
+          </button>
+
+
+          <button
+            type="button"
+            id="btn-confirm-send"
+            class="
+              rounded-xl
+              bg-gradient-to-r
+              from-blue-600
+              to-cyan-600
+              px-4 py-2
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:shadow-lg
+            "
+          >
+            Sí, enviar
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+
+<!-- ========================================================= -->
+<!-- JAVASCRIPT                                                -->
+<!-- ========================================================= -->
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+  const form = document.getElementById('comunicado-form');
+
+  const titulo = document.getElementById('titulo');
+  const mensaje = document.getElementById('mensaje');
+
+  const previewTitle =
+    document.getElementById('preview-title');
+
+  const previewMessage =
+    document.getElementById('preview-message');
+
+  const modal =
+    document.getElementById('confirm-modal');
+
+  const backdrop =
+    document.getElementById('confirm-backdrop');
+
+  const openBtn =
+    document.getElementById('btn-open-confirm');
+
+  const cancelBtn =
+    document.getElementById('btn-cancel-confirm');
+
+  const confirmBtn =
+    document.getElementById('btn-confirm-send');
+
+  const destinationChecks = Array.from(
+    document.querySelectorAll('.destinatario-checkbox')
+  );
+
+  const selectedCount =
+    document.getElementById('selected-count');
+
+  const warningSelectedCount =
+    document.getElementById('warning-selected-count');
+
+  const warningSelectedPlural =
+    document.getElementById('warning-selected-plural');
+
+  const warningSelectedPlural2 =
+    document.getElementById('warning-selected-plural-2');
+
+  const modalSelectedCount =
+    document.getElementById('modal-selected-count');
+
+  const modalSelectedPlural =
+    document.getElementById('modal-selected-plural');
+
+  const toggleAdministrativos =
+    document.getElementById('toggle-administrativos');
+
+  const toggleTecnicos =
+    document.getElementById('toggle-tecnicos');
+
+  const selectAllBtn =
+    document.getElementById('select-all');
+
+  const clearAllBtn =
+    document.getElementById('clear-all');
+
+
+  /* =======================================================
+     VISTA PREVIA
+     ======================================================= */
+
+  function refreshPreview() {
+
+    const tituloTxt =
+      (titulo?.value || '').trim()
+      || 'Título del comunicado';
+
+    const mensajeTxt =
+      (mensaje?.value || '').trim()
+      || 'El mensaje aparecerá aquí.';
+
+    if (previewTitle) {
+      previewTitle.textContent = tituloTxt;
+    }
+
+    if (previewMessage) {
+      previewMessage.textContent = mensajeTxt;
+    }
+  }
+
+
+  /* =======================================================
+     DESTINATARIOS
+     ======================================================= */
+
+  function getSelectedChecks() {
+    return destinationChecks.filter(cb => cb.checked);
+  }
+
+
+  function refreshSelectedCount() {
+
+    const totalSelected =
+      getSelectedChecks().length;
+
+
+    if (selectedCount) {
+      selectedCount.textContent = totalSelected;
+    }
+
+
+    if (warningSelectedCount) {
+      warningSelectedCount.textContent = totalSelected;
+    }
+
+
+    if (modalSelectedCount) {
+      modalSelectedCount.textContent = totalSelected;
+    }
+
+
+    const plural =
+      totalSelected === 1 ? '' : 's';
+
+
+    if (warningSelectedPlural) {
+      warningSelectedPlural.textContent = plural;
+    }
+
+
+    if (warningSelectedPlural2) {
+      warningSelectedPlural2.textContent = plural;
+    }
+
+
+    if (modalSelectedPlural) {
+      modalSelectedPlural.textContent = plural;
+    }
+
+
+    /* Administrativo */
+
+    if (toggleAdministrativos) {
+
+      const grupo =
+        destinationChecks.filter(
+          cb => cb.dataset.group === 'administrativos'
+        );
+
+      const marcados =
+        grupo.filter(cb => cb.checked).length;
+
+
+      toggleAdministrativos.checked =
+        grupo.length > 0
+        && marcados === grupo.length;
+
+
+      toggleAdministrativos.indeterminate =
+        marcados > 0
+        && marcados < grupo.length;
+
+
+      toggleAdministrativos.disabled =
+        grupo.length === 0;
+    }
+
+
+    /* Técnicos */
+
+    if (toggleTecnicos) {
+
+      const grupo =
+        destinationChecks.filter(
+          cb => cb.dataset.group === 'tecnicos'
+        );
+
+      const marcados =
+        grupo.filter(cb => cb.checked).length;
+
+
+      toggleTecnicos.checked =
+        grupo.length > 0
+        && marcados === grupo.length;
+
+
+      toggleTecnicos.indeterminate =
+        marcados > 0
+        && marcados < grupo.length;
+
+
+      toggleTecnicos.disabled =
+        grupo.length === 0;
+    }
+
+
+    /* Botón enviar */
+
+    if (openBtn) {
+
+      const puedeEnviar =
+        totalSelected > 0
+        && destinationChecks.length > 0;
+
+      openBtn.disabled = !puedeEnviar;
+
+      openBtn.classList.toggle(
+        'opacity-50',
+        !puedeEnviar
+      );
+
+      openBtn.classList.toggle(
+        'cursor-not-allowed',
+        !puedeEnviar
+      );
+    }
+  }
+
+
+  function setGroup(groupName, checked) {
+
+    destinationChecks
+      .filter(
+        cb => cb.dataset.group === groupName
+      )
+      .forEach(cb => {
+        cb.checked = checked;
+      });
+
+    refreshSelectedCount();
+  }
+
+
+  destinationChecks.forEach(cb => {
+
+    cb.addEventListener(
+      'change',
+      refreshSelectedCount
+    );
+
+  });
+
+
+  if (toggleAdministrativos) {
+
+    toggleAdministrativos.addEventListener(
+      'change',
+      function () {
+        setGroup(
+          'administrativos',
+          this.checked
+        );
+      }
+    );
+
+  }
+
+
+  if (toggleTecnicos) {
+
+    toggleTecnicos.addEventListener(
+      'change',
+      function () {
+        setGroup(
+          'tecnicos',
+          this.checked
+        );
+      }
+    );
+
+  }
+
+
+  if (selectAllBtn) {
+
+    selectAllBtn.addEventListener(
+      'click',
+      function () {
+
+        destinationChecks.forEach(cb => {
+          cb.checked = true;
+        });
+
+        refreshSelectedCount();
+      }
+    );
+
+  }
+
+
+  if (clearAllBtn) {
+
+    clearAllBtn.addEventListener(
+      'click',
+      function () {
+
+        destinationChecks.forEach(cb => {
+          cb.checked = false;
+        });
+
+        refreshSelectedCount();
+      }
+    );
+
+  }
+
+
+  /* =======================================================
+     MODAL
+     ======================================================= */
+
+  function openModal() {
+
+    if (!titulo || !titulo.value.trim()) {
+
+      alert('Debes escribir un título.');
+
+      if (titulo) {
+        titulo.focus();
+      }
+
+      return;
+    }
+
+
+    if (!mensaje || !mensaje.value.trim()) {
+
+      alert('Debes escribir el mensaje.');
+
+      if (mensaje) {
+        mensaje.focus();
+      }
+
+      return;
+    }
+
+
+    const totalSelected =
+      getSelectedChecks().length;
+
+
+    if (totalSelected === 0) {
+
+      alert(
+        'Debes seleccionar al menos un destinatario.'
+      );
+
+      return;
+    }
+
+
+    refreshSelectedCount();
+
+    modal.classList.remove('hidden');
+
+    document.body.classList.add(
+      'overflow-hidden'
+    );
+  }
+
+
+  function closeModal() {
+
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+
+    document.body.classList.remove(
+      'overflow-hidden'
+    );
+  }
+
+
+  /* =======================================================
+     EVENTOS FORMULARIO
+     ======================================================= */
+
+  if (titulo) {
+    titulo.addEventListener(
+      'input',
+      refreshPreview
+    );
+  }
+
+
+  if (mensaje) {
+    mensaje.addEventListener(
+      'input',
+      refreshPreview
+    );
+  }
+
+
+  if (openBtn) {
+
+    openBtn.addEventListener(
+      'click',
+      openModal
+    );
+
+  }
+
+
+  if (cancelBtn) {
+
+    cancelBtn.addEventListener(
+      'click',
+      closeModal
+    );
+
+  }
+
+
+  if (backdrop) {
+
+    backdrop.addEventListener(
+      'click',
+      closeModal
+    );
+
+  }
+
+
+  if (confirmBtn) {
+
+    confirmBtn.addEventListener(
+      'click',
+      function () {
+
+        const totalSelected =
+          getSelectedChecks().length;
+
+
+        if (totalSelected === 0) {
+
+          closeModal();
+
+          alert(
+            'Debes seleccionar al menos un destinatario.'
+          );
+
+          return;
+        }
+
+
+        confirmBtn.disabled = true;
+
+        confirmBtn.textContent =
+          'Enviando...';
+
+
+        form.submit();
+      }
+    );
+
+  }
+
+
+  document.addEventListener(
+    'keydown',
+    function (event) {
+
+      if (
+        event.key === 'Escape'
+        && modal
+        && !modal.classList.contains('hidden')
+      ) {
+        closeModal();
+      }
+
+    }
+  );
+
+
+  /* =======================================================
+     INICIALIZACIÓN
+     ======================================================= */
+
+  refreshPreview();
+
+  refreshSelectedCount();
+
+});
+</script>
+
+
+<!-- ========================================================= -->
+<!-- CONSERVAR SCROLL AL PAGINAR                               -->
+<!-- ========================================================= -->
+
+<script>
+(function () {
+
+  const page =
+    document.getElementById(
+      'comunicados-page-scroll'
+    );
+
+  if (!page) return;
+
+  const KEY =
+    'gz-comunicados-scroll:'
+    + location.pathname;
+
+
+  function saveScroll() {
+
+    try {
+
+      sessionStorage.setItem(
+        KEY,
+        String(page.scrollTop || 0)
+      );
+
+    } catch (_) {}
+
+  }
+
+
+  function restoreScroll() {
+
+    try {
+
+      const raw =
+        sessionStorage.getItem(KEY);
+
+      if (raw === null) return;
+
+      const value =
+        parseInt(raw, 10) || 0;
+
+      requestAnimationFrame(() => {
+        page.scrollTop = value;
+      });
+
+    } catch (_) {}
+
+  }
+
+
+  document.addEventListener(
+    'click',
+    function (event) {
+
+      const link =
+        event.target.closest(
+          'a[href*="page_comunicados="]'
+        );
+
+      if (link) {
+        saveScroll();
+      }
+
+    }
+  );
+
+
+  window.addEventListener(
+    'beforeunload',
+    saveScroll
+  );
+
+
+  window.addEventListener(
+    'pageshow',
+    function (event) {
+
+      if (event.persisted) {
+        restoreScroll();
+      }
+
+    }
+  );
+
+})();
+</script>
+
+{% endblock %}

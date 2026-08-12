@@ -39,6 +39,7 @@
   ⬅️ Volver
 </a>
 
+
     {# ✅ Acta (PDF): SIEMPRE visible, esté o no aprobado #}
    <a href="{% url 'operaciones:generar_acta_preview' s.id %}?force=1&save=1"
    target="_blank" rel="noopener"
@@ -80,6 +81,18 @@
   {% endif %}
 </div>
 
+
+{% if faltantes_global %}
+  <div class="mb-6 p-4 rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-900">
+    <div class="font-semibold mb-1">
+      ⚠️ Faltan fotos requeridas
+    </div>
+
+    <div class="text-sm">
+      {{ faltantes_global|join:", " }}.
+    </div>
+  </div>
+{% endif %}
  
 {% if reporte_listo %}
   {% if reporte_url or acta_url %}

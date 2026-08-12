@@ -243,6 +243,7 @@ def enviar_email_notificacion(
 
 # ========== Helper específico: asignación de servicio a técnicos ==========
 
+
 def _build_mensaje_asignacion(
     servicio: Any,
     tecnico: CustomUser,
@@ -250,8 +251,8 @@ def _build_mensaje_asignacion(
 ) -> tuple[str, str]:
     """
     Construye título y mensaje para la asignación de un servicio.
-    Intenta agregar nombre/dirección del sitio, datos de acceso
-    (Candado BT, Acceso, Claves, Llaves, Cantidad Llaves),
+    Intenta agregar nombre/dirección del sitio, Construcción, Altura,
+    datos de acceso (Candado BT, Acceso, Claves, Llaves, Cantidad Llaves),
     link a Google Maps y calcula el MONTO MMOO POR TÉCNICO con decimales.
     """
     du_raw = getattr(servicio, "du", None)
@@ -284,33 +285,35 @@ def _build_mensaje_asignacion(
     except Exception:
         monto_por_tecnico = Decimal("0.00")
 
-    # Formato tipo 1.500,50 (puntos miles, coma decimal)
+    # Formato tipo 1.500,50
     monto_txt_raw = f"{monto_por_tecnico:,.2f}"
-    monto_txt = (
-        monto_txt_raw
-        .replace(",", "X")  # '1X500.50'
-        .replace(".", ",")  # '1X500,50'
-        .replace("X", ".")  # '1.500,50'
-    )
+    monto_txt = monto_txt_raw.replace(",", "X").replace(".", ",").replace("X", ".")
 
     asignador_txt = actor.get_full_name() if actor else "Sistema"
 
-    # ================== Buscar SitioMovil + link Google Maps + accesos ==================
+    # ==========================================================
+    # Buscar SitioMovil + Google Maps + accesos
+    # ==========================================================
     sitio_nombre = ""
     sitio_direccion = ""
+
+    # NUEVO
+    tipo_construccion = ""
+    altura = ""
+
     google_link = ""
 
     candado_bt = ""
-    acceso = ""           # condiciones_acceso
+    acceso = ""
     claves = ""
     llaves = ""
     cantidad_llaves = ""
 
     try:
-        from operaciones.models import \
-            SitioMovil  # import local para evitar circulares
+        from operaciones.models import SitioMovil
 
         sitio = None
+
         id_claro_val = getattr(servicio, "id_claro", None)
         id_new_val = getattr(servicio, "id_new", None)
 
@@ -318,31 +321,58 @@ def _build_mensaje_asignacion(
 
         if id_claro_val:
             sitio = qs.filter(id_claro=id_claro_val).first()
+
         if not sitio and id_new_val:
             sitio = qs.filter(id_sites_new=id_new_val).first()
 
         if sitio:
             sitio_nombre = _clean_info(sitio.nombre)
+
             sitio_direccion = _clean_info(sitio.direccion)
 
-            # Datos de acceso / seguridad (limpios)
+            # ==================================================
+            # NUEVO: Construcción + Altura
+            # ==================================================
+            tipo_construccion = _clean_info(getattr(sitio, "tipo_construccion", ""))
+
+            altura = _clean_info(getattr(sitio, "altura", ""))
+
+            # ==================================================
+            # Datos de acceso / seguridad
+            # ==================================================
             candado_bt = _clean_info(getattr(sitio, "candado_bt", ""))
+
             acceso = _clean_info(getattr(sitio, "condiciones_acceso", ""))
+
             claves = _clean_info(getattr(sitio, "claves", ""))
+
             llaves = _clean_info(getattr(sitio, "llaves", ""))
+
             cantidad_llaves = _clean_info(getattr(sitio, "cantidad_llaves", ""))
 
-            # Link Google Maps, si hay coordenadas
+            # ==================================================
+            # Link Google Maps
+            # ==================================================
             if sitio.latitud is not None and sitio.longitud is not None:
                 lat = str(sitio.latitud).replace(",", ".")
+
                 lng = str(sitio.longitud).replace(",", ".")
-                google_link = f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
+
+                google_link = (
+                    "https://www.google.com/maps/search/" f"?api=1&query={lat},{lng}"
+                )
+
     except Exception:
         google_link = ""
-    # ==========================================================================
 
+    # ==========================================================
+    # Título
+    # ==========================================================
     titulo = f"Asignación de servicio {du_txt}"
 
+    # ==========================================================
+    # Mensaje principal
+    # ==========================================================
     mensaje = (
         "🔔 Nueva asignación de servicio\n\n"
         f"{du_txt}\n"
@@ -352,33 +382,62 @@ def _build_mensaje_asignacion(
         f"Monto MMOO (por técnico): ${monto_txt}\n"
     )
 
+    # ==========================================================
     # Bloque info de sitio
-    if sitio_nombre or sitio_direccion:
+    # ==========================================================
+    if sitio_nombre or sitio_direccion or tipo_construccion or altura:
         mensaje += "\n📍 Sitio:\n"
+
         if sitio_nombre:
             mensaje += f"{sitio_nombre}\n"
+
         if sitio_direccion:
             mensaje += f"{sitio_direccion}\n"
 
+        if tipo_construccion:
+            mensaje += f"- Construcción: {tipo_construccion}\n"
+
+        if altura:
+            mensaje += f"- Altura: {altura}\n"
+
+    # ==========================================================
     # Bloque accesos / seguridad
-    if any([candado_bt, acceso, claves, llaves, cantidad_llaves]):
-        mensaje += "\n🔐 Accesos / Seguridad:\n"
+    # ==========================================================
+    if any(
+        [
+            candado_bt,
+            acceso,
+            claves,
+            llaves,
+            cantidad_llaves,
+        ]
+    ):
+        mensaje += "\n� Accesos / Seguridad:\n"
+
         if candado_bt:
             mensaje += f"- Candado BT: {candado_bt}\n"
+
         if acceso:
             mensaje += f"- Acceso: {acceso}\n"
+
         if claves:
             mensaje += f"- Claves: {claves}\n"
+
         if llaves:
             mensaje += f"- Llaves: {llaves}\n"
+
         if cantidad_llaves:
             mensaje += f"- Cantidad llaves: {cantidad_llaves}\n"
 
-    # Link Google Maps (si hay)
+    # ==========================================================
+    # Google Maps
+    # ==========================================================
     if google_link:
-        mensaje += f"\n🌐 Google Maps:\n{google_link}\n"
+        mensaje += f"\n🌐 Google Maps:\n" f"{google_link}\n"
 
+    # ==========================================================
     # Footer
+    # ==========================================================
     mensaje += (
         "\n"
         f"👷 Técnico: {tecnico.get_full_name() or tecnico.username}\n"

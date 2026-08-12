@@ -322,8 +322,12 @@ def responder_info_sitio_por_codigo(codigo: str) -> str:
     """
 
     codigo = (codigo or "").strip()
+
     if not codigo:
-        return "Necesito que me digas algún identificador del sitio (ID Claro, ID Sites, etc.)."
+        return (
+            "Necesito que me digas algún identificador del sitio "
+            "(ID Claro, ID Sites, etc.)."
+        )
 
     sitio = (
         SitioMovil.objects.filter(
@@ -338,18 +342,28 @@ def responder_info_sitio_por_codigo(codigo: str) -> str:
     if not sitio:
         return (
             f"No encontré un sitio con código `{codigo}`.\n"
-            "Prueba indicarme el ID Claro, el ID Sites o el ID Sites New exactamente como aparece en la ficha."
+            "Prueba indicarme el ID Claro, el ID Sites o el ID Sites New "
+            "exactamente como aparece en la ficha."
         )
 
     lineas: list[str] = []
+
     lineas.append("📍 *Información del sitio*")
     lineas.append("")
+
     lineas.append(f"- Nombre: {sitio.nombre or 'Sin nombre'}")
     lineas.append(f"- ID Sites: {sitio.id_sites}")
     lineas.append(f"- ID Claro: {sitio.id_claro or 'Sin ID Claro'}")
     lineas.append(f"- ID Sites New: {sitio.id_sites_new or 'Sin ID Sites New'}")
     lineas.append(f"- Región: {sitio.region or 'Sin región'}")
     lineas.append(f"- Dirección: {sitio.direccion or 'Sin dirección'}")
+
+    # NUEVO: solo estas dos columnas
+    if sitio.tipo_construccion:
+        lineas.append(f"- Construcción: {sitio.tipo_construccion}")
+
+    if sitio.altura:
+        lineas.append(f"- Altura: {sitio.altura}")
 
     # Seguridad / acceso
     if any(
@@ -364,16 +378,22 @@ def responder_info_sitio_por_codigo(codigo: str) -> str:
     ):
         lineas.append("")
         lineas.append("🔐 *Accesos / seguridad*")
+
         if sitio.candado_bt:
             lineas.append(f"- Candado BT: {sitio.candado_bt}")
+
         if sitio.condiciones_acceso:
             lineas.append(f"- Condiciones de acceso: {sitio.condiciones_acceso}")
+
         if sitio.claves:
             lineas.append(f"- Claves: {sitio.claves}")
+
         if sitio.llaves:
             lineas.append(f"- Llaves: {sitio.llaves}")
+
         if sitio.cantidad_llaves:
             lineas.append(f"- Cantidad de llaves: {sitio.cantidad_llaves}")
+
         if sitio.guardias:
             lineas.append(f"- Guardias: {sitio.guardias}")
 
@@ -381,7 +401,9 @@ def responder_info_sitio_por_codigo(codigo: str) -> str:
     if sitio.latitud is not None and sitio.longitud is not None:
         lat = str(sitio.latitud).replace(",", ".")
         lng = str(sitio.longitud).replace(",", ".")
-        maps_url = f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
+
+        maps_url = "https://www.google.com/maps/search/" f"?api=1&query={lat},{lng}"
+
         lineas.append("")
         lineas.append(f"🌐 Google Maps: {maps_url}")
 

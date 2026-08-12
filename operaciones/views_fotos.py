@@ -1613,6 +1613,7 @@ def borrar_evidencia_supervisor(request, ev_id: int):
 @rol_requerido("supervisor", "admin", "pm")
 def revisar_sesion_fotos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
+
     sesion = _get_or_create_sesion(servicio)
 
     next_url = (
@@ -1621,9 +1622,16 @@ def revisar_sesion_fotos(request, servicio_id):
         or reverse("operaciones:listar_servicios_supervisor")
     )
 
-    asignaciones = (
+    revisar_url = reverse(
+        "operaciones:fotos_revisar_sesion", kwargs={"servicio_id": servicio.id}
+    )
+
+    asignaciones = list(
         sesion.asignaciones.select_related("tecnico")
-        .prefetch_related("evidencias__requisito")
+        .prefetch_related(
+            "requisitos",
+            "evidencias__requisito",
+        )
         .all()
     )
 
@@ -1635,27 +1643,25 @@ def revisar_sesion_fotos(request, servicio_id):
 
         if not can_review:
             messages.error(request, "Este proyecto no está listo para revisión.")
-            return redirect(
-                f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
-            )
+
+            return redirect(f"{revisar_url}?next={next_url}")
 
         if accion == "aprobar":
             with transaction.atomic():
+
                 try:
                     xlsx_path = _xlsx_path_reporte_fotografico(servicio)
                 except Exception as e:
                     messages.error(request, f"No se pudo generar el informe: {e}")
-                    return redirect(
-                        f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
-                    )
+
+                    return redirect(f"{revisar_url}?next={next_url}")
 
                 try:
                     bytes_pdf = _bytes_acta_aceptacion(servicio)
                 except Exception as e:
                     messages.error(request, f"No se pudo generar el acta: {e}")
-                    return redirect(
-                        f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
-                    )
+
+                    return redirect(f"{revisar_url}?next={next_url}")
 
                 from .models import _excel_filename, _pdf_filename
 
@@ -1672,12 +1678,15 @@ def revisar_sesion_fotos(request, servicio_id):
                     pass
 
                 excel_name = _excel_filename(servicio)
+
                 pdf_name = _pdf_filename(servicio, servicio.documento_compra or "DOC")
 
                 try:
                     with open(xlsx_path, "rb") as f:
                         servicio.reporte_fotografico.save(
-                            excel_name, File(f), save=False
+                            excel_name,
+                            File(f),
+                            save=False,
                         )
                 finally:
                     try:
@@ -1687,7 +1696,9 @@ def revisar_sesion_fotos(request, servicio_id):
                         pass
 
                 servicio.acta_aceptacion_pdf.save(
-                    pdf_name, ContentFile(bytes_pdf), save=False
+                    pdf_name,
+                    ContentFile(bytes_pdf),
+                    save=False,
                 )
 
                 servicio.estado = "aprobado_supervisor"
@@ -1706,20 +1717,25 @@ def revisar_sesion_fotos(request, servicio_id):
                 )
 
                 sesion.estado = "aprobado_supervisor"
+
                 sesion.save(update_fields=["estado"])
+
                 sesion.asignaciones.update(estado="aprobado_supervisor")
 
                 messages.success(
                     request, "Proyecto aprobado. Informe y acta generados."
                 )
+
                 return redirect(next_url)
 
         elif accion == "rechazar":
             sesion.estado = "rechazado_supervisor"
+
             sesion.save(update_fields=["estado"])
 
             sesion.asignaciones.update(
-                estado="rechazado_supervisor", reintento_habilitado=True
+                estado="rechazado_supervisor",
+                reintento_habilitado=True,
             )
 
             servicio.estado = "rechazado_supervisor"
@@ -1737,19 +1753,59 @@ def revisar_sesion_fotos(request, servicio_id):
             messages.warning(
                 request, "Proyecto rechazado. Técnicos habilitados para reintento."
             )
+
             return redirect(next_url)
 
         messages.error(request, "Acción no válida.")
-        return redirect(
-            f"{reverse('operaciones:fotos_revisar_sesion', kwargs={'servicio_id': servicio.id})}?next={next_url}"
-        )
 
+        return redirect(f"{revisar_url}?next={next_url}")
+
+    # ==========================================================
+    # EVIDENCIAS POR ASIGNACIÓN
+    # ==========================================================
     evidencias_por_asig = []
 
+    requisitos_con_evidencia = set()
+
     for a in asignaciones:
-        evs = _order_evidencias(a.evidencias.select_related("requisito"))
+        evs = list(_order_evidencias(a.evidencias.select_related("requisito")))
+
         evidencias_por_asig.append((a, evs))
 
+        for ev in evs:
+            if ev.requisito_id:
+                requisitos_con_evidencia.add(ev.requisito_id)
+
+    # ==========================================================
+    # REQUISITOS CANÓNICOS DEL PROYECTO
+    # ==========================================================
+    requisitos_canonicos = []
+
+    if asignaciones:
+        requisitos_canonicos = list(
+            asignaciones[0]
+            .requisitos.filter(activo=True)
+            .order_by(
+                "orden",
+                "id",
+            )
+        )
+
+    # ==========================================================
+    # FALTANTES GLOBALES
+    # ==========================================================
+    faltantes_global = []
+
+    for requisito in requisitos_canonicos:
+        if not requisito.obligatorio:
+            continue
+
+        if requisito.id not in requisitos_con_evidencia:
+            faltantes_global.append(requisito.titulo)
+
+    # ==========================================================
+    # RENDER
+    # ==========================================================
     return render(
         request,
         "operaciones/fotos_revisar_sesion.html",
@@ -1758,6 +1814,7 @@ def revisar_sesion_fotos(request, servicio_id):
             "sesion": sesion,
             "evidencias_por_asig": evidencias_por_asig,
             "can_review": can_review,
+            "faltantes_global": faltantes_global,
             "reporte_listo": bool(servicio.reporte_fotografico),
             "reporte_url": (
                 servicio.reporte_fotografico.url if servicio.reporte_fotografico else ""

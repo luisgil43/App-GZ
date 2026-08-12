@@ -2142,6 +2142,12 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
     if sitio.comuna:
         msg += f"• Comuna: {sitio.comuna}\n"
 
+    # NUEVO: construcción y altura
+    if sitio.tipo_construccion:
+        msg += f"• Construcción: {sitio.tipo_construccion}\n"
+    if sitio.altura:
+        msg += f"• Altura: {sitio.altura}\n"
+
     detalles = []
     if sitio.candado_bt:
         detalles.append(f"Candado BT: {sitio.candado_bt}")
@@ -2162,7 +2168,10 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
     if sitio.latitud is not None and sitio.longitud is not None:
         lat = str(sitio.latitud).replace(",", ".")
         lng = str(sitio.longitud).replace(",", ".")
-        msg += f"\n📍 Google Maps:\nhttps://www.google.com/maps/search/?api=1&query={lat},{lng}"
+        msg += (
+            f"\n📍 Google Maps:\n"
+            f"https://www.google.com/maps/search/?api=1&query={lat},{lng}"
+        )
 
     return msg
 

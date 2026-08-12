@@ -965,8 +965,8 @@
 
         {% endif %}
 
-        <!-- Bot GZ -->
-        {% if request.user.es_admin_general %}
+          <!-- Bot GZ / Comunicaciones -->
+        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_supervisor or request.user.es_pm %}
 
           <li class="group">
 
@@ -986,11 +986,21 @@
 
             <ul class="submenu hidden space-y-1">
 
+              <!-- Comunicados Telegram -->
               <li>
-                <a href="{% url 'bot_gz:training_dashboard' %}">
-                  Entrenamiento del bot
+                <a href="{% url 'notificaciones:enviar_comunicado_telegram' %}">
+                  📢 Comunicados Telegram
                 </a>
               </li>
+
+              <!-- Entrenamiento: SOLO ADMIN -->
+              {% if request.user.es_admin_general %}
+                <li>
+                  <a href="{% url 'bot_gz:training_dashboard' %}">
+                    🧠 Entrenamiento del bot
+                  </a>
+                </li>
+              {% endif %}
 
             </ul>
           </li>
