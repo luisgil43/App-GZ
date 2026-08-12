@@ -159,25 +159,25 @@
     </div>
   </a>
 
-  {# Botón X / candado tal cual lo tenías #}
-  {% if request.user.is_superuser or request.user.es_supervisor %}
-    {% if s.estado == 'en_revision_supervisor' or s.estado == 'en_progreso' or s.estado == 'rechazado_supervisor' %}
-      <button type="button"
-              class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center
-                     bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
-              title="Eliminar esta foto"
-              data-delete
-              data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}?next={{ next_url|default:request.GET.next|urlencode }}">
-        ✕
-      </button>
-    {% else %}
-      <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
-            title="Bloqueado">🔒</span>
-    {% endif %}
+{# Botón X / candado #}
+{% if request.user.is_superuser or request.user.es_supervisor %}
+  {% if s.estado == 'en_revision_supervisor' or s.estado == 'en_progreso' or s.estado == 'rechazado_supervisor' %}
+    <button type="button"
+            class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center
+                   bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+            title="Eliminar esta foto"
+            data-delete
+            data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}?next={{ next_url|default:''|urlencode }}">
+      ✕
+    </button>
   {% else %}
     <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
           title="Bloqueado">🔒</span>
   {% endif %}
+{% else %}
+  <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
+        title="Bloqueado">🔒</span>
+{% endif %}
 </div>
 
     <figcaption class="text-xs mt-1">
