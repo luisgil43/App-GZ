@@ -1232,6 +1232,7 @@
                         accent-cyan-600
                       "
                       value="{{ servicio.pk }}"
+                      data-estado="{{ servicio.estado }}"
                       aria-label="Seleccionar DU{{ servicio.du }}"
                     >
 
@@ -1384,14 +1385,16 @@
 
                   {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
 
-                    <button
-                      type="button"
-                      class="btn-ghost btn-approve"
-                      title="Aprobar cotización"
-                      onclick="abrirModal('modal-aprobar-{{ servicio.pk }}')"
-                    >
-                      ✅
-                    </button>
+                    {% if servicio.estado == 'cotizado' %}
+                      <button
+                        type="button"
+                        class="btn-ghost btn-approve"
+                        title="Aprobar cotización"
+                        onclick="abrirModal('modal-aprobar-{{ servicio.pk }}')"
+                      >
+                        ✅
+                      </button>
+                    {% endif %}
 
                     <a
                       href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
@@ -1865,7 +1868,7 @@
           </select>
 
           <span class="ml-2 text-xs text-slate-500">
-            {{ pagina.paginator.count }} pendiente(s)
+            {{ pagina.paginator.count }} servicio(s)
           </span>
 
         </div>
@@ -2009,6 +2012,257 @@
       </div>
 
     </div>
+
+<!-- ====================================================== -->
+<!-- MODAL CONFIRMACIÓN ACCIÓN MASIVA                       -->
+<!-- ====================================================== -->
+
+<div
+  id="modalBulkConfirm"
+  class="
+    fixed
+    inset-0
+    z-[200]
+    hidden
+    items-center
+    justify-center
+    px-4
+    py-6
+  "
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="bulkConfirmTitle"
+>
+  <!-- Fondo -->
+  <div
+    class="
+      absolute
+      inset-0
+      bg-slate-950/55
+      backdrop-blur-[3px]
+    "
+    onclick="document.getElementById('btnBulkConfirmCancel').click()"
+  ></div>
+
+  <!-- Tarjeta -->
+  <div
+    class="
+      relative
+      z-10
+      w-full
+      max-w-md
+      overflow-hidden
+      rounded-3xl
+      border
+      border-white/70
+      bg-white
+      shadow-2xl
+    "
+  >
+
+    <!-- Contenido -->
+    <div class="px-6 pb-5 pt-6 sm:px-7 sm:pt-7">
+
+      <div class="flex items-start gap-4">
+
+        <div
+          id="bulkConfirmIconWrap"
+          class="
+            flex
+            h-12
+            w-12
+            shrink-0
+            items-center
+            justify-center
+            rounded-2xl
+            bg-emerald-100
+            text-2xl
+          "
+        >
+          <span id="bulkConfirmIcon">
+            ✅
+          </span>
+        </div>
+
+        <div class="min-w-0 flex-1">
+
+          <h3
+            id="bulkConfirmTitle"
+            class="
+              text-lg
+              font-black
+              tracking-tight
+              text-slate-900
+            "
+          >
+            Aprobar cotizaciones
+          </h3>
+
+          <p
+            id="bulkConfirmMessage"
+            class="
+              mt-2
+              text-sm
+              leading-6
+              text-slate-600
+            "
+          >
+          </p>
+
+        </div>
+
+      </div>
+
+      <!-- Resumen -->
+      <div
+        id="bulkConfirmSummary"
+        class="
+          mt-5
+          flex
+          items-center
+          gap-3
+          rounded-2xl
+          border
+          border-slate-200
+          bg-slate-50
+          px-4
+          py-3
+        "
+      >
+
+        <div
+          id="bulkConfirmCount"
+          class="
+            flex
+            h-9
+            min-w-9
+            items-center
+            justify-center
+            rounded-xl
+            bg-white
+            px-2
+            text-sm
+            font-black
+            text-slate-800
+            shadow-sm
+            ring-1
+            ring-slate-200
+          "
+        >
+          0
+        </div>
+
+        <div>
+          <p class="text-xs font-bold text-slate-700">
+            Cotizaciones seleccionadas
+          </p>
+
+          <p class="text-[11px] text-slate-500">
+            La acción se aplicará a todos los registros seleccionados.
+          </p>
+        </div>
+
+      </div>
+
+      <div
+        id="bulkConfirmWarning"
+        class="
+          mt-4
+          hidden
+          rounded-xl
+          border
+          border-red-200
+          bg-red-50
+          px-4
+          py-3
+          text-xs
+          font-semibold
+          text-red-700
+        "
+      >
+        Esta acción no se puede deshacer.
+      </div>
+
+    </div>
+
+    <!-- Botones -->
+    <div
+      class="
+        flex
+        flex-col-reverse
+        gap-2
+        border-t
+        border-slate-200
+        bg-slate-50
+        px-6
+        py-4
+        sm:flex-row
+        sm:justify-end
+      "
+    >
+
+      <button
+        type="button"
+        id="btnBulkConfirmCancel"
+        class="
+          inline-flex
+          min-h-11
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-5
+          text-sm
+          font-bold
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-100
+        "
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="btnBulkConfirmAccept"
+        class="
+          inline-flex
+          min-h-11
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          border
+          border-emerald-600
+          bg-emerald-600
+          px-5
+          text-sm
+          font-black
+          text-white
+          shadow-md
+          transition
+          hover:-translate-y-0.5
+          hover:bg-emerald-700
+          hover:shadow-lg
+        "
+      >
+        <span id="bulkConfirmButtonIcon">
+          ✅
+        </span>
+
+        <span id="bulkConfirmButtonText">
+          Aprobar
+        </span>
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
 <script>
   function abrirModal(id) {
     const modal = document.getElementById(id);
@@ -2740,6 +2994,12 @@ function syncFiltersWithUrl(){
 <script>
 (function () {
 
+  let bulkAccionPendiente = null;
+
+  /* ======================================================== */
+  /* HELPERS                                                  */
+  /* ======================================================== */
+
   function zona() {
     return document.getElementById('zonaTabla');
   }
@@ -2760,64 +3020,107 @@ function syncFiltersWithUrl(){
     );
   }
 
-  function actualizarBarraMasiva() {
-    const z = zona();
-
-    if (!z) return;
-
-    const seleccionados = getSelectedChecks();
-
-    const barra = z.querySelector(
-      '#bulkActionsBar'
-    );
-
-    const contador = z.querySelector(
-      '#bulkSelectedCount'
-    );
-
-    const selectAll = z.querySelector(
-      '#selectAllCotizaciones'
-    );
-
-    if (contador) {
-      contador.textContent = seleccionados.length;
-    }
-
-    if (barra) {
-
-      if (seleccionados.length) {
-        barra.classList.remove('hidden');
-        barra.classList.add('flex');
-
-      } else {
-        barra.classList.add('hidden');
-        barra.classList.remove('flex');
-      }
-    }
-
-    if (selectAll) {
-
-      const checks = getChecks();
-
-      selectAll.checked =
-        checks.length > 0 &&
-        seleccionados.length === checks.length;
-
-      selectAll.indeterminate =
-        seleccionados.length > 0 &&
-        seleccionados.length < checks.length;
-    }
-  }
-
   function idsSeleccionados() {
     return getSelectedChecks().map(
       checkbox => checkbox.value
     );
   }
 
-  function enviarAccionMasiva(
-    accion,
-    mensaje
+  /* ======================================================== */
+  /* BARRA DE ACCIONES MASIVAS                                */
+  /* ======================================================== */
+
+  function actualizarBarraMasiva() {
+  const z = zona();
+
+  if (!z) return;
+
+  const seleccionados = getSelectedChecks();
+
+  const barra = z.querySelector(
+    '#bulkActionsBar'
+  );
+
+  const contador = z.querySelector(
+    '#bulkSelectedCount'
+  );
+
+  const selectAll = z.querySelector(
+    '#selectAllCotizaciones'
+  );
+
+  const btnApprove = z.querySelector(
+    '#btnBulkApprove'
+  );
+
+  if (contador) {
+    contador.textContent = seleccionados.length;
+  }
+
+  if (barra) {
+
+    if (seleccionados.length) {
+      barra.classList.remove('hidden');
+      barra.classList.add('flex');
+
+    } else {
+      barra.classList.add('hidden');
+      barra.classList.remove('flex');
+    }
+  }
+
+  /* ======================================================== */
+  /* APROBAR SOLO COTIZACIONES EN ESTADO "COTIZADO"          */
+  /* ======================================================== */
+
+  if (btnApprove) {
+
+    const haySeleccionados = seleccionados.length > 0;
+
+    const todosSonCotizados =
+      haySeleccionados &&
+      seleccionados.every(
+        checkbox => checkbox.dataset.estado === 'cotizado'
+      );
+
+    btnApprove.disabled = !todosSonCotizados;
+
+    btnApprove.classList.toggle(
+      'opacity-50',
+      !todosSonCotizados
+    );
+
+    btnApprove.classList.toggle(
+      'cursor-not-allowed',
+      !todosSonCotizados
+    );
+
+    btnApprove.title =
+      todosSonCotizados
+        ? 'Aprobar cotizaciones seleccionadas'
+        : 'Solo se pueden aprobar cotizaciones en estado Cotizado';
+  }
+
+  if (selectAll) {
+
+    const checks = getChecks();
+
+    selectAll.checked =
+      checks.length > 0 &&
+      seleccionados.length === checks.length;
+
+    selectAll.indeterminate =
+      seleccionados.length > 0 &&
+      seleccionados.length < checks.length;
+  }
+}
+
+  /* ======================================================== */
+  /* MODAL MASIVO                                             */
+  /* ======================================================== */
+
+  function abrirModalMasivo(
+    accion
   ) {
     const ids = idsSeleccionados();
 
@@ -2825,62 +3128,273 @@ function syncFiltersWithUrl(){
       return;
     }
 
-    if (!window.confirm(mensaje)) {
+    const modal = document.getElementById(
+      'modalBulkConfirm'
+    );
+
+    const title = document.getElementById(
+      'bulkConfirmTitle'
+    );
+
+    const message = document.getElementById(
+      'bulkConfirmMessage'
+    );
+
+    const count = document.getElementById(
+      'bulkConfirmCount'
+    );
+
+    const iconWrap = document.getElementById(
+      'bulkConfirmIconWrap'
+    );
+
+    const icon = document.getElementById(
+      'bulkConfirmIcon'
+    );
+
+    const warning = document.getElementById(
+      'bulkConfirmWarning'
+    );
+
+    const accept = document.getElementById(
+      'btnBulkConfirmAccept'
+    );
+
+    const buttonIcon = document.getElementById(
+      'bulkConfirmButtonIcon'
+    );
+
+    const buttonText = document.getElementById(
+      'bulkConfirmButtonText'
+    );
+
+    if (
+      !modal ||
+      !title ||
+      !message ||
+      !count ||
+      !accept
+    ) {
       return;
     }
 
-    const form = document.createElement('form');
+    bulkAccionPendiente = accion;
+
+    count.textContent = ids.length;
+
+    /* ====================================================== */
+    /* APROBAR                                                */
+    /* ====================================================== */
+
+    if (accion === 'aprobar') {
+
+      title.textContent =
+        ids.length === 1
+          ? 'Aprobar cotización'
+          : 'Aprobar cotizaciones';
+
+      message.textContent =
+        ids.length === 1
+          ? '¿Confirmas que deseas aprobar la cotización seleccionada?'
+          : (
+              '¿Confirmas que deseas aprobar las ' +
+              ids.length +
+              ' cotizaciones seleccionadas?'
+            );
+
+      icon.textContent = '✅';
+
+      iconWrap.className =
+        'flex h-12 w-12 shrink-0 items-center justify-center ' +
+        'rounded-2xl bg-emerald-100 text-2xl';
+
+      warning.classList.add('hidden');
+
+      accept.className =
+        'inline-flex min-h-11 items-center justify-center gap-2 ' +
+        'rounded-xl border border-emerald-600 bg-emerald-600 ' +
+        'px-5 text-sm font-black text-white shadow-md transition ' +
+        'hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-lg';
+
+      buttonIcon.textContent = '✅';
+      buttonText.textContent = 'Aprobar';
+
+    }
+
+    /* ====================================================== */
+    /* ELIMINAR                                               */
+    /* ====================================================== */
+
+    else if (accion === 'eliminar') {
+
+      title.textContent =
+        ids.length === 1
+          ? 'Eliminar cotización'
+          : 'Eliminar cotizaciones';
+
+      message.textContent =
+        ids.length === 1
+          ? '¿Confirmas que deseas eliminar definitivamente la cotización seleccionada?'
+          : (
+              '¿Confirmas que deseas eliminar definitivamente las ' +
+              ids.length +
+              ' cotizaciones seleccionadas?'
+            );
+
+      icon.textContent = '🗑️';
+
+      iconWrap.className =
+        'flex h-12 w-12 shrink-0 items-center justify-center ' +
+        'rounded-2xl bg-red-100 text-2xl';
+
+      warning.classList.remove('hidden');
+
+      accept.className =
+        'inline-flex min-h-11 items-center justify-center gap-2 ' +
+        'rounded-xl border border-red-600 bg-red-600 ' +
+        'px-5 text-sm font-black text-white shadow-md transition ' +
+        'hover:-translate-y-0.5 hover:bg-red-700 hover:shadow-lg';
+
+      buttonIcon.textContent = '🗑️';
+      buttonText.textContent = 'Eliminar';
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    document.body.classList.add(
+      'overflow-hidden'
+    );
+
+    setTimeout(() => {
+      accept.focus();
+    }, 50);
+  }
+
+  function cerrarModalMasivo() {
+    const modal = document.getElementById(
+      'modalBulkConfirm'
+    );
+
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+
+    document.body.classList.remove(
+      'overflow-hidden'
+    );
+
+    bulkAccionPendiente = null;
+  }
+
+  /* ======================================================== */
+  /* ENVIAR ACCIÓN                                            */
+  /* ======================================================== */
+
+  function enviarAccionMasiva(
+    accion
+  ) {
+    const ids = idsSeleccionados();
+
+    if (!ids.length) {
+      cerrarModalMasivo();
+      return;
+    }
+
+    const form = document.createElement(
+      'form'
+    );
 
     form.method = 'POST';
 
     form.action =
       "{% url 'operaciones:accion_masiva_cotizaciones_pm' %}";
 
-    // CSRF
-    const csrf = document.createElement('input');
+    /* ====================================================== */
+    /* CSRF                                                   */
+    /* ====================================================== */
+
+    const csrf = document.createElement(
+      'input'
+    );
 
     csrf.type = 'hidden';
     csrf.name = 'csrfmiddlewaretoken';
     csrf.value = '{{ csrf_token }}';
 
-    form.appendChild(csrf);
+    form.appendChild(
+      csrf
+    );
 
-    // Acción
-    const inputAccion = document.createElement('input');
+    /* ====================================================== */
+    /* ACCIÓN                                                 */
+    /* ====================================================== */
+
+    const inputAccion = document.createElement(
+      'input'
+    );
 
     inputAccion.type = 'hidden';
     inputAccion.name = 'accion';
     inputAccion.value = accion;
 
-    form.appendChild(inputAccion);
+    form.appendChild(
+      inputAccion
+    );
 
-    // Retorno
-    const inputNext = document.createElement('input');
+    /* ====================================================== */
+    /* RETORNO                                                */
+    /* ====================================================== */
+
+    const inputNext = document.createElement(
+      'input'
+    );
 
     inputNext.type = 'hidden';
     inputNext.name = 'next';
+
     inputNext.value =
       window.location.pathname +
       window.location.search;
 
-    form.appendChild(inputNext);
+    form.appendChild(
+      inputNext
+    );
 
-    // IDs
+    /* ====================================================== */
+    /* IDS                                                    */
+    /* ====================================================== */
+
     ids.forEach((id) => {
 
-      const input = document.createElement('input');
+      const input = document.createElement(
+        'input'
+      );
 
       input.type = 'hidden';
       input.name = 'servicio_ids';
       input.value = id;
 
-      form.appendChild(input);
+      form.appendChild(
+        input
+      );
     });
 
-    document.body.appendChild(form);
+    /* ====================================================== */
+    /* ENVIAR                                                 */
+    /* ====================================================== */
+
+    document.body.appendChild(
+      form
+    );
 
     form.submit();
   }
+
+  /* ======================================================== */
+  /* CHECKBOXES                                               */
+  /* ======================================================== */
 
   document.addEventListener(
     'change',
@@ -2896,7 +3410,8 @@ function syncFiltersWithUrl(){
         )
       ) {
 
-        const marcado = e.target.checked;
+        const marcado =
+          e.target.checked;
 
         getChecks().forEach(
           checkbox => {
@@ -2920,6 +3435,10 @@ function syncFiltersWithUrl(){
     }
   );
 
+  /* ======================================================== */
+  /* BOTONES                                                  */
+  /* ======================================================== */
+
   document.addEventListener(
     'click',
     function (e) {
@@ -2930,16 +3449,10 @@ function syncFiltersWithUrl(){
 
       if (approve) {
 
-        const cantidad =
-          idsSeleccionados().length;
+        e.preventDefault();
 
-        enviarAccionMasiva(
-          'aprobar',
-          (
-            '¿Confirmas aprobar ' +
-            cantidad +
-            ' cotización(es) seleccionada(s)?'
-          )
+        abrirModalMasivo(
+          'aprobar'
         );
 
         return;
@@ -2951,21 +3464,102 @@ function syncFiltersWithUrl(){
 
       if (eliminar) {
 
-        const cantidad =
-          idsSeleccionados().length;
+        e.preventDefault();
+
+        abrirModalMasivo(
+          'eliminar'
+        );
+
+        return;
+      }
+
+      const cancelar = e.target.closest(
+        '#btnBulkConfirmCancel'
+      );
+
+      if (cancelar) {
+
+        cerrarModalMasivo();
+
+        return;
+      }
+
+      const aceptar = e.target.closest(
+        '#btnBulkConfirmAccept'
+      );
+
+      if (aceptar) {
+
+        if (!bulkAccionPendiente) {
+          return;
+        }
+
+        aceptar.disabled = true;
+        aceptar.classList.add(
+          'opacity-70',
+          'cursor-wait'
+        );
 
         enviarAccionMasiva(
-          'eliminar',
-          (
-            '¿Confirmas eliminar definitivamente ' +
-            cantidad +
-            ' cotización(es)?\n\n' +
-            'Esta acción no se puede deshacer.'
-          )
+          bulkAccionPendiente
         );
       }
     }
   );
+
+  /* ======================================================== */
+  /* CERRAR HACIENDO CLICK EN EL FONDO                        */
+  /* ======================================================== */
+
+  document.addEventListener(
+    'click',
+    function (e) {
+
+      const modal = document.getElementById(
+        'modalBulkConfirm'
+      );
+
+      if (
+        !modal ||
+        modal.classList.contains('hidden')
+      ) {
+        return;
+      }
+
+      if (e.target === modal) {
+        cerrarModalMasivo();
+      }
+    }
+  );
+
+  /* ======================================================== */
+  /* ESCAPE                                                   */
+  /* ======================================================== */
+
+  document.addEventListener(
+    'keydown',
+    function (e) {
+
+      if (e.key !== 'Escape') {
+        return;
+      }
+
+      const modal = document.getElementById(
+        'modalBulkConfirm'
+      );
+
+      if (
+        modal &&
+        !modal.classList.contains('hidden')
+      ) {
+        cerrarModalMasivo();
+      }
+    }
+  );
+
+  /* ======================================================== */
+  /* INICIAL                                                  */
+  /* ======================================================== */
 
   actualizarBarraMasiva();
 
