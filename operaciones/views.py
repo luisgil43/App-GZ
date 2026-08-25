@@ -1811,24 +1811,27 @@ def descargar_formato_sitios_excel(request):
 @rol_requerido("pm", "admin", "facturacion")
 def listar_servicios_pm(request):
     """
-    Bandeja de cotizaciones pendientes de aprobación.
+    Bandeja general de servicios cotizados.
 
     REGLA PRINCIPAL
     ==========================================================
 
-    Esta pantalla muestra EXCLUSIVAMENTE:
+    Esta pantalla muestra servicios operativos en cualquiera de
+    los estados válidos del flujo de cotizaciones.
 
-        estado = "cotizado"
+    Se excluyen los registros especiales de ajustes:
 
-    Es decir:
+        - ajuste_bono
+        - ajuste_adelanto
+        - ajuste_descuento
 
-        Cotizado (pendiente aprobación)
+    Puede filtrarse por:
 
-    Una vez aprobada una cotización y pase a:
-
-        aprobado_pendiente
-
-    desaparece automáticamente de esta bandeja.
+        - DU
+        - ID Claro
+        - ID NEW
+        - Mes de producción
+        - Estado
 
     Los filtros Excel se aplican antes de paginar.
 
@@ -1845,15 +1848,26 @@ def listar_servicios_pm(request):
     from django.core.paginator import Paginator
 
     # ========================================================
-    # QUERYSET BASE
+    # ESTADOS OPERATIVOS VISIBLES
     # ========================================================
-    #
-    # Esta pantalla es ahora exclusivamente una bandeja
-    # de aprobación.
+
+    ESTADOS_VISIBLES = [
+        "cotizado",
+        "aprobado_pendiente",
+        "asignado",
+        "en_progreso",
+        "en_revision_supervisor",
+        "finalizado_trabajador",
+        "rechazado_supervisor",
+        "aprobado_supervisor",
+    ]
+
+    # ========================================================
+    # QUERYSET BASE
     # ========================================================
 
     servicios = ServicioCotizado.objects.filter(
-        estado="cotizado",
+        estado__in=ESTADOS_VISIBLES,
     ).order_by(
         "-fecha_creacion",
         "-id",
@@ -1891,6 +1905,17 @@ def listar_servicios_pm(request):
         or ""
     ).strip()
 
+    estado = (
+        request.GET.get(
+            "estado",
+        )
+        or ""
+    ).strip()
+
+    # ========================================================
+    # APLICAR FILTROS RÁPIDOS
+    # ========================================================
+
     du = du_raw
 
     if du:
@@ -1920,6 +1945,11 @@ def listar_servicios_pm(request):
     if mes_produccion:
         servicios = servicios.filter(
             mes_produccion__icontains=mes_produccion,
+        )
+
+    if estado and estado in ESTADOS_VISIBLES:
+        servicios = servicios.filter(
+            estado=estado,
         )
 
     servicios = servicios.distinct()
@@ -1975,7 +2005,21 @@ def listar_servicios_pm(request):
     def status_label(
         servicio,
     ):
-        return "Cotizado (pendiente aprobación)"
+        labels = {
+            "cotizado": "Cotizado (pendiente aprobación)",
+            "aprobado_pendiente": "Aprobada, pendiente por asignar",
+            "asignado": "Asignado",
+            "en_progreso": "En progreso",
+            "en_revision_supervisor": "En revisión supervisor",
+            "finalizado_trabajador": "Finalizado trabajador",
+            "rechazado_supervisor": "Rechazado por supervisor",
+            "aprobado_supervisor": "Aprobado por supervisor",
+        }
+
+        return labels.get(
+            servicio.estado,
+            servicio.estado,
+        )
 
     def excel_value_for_servicio(
         servicio,
@@ -2049,6 +2093,19 @@ def listar_servicios_pm(request):
     servicios_list = list(
         servicios,
     )
+
+    # ========================================================
+    # LABEL DE ESTADO PARA EL TEMPLATE
+    # ========================================================
+
+    for servicio in servicios_list:
+        servicio.estado_pm_label = status_label(
+            servicio,
+        )
+
+    # ========================================================
+    # APLICAR FILTROS EXCEL
+    # ========================================================
 
     if excel_filters:
 
@@ -2183,12 +2240,58 @@ def listar_servicios_pm(request):
     if mes_produccion:
         keep_params["mes_produccion"] = mes_produccion
 
+    if estado and estado in ESTADOS_VISIBLES:
+        keep_params["estado"] = estado
+
     if excel_filters_raw:
         keep_params["excel_filters"] = excel_filters_raw
 
     qs_keep = urlencode(
         keep_params,
     )
+
+    # ========================================================
+    # ESTADOS DISPONIBLES PARA FILTROS
+    # ========================================================
+
+    estado_choices = [
+        (
+            "cotizado",
+            "Cotizado (pendiente aprobación)",
+        ),
+        (
+            "aprobado_pendiente",
+            "Aprobada, pendiente por asignar",
+        ),
+        (
+            "asignado",
+            "Asignado",
+        ),
+        (
+            "en_progreso",
+            "En progreso",
+        ),
+        (
+            "en_revision_supervisor",
+            "En revisión supervisor",
+        ),
+        (
+            "finalizado_trabajador",
+            "Finalizado trabajador",
+        ),
+        (
+            "rechazado_supervisor",
+            "Rechazado por supervisor",
+        ),
+        (
+            "aprobado_supervisor",
+            "Aprobado por supervisor",
+        ),
+    ]
+
+    # ========================================================
+    # RENDER
+    # ========================================================
 
     return render(
         request,
@@ -2201,13 +2304,14 @@ def listar_servicios_pm(request):
                 "id_claro": id_claro,
                 "mes_produccion": mes_produccion,
                 "id_new": id_new,
-                "estado": "cotizado",
+                "estado": (estado if estado in ESTADOS_VISIBLES else ""),
             },
-            "estado_choices": (ServicioCotizado.ESTADOS),
-            "excel_global_json": (excel_global_json),
+            "estado_choices": estado_choices,
+            "excel_global_json": excel_global_json,
             "qs_keep": qs_keep,
         },
     )
+
 
 @login_required
 @rol_requerido("pm", "admin")
@@ -2437,7 +2541,6 @@ def accion_masiva_cotizaciones_pm(
     return redirect(
         "operaciones:listar_servicios_pm",
     )
-
 
 
 @login_required
