@@ -20,52 +20,57 @@ def health_check(request):
 
 urlpatterns = [
     # Health check
-    path('admin/', admin.site.urls),
-    path('healthz', health_check),
-
-
-    path('logout/', LogoutView.as_view(next_page='/usuarios/login/'), name='logout'),
-
-
+    path("admin/", admin.site.urls),
+    path("healthz", health_check),
+    path("logout/", LogoutView.as_view(next_page="/usuarios/login/"), name="logout"),
     # Panel de administración personalizado
-    path('dashboard_admin/', include(('dashboard_admin.urls',
-         'dashboard_admin'), namespace='dashboard_admin')),
-
-
+    path(
+        "dashboard_admin/",
+        include(
+            ("dashboard_admin.urls", "dashboard_admin"), namespace="dashboard_admin"
+        ),
+    ),
     # Dashboard técnico
-    path('dashboard/', include(('dashboard.urls', 'dashboard'), namespace='dashboard')),
-
+    path("dashboard/", include(("dashboard.urls", "dashboard"), namespace="dashboard")),
     # Usuarios
-    path('usuarios/', include(('usuarios.urls', 'usuarios'), namespace='usuarios')),
-
+    path("usuarios/", include(("usuarios.urls", "usuarios"), namespace="usuarios")),
     # Recuperación de contraseña
-    path('password_reset/', PasswordResetView.as_view(), name='password_reset'),
-    path('password_reset/done/', PasswordResetDoneView.as_view(),
-         name='password_reset_done'),
-    path('reset/<uidb64>/<token>/', PasswordResetConfirmView.as_view(),
-         name='password_reset_confirm'),
-    path('reset/done/', PasswordResetCompleteView.as_view(),
-         name='password_reset_complete'),
-
+    path("password_reset/", PasswordResetView.as_view(), name="password_reset"),
+    path(
+        "password_reset/done/",
+        PasswordResetDoneView.as_view(),
+        name="password_reset_done",
+    ),
+    path(
+        "reset/<uidb64>/<token>/",
+        PasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
+    ),
+    path(
+        "reset/done/",
+        PasswordResetCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
     # Liquidaciones
-    path('liquidaciones/', include(('liquidaciones.urls',
-         'liquidaciones'), namespace='liquidaciones')),
+    path(
+        "liquidaciones/",
+        include(("liquidaciones.urls", "liquidaciones"), namespace="liquidaciones"),
+    ),
     path("flota/", include("flota.urls")),
-
     # Redirección raíz a dashboard (usuarios normales)
-    path('', RedirectView.as_view(url='/dashboard/', permanent=False)),
-
+    path("", RedirectView.as_view(url="/dashboard/", permanent=False)),
     # Django Select2
     path("select2/", include("django_select2.urls")),
     # Contratos de trabajos
-    path('rrhh/', include('rrhh.urls', namespace='rrhh')),
-   
-    path('dashboard_admin/login/',
-         RedirectView.as_view(url='/usuarios/login/', permanent=False)),
-    path('logistica/', include('logistica.urls', namespace='logistica')),
-    path('operaciones/', include('operaciones.urls')),
-    path('notificaciones/', include('notificaciones.urls')),
-    path('facturacion/', include('facturacion.urls')),
+    path("rrhh/", include("rrhh.urls", namespace="rrhh")),
+    path(
+        "dashboard_admin/login/",
+        RedirectView.as_view(url="/usuarios/login/", permanent=False),
+    ),
+    path("logistica/", include("logistica.urls", namespace="logistica")),
+    path("operaciones/", include("operaciones.urls")),
+    path("notificaciones/", include("notificaciones.urls")),
+    path("facturacion/", include("facturacion.urls")),
     path("geo-cam/", include("geo_cam.urls")),
     path(
         "favicon.ico",
@@ -73,7 +78,7 @@ urlpatterns = [
             url=staticfiles_storage.url("images/favicon.ico"),
             permanent=True,
         ),
-        name="favicon"
+        name="favicon",
     ),
     path(
         "apple-touch-icon.png",
@@ -81,7 +86,7 @@ urlpatterns = [
             url=staticfiles_storage.url("images/apple-touch-icon.png"),
             permanent=True,
         ),
-        name="apple_touch_icon"
+        name="apple_touch_icon",
     ),
     path(
         "apple-touch-icon-precomposed.png",
@@ -89,7 +94,7 @@ urlpatterns = [
             url=staticfiles_storage.url("images/apple-touch-icon.png"),
             permanent=True,
         ),
-        name="apple_touch_icon_precomposed"
+        name="apple_touch_icon_precomposed",
     ),
     # (Opcional) variantes que a veces piden dispositivos antiguos
     path(
@@ -98,14 +103,14 @@ urlpatterns = [
             url=staticfiles_storage.url("images/apple-touch-icon-120x120.png"),
             permanent=True,
         ),
-        name="apple_touch_icon_120"
+        name="apple_touch_icon_120",
     ),
     path(
         "favicon.ico",
         RedirectView.as_view(
             url=staticfiles_storage.url("icons/favicon.ico"),
             permanent=True,
-        )
+        ),
     ),
     path(
         "apple-touch-icon.png",
@@ -113,20 +118,23 @@ urlpatterns = [
             # o tu apple-touch-icon.png
             url=staticfiles_storage.url("icons/apple-touch-icon-180x180.png"),
             permanent=True,
-        )
+        ),
     ),
     path(
         "apple-touch-icon-precomposed.png",
         RedirectView.as_view(
             url=staticfiles_storage.url("icons/apple-touch-icon-180x180.png"),
             permanent=True,
-        )
+        ),
     ),
-
+    path("planificacion/",include("planificacion.urls"),
+    ),
     path("bot-gz/", include("bot_gz.urls", namespace="bot_gz")),
     path("prevencion/", include("prevencion.urls")),
-    path("cron/", include(("notificaciones.urls", "notificaciones"), namespace="cron_general")),
-
+    path(
+        "cron/",
+        include(("notificaciones.urls", "notificaciones"), namespace="cron_general"),
+    ),
 ]
 
 # Archivos estáticos y media (solo en DEBUG)

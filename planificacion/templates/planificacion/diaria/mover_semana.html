@@ -1,0 +1,480 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Mover sitio de semana
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto w-full max-w-4xl">
+
+    <div
+      class="
+        overflow-hidden
+        rounded-3xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <!-- ================================================== -->
+      <!-- CABECERA                                           -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          border-b border-slate-100
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-blue-50
+          px-5
+          py-5
+          sm:px-6
+        "
+      >
+
+        <div
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.14em]
+            text-blue-700
+          "
+        >
+          Planificación diaria
+        </div>
+
+        <h1
+          class="
+            mt-1
+            text-2xl
+            font-black
+            text-slate-900
+            sm:text-3xl
+          "
+        >
+          Mover sitio de semana
+        </h1>
+
+        <p
+          class="
+            mt-2
+            max-w-3xl
+            text-sm
+            leading-relaxed
+            text-slate-600
+          "
+        >
+          Selecciona la nueva semana operacional. El sitio perderá
+          completamente su ubicación diaria y semanal anterior y
+          será procesado desde cero dentro de la semana destino.
+        </p>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- SITIO                                               -->
+      <!-- ================================================== -->
+
+      <div class="border-b border-slate-100 p-5 sm:p-6">
+
+        <div
+          class="
+            rounded-2xl
+            border border-slate-200
+            bg-slate-50
+            p-4
+          "
+        >
+
+          <div
+            class="
+              flex
+              flex-col
+              gap-4
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+            "
+          >
+
+            <div class="min-w-0">
+
+              <div
+                class="
+                  text-[10px]
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-slate-400
+                "
+              >
+                Sitio
+              </div>
+
+              <div class="mt-1 text-xl font-black text-slate-900">
+
+                {% if sitio.id_claro %}
+                  {{ sitio.id_claro }}
+                {% else %}
+                  {{ sitio.id_sites }}
+                {% endif %}
+
+              </div>
+
+              <div class="mt-1 text-sm font-semibold text-slate-600">
+                {{ sitio.nombre|default:"Sin nombre" }}
+              </div>
+
+              <div class="mt-1 text-xs text-slate-500">
+                {{ sitio.comuna|default:"—" }}
+              </div>
+
+            </div>
+
+
+            <div
+              class="
+                rounded-2xl
+                border border-amber-200
+                bg-amber-50
+                px-4
+                py-3
+                sm:text-right
+              "
+            >
+
+              <div
+                class="
+                  text-[10px]
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-amber-600
+                "
+              >
+                Semana actual
+              </div>
+
+              <div class="mt-1 font-black text-amber-900">
+                {{ batch_origen.codigo_semana }}
+              </div>
+
+              <div class="mt-1 text-xs font-semibold text-amber-700">
+                {{ batch_origen.fecha_inicio|date:"d/m/Y" }}
+                –
+                {{ batch_origen.fecha_fin|date:"d/m/Y" }}
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- ADVERTENCIA                                         -->
+      <!-- ================================================== -->
+
+      <div class="border-b border-slate-100 px-5 py-4 sm:px-6">
+
+        <div
+          class="
+            rounded-2xl
+            border border-blue-200
+            bg-blue-50
+            px-4
+            py-3
+            text-sm
+            leading-relaxed
+            text-blue-800
+          "
+        >
+          Si el servicio está asignado o en ejecución, se eliminará
+          la asignación actual, la sesión fotográfica y sus técnicos,
+          y Operaciones volverá a
+          <strong>pendiente por asignar</strong>.
+          Los servicios que ya estén en revisión del supervisor
+          no podrán moverse.
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- SEMANAS                                             -->
+      <!-- ================================================== -->
+
+      <form
+        method="post"
+        action="{% url 'planificacion:confirmar_mover_semana' sitio_batch.id %}"
+      >
+
+        {% csrf_token %}
+
+        <div class="p-5 sm:p-6">
+
+          <div class="mb-4">
+
+            <h2 class="text-base font-black text-slate-900">
+              Semana destino
+            </h2>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Puedes mover el sitio hacia cualquier semana existente.
+            </p>
+
+          </div>
+
+
+          {% if batches_destino %}
+
+            <div class="space-y-3">
+
+              {% for destino in batches_destino %}
+
+                <label
+                  class="
+                    block
+                    cursor-pointer
+                    rounded-2xl
+                    border border-slate-200
+                    bg-white
+                    p-4
+                    transition
+                    hover:border-blue-300
+                    hover:bg-blue-50/40
+                  "
+                >
+
+                  <div
+                    class="
+                      flex
+                      items-start
+                      gap-3
+                    "
+                  >
+
+                    <input
+                      type="radio"
+                      name="batch_destino_id"
+                      value="{{ destino.id }}"
+                      required
+                      class="
+                        mt-1
+                        h-4
+                        w-4
+                        shrink-0
+                        accent-blue-600
+                      "
+                    >
+
+
+                    <div class="min-w-0 flex-1">
+
+                      <div
+                        class="
+                          flex
+                          flex-col
+                          gap-2
+                          sm:flex-row
+                          sm:items-center
+                          sm:justify-between
+                        "
+                      >
+
+                        <div>
+
+                          <div
+                            class="
+                              text-base
+                              font-black
+                              text-slate-900
+                            "
+                          >
+                            {{ destino.codigo_semana }}
+                          </div>
+
+                          <div class="mt-0.5 text-xs font-semibold text-slate-500">
+                            {{ destino.fecha_inicio|date:"d/m/Y" }}
+                            –
+                            {{ destino.fecha_fin|date:"d/m/Y" }}
+                          </div>
+
+                        </div>
+
+
+                        <div class="flex flex-wrap gap-2">
+
+                          <span
+                            class="
+                              rounded-full
+                              border border-slate-200
+                              bg-slate-50
+                              px-2.5
+                              py-1
+                              text-[10px]
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            {{ destino.get_estado_display }}
+                          </span>
+
+                          <span
+                            class="
+                              rounded-full
+                              border border-blue-200
+                              bg-blue-50
+                              px-2.5
+                              py-1
+                              text-[10px]
+                              font-black
+                              text-blue-700
+                            "
+                          >
+                            {{ destino.sitios.count }} sitio(s)
+                          </span>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </label>
+
+              {% endfor %}
+
+            </div>
+
+          {% else %}
+
+            <div
+              class="
+                rounded-2xl
+                border border-amber-200
+                bg-amber-50
+                px-4
+                py-5
+                text-sm
+                font-semibold
+                text-amber-700
+              "
+            >
+              No existe actualmente otra semana disponible para recibir
+              este sitio.
+            </div>
+
+          {% endif %}
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- ACCIONES                                          -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            flex
+            flex-col-reverse
+            gap-2
+            border-t border-slate-100
+            bg-slate-50
+            px-5
+            py-4
+            sm:flex-row
+            sm:justify-end
+            sm:px-6
+          "
+        >
+
+          <a
+            href="{% url 'planificacion:detalle_planificacion_diaria' batch_origen.id %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-5
+              py-2.5
+              text-sm
+              font-black
+              text-slate-700
+              transition
+              hover:bg-slate-100
+            "
+          >
+            Cancelar
+          </a>
+
+
+          {% if batches_destino %}
+
+            <button
+              type="submit"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-blue-600
+                px-5
+                py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-sm
+                transition
+                hover:bg-blue-700
+              "
+            >
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="h-4 w-4"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M5 12h14M13 6l6 6-6 6"
+                />
+              </svg>
+
+              Mover de semana
+
+            </button>
+
+          {% endif %}
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

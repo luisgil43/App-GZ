@@ -1,0 +1,2275 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Detalle Batch Semanal
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto max-w-[1650px]">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div class="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+
+    <div>
+
+      <div class="text-sm font-medium text-slate-500">
+        {{ mensual }}
+      </div>
+
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">
+        {% if batch.nombre %}
+          {{ batch.nombre }}
+        {% else %}
+          Semana {{ batch.fecha_inicio|date:"d/m/Y" }}
+        {% endif %}
+      </h1>
+
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-sm">
+
+        <span class="text-slate-500">
+          Semana objetivo:
+        </span>
+
+        <span class="font-semibold text-slate-800">
+          {{ batch.fecha_inicio|date:"d/m/Y" }}
+        </span>
+
+        <span class="text-slate-300">
+          ·
+        </span>
+
+        <span class="text-slate-500">
+          Estado:
+        </span>
+
+        <span class="font-semibold text-slate-800">
+          {{ batch.get_estado_display }}
+        </span>
+
+        {% if batch.generado_por_motor %}
+
+          <span class="text-slate-300">
+            ·
+          </span>
+
+          <span
+            class="
+              inline-flex
+              rounded-full
+              border border-cyan-200
+              bg-cyan-50
+              px-2.5
+              py-1
+              text-xs
+              font-bold
+              text-cyan-700
+            "
+          >
+            Generado por motor
+          </span>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+
+    <div class="flex flex-wrap gap-2">
+
+      <a
+        href="{% url 'planificacion:lista_planificacion_semanal' mensual.id %}"
+        class="
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4 py-2.5
+          text-sm
+          font-semibold
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-50
+        "
+      >
+        Volver a semanas
+      </a>
+
+      {% if batch.generado_por_motor %}
+
+        <a
+          href="{% url 'planificacion:mapa_batch_semanal' batch.id %}"
+          class="
+            rounded-xl
+            border border-emerald-200
+            bg-gradient-to-r
+            from-emerald-600
+            to-teal-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          Ver mapa semanal
+        </a>
+
+      {% endif %}
+
+      {% if batch.estado == "borrador" %}
+
+        <a
+          href="{% url 'planificacion:analizar_batch_semanal' batch.id %}"
+          class="
+            rounded-xl
+            bg-gradient-to-r
+            from-cyan-600
+            to-blue-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          Analizar asignación
+        </a>
+
+
+        {% if resumen.principales > 0 %}
+
+          <form
+            method="post"
+            action="{% url 'planificacion:cerrar_propuesta_semanal' batch.id %}"
+          >
+            {% csrf_token %}
+
+            <button
+              type="submit"
+              class="
+                rounded-xl
+                bg-blue-600
+                px-4 py-2.5
+                text-sm
+                font-semibold
+                text-white
+                shadow-sm
+                transition
+                hover:bg-blue-700
+              "
+            >
+              Cerrar propuesta
+            </button>
+
+          </form>
+
+        {% endif %}
+
+
+      {% elif batch.estado == "propuesto" %}
+
+        <form
+          method="post"
+          action="{% url 'planificacion:enviar_gestion_permisos_batch' batch.id %}"
+        >
+          {% csrf_token %}
+
+          <button
+            type="submit"
+            class="
+              rounded-xl
+              bg-amber-500
+              px-4 py-2.5
+              text-sm
+              font-semibold
+              text-white
+              shadow-sm
+              transition
+              hover:bg-amber-600
+            "
+          >
+            Marcar gestión enviada
+          </button>
+
+        </form>
+
+      {% endif %}
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- CONTADORES                                             -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-xs font-semibold uppercase text-slate-500">
+        Objetivo
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-slate-900">
+        {{ resumen.objetivo }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div class="text-xs font-semibold uppercase text-blue-600">
+        Principales
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-blue-800">
+        {{ resumen.principales }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+      <div class="text-xs font-semibold uppercase text-violet-600">
+        Reserva
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-violet-800">
+        {{ resumen.reservas }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <div class="text-xs font-semibold uppercase text-amber-600">
+        Gestión
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-amber-700">
+        {{ resumen.gestion_permiso }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+      <div class="text-xs font-semibold uppercase text-emerald-600">
+        Disponibles
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-emerald-700">
+        {{ resumen.disponibles }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-red-200 bg-red-50 p-4">
+      <div class="text-xs font-semibold uppercase text-red-600">
+        Rechazados
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-red-700">
+        {{ resumen.rechazados }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-xs font-semibold uppercase text-slate-500">
+        Urbanos
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-slate-900">
+        {{ resumen.urbanos }}
+      </div>
+    </div>
+
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div class="text-xs font-semibold uppercase text-slate-500">
+        Rurales
+      </div>
+
+      <div class="mt-1 text-2xl font-bold text-slate-900">
+        {{ resumen.rurales }}
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- MOTOR DE PLANIFICACIÓN                                 -->
+  <!-- ====================================================== -->
+
+  {% if batch.estado == "borrador" %}
+
+  <div
+    class="
+      mb-5
+      overflow-hidden
+      rounded-2xl
+      border border-cyan-200
+      bg-gradient-to-r
+      from-cyan-50
+      via-white
+      to-blue-50
+      shadow-sm
+    "
+  >
+
+    <div class="p-5 sm:p-6">
+
+      <div class="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+
+        <div class="max-w-4xl">
+
+          <p
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-cyan-700
+            "
+          >
+            Motor semanal
+          </p>
+
+          <h2 class="mt-1 text-xl font-black text-slate-900">
+            Análisis inteligente de la asignación
+          </h2>
+
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">
+            GZ analiza todos los sitios disponibles del mes y compara
+            concentración geográfica, urbano/rural, capacidad de las
+            cuadrillas, condiciones de acceso, respaldo y el impacto
+            que cada selección deja sobre las siguientes semanas.
+          </p>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+
+            <span
+              class="
+                rounded-full
+                border border-slate-200
+                bg-white
+                px-3 py-1.5
+                text-xs
+                font-bold
+                text-slate-600
+              "
+            >
+              Objetivo: {{ resumen.objetivo }}
+            </span>
+
+            <span
+              class="
+                rounded-full
+                border border-slate-200
+                bg-white
+                px-3 py-1.5
+                text-xs
+                font-bold
+                text-slate-600
+              "
+            >
+              Capacidad nominal: {{ resumen.capacidad.total }}
+            </span>
+
+            {% if resumen.capacidad.sabado %}
+
+              <span
+                class="
+                  rounded-full
+                  border border-amber-200
+                  bg-amber-50
+                  px-3 py-1.5
+                  text-xs
+                  font-bold
+                  text-amber-700
+                "
+              >
+                Sábado disponible: +{{ resumen.capacidad.sabado }}
+              </span>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+
+        <div class="shrink-0">
+
+          <a
+            href="{% url 'planificacion:analizar_batch_semanal' batch.id %}"
+            class="
+              inline-flex
+              min-w-[230px]
+              items-center
+              justify-center
+              rounded-xl
+              bg-gradient-to-r
+              from-cyan-600
+              to-blue-600
+              px-5 py-3
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+            "
+          >
+            Analizar asignación
+          </a>
+
+          <p class="mt-2 text-center text-[11px] text-slate-500">
+            El motor generará varias propuestas comparables.
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  {% endif %}
+
+
+  <!-- ====================================================== -->
+  <!-- DISPONIBILIDAD DE CUADRILLAS                           -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+      <div>
+
+        <h2 class="text-base font-bold text-slate-900">
+          Disponibilidad semanal
+        </h2>
+
+        <p class="mt-1 text-sm text-slate-500">
+          Configuración utilizada por el motor para evaluar
+          capacidad y compatibilidad operacional.
+        </p>
+
+      </div>
+
+
+      <div class="text-sm text-slate-600">
+
+        Capacidad nominal:
+
+        <span class="font-bold text-slate-900">
+          {{ resumen.capacidad.total }}
+        </span>
+
+        {% if resumen.capacidad.sabado %}
+
+          <span class="mx-1 text-slate-300">
+            ·
+          </span>
+
+          sábado disponible:
+
+          <span class="font-bold text-slate-900">
+            {{ resumen.capacidad.sabado }}
+          </span>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+
+    <div class="mt-4 grid gap-3 md:grid-cols-3">
+
+      {% for disponibilidad in disponibilidades %}
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+          <div class="flex items-start justify-between gap-3">
+
+            <div>
+
+              <div class="font-bold text-slate-900">
+                {{ disponibilidad.get_cuadrilla_display }}
+              </div>
+
+              <div class="mt-1 text-sm text-slate-600">
+                {{ disponibilidad.tipo_vehiculo }}
+              </div>
+
+            </div>
+
+
+            {% if disponibilidad.permite_rural %}
+
+              <span
+                class="
+                  rounded-full
+                  border border-slate-200
+                  bg-white
+                  px-2.5 py-1
+                  text-[10px]
+                  font-bold
+                  text-slate-600
+                "
+              >
+                Urbano / Rural
+              </span>
+
+            {% else %}
+
+              <span
+                class="
+                  rounded-full
+                  border border-blue-200
+                  bg-blue-50
+                  px-2.5 py-1
+                  text-[10px]
+                  font-bold
+                  text-blue-700
+                "
+              >
+                Solo urbano
+              </span>
+
+            {% endif %}
+
+          </div>
+
+
+          <div class="mt-3">
+
+            {% if disponibilidad.activa %}
+
+              <span
+                class="
+                  rounded-full
+                  bg-emerald-50
+                  px-2.5 py-1
+                  text-xs
+                  font-semibold
+                  text-emerald-700
+                "
+              >
+                {{ disponibilidad.get_modalidad_display }}
+              </span>
+
+            {% else %}
+
+              <span
+                class="
+                  rounded-full
+                  bg-slate-200
+                  px-2.5 py-1
+                  text-xs
+                  font-semibold
+                  text-slate-600
+                "
+              >
+                Inactiva
+              </span>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+
+      {% empty %}
+
+        <div class="text-sm text-slate-500">
+          No existe configuración de cuadrillas.
+        </div>
+
+      {% endfor %}
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- SITIOS INCLUIDOS                                       -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      mb-6
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+    "
+  >
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+
+          <h2 class="text-base font-bold text-slate-900">
+            Sitios incluidos en el batch
+          </h2>
+
+          <p class="mt-1 text-sm text-slate-500">
+
+            {% if batch.generado_por_motor %}
+
+              Propuesta generada automáticamente por el motor.
+              Puedes revisar y hacer ajustes antes de cerrarla.
+
+            {% else %}
+
+              Todavía no existe una propuesta aplicada.
+              Ejecuta el análisis para que GZ prepare el batch.
+
+            {% endif %}
+
+          </p>
+
+        </div>
+
+
+        {% if batch.generado_por_motor and batch.estado == "borrador" %}
+
+          <a
+            href="{% url 'planificacion:analizar_batch_semanal' batch.id %}?recalcular=1"
+            class="
+              inline-flex
+              rounded-xl
+              border border-cyan-200
+              bg-cyan-50
+              px-3 py-2
+              text-xs
+              font-bold
+              text-cyan-700
+              transition
+              hover:bg-cyan-100
+            "
+          >
+            Recalcular propuestas
+          </a>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+
+    {% if incluidos %}
+
+      <form
+        id="form-sitios-batch"
+        method="post"
+        action="{% url 'planificacion:confirmar_sitios_batch' batch.id %}"
+      >
+
+        {% csrf_token %}
+
+        <!-- ================================================= -->
+        <!-- ACCIONES MASIVAS                                  -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-3
+            border-b
+            border-slate-200
+            bg-slate-50
+            px-5
+            py-4
+            lg:flex-row
+            lg:items-center
+            lg:justify-between
+          "
+        >
+
+          <div class="flex items-center gap-3">
+
+            <span
+              id="contador-seleccionados-batch"
+              class="
+                inline-flex
+                h-8
+                min-w-8
+                items-center
+                justify-center
+                rounded-full
+                bg-cyan-50
+                px-2
+                text-xs
+                font-black
+                text-cyan-700
+              "
+            >
+              0
+            </span>
+
+            <div>
+
+              <div class="text-sm font-bold text-slate-800">
+                Sitios seleccionados
+              </div>
+
+              <div class="text-xs text-slate-500">
+                Selecciona uno o varios sitios para aplicar una acción masiva.
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+            <select
+              id="estado-batch-masivo"
+              name="nuevo_estado_batch"
+              class="
+                min-w-[220px]
+                rounded-xl
+                border
+                border-slate-300
+                bg-white
+                px-3
+                py-2.5
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              <option value="">
+                Cambiar estado batch
+              </option>
+
+              <option value="seleccionado">
+                Seleccionado
+              </option>
+
+              <option value="gestion_permiso">
+                Gestión de permiso
+              </option>
+
+              <option value="disponible">
+                Disponible
+              </option>
+
+              <option value="confirmado">
+                Confirmado
+              </option>
+
+              <option value="rechazado">
+                Rechazado
+              </option>
+
+              <option value="sin_respuesta">
+                Sin respuesta
+              </option>
+
+            </select>
+
+
+            <button
+              id="boton-estado-batch-masivo"
+              type="submit"
+              formaction="{% url 'planificacion:actualizar_estado_masivo_sitios_batch' batch.id %}"
+              formmethod="post"
+              disabled
+              class="
+                rounded-xl
+                bg-slate-900
+                px-4
+                py-2.5
+                text-sm
+                font-bold
+                text-white
+                transition
+                hover:bg-slate-800
+                disabled:cursor-not-allowed
+                disabled:opacity-40
+              "
+            >
+              Aplicar estado
+            </button>
+
+
+            <button
+              id="limpiar-seleccion-batch"
+              type="button"
+              disabled
+              class="
+                rounded-xl
+                border
+                border-slate-300
+                bg-white
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-slate-600
+                transition
+                hover:bg-slate-100
+                disabled:cursor-not-allowed
+                disabled:opacity-40
+              "
+            >
+              Limpiar selección
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div class="overflow-x-auto">
+
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+
+            <thead class="bg-slate-50">
+
+              <tr
+                class="
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  tracking-wide
+                  text-slate-500
+                "
+              >
+
+                <!-- ========================================= -->
+                <!-- SELECTOR MASIVO                           -->
+                <!-- ========================================= -->
+
+                <th class="px-3 py-3">
+
+                  <input
+                    id="seleccionar-todos-incluidos"
+                    type="checkbox"
+                    class="
+                      h-4
+                      w-4
+                      rounded
+                      border-slate-300
+                      text-blue-600
+                    "
+                    title="Seleccionar todos los sitios visibles"
+                  >
+
+                </th>
+
+
+                <th class="px-3 py-3">
+                  ID Claro
+                </th>
+
+                <th class="px-3 py-3">
+                  Nombre
+                </th>
+
+                <th class="px-3 py-3">
+                  Comuna
+                </th>
+
+                <th class="px-3 py-3">
+                  Zona
+                </th>
+
+                <th class="px-3 py-3">
+                  Acceso
+                </th>
+
+                <th class="px-3 py-3">
+                  Permiso
+                </th>
+
+                <th class="px-3 py-3">
+                  Estado batch
+                </th>
+
+                <th class="px-3 py-3">
+                  Tipo
+                </th>
+
+                <th class="px-3 py-3">
+                  Puntaje
+                </th>
+
+                <th class="px-3 py-3 text-right">
+                  Acción
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody class="divide-y divide-slate-100">
+
+              {% for item in incluidos %}
+
+                <tr
+                  class="
+                    {% if item.estado == 'excluido' or item.estado == 'reemplazado' %}
+                      bg-slate-50 opacity-60
+                    {% else %}
+                      hover:bg-slate-50
+                    {% endif %}
+                  "
+                  data-item-row
+                >
+
+                  <!-- ======================================= -->
+                  <!-- CHECKBOX                                -->
+                  <!-- ======================================= -->
+
+                  <td class="px-3 py-3">
+
+                    {% if item.estado != "excluido" and item.estado != "reemplazado" %}
+
+                      <input
+                        type="checkbox"
+                        name="item_ids"
+                        value="{{ item.id }}"
+                        class="
+                          item-batch-checkbox
+                          h-4
+                          w-4
+                          rounded
+                          border-slate-300
+                          text-blue-600
+                        "
+                      >
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ID -->
+
+                  <td
+                    class="
+                      whitespace-nowrap
+                      px-3 py-3
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    {{ item.sitio_planificado.sitio.id_claro|default:"—" }}
+                  </td>
+
+
+                  <!-- NOMBRE -->
+
+                  <td class="min-w-[200px] px-3 py-3 text-slate-700">
+                    {{ item.sitio_planificado.sitio.nombre|default:"—" }}
+                  </td>
+
+
+                  <!-- COMUNA -->
+
+                  <td class="whitespace-nowrap px-3 py-3">
+                    {{ item.sitio_planificado.sitio.comuna|default:"—" }}
+                  </td>
+
+
+                  <!-- ZONA -->
+
+                  <td class="whitespace-nowrap px-3 py-3">
+
+                    {% if item.sitio_planificado.sitio.tipo_zona %}
+
+                      {% if "Rural" in item.sitio_planificado.sitio.tipo_zona %}
+
+                        <span
+                          class="
+                            rounded-full
+                            border border-amber-200
+                            bg-amber-50
+                            px-2.5 py-1
+                            text-xs
+                            font-semibold
+                            text-amber-700
+                          "
+                        >
+                          {{ item.sitio_planificado.sitio.tipo_zona }}
+                        </span>
+
+                      {% else %}
+
+                        <span
+                          class="
+                            rounded-full
+                            border border-blue-200
+                            bg-blue-50
+                            px-2.5 py-1
+                            text-xs
+                            font-semibold
+                            text-blue-700
+                          "
+                        >
+                          {{ item.sitio_planificado.sitio.tipo_zona }}
+                        </span>
+
+                      {% endif %}
+
+                    {% else %}
+
+                      <span class="text-slate-400">
+                        —
+                      </span>
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ACCESO -->
+
+                  <td class="min-w-[180px] px-3 py-3">
+                    {{ item.sitio_planificado.sitio.condiciones_acceso|default:"Sin información" }}
+                  </td>
+
+
+                  <!-- PERMISO -->
+
+                  <td class="min-w-[180px] px-3 py-3">
+
+                    {% if item.estado != "excluido" and item.estado != "reemplazado" %}
+
+                      <select
+                        class="
+                          permiso-inline
+                          w-full
+                          min-w-[150px]
+                          rounded-lg
+                          border border-slate-300
+                          bg-white
+                          px-2 py-1.5
+                          text-xs
+                          font-semibold
+                        "
+                        data-url="{% url 'planificacion:actualizar_permiso_sitio_batch' item.id %}"
+                        data-original="{{ item.sitio_planificado.estado_permiso }}"
+                      >
+
+                        {% for valor, etiqueta in estados_permiso %}
+
+                          <option
+                            value="{{ valor }}"
+                            {% if item.sitio_planificado.estado_permiso == valor %}selected{% endif %}
+                          >
+                            {{ etiqueta }}
+                          </option>
+
+                        {% endfor %}
+
+                      </select>
+
+
+                    {% else %}
+
+                      {{ item.sitio_planificado.get_estado_permiso_display }}
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ESTADO BATCH -->
+
+                  <td class="px-3 py-3">
+
+                    <span
+                      class="
+                        estado-batch-label
+                        inline-flex
+                        rounded-full
+                        bg-slate-100
+                        px-2.5 py-1
+                        text-xs
+                        font-semibold
+                        text-slate-700
+                      "
+                    >
+                      {{ item.get_estado_display }}
+                    </span>
+
+                  </td>
+
+
+                  <!-- TIPO -->
+
+                  <td class="px-3 py-3">
+
+                    {% if item.es_reserva %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border border-violet-200
+                          bg-violet-50
+                          px-2.5 py-1
+                          text-xs
+                          font-semibold
+                          text-violet-700
+                        "
+                      >
+                        Reserva
+                      </span>
+
+                    {% else %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border border-blue-200
+                          bg-blue-50
+                          px-2.5 py-1
+                          text-xs
+                          font-semibold
+                          text-blue-700
+                        "
+                      >
+                        Principal
+                      </span>
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- PUNTAJE -->
+
+                  <td class="px-3 py-3 text-center">
+
+                    {% if item.puntaje_motor %}
+
+                      <span
+                        class="
+                          inline-flex
+                          rounded-lg
+                          border border-slate-200
+                          bg-slate-50
+                          px-2 py-1
+                          text-xs
+                          font-bold
+                          text-slate-700
+                        "
+                      >
+                        {{ item.puntaje_motor }}
+                      </span>
+
+                    {% else %}
+
+                      <span class="text-slate-400">
+                        —
+                      </span>
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ACCIÓN -->
+
+                  <td class="px-3 py-3 text-right">
+
+                    {% if item.estado != "excluido" and item.estado != "reemplazado" %}
+
+                      <button
+                        type="submit"
+                        form="quitar-item-{{ item.id }}"
+                        class="
+                          rounded-lg
+                          border border-red-200
+                          bg-white
+                          px-2.5 py-1.5
+                          text-xs
+                          font-semibold
+                          text-red-600
+                          transition
+                          hover:bg-red-50
+                        "
+                      >
+                        Quitar
+                      </button>
+
+                    {% endif %}
+
+                  </td>
+
+                </tr>
+
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- CONFIRMACIÓN PARA PLANIFICACIÓN DIARIA            -->
+        <!-- ================================================= -->
+
+        {% if resumen.disponibles > 0 %}
+
+          <div
+            class="
+              flex
+              flex-col
+              gap-3
+              border-t
+              border-slate-200
+              px-5
+              py-4
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+            "
+          >
+
+            <p class="text-xs text-slate-500">
+              Para enviar sitios a planificación diaria,
+              selecciona únicamente sitios en estado Disponible.
+            </p>
+
+
+            <button
+              id="boton-confirmar-planificacion-diaria"
+              type="submit"
+              class="
+                rounded-xl
+                bg-emerald-600
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-white
+                transition
+                hover:bg-emerald-700
+              "
+            >
+              Confirmar seleccionados para planificación diaria
+            </button>
+
+          </div>
+
+        {% endif %}
+
+      </form>
+
+
+      {% for item in incluidos %}
+
+        {% if item.estado != "excluido" and item.estado != "reemplazado" %}
+
+          <form
+            id="quitar-item-{{ item.id }}"
+            method="post"
+            action="{% url 'planificacion:quitar_sitio_batch' item.id %}"
+            class="hidden"
+          >
+            {% csrf_token %}
+          </form>
+
+        {% endif %}
+
+      {% endfor %}
+
+
+    {% else %}
+
+      <div class="px-6 py-12 text-center">
+
+        <div
+          class="
+            mx-auto
+            flex
+            h-12 w-12
+            items-center
+            justify-center
+            rounded-2xl
+            bg-cyan-50
+            text-sm
+            font-black
+            text-cyan-700
+          "
+        >
+          GZ
+        </div>
+
+        <p class="mt-3 font-bold text-slate-800">
+          El batch todavía no tiene una propuesta aplicada
+        </p>
+
+        <p class="mx-auto mt-1 max-w-xl text-sm text-slate-500">
+          Ejecuta el motor para comparar diferentes composiciones
+          geográficas y seleccionar la alternativa más conveniente.
+        </p>
+
+
+        {% if batch.estado == "borrador" %}
+
+          <a
+            href="{% url 'planificacion:analizar_batch_semanal' batch.id %}"
+            class="
+              mt-4
+              inline-flex
+              rounded-xl
+              bg-gradient-to-r
+              from-cyan-600
+              to-blue-600
+              px-4 py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-sm
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-md
+            "
+          >
+            Analizar asignación
+          </a>
+
+        {% endif %}
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- AJUSTE MANUAL                                          -->
+  <!-- ====================================================== -->
+
+  {% if batch.estado == "borrador" or batch.estado == "propuesto" or batch.estado == "gestion_permisos" %}
+
+    <details
+      class="
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+      {% if batch.generado_por_motor %}{% else %}{% endif %}
+    >
+
+      <summary
+        class="
+          cursor-pointer
+          list-none
+          border-b border-transparent
+          px-5 py-4
+          transition
+          hover:bg-slate-50
+          open:border-slate-200
+        "
+      >
+
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <h2 class="text-base font-bold text-slate-900">
+              Ajuste manual y candidatos adicionales
+            </h2>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Utiliza esta sección únicamente para corregir o complementar
+              la propuesta generada por el motor.
+            </p>
+
+          </div>
+
+          <span
+            class="
+              rounded-full
+              border border-slate-200
+              bg-slate-50
+              px-3 py-1.5
+              text-xs
+              font-bold
+              text-slate-600
+            "
+          >
+            Ver candidatos
+          </span>
+
+        </div>
+
+      </summary>
+
+
+      <!-- FILTROS -->
+
+      <form method="get" class="border-b border-slate-200 bg-slate-50 p-4">
+
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+
+          <input
+            type="text"
+            name="q"
+            value="{{ filtros.q }}"
+            placeholder="Buscar ID Claro"
+            class="
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-3 py-2
+              text-sm
+            "
+          >
+
+
+          <select
+            name="comuna"
+            class="
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-3 py-2
+              text-sm
+            "
+          >
+
+            <option value="">
+              Todas las comunas
+            </option>
+
+            {% for opcion in comunas %}
+
+              <option
+                value="{{ opcion }}"
+                {% if filtros.comuna == opcion %}selected{% endif %}
+              >
+                {{ opcion }}
+              </option>
+
+            {% endfor %}
+
+          </select>
+
+
+          <select
+            name="tipo_zona"
+            class="
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-3 py-2
+              text-sm
+            "
+          >
+
+            <option value="">
+              Todos los tipos de zona
+            </option>
+
+            {% for opcion in tipos_zona %}
+
+              <option
+                value="{{ opcion }}"
+                {% if filtros.tipo_zona == opcion %}selected{% endif %}
+              >
+                {{ opcion }}
+              </option>
+
+            {% endfor %}
+
+          </select>
+
+
+          <select
+            name="permiso"
+            class="
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-3 py-2
+              text-sm
+            "
+          >
+
+            <option value="">
+              Todos los permisos
+            </option>
+
+            {% for valor, etiqueta in estados_permiso %}
+
+              <option
+                value="{{ valor }}"
+                {% if filtros.permiso == valor %}selected{% endif %}
+              >
+                {{ etiqueta }}
+              </option>
+
+            {% endfor %}
+
+          </select>
+
+
+          <div class="flex gap-2">
+
+            <button
+              type="submit"
+              class="
+                flex-1
+                rounded-xl
+                bg-slate-800
+                px-3 py-2
+                text-sm
+                font-semibold
+                text-white
+                transition
+                hover:bg-slate-900
+              "
+            >
+              Filtrar
+            </button>
+
+            <a
+              href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+              class="
+                rounded-xl
+                border border-slate-300
+                bg-white
+                px-3 py-2
+                text-sm
+                font-semibold
+                text-slate-600
+                transition
+                hover:bg-slate-50
+              "
+            >
+              Limpiar
+            </a>
+
+          </div>
+
+        </div>
+
+      </form>
+
+
+      <!-- TABLA DE CANDIDATOS -->
+
+      <form
+        method="post"
+        action="{% url 'planificacion:agregar_sitios_batch' batch.id %}"
+      >
+
+        {% csrf_token %}
+
+        <div class="overflow-x-auto">
+
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+
+            <thead class="bg-white">
+
+              <tr
+                class="
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  tracking-wide
+                  text-slate-500
+                "
+              >
+
+                <th class="px-3 py-3">
+
+                  <input
+                    id="seleccionar-todos"
+                    type="checkbox"
+                    class="
+                      h-4 w-4
+                      rounded
+                      border-slate-300
+                      text-blue-600
+                    "
+                  >
+
+                </th>
+
+                <th class="px-3 py-3">
+                  ID Claro
+                </th>
+
+                <th class="px-3 py-3">
+                  Nombre
+                </th>
+
+                <th class="px-3 py-3">
+                  Comuna
+                </th>
+
+                <th class="px-3 py-3">
+                  Zona
+                </th>
+
+                <th class="px-3 py-3">
+                  Dirección
+                </th>
+
+                <th class="px-3 py-3">
+                  Acceso
+                </th>
+
+                <th class="px-3 py-3">
+                  Permiso
+                </th>
+
+                <th class="px-3 py-3">
+                  Prioridad
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody class="divide-y divide-slate-100">
+
+              {% for candidato in candidatos %}
+
+                <tr class="hover:bg-slate-50">
+
+                  <td class="px-3 py-3">
+
+                    <input
+                      type="checkbox"
+                      name="sitio_ids"
+                      value="{{ candidato.id }}"
+                      class="
+                        sitio-checkbox
+                        h-4 w-4
+                        rounded
+                        border-slate-300
+                        text-blue-600
+                      "
+                    >
+
+                  </td>
+
+
+                  <td
+                    class="
+                      whitespace-nowrap
+                      px-3 py-3
+                      font-bold
+                      text-slate-900
+                    "
+                  >
+                    {{ candidato.sitio.id_claro|default:"—" }}
+                  </td>
+
+
+                  <td class="min-w-[200px] px-3 py-3">
+                    {{ candidato.sitio.nombre|default:"—" }}
+                  </td>
+
+
+                  <td class="whitespace-nowrap px-3 py-3">
+                    {{ candidato.sitio.comuna|default:"—" }}
+                  </td>
+
+
+                  <td class="whitespace-nowrap px-3 py-3">
+                    {{ candidato.sitio.tipo_zona|default:"Sin información" }}
+                  </td>
+
+
+                  <td class="min-w-[260px] px-3 py-3">
+                    {{ candidato.sitio.direccion|default:"—" }}
+                  </td>
+
+
+                  <td class="min-w-[180px] px-3 py-3">
+                    {{ candidato.sitio.condiciones_acceso|default:"Sin información" }}
+                  </td>
+
+
+                  <td class="px-3 py-3">
+                    {{ candidato.get_estado_permiso_display }}
+                  </td>
+
+
+                  <td class="px-3 py-3">
+                    {{ candidato.get_prioridad_display }}
+                  </td>
+
+                </tr>
+
+
+              {% empty %}
+
+                <tr>
+
+                  <td
+                    colspan="9"
+                    class="
+                      px-5 py-12
+                      text-center
+                      text-sm
+                      text-slate-500
+                    "
+                  >
+                    No existen candidatos disponibles con estos filtros.
+                  </td>
+
+                </tr>
+
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+
+        {% if candidatos %}
+
+          <div
+            class="
+              flex
+              flex-col
+              gap-3
+              border-t border-slate-200
+              px-5 py-4
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+            "
+          >
+
+            <div class="text-sm text-slate-500">
+              Ajusta manualmente solo cuando sea necesario.
+            </div>
+
+
+            <div class="flex flex-wrap gap-2">
+
+              <button
+                type="submit"
+                name="es_reserva"
+                value="1"
+                class="
+                  rounded-xl
+                  border border-violet-200
+                  bg-violet-50
+                  px-4 py-2.5
+                  text-sm
+                  font-semibold
+                  text-violet-700
+                  transition
+                  hover:bg-violet-100
+                "
+              >
+                Agregar como reserva
+              </button>
+
+
+              <button
+                type="submit"
+                name="es_reserva"
+                value="0"
+                class="
+                  rounded-xl
+                  bg-blue-600
+                  px-4 py-2.5
+                  text-sm
+                  font-semibold
+                  text-white
+                  transition
+                  hover:bg-blue-700
+                "
+              >
+                Agregar como principal
+              </button>
+
+            </div>
+
+          </div>
+
+        {% endif %}
+
+      </form>
+
+    </details>
+
+  {% endif %}
+
+</div>
+
+</div>
+
+
+<script>
+(function () {
+
+  function getCookie(name) {
+
+    let cookieValue = null;
+
+    if (
+      document.cookie
+      &&
+      document.cookie !== ""
+    ) {
+
+      const cookies =
+        document.cookie.split(";");
+
+      for (
+        let i = 0;
+        i < cookies.length;
+        i++
+      ) {
+
+        const cookie =
+          cookies[i].trim();
+
+        if (
+          cookie.substring(
+            0,
+            name.length + 1
+          )
+          ===
+          name + "="
+        ) {
+
+          cookieValue =
+            decodeURIComponent(
+              cookie.substring(
+                name.length + 1
+              )
+            );
+
+          break;
+
+        }
+
+      }
+
+    }
+
+    return cookieValue;
+
+  }
+
+
+  const csrftoken =
+    getCookie("csrftoken");
+
+
+  /* ======================================================== */
+  /* SELECCIONAR TODOS CANDIDATOS                             */
+  /* ======================================================== */
+
+  const selectAll =
+    document.getElementById(
+      "seleccionar-todos"
+    );
+
+
+  if (selectAll) {
+
+    selectAll.addEventListener(
+      "change",
+      function () {
+
+        document
+          .querySelectorAll(
+            ".sitio-checkbox"
+          )
+          .forEach(
+            function (checkbox) {
+
+              checkbox.checked =
+                selectAll.checked;
+
+            }
+          );
+
+      }
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* SELECCIÓN MASIVA SITIOS DEL BATCH                        */
+  /* ======================================================== */
+
+  const seleccionarTodosIncluidos =
+    document.getElementById(
+      "seleccionar-todos-incluidos"
+    );
+
+
+  const checkboxesBatch =
+    Array.from(
+      document.querySelectorAll(
+        ".item-batch-checkbox"
+      )
+    );
+
+
+  const contadorSeleccionados =
+    document.getElementById(
+      "contador-seleccionados-batch"
+    );
+
+
+  const selectorEstadoBatch =
+    document.getElementById(
+      "estado-batch-masivo"
+    );
+
+
+  const botonEstadoMasivo =
+    document.getElementById(
+      "boton-estado-batch-masivo"
+    );
+
+
+  const botonLimpiar =
+    document.getElementById(
+      "limpiar-seleccion-batch"
+    );
+
+
+  function actualizarSeleccionBatch() {
+
+    const seleccionados =
+      checkboxesBatch.filter(
+        function (checkbox) {
+          return checkbox.checked;
+        }
+      );
+
+
+    const cantidad =
+      seleccionados.length;
+
+
+    if (contadorSeleccionados) {
+
+      contadorSeleccionados.textContent =
+        String(cantidad);
+
+    }
+
+
+    if (botonLimpiar) {
+
+      botonLimpiar.disabled =
+        cantidad === 0;
+
+    }
+
+
+    if (botonEstadoMasivo) {
+
+      botonEstadoMasivo.disabled =
+        (
+          cantidad === 0
+          ||
+          !selectorEstadoBatch
+          ||
+          !selectorEstadoBatch.value
+        );
+
+    }
+
+
+    if (seleccionarTodosIncluidos) {
+
+      if (
+        checkboxesBatch.length > 0
+        &&
+        cantidad === checkboxesBatch.length
+      ) {
+
+        seleccionarTodosIncluidos.checked =
+          true;
+
+        seleccionarTodosIncluidos.indeterminate =
+          false;
+
+      } else if (cantidad > 0) {
+
+        seleccionarTodosIncluidos.checked =
+          false;
+
+        seleccionarTodosIncluidos.indeterminate =
+          true;
+
+      } else {
+
+        seleccionarTodosIncluidos.checked =
+          false;
+
+        seleccionarTodosIncluidos.indeterminate =
+          false;
+
+      }
+
+    }
+
+  }
+
+
+  if (seleccionarTodosIncluidos) {
+
+    seleccionarTodosIncluidos.addEventListener(
+      "change",
+      function () {
+
+        checkboxesBatch.forEach(
+          function (checkbox) {
+
+            checkbox.checked =
+              seleccionarTodosIncluidos.checked;
+
+          }
+        );
+
+
+        actualizarSeleccionBatch();
+
+      }
+    );
+
+  }
+
+
+  checkboxesBatch.forEach(
+    function (checkbox) {
+
+      checkbox.addEventListener(
+        "change",
+        actualizarSeleccionBatch
+      );
+
+    }
+  );
+
+
+  if (selectorEstadoBatch) {
+
+    selectorEstadoBatch.addEventListener(
+      "change",
+      actualizarSeleccionBatch
+    );
+
+  }
+
+
+  if (botonLimpiar) {
+
+    botonLimpiar.addEventListener(
+      "click",
+      function () {
+
+        checkboxesBatch.forEach(
+          function (checkbox) {
+
+            checkbox.checked =
+              false;
+
+          }
+        );
+
+
+        if (selectorEstadoBatch) {
+
+          selectorEstadoBatch.value =
+            "";
+
+        }
+
+
+        actualizarSeleccionBatch();
+
+      }
+    );
+
+  }
+
+
+  actualizarSeleccionBatch();
+
+
+  /* ======================================================== */
+  /* PERMISOS INLINE                                          */
+  /* ======================================================== */
+
+  document
+    .querySelectorAll(
+      ".permiso-inline"
+    )
+    .forEach(
+      function (select) {
+
+        select.addEventListener(
+          "change",
+          async function () {
+
+            const nuevoValor =
+              select.value;
+
+
+            const valorAnterior =
+              select.dataset.original;
+
+
+            select.disabled =
+              true;
+
+
+            const body =
+              new URLSearchParams();
+
+
+            body.append(
+              "estado_permiso",
+              nuevoValor
+            );
+
+
+            try {
+
+              const response =
+                await fetch(
+                  select.dataset.url,
+                  {
+                    method: "POST",
+
+                    headers: {
+                      "X-CSRFToken":
+                        csrftoken,
+
+                      "X-Requested-With":
+                        "XMLHttpRequest",
+
+                      "Content-Type":
+                        "application/x-www-form-urlencoded;charset=UTF-8"
+                    },
+
+                    body:
+                      body.toString()
+                  }
+                );
+
+
+              const data =
+                await response.json();
+
+
+              if (
+                !response.ok
+                ||
+                !data.ok
+              ) {
+
+                throw new Error(
+                  data.error
+                  ||
+                  "No fue posible actualizar el permiso."
+                );
+
+              }
+
+
+              select.dataset.original =
+                data.estado_permiso;
+
+
+              const row =
+                select.closest(
+                  "[data-item-row]"
+                );
+
+
+              const estadoLabel =
+                row?.querySelector(
+                  ".estado-batch-label"
+                );
+
+
+              if (estadoLabel) {
+
+                estadoLabel.textContent =
+                  data.estado_batch_display;
+
+              }
+
+
+            } catch (error) {
+
+              select.value =
+                valorAnterior;
+
+
+              alert(
+                error.message
+              );
+
+
+            } finally {
+
+              select.disabled =
+                false;
+
+            }
+
+          }
+        );
+
+      }
+    );
+
+})();
+</script>
+
+{% endblock %}

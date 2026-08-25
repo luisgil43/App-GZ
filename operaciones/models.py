@@ -1,4 +1,4 @@
-#models_operaciones
+# models_operaciones
 
 import os
 import re
@@ -28,7 +28,7 @@ def _yyyy_mm(dt=None) -> str:
     except Exception:
         # si viene date directamente
         return dt.strftime("%Y-%m")
-    
+
 # === Storage Wasabi (GZ Services) ===
 _gz_storage = GZWasabiStorage()
 
@@ -167,13 +167,16 @@ class SitioMovil(models.Model):
     nombre = models.CharField(max_length=255, blank=True, null=True)
     direccion = models.CharField(max_length=255, blank=True, null=True)
 
-    # Coordenadas como float
     latitud = models.FloatField(blank=True, null=True)
     longitud = models.FloatField(blank=True, null=True)
 
     comuna = models.CharField(max_length=100, blank=True, null=True)
     tipo_construccion = models.CharField(max_length=100, blank=True, null=True)
     altura = models.CharField(max_length=100, blank=True, null=True)
+
+    # NUEVO
+    tipo_zona = models.CharField(max_length=100, blank=True, null=True)
+
     candado_bt = models.CharField(max_length=100, blank=True, null=True)
     condiciones_acceso = models.TextField(blank=True, null=True)
     claves = models.TextField(blank=True, null=True)
@@ -183,11 +186,42 @@ class SitioMovil(models.Model):
     zonas_conflictivas = models.TextField(blank=True, null=True)
     alarmas = models.TextField(blank=True, null=True)
     guardias = models.TextField(blank=True, null=True)
+
+    # Los dejamos por compatibilidad con información anterior.
     nivel = models.IntegerField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return self.nombre or self.id_sites
+
+
+class SitiosTablaMetadata(models.Model):
+    """
+    Mantiene información global de la última modificación
+    realizada sobre la tabla maestra de sitios.
+    """
+
+    ultima_actualizacion = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="actualizaciones_tabla_sitios",
+    )
+
+    class Meta:
+        verbose_name = "Metadata tabla de sitios"
+        verbose_name_plural = "Metadata tabla de sitios"
+
+    def __str__(self):
+        if self.ultima_actualizacion:
+            return f"Sitios actualizados {self.ultima_actualizacion}"
+        return "Metadata tabla de sitios"
 
 
 class ServicioCotizado(models.Model):

@@ -1,0 +1,295 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Completar semana operacional
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-6 sm:px-6">
+
+  <div
+    class="
+      mx-auto
+      max-w-5xl
+      overflow-hidden
+      rounded-3xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+    "
+  >
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50
+        px-6 py-6
+      "
+    >
+
+      <p
+        class="
+          text-[11px]
+          font-black
+          uppercase
+          tracking-[0.15em]
+          text-cyan-700
+        "
+      >
+        Continuidad operacional
+      </p>
+
+      <h1
+        class="
+          mt-1
+          text-2xl
+          font-black
+          text-slate-900
+        "
+      >
+        Completar semana anterior
+      </h1>
+
+      <p class="mt-2 text-sm text-slate-500">
+        La planificación {{ mensual }} ya está disponible.
+        Puedes utilizar algunos de sus sitios para completar
+        la semana operacional actualmente vigente.
+      </p>
+
+    </div>
+
+
+    <div class="p-6">
+
+      {% if opciones %}
+
+        <div class="space-y-4">
+
+          {% for opcion in opciones %}
+
+            {% with batch=opcion.batch diag=opcion.diagnostico %}
+
+              <form
+                method="post"
+                action="{% url 'planificacion:analizar_completar_semana' mensual.pk %}"
+                class="
+                  rounded-2xl
+                  border border-slate-200
+                  bg-white
+                  p-5
+                  shadow-sm
+                "
+              >
+
+                {% csrf_token %}
+
+                <input
+                  type="hidden"
+                  name="batch_id"
+                  value="{{ batch.pk }}"
+                >
+
+                <div
+                  class="
+                    flex
+                    flex-col
+                    gap-4
+                    lg:flex-row
+                    lg:items-center
+                    lg:justify-between
+                  "
+                >
+
+                  <div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+
+                      <span
+                        class="
+                          rounded-full
+                          border border-cyan-200
+                          bg-cyan-50
+                          px-3 py-1
+                          text-xs
+                          font-black
+                          text-cyan-700
+                        "
+                      >
+                        {{ batch.codigo_semana }}
+                      </span>
+
+                      <span class="text-sm font-black text-slate-900">
+                        {{ batch.fecha_inicio|date:"d/m/Y" }}
+                        –
+                        {{ batch.fecha_fin|date:"d/m/Y" }}
+                      </span>
+
+                    </div>
+
+                    <div
+                      class="
+                        mt-4
+                        grid
+                        grid-cols-2
+                        gap-3
+                        md:grid-cols-4
+                      "
+                    >
+
+                      <div class="rounded-xl bg-slate-50 p-3">
+                        <p class="text-[10px] font-black uppercase text-slate-400">
+                          Días restantes
+                        </p>
+
+                        <p class="mt-1 text-xl font-black text-slate-800">
+                          {{ diag.cantidad_dias_restantes }}
+                        </p>
+                      </div>
+
+                      <div class="rounded-xl bg-blue-50 p-3">
+                        <p class="text-[10px] font-black uppercase text-blue-500">
+                          Capacidad
+                        </p>
+
+                        <p class="mt-1 text-xl font-black text-blue-800">
+                          {{ diag.capacidad_restante }}
+                        </p>
+                      </div>
+
+                      <div class="rounded-xl bg-amber-50 p-3">
+                        <p class="text-[10px] font-black uppercase text-amber-600">
+                          Sitios actuales
+                        </p>
+
+                        <p class="mt-1 text-xl font-black text-amber-800">
+                          {{ diag.cantidad_sitios_residuales }}
+                        </p>
+                      </div>
+
+                      <div class="rounded-xl bg-emerald-50 p-3">
+                        <p class="text-[10px] font-black uppercase text-emerald-600">
+                          Recomendación
+                        </p>
+
+                        <p class="mt-1 text-xl font-black text-emerald-800">
+                          +{{ diag.sitios_a_incorporar }}
+                        </p>
+                      </div>
+
+                    </div>
+
+                    <p class="mt-4 text-sm text-slate-600">
+                      Para mantener aproximadamente
+                      <strong>3 sitios por jornada</strong>,
+                      el sistema recomienda incorporar
+                      <strong>
+                        {{ diag.sitios_a_incorporar }}
+                      </strong>
+                      sitio(s) desde {{ mensual }}.
+                    </p>
+
+                  </div>
+
+
+                  <button
+                    type="submit"
+                    class="
+                      inline-flex
+                      shrink-0
+                      items-center
+                      justify-center
+                      rounded-xl
+                      bg-gradient-to-r
+                      from-cyan-600
+                      to-blue-600
+                      px-5 py-3
+                      text-sm
+                      font-black
+                      text-white
+                      shadow-md
+                      transition
+                      hover:-translate-y-0.5
+                      hover:shadow-lg
+                    "
+                  >
+                    Procesar recomendación
+                  </button>
+
+                </div>
+
+              </form>
+
+            {% endwith %}
+
+          {% endfor %}
+
+        </div>
+
+      {% else %}
+
+        <div
+          class="
+            rounded-2xl
+            border border-emerald-200
+            bg-emerald-50
+            px-5 py-8
+            text-center
+          "
+        >
+
+          <div class="text-3xl">
+            ✅
+          </div>
+
+          <p class="mt-3 font-black text-emerald-800">
+            No existe una semana vigente que necesite completarse
+          </p>
+
+          <p class="mt-1 text-sm text-emerald-700">
+            No es necesario mover sitios de {{ mensual }}
+            hacia una semana operacional anterior.
+          </p>
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <div
+      class="
+        flex
+        justify-between
+        border-t border-slate-200
+        bg-slate-50
+        px-6 py-4
+      "
+    >
+
+      <a
+        href="{% url 'planificacion:lista_asignacion_mensual' mensual.pk %}"
+        class="
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4 py-2.5
+          text-sm
+          font-bold
+          text-slate-700
+        "
+      >
+        ← Volver al mes
+      </a>
+
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

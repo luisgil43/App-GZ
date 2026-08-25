@@ -1,0 +1,827 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Cuadrillas
+{% endblock %}
+
+{% load l10n %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto max-w-[1500px]">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      mb-5
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <div
+      class="
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/50
+        px-5 py-5
+        sm:px-6
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        "
+      >
+
+        <div>
+
+          <p
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-cyan-700
+            "
+          >
+            Planificación
+          </p>
+
+          <h1
+            class="
+              mt-1
+              text-2xl
+              font-black
+              tracking-tight
+              text-slate-900
+              sm:text-3xl
+            "
+          >
+            Cuadrillas operativas
+          </h1>
+
+          <p class="mt-1 max-w-3xl text-sm text-slate-500">
+            Administra las cuadrillas que puede utilizar el motor,
+            sus integrantes, vehículos, capacidades territoriales
+            y puntos habituales de salida.
+          </p>
+
+        </div>
+
+
+        <a
+          href="{% url 'planificacion:crear_cuadrilla' %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            bg-gradient-to-r
+            from-cyan-600
+            to-blue-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          Nueva cuadrilla
+        </a>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- RESUMEN                                                -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 grid gap-3 sm:grid-cols-3">
+
+    <div
+      class="
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        p-4
+        shadow-sm
+      "
+    >
+      <p class="text-xs font-black uppercase text-slate-400">
+        Total
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-slate-900">
+        {{ cuadrillas|length }}
+      </p>
+    </div>
+
+
+    <div
+      class="
+        rounded-2xl
+        border border-emerald-200
+        bg-emerald-50
+        p-4
+      "
+    >
+      <p class="text-xs font-black uppercase text-emerald-700">
+        Activas
+      </p>
+
+      <p class="mt-1 text-sm font-semibold text-emerald-800">
+        Disponibles para incorporarse a las semanas.
+      </p>
+    </div>
+
+
+    <div
+      class="
+        rounded-2xl
+        border border-blue-200
+        bg-blue-50
+        p-4
+      "
+    >
+      <p class="text-xs font-black uppercase text-blue-700">
+        Bases
+      </p>
+
+      <p class="mt-1 text-sm font-semibold text-blue-800">
+        Cada cuadrilla puede tener un punto de salida diferente.
+      </p>
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- TABLA                                                  -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <div class="overflow-x-auto">
+
+      <table class="min-w-[1550px] w-full text-sm">
+
+        <thead class="bg-slate-50">
+
+          <tr
+            class="
+              text-left
+              text-[11px]
+              font-black
+              uppercase
+              tracking-wide
+              text-slate-500
+            "
+          >
+
+            <th class="px-4 py-3">
+              Cuadrilla
+            </th>
+
+            <th class="px-4 py-3">
+              Integrantes
+            </th>
+
+            <th class="px-4 py-3">
+              Vehículo
+            </th>
+
+            <th class="px-4 py-3">
+              Cobertura
+            </th>
+
+            <th class="px-4 py-3">
+              Base habitual
+            </th>
+
+            <th class="px-4 py-3">
+              Coordenadas
+            </th>
+
+            <th class="px-4 py-3">
+              Jornada
+            </th>
+
+            <th class="px-4 py-3">
+              Trabajo / sitio
+            </th>
+
+            <th class="px-4 py-3">
+              Estado
+            </th>
+
+            <th class="px-4 py-3 text-right">
+              Acciones
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody class="divide-y divide-slate-100">
+
+          {% for cuadrilla in cuadrillas %}
+
+            <tr class="hover:bg-slate-50">
+
+              <!-- ================================================= -->
+              <!-- CUADRILLA                                         -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4">
+
+                <div class="font-black text-slate-900">
+                  {{ cuadrilla.nombre }}
+                </div>
+
+                <div class="mt-0.5 text-xs text-slate-400">
+                  {{ cuadrilla.codigo }}
+                </div>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- INTEGRANTES                                       -->
+              <!-- ================================================= -->
+
+              <td class="min-w-[250px] px-4 py-4">
+
+                {% with integrantes=cuadrilla.integrantes.all %}
+
+                  {% if integrantes %}
+
+                    <div class="flex flex-wrap gap-1.5">
+
+                      {% for integrante in integrantes %}
+
+                        <span
+                          class="
+                            inline-flex
+                            items-center
+                            rounded-full
+                            border border-cyan-200
+                            bg-cyan-50
+                            px-2.5
+                            py-1
+                            text-xs
+                            font-bold
+                            text-cyan-800
+                          "
+                        >
+
+                          {% if integrante.first_name or integrante.last_name %}
+
+                            {{ integrante.get_full_name }}
+
+                          {% else %}
+
+                            {{ integrante.username }}
+
+                          {% endif %}
+
+                        </span>
+
+                      {% endfor %}
+
+                    </div>
+
+
+                  {% else %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        border border-amber-200
+                        bg-amber-50
+                        px-2.5
+                        py-1
+                        text-xs
+                        font-bold
+                        text-amber-700
+                      "
+                    >
+                      Sin integrantes
+                    </span>
+
+                  {% endif %}
+
+                {% endwith %}
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- VEHÍCULO                                          -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4">
+
+                <span
+                  class="
+                    rounded-full
+                    border border-slate-200
+                    bg-slate-50
+                    px-2.5 py-1
+                    text-xs
+                    font-bold
+                    text-slate-700
+                  "
+                >
+                  {{ cuadrilla.tipo_vehiculo|default:"Sin definir" }}
+                </span>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- COBERTURA                                         -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4">
+
+                <div class="flex flex-wrap gap-1.5">
+
+                  {% if cuadrilla.permite_urbano %}
+
+                    <span
+                      class="
+                        rounded-full
+                        bg-blue-50
+                        px-2.5 py-1
+                        text-xs
+                        font-bold
+                        text-blue-700
+                      "
+                    >
+                      Urbano
+                    </span>
+
+                  {% endif %}
+
+
+                  {% if cuadrilla.permite_rural %}
+
+                    <span
+                      class="
+                        rounded-full
+                        bg-amber-50
+                        px-2.5 py-1
+                        text-xs
+                        font-bold
+                        text-amber-700
+                      "
+                    >
+                      Rural
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- BASE HABITUAL                                     -->
+              <!-- ================================================= -->
+
+              <td class="min-w-[260px] px-4 py-4">
+
+                {% if cuadrilla.base_nombre %}
+
+                  <div class="font-bold text-slate-800">
+                    {{ cuadrilla.base_nombre }}
+                  </div>
+
+                {% endif %}
+
+                <div class="mt-1 text-xs leading-relaxed text-slate-600">
+                  {{ cuadrilla.direccion_base|default:"Sin dirección configurada" }}
+                </div>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- COORDENADAS                                       -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4">
+
+                {% if cuadrilla.tiene_base_operacional %}
+
+                  <div
+                    class="
+                      flex
+                      items-center
+                      gap-2
+                    "
+                  >
+
+                    <div
+                      class="
+                        rounded-xl
+                        border border-emerald-100
+                        bg-emerald-50
+                        px-3 py-2
+                        text-xs
+                        font-semibold
+                        text-emerald-700
+                      "
+                    >
+                      {{ cuadrilla.base_latitud }},
+                      {{ cuadrilla.base_longitud }}
+                    </div>
+
+
+                    <a
+                      href="https://www.google.com/maps/search/?api=1&query={{ cuadrilla.base_latitud|unlocalize }},{{ cuadrilla.base_longitud|unlocalize }}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Ver ubicación en Google Maps"
+                      class="
+                        inline-flex
+                        h-9 w-9
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-xl
+                        border border-blue-200
+                        bg-blue-50
+                        text-blue-700
+                        transition
+                        hover:border-blue-300
+                        hover:bg-blue-100
+                        hover:text-blue-800
+                      "
+                    >
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path>
+                        <circle cx="12" cy="10" r="3"></circle>
+                      </svg>
+
+                    </a>
+
+                  </div>
+
+
+                {% elif cuadrilla.direccion_base %}
+
+                  <div class="space-y-2">
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-amber-50
+                        px-2.5 py-1
+                        text-xs
+                        font-bold
+                        text-amber-700
+                      "
+                    >
+                      Pendiente
+                    </span>
+
+                    <form
+                      method="post"
+                      action="{% url 'planificacion:regeocodificar_cuadrilla' cuadrilla.pk %}"
+                    >
+
+                      {% csrf_token %}
+
+                      <button
+                        type="submit"
+                        class="
+                          text-xs
+                          font-bold
+                          text-cyan-700
+                          hover:underline
+                        "
+                      >
+                        Obtener coordenadas
+                      </button>
+
+                    </form>
+
+                  </div>
+
+
+                {% else %}
+
+                  <span class="text-xs text-slate-400">
+                    Sin base
+                  </span>
+
+                {% endif %}
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- JORNADA                                           -->
+              <!-- ================================================= -->
+
+              <td class="whitespace-nowrap px-4 py-4">
+
+                <div class="font-bold text-slate-800">
+                  {{ cuadrilla.jornada_formateada }}
+                </div>
+
+                <div class="mt-0.5 text-xs text-slate-400">
+                  referencia diaria
+                </div>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- TRABAJO / SITIO                                   -->
+              <!-- ================================================= -->
+
+              <td class="whitespace-nowrap px-4 py-4">
+
+                <div class="font-bold text-slate-800">
+                  {{ cuadrilla.trabajo_sitio_formateado }}
+                </div>
+
+                <div class="mt-0.5 text-xs text-slate-400">
+                  estimación
+                </div>
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- ESTADO                                            -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4">
+
+                {% if cuadrilla.activa %}
+
+                  <span
+                    class="
+                      rounded-full
+                      bg-emerald-50
+                      px-2.5 py-1
+                      text-xs
+                      font-bold
+                      text-emerald-700
+                    "
+                  >
+                    Activa
+                  </span>
+
+                {% else %}
+
+                  <span
+                    class="
+                      rounded-full
+                      bg-slate-100
+                      px-2.5 py-1
+                      text-xs
+                      font-bold
+                      text-slate-600
+                    "
+                  >
+                    Inactiva
+                  </span>
+
+                {% endif %}
+
+              </td>
+
+
+              <!-- ================================================= -->
+              <!-- ACCIONES                                          -->
+              <!-- ================================================= -->
+
+              <td class="px-4 py-4 text-right">
+
+                <div
+                  class="
+                    flex
+                    flex-wrap
+                    justify-end
+                    gap-2
+                  "
+                >
+
+                  <a
+                    href="{% url 'planificacion:editar_cuadrilla' cuadrilla.pk %}"
+                    class="
+                      rounded-lg
+                      border border-slate-300
+                      bg-white
+                      px-3 py-2
+                      text-xs
+                      font-bold
+                      text-slate-700
+                      transition
+                      hover:bg-slate-50
+                    "
+                  >
+                    Editar
+                  </a>
+
+
+                  <form
+                    method="post"
+                    action="{% url 'planificacion:cambiar_estado_cuadrilla' cuadrilla.pk %}"
+                  >
+
+                    {% csrf_token %}
+
+                    <button
+                      type="submit"
+                      class="
+                        rounded-lg
+                        border
+                        px-3 py-2
+                        text-xs
+                        font-bold
+                        transition
+
+                        {% if cuadrilla.activa %}
+
+                          border-amber-200
+                          bg-amber-50
+                          text-amber-700
+                          hover:bg-amber-100
+
+                        {% else %}
+
+                          border-emerald-200
+                          bg-emerald-50
+                          text-emerald-700
+                          hover:bg-emerald-100
+
+                        {% endif %}
+                      "
+                    >
+
+                      {% if cuadrilla.activa %}
+
+                        Desactivar
+
+                      {% else %}
+
+                        Activar
+
+                      {% endif %}
+
+                    </button>
+
+                  </form>
+
+
+                  {% if puede_eliminar_cuadrillas %}
+
+                    <form
+                      method="post"
+                      action="{% url 'planificacion:eliminar_cuadrilla' cuadrilla.pk %}"
+                      onsubmit="
+                        return confirm(
+                          '¿Eliminar definitivamente la cuadrilla {{ cuadrilla.nombre|escapejs }}? Esta acción no se puede deshacer.'
+                        );
+                      "
+                    >
+
+                      {% csrf_token %}
+
+                      <button
+                        type="submit"
+                        class="
+                          rounded-lg
+                          border border-red-200
+                          bg-red-50
+                          px-3 py-2
+                          text-xs
+                          font-bold
+                          text-red-700
+                          transition
+                          hover:border-red-300
+                          hover:bg-red-100
+                        "
+                      >
+                        Eliminar
+                      </button>
+
+                    </form>
+
+                  {% endif %}
+
+                </div>
+
+              </td>
+
+            </tr>
+
+
+          {% empty %}
+
+            <tr>
+
+              <td
+                colspan="10"
+                class="px-6 py-16 text-center"
+              >
+
+                <p class="font-bold text-slate-700">
+                  Todavía no existen cuadrillas
+                </p>
+
+                <p class="mt-1 text-sm text-slate-500">
+                  Crea la primera cuadrilla para comenzar
+                  a configurar el motor operacional.
+                </p>
+
+                <a
+                  href="{% url 'planificacion:crear_cuadrilla' %}"
+                  class="
+                    mt-4
+                    inline-flex
+                    rounded-xl
+                    bg-cyan-600
+                    px-4 py-2.5
+                    text-sm
+                    font-black
+                    text-white
+                    transition
+                    hover:bg-cyan-700
+                  "
+                >
+                  Crear primera cuadrilla
+                </a>
+
+              </td>
+
+            </tr>
+
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+</div>
+
+</div>
+
+{% endblock %}

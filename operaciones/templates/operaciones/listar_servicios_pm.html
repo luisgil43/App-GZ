@@ -843,610 +843,1166 @@
 
 </div>
 
-<!-- Zona recargable -->
-<div id="zonaTabla" data-excel-global='{{ excel_global_json|safe }}'>
+    <!-- ====================================================== -->
+    <!-- ZONA RECARGABLE                                       -->
+    <!-- ====================================================== -->
 
-  <div class="overflow-x-auto bg-white">
-    <table id="servicios-pm-table"
-           data-columns-table="servicios-pm"
-           data-columns-offset="0"
-           class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
-           style="white-space: nowrap;">
+    <div
+      id="zonaTabla"
+      data-excel-global='{{ excel_global_json|safe }}'
+    >
 
-      <thead class="bg-gray-100 text-gray-800 font-semibold text-center">
-        <tr>
-          <th class="p-2" data-excel-col data-excel-key="0">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>DU</span><span class="excel-arrow text-gray-500">▼</span>
+      <!-- ==================================================== -->
+      <!-- ACCIONES MASIVAS ADMIN                              -->
+      <!-- ==================================================== -->
+
+      {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}
+
+        <div
+          id="bulkActionsBar"
+          class="
+            hidden
+            items-center
+            justify-between
+            gap-3
+            border-b border-slate-200
+            bg-gradient-to-r
+            from-slate-50
+            via-white
+            to-cyan-50
+            px-4 py-3
+            sm:px-6
+          "
+        >
+
+          <div class="flex items-center gap-2">
+
+            <span
+              class="
+                inline-flex
+                h-8
+                min-w-8
+                items-center
+                justify-center
+                rounded-lg
+                bg-cyan-100
+                px-2
+                text-xs
+                font-black
+                text-cyan-800
+              "
+              id="bulkSelectedCount"
+            >
+              0
+            </span>
+
+            <span class="text-sm font-bold text-slate-700">
+              cotización(es) seleccionada(s)
+            </span>
+
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+
+            <button
+              type="button"
+              id="btnBulkApprove"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border border-emerald-500
+                bg-emerald-600
+                px-4 py-2
+                text-xs
+                font-black
+                text-white
+                shadow-sm
+                transition
+                hover:bg-emerald-700
+              "
+            >
+              ✅ Aprobar seleccionadas
             </button>
-          </th>
 
-          <th class="p-2" data-excel-col data-excel-key="1">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>ID CLARO</span><span class="excel-arrow text-gray-500">▼</span>
+            {% if request.user.is_superuser or request.user.es_admin_general %}
+
+            <button
+              type="button"
+              id="btnBulkDelete"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border border-red-500
+                bg-red-600
+                px-4 py-2
+                text-xs
+                font-black
+                text-white
+                shadow-sm
+                transition
+                hover:bg-red-700
+              "
+            >
+              🗑️ Eliminar seleccionadas
             </button>
-          </th>
 
-          <th class="p-2" data-excel-col data-excel-key="2">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>REGIÓN</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+          {% endif %}
 
-          <th class="p-2" data-excel-col data-excel-key="3">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>MES PRODUCCIÓN</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+          </div>
 
-          <th class="p-2" data-excel-col data-excel-key="4">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>ID NEW</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+        </div>
 
-          <th class="p-2" data-excel-col data-excel-key="5">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>DETALLE TAREA</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+      {% endif %}
 
-          <th class="p-2" data-excel-col data-excel-key="6">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>MONTO COTIZADO</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+      <!-- ==================================================== -->
+      <!-- TABLA                                               -->
+      <!-- ==================================================== -->
 
-          <th class="p-2" data-excel-col data-excel-key="7">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+      <div class="tabla-responsive bg-white">
 
-          <th class="p-2" data-excel-col data-excel-key="8">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>ESTADO</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
+        <table
+          id="servicios-pm-table"
+          data-columns-table="servicios-pm"
+          data-columns-offset="{% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}1{% else %}0{% endif %}"
+          class="
+            table-auto
+            w-full
+            text-sm
+            min-w-full
+            sm:min-w-[1200px]
+          "
+          style="white-space: nowrap;"
+        >
 
-          <th class="p-2" data-excel-col data-excel-key="9">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>ACCIONES</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
-          </th>
-        </tr>
-      </thead>
+          <thead
+            class="
+              bg-gray-100
+              text-center
+              font-semibold
+              text-gray-800
+            "
+          >
 
-      <tbody class="text-center">
-        {% for servicio in pagina %}
-          <tr class="transition hover:bg-cyan-50/40">
-            <td class="p-2 font-mono">DU{{ servicio.du }}</td>
-            <td class="p-2">{{ servicio.id_claro }}</td>
-            <td class="p-2">{{ servicio.region }}</td>
-            <td class="p-2">{{ servicio.mes_produccion }}</td>
-            <td class="p-2">{{ servicio.id_new }}</td>
+            <tr>
 
-            <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
-              {{ servicio.detalle_tarea }}
-            </td>
+              {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}
 
-            <td class="p-2 font-semibold text-emerald-700">
-              UF {{ servicio.monto_cotizado|intcomma }}
-            </td>
+                <th class="w-12 p-2">
 
-            <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-              $ {{ servicio.monto_mmoo|miles }} CLP
-            </td>
+                  <input
+                    type="checkbox"
+                    id="selectAllCotizaciones"
+                    title="Seleccionar todas las cotizaciones visibles"
+                    class="
+                      h-4 w-4
+                      cursor-pointer
+                      rounded
+                      border-slate-300
+                      accent-cyan-600
+                    "
+                  >
 
-            <!-- ESTADO -->
-            <td class="p-2 text-sm">
-              <div class="flex flex-col gap-1 text-left">
-                <div class="inline-block px-3 py-1 rounded-full text-xs font-medium
-                  {% if servicio.estado == 'cotizado' %}bg-gray-100 text-gray-800
-                  {% elif servicio.estado == 'aprobado_pendiente' %}bg-yellow-100 text-yellow-800
-                  {% elif servicio.estado == 'asignado' %}bg-blue-100 text-blue-800
-                  {% elif servicio.estado == 'en_progreso' %}bg-indigo-100 text-indigo-800
-                  {% elif servicio.estado == 'finalizado_trabajador' or servicio.estado == 'en_revision_supervisor' %}bg-yellow-100 text-emerald-800
-                  {% elif servicio.estado == 'rechazado_supervisor' %}bg-red-100 text-red-800
-                  {% elif servicio.estado == 'aprobado_supervisor' %}bg-emerald-100 text-emerald-800
-                  {% elif servicio.estado == 'informe_subido' %}bg-gray-200 text-gray-800
-                  {% elif servicio.estado == 'finalizado' %}bg-green-200 text-green-800
-                  {% elif servicio.estado == 'ajuste_bono' %}bg-blue-100 text-blue-800
-                  {% elif servicio.estado == 'ajuste_adelanto' %}bg-purple-100 text-purple-800
-                  {% elif servicio.estado == 'ajuste_descuento' %}bg-red-100 text-red-800
-                  {% else %}bg-gray-100 text-gray-800{% endif %}">
+                </th>
 
-                  {% if servicio.estado == 'cotizado' %}
-                    📝 Cotizado (pendiente aprobación)
+              {% endif %}
 
-                  {% elif servicio.estado == 'aprobado_pendiente' %}
-                    ✅ Aprobado por PM:
-                    {% if servicio.pm_aprueba %}
-                      {{ servicio.pm_aprueba.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">Sin asignar</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="0"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>DU</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'asignado' %}
-                    ✅ Asignado por Supervisor:
-                    {% if servicio.supervisor_asigna %}
-                      {{ servicio.supervisor_asigna.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">Sin asignar</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="1"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>ID CLARO</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'en_progreso' %}
-                    🕓 En ejecución (aceptado por
-                    {% if servicio.tecnico_aceptado %}
-                      {{ servicio.tecnico_aceptado.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">Sin asignar</span>
-                    {% endif %})
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="2"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>REGIÓN</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'finalizado_trabajador' or servicio.estado == 'en_revision_supervisor' %}
-                    ✔ Finalizado por
-                    {% if servicio.tecnico_finalizo %}
-                      {{ servicio.tecnico_finalizo.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">—</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="3"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>MES PRODUCCIÓN</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'rechazado_supervisor' %}
-                    ❌ Rechazado por
-                    {% if servicio.supervisor_rechazo %}
-                      {{ servicio.supervisor_rechazo.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">—</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="4"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>ID NEW</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'aprobado_supervisor' %}
-                    ✅ Aprobado por:
-                    {% if servicio.supervisor_aprobo %}
-                      {{ servicio.supervisor_aprobo.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">—</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="5"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>DETALLE TAREA</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'informe_subido' %}
-                    📄 Informe cargado por
-                    {% if servicio.usuario_informe %}
-                      {{ servicio.usuario_informe.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">—</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="6"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>MONTO COTIZADO</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'finalizado' %}
-                    ✅ Finalizado por
-                    {% if servicio.tecnico_finalizo %}
-                      {{ servicio.tecnico_finalizo.get_full_name }}
-                    {% else %}
-                      <span class="italic text-gray-400">—</span>
-                    {% endif %}
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="7"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>MONTO MMOO</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'ajuste_bono' %}
-                    🎁 Bono
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="8"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>ESTADO</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'ajuste_adelanto' %}
-                    ⏩ Adelanto
+              <th
+                class="p-2"
+                data-excel-col
+                data-excel-key="9"
+              >
+                <button
+                  type="button"
+                  class="
+                    excel-header-btn
+                    flex
+                    items-center
+                    gap-1
+                  "
+                >
+                  <span>ACCIONES</span>
+                  <span class="excel-arrow text-gray-500">▼</span>
+                </button>
+              </th>
 
-                  {% elif servicio.estado == 'ajuste_descuento' %}
-                    ➖ Descuento
+            </tr>
 
-                  {% else %}
-                    Estatus desconocido
-                  {% endif %}
-                </div>
+          </thead>
 
-                {% if servicio.estado == 'en_revision_supervisor' or servicio.estado == 'finalizado_trabajador' %}
-                  <div class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    📝 Pendiente revisión del supervisor
-                  </div>
+          <tbody class="text-center">
+
+            {% for servicio in pagina %}
+
+              <tr
+                class="
+                  transition
+                  hover:bg-cyan-50/40
+                "
+              >
+
+                {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}
+
+                  <td class="p-2">
+
+                    <input
+                      type="checkbox"
+                      class="
+                        cotizacion-row-check
+                        h-4 w-4
+                        cursor-pointer
+                        rounded
+                        border-slate-300
+                        accent-cyan-600
+                      "
+                      value="{{ servicio.pk }}"
+                      aria-label="Seleccionar DU{{ servicio.du }}"
+                    >
+
+                  </td>
+
                 {% endif %}
+
+                <td class="p-2 font-mono">
+                  DU{{ servicio.du }}
+                </td>
+
+                <td class="p-2">
+                  {{ servicio.id_claro }}
+                </td>
+
+                <td class="p-2">
+                  {{ servicio.region }}
+                </td>
+
+                <td class="p-2">
+                  {{ servicio.mes_produccion }}
+                </td>
+
+                <td class="p-2">
+                  {{ servicio.id_new }}
+                </td>
+
+                <td
+                  class="
+                    min-w-[300px]
+                    w-[350px]
+                    max-w-[400px]
+                    whitespace-pre-line
+                    break-words
+                    p-2
+                    align-top
+                    text-xs
+                    leading-tight
+                  "
+                >
+                  {{ servicio.detalle_tarea }}
+                </td>
+
+                <td
+                  class="
+                    p-2
+                    font-semibold
+                    text-emerald-700
+                  "
+                >
+                  UF {{ servicio.monto_cotizado|intcomma }}
+                </td>
+
+                <td
+                  class="
+                    whitespace-nowrap
+                    p-2
+                    font-semibold
+                    text-emerald-700
+                  "
+                >
+                  $ {{ servicio.monto_mmoo|miles }} CLP
+                </td>
+
+                <!-- ========================================== -->
+                <!-- ESTADO                                     -->
+                <!-- ========================================== -->
+
+                <td class="p-2 text-sm">
+
+                  <div class="flex flex-col gap-1 text-left">
+
+                    <div
+                      class="
+                        inline-block
+                        rounded-full
+                        bg-gray-100
+                        px-3 py-1
+                        text-xs
+                        font-medium
+                        text-gray-800
+                      "
+                    >
+                      📝 Cotizado (pendiente aprobación)
+                    </div>
+
+                  </div>
+
+                </td>
+
+                <!-- ========================================== -->
+                <!-- ACCIONES                                   -->
+                <!-- ========================================== -->
+
+                <td class="space-x-1 p-2">
+
+                  {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+
+                    <button
+                      type="button"
+                      class="btn-ghost btn-approve"
+                      title="Aprobar cotización"
+                      onclick="abrirModal('modal-aprobar-{{ servicio.pk }}')"
+                    >
+                      ✅
+                    </button>
+
+                    <a
+                      href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+                      class="btn-ghost btn-edit"
+                      title="Editar"
+                    >
+                      ✏️
+                    </a>
+
+                    <button
+                      type="button"
+                      class="btn-ghost btn-delete"
+                      onclick="abrirModal('modal-{{ servicio.pk }}')"
+                      title="Eliminar"
+                    >
+                      🗑️
+                    </button>
+
+                  {% endif %}
+
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+
+                <td
+                  colspan="{% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}11{% else %}10{% endif %}"
+                  class="p-8 text-center text-slate-500"
+                >
+
+                  <div
+                    class="
+                      mx-auto
+                      flex
+                      max-w-md
+                      flex-col
+                      items-center
+                      rounded-2xl
+                      border
+                      border-dashed
+                      border-slate-300
+                      bg-slate-50
+                      p-6
+                    "
+                  >
+
+                    <span class="text-3xl">
+                      ✅
+                    </span>
+
+                    <p class="mt-3 font-black text-slate-700">
+                      No hay cotizaciones pendientes de aprobación
+                    </p>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                      Todas las cotizaciones disponibles ya fueron procesadas.
+                    </p>
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+      <!-- ==================================================== -->
+      <!-- MODALES INDIVIDUALES                                -->
+      <!-- ==================================================== -->
+
+      {% for servicio in pagina %}
+
+        <!-- ================================================ -->
+        <!-- ELIMINAR                                        -->
+        <!-- ================================================ -->
+
+        <div
+          id="modal-{{ servicio.pk }}"
+          class="
+            cotizacion-modal-backdrop
+            hidden
+            fixed
+            inset-0
+            z-[100]
+            items-center
+            justify-center
+            px-4
+            py-6
+          "
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-delete-title-{{ servicio.pk }}"
+        >
+
+          <div
+            class="
+              cotizacion-modal-card
+              w-full
+              max-w-md
+              overflow-hidden
+              rounded-2xl
+              bg-white
+            "
+          >
+
+            <div class="p-6">
+
+              <div
+                class="
+                  mb-4
+                  flex
+                  h-12 w-12
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-red-100
+                  text-xl
+                "
+              >
+                🗑️
               </div>
 
-              {% if servicio.estado == 'rechazado_supervisor' and servicio.motivo_rechazo %}
-                <div class="mt-1 text-xs text-red-700 whitespace-pre-wrap break-words">
-                  <strong>Motivo:</strong> {{ servicio.motivo_rechazo }}
-                </div>
-              {% endif %}
-            </td>
+              <h3
+                id="modal-delete-title-{{ servicio.pk }}"
+                class="
+                  text-lg
+                  font-black
+                  text-slate-900
+                "
+              >
+                Eliminar cotización
+              </h3>
 
-            <!-- ACCIONES -->
-            <td class="p-2 space-x-1">
-              {% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
-                {% if servicio.estado == 'cotizado' %}
-                  <button type="button"
-                          class="btn-ghost btn-approve"
-                          title="Aprobar cotización"
-                          onclick="abrirModal('modal-aprobar-{{ servicio.pk }}')">
-                    ✅
-                  </button>
-                {% endif %}
+              <p class="mt-2 text-sm text-slate-600">
 
-                <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
-   class="btn-ghost btn-edit"
-   title="Editar">
-  ✏️
-</a>
+                ¿Confirmas eliminar la cotización
 
-                <button type="button"
-                        class="btn-ghost btn-delete"
-                        onclick="abrirModal('modal-{{ servicio.pk }}')"
-                        title="Eliminar">
-                  🗑️
+                <strong class="text-slate-900">
+                  DU{{ servicio.du|default:"—" }}
+                </strong>?
+
+              </p>
+
+              <p class="mt-1 text-xs font-semibold text-red-600">
+                Esta acción no se puede deshacer.
+              </p>
+
+            </div>
+
+            <div
+              class="
+                flex
+                justify-end
+                gap-2
+                border-t
+                border-slate-200
+                bg-slate-50
+                px-6 py-4
+              "
+            >
+
+              <button
+                type="button"
+                onclick="cerrarModal('modal-{{ servicio.pk }}')"
+                class="
+                  rounded-xl
+                  border
+                  border-slate-300
+                  bg-white
+                  px-4 py-2.5
+                  text-sm
+                  font-bold
+                  text-slate-700
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                Cancelar
+              </button>
+
+              <form
+                method="post"
+                action="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+              >
+
+                {% csrf_token %}
+
+                <input
+                  type="hidden"
+                  name="next"
+                  value="{{ request.get_full_path }}"
+                >
+
+                <button
+                  type="submit"
+                  class="
+                    rounded-xl
+                    border
+                    border-red-600
+                    bg-red-600
+                    px-4 py-2.5
+                    text-sm
+                    font-black
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-red-700
+                  "
+                >
+                  Eliminar
                 </button>
 
-              {% else %}
-                {% if servicio.estado == 'cotizado' %}
-                  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
-   class="btn-ghost btn-edit"
-   title="Editar">
-  ✏️
-</a>
+              </form>
 
-                  <button type="button"
-                          class="btn-ghost btn-delete"
-                          onclick="abrirModal('modal-{{ servicio.pk }}')"
-                          title="Eliminar">
-                    🗑️
-                  </button>
+            </div>
 
-               {% elif servicio.estado in estado_permite_editar %}
-  <a href="{% url 'operaciones:editar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
-     class="btn-ghost btn-edit"
-     title="Editar">
-    ✏️
-  </a>
+          </div>
 
-                  <button type="button"
-                          class="btn-ghost btn-delete"
-                          onclick="abrirModal('modal-{{ servicio.pk }}')"
-                          title="Eliminar">
-                    🗑️
-                  </button>
+        </div>
 
-                {% else %}
-                  <span class="text-gray-400 italic">🔒 Bloqueado</span>
-                {% endif %}
-              {% endif %}
-            </td>
-          </tr>
-      {% empty %}
+        <!-- ================================================ -->
+        <!-- APROBAR                                         -->
+        <!-- ================================================ -->
 
-  <tr>
+        <div
+          id="modal-aprobar-{{ servicio.pk }}"
+          class="
+            cotizacion-modal-backdrop
+            hidden
+            fixed
+            inset-0
+            z-[100]
+            items-center
+            justify-center
+            px-4
+            py-6
+          "
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-approve-title-{{ servicio.pk }}"
+        >
 
-    <td
-      colspan="10"
-      class="p-8 text-center text-slate-500"
-    >
+          <div
+            class="
+              cotizacion-modal-card
+              w-full
+              max-w-md
+              overflow-hidden
+              rounded-2xl
+              bg-white
+            "
+          >
+
+            <div class="p-6">
+
+              <div
+                class="
+                  mb-4
+                  flex
+                  h-12 w-12
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-emerald-100
+                  text-xl
+                "
+              >
+                ✅
+              </div>
+
+              <h3
+                id="modal-approve-title-{{ servicio.pk }}"
+                class="
+                  text-lg
+                  font-black
+                  text-slate-900
+                "
+              >
+                Aprobar cotización
+              </h3>
+
+              <p class="mt-2 text-sm text-slate-600">
+
+                ¿Confirmas aprobar la cotización
+
+                <strong class="text-slate-900">
+                  DU{{ servicio.du|default:"—" }}
+                </strong>?
+
+              </p>
+
+            </div>
+
+            <div
+              class="
+                flex
+                justify-end
+                gap-2
+                border-t
+                border-slate-200
+                bg-slate-50
+                px-6 py-4
+              "
+            >
+
+              <button
+                type="button"
+                onclick="cerrarModal('modal-aprobar-{{ servicio.pk }}')"
+                class="
+                  rounded-xl
+                  border
+                  border-slate-300
+                  bg-white
+                  px-4 py-2.5
+                  text-sm
+                  font-bold
+                  text-slate-700
+                  shadow-sm
+                  transition
+                  hover:bg-slate-100
+                "
+              >
+                Cancelar
+              </button>
+
+              <form
+                method="post"
+                action="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}"
+              >
+
+                {% csrf_token %}
+
+                <input
+                  type="hidden"
+                  name="next"
+                  value="{{ request.get_full_path }}"
+                >
+
+                <button
+                  type="submit"
+                  class="
+                    rounded-xl
+                    border
+                    border-emerald-600
+                    bg-emerald-600
+                    px-4 py-2.5
+                    text-sm
+                    font-black
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:bg-emerald-700
+                  "
+                >
+                  Aprobar
+                </button>
+
+              </form>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      {% endfor %}
+
+      <!-- ==================================================== -->
+      <!-- FOOTER TABLA                                        -->
+      <!-- ==================================================== -->
 
       <div
         class="
-          mx-auto
           flex
-          max-w-md
           flex-col
-          items-center
-          rounded-2xl
-          border border-dashed border-slate-300
+          gap-4
+          border-t
+          border-slate-200
           bg-slate-50
-          p-6
+          px-4 py-4
+          sm:px-6
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
         "
       >
 
-        <span class="text-3xl">
-          📋
-        </span>
+        <!-- ================================================== -->
+        <!-- CANTIDAD                                          -->
+        <!-- ================================================== -->
 
-        <p class="mt-3 font-black text-slate-700">
-          No hay cotizaciones registradas
-        </p>
+        <div class="flex items-center gap-2">
 
-        <p class="mt-1 text-sm text-slate-500">
-          Crea una cotización o importa los registros disponibles.
-        </p>
+          <label
+            for="cantidad"
+            class="
+              text-sm
+              font-semibold
+              text-slate-600
+            "
+          >
+            Mostrar:
+          </label>
 
-      </div>
+          <select
+            name="cantidad"
+            id="cantidad"
+            class="
+              rounded-xl
+              border
+              border-slate-300
+              bg-white
+              px-3 py-2
+              text-sm
+              font-semibold
+              text-slate-700
+              shadow-sm
+              outline-none
+              transition
+              focus:border-cyan-400
+              focus:ring-2
+              focus:ring-cyan-100
+            "
+          >
 
-    </td>
+            <option
+              value="5"
+              {% if cantidad == '5' %}selected{% endif %}
+            >
+              5
+            </option>
 
-  </tr>
+            <option
+              value="10"
+              {% if cantidad == '10' %}selected{% endif %}
+            >
+              10
+            </option>
 
-{% endfor %}
-      </tbody>
-    </table>
-  </div>
+            <option
+              value="20"
+              {% if cantidad == '20' %}selected{% endif %}
+            >
+              20
+            </option>
 
-  {% for servicio in pagina %}
-    <div id="modal-{{ servicio.pk }}"
-         class="
-  cotizacion-modal-backdrop
-  hidden
-  fixed
-  inset-0
-  z-50
-  flex
-  items-center
-  justify-center
-  px-4
-"
-      <div class="bg-white p-6 rounded-xl shadow max-w-md w-full">
-        <h3 class="text-lg font-bold mb-4 text-gray-800">
-          ¿Eliminar la cotización DU{{ servicio.du }}?
-        </h3>
+            <option
+              value="50"
+              {% if cantidad == '50' %}selected{% endif %}
+            >
+              50
+            </option>
 
-        <p class="text-sm text-gray-600 mb-4">
-          Esta acción no se puede deshacer.
-        </p>
+            <option
+              value="100"
+              {% if cantidad == '100' %}selected{% endif %}
+            >
+              100
+            </option>
 
-        <div class="flex justify-end gap-2">
-          <button type="button"
-                  onclick="cerrarModal('modal-{{ servicio.pk }}')"
-                  class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
-            Cancelar
-          </button>
+          </select>
 
-          <form method="post"
-      action="{% url 'operaciones:eliminar_servicio_cotizado' servicio.pk %}?next={{ request.get_full_path|urlencode }}">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-  <button type="submit"
+          <span class="ml-2 text-xs text-slate-500">
+            {{ pagina.paginator.count }} pendiente(s)
+          </span>
+
+        </div>
+
+        <!-- ================================================== -->
+        <!-- PAGINACIÓN                                        -->
+        <!-- ================================================== -->
+
+        <div
+          id="pager"
           class="
-  rounded-xl
-  border border-red-600
-  bg-red-600
-  px-4 py-2
-  text-sm
-  font-black
-  text-white
-  shadow-sm
-  transition
-  hover:bg-red-700
-">
-    Eliminar
-  </button>
-</form>
+            flex
+            flex-wrap
+            items-center
+            gap-2
+            lg:justify-end
+          "
+        >
+
+          {% if pagina.has_previous %}
+
+            <a
+              href="?page=1&{{ qs_keep }}"
+              class="
+                inline-flex
+                h-9
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-slate-300
+                bg-white
+                px-3
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              « Primero
+            </a>
+
+            <a
+              href="?page={{ pagina.previous_page_number }}&{{ qs_keep }}"
+              class="
+                inline-flex
+                h-9
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-slate-300
+                bg-white
+                px-3
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              ‹ Anterior
+            </a>
+
+          {% endif %}
+
+          <span
+            class="
+              inline-flex
+              h-9
+              items-center
+              justify-center
+              rounded-lg
+              border
+              border-cyan-200
+              bg-cyan-50
+              px-4
+              text-sm
+              font-black
+              text-cyan-800
+            "
+          >
+            Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+          </span>
+
+          {% if pagina.has_next %}
+
+            <a
+              href="?page={{ pagina.next_page_number }}&{{ qs_keep }}"
+              class="
+                inline-flex
+                h-9
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-slate-300
+                bg-white
+                px-3
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              Siguiente ›
+            </a>
+
+            <a
+              href="?page={{ pagina.paginator.num_pages }}&{{ qs_keep }}"
+              class="
+                inline-flex
+                h-9
+                items-center
+                justify-center
+                rounded-lg
+                border
+                border-slate-300
+                bg-white
+                px-3
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              Último »
+            </a>
+
+          {% endif %}
+
         </div>
+
       </div>
+
     </div>
-
-    <div id="modal-aprobar-{{ servicio.pk }}"
-         class="
-  cotizacion-modal-backdrop
-  hidden
-  fixed
-  inset-0
-  z-50
-  flex
-  items-center
-  justify-center
-  px-4
-"
-      <div class="
-  cotizacion-modal-card
-  w-full
-  max-w-md
-  rounded-2xl
-  bg-white
-  p-6
-">
-        <h3 class="
-  rounded-xl
-  border border-emerald-600
-  bg-emerald-600
-  px-4 py-2
-  text-sm
-  font-black
-  text-white
-  shadow-sm
-  transition
-  hover:bg-emerald-700
-">
-          Aprobar cotización
-        </h3>
-
-        <p class="text-sm text-gray-600 mb-4">
-          ¿Confirmas aprobar la cotización <b>DU{{ servicio.du|default:"—" }}</b>?
-        </p>
-
-        <div class="flex justify-end gap-2">
-          <button type="button"
-                  onclick="cerrarModal('modal-aprobar-{{ servicio.pk }}')"
-                  class="
-  rounded-xl
-  border border-slate-300
-  bg-white
-  px-4 py-2
-  text-sm
-  font-bold
-  text-slate-600
-  transition
-  hover:bg-slate-100
-">
-            Cancelar
-          </button>
-
-          <form method="post"
-      action="{% url 'operaciones:aprobar_cotizacion' servicio.pk %}?next={{ request.get_full_path|urlencode }}">
-  {% csrf_token %}
-  <input type="hidden" name="next" value="{{ request.get_full_path }}">
-
-  <button type="submit"
-          class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
-    Aprobar
-  </button>
-</form>
-        </div>
-      </div>
-    </div>
-  {% endfor %}
-
-  <!-- Selector cantidad -->
-  <form
-  method="get"
-  class="
-    flex
-    flex-wrap
-    items-center
-    gap-2
-    border-t border-slate-200
-    bg-slate-50
-    px-4 py-4
-    sm:px-6
-  "
->
-    <label for="cantidad" class="text-sm font-medium text-gray-700">
-      Mostrar:
-    </label>
-
-    <select
-  name="cantidad"
-  id="cantidad"
-  class="
-    rounded-xl
-    border border-slate-300
-    bg-white
-    px-3 py-2
-    text-sm
-    font-semibold
-    text-slate-700
-    shadow-sm
-    outline-none
-    transition
-    focus:border-cyan-400
-    focus:ring-2
-    focus:ring-cyan-100
-  "
->
-      <option value="5"   {% if cantidad == '5' %}selected{% endif %}>5</option>
-      <option value="10"  {% if cantidad == '10' %}selected{% endif %}>10</option>
-      <option value="20"  {% if cantidad == '20' %}selected{% endif %}>20</option>
-      <option value="50"  {% if cantidad == '50' %}selected{% endif %}>50</option>
-      <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
-    </select>
-
-    <input type="hidden" name="du" value="{{ filtros.du }}">
-    <input type="hidden" name="id_claro" value="{{ filtros.id_claro }}">
-    <input type="hidden" name="id_new" value="{{ filtros.id_new }}">
-    <input type="hidden" name="mes_produccion" value="{{ filtros.mes_produccion }}">
-    <input type="hidden" name="estado" value="{{ filtros.estado }}">
-  </form>
-
-  <!-- Paginación -->
-  <div
-  id="pager"
-  class="
-    flex
-    flex-wrap
-    items-center
-    justify-center
-    gap-2
-    border-t border-slate-200
-    bg-slate-50
-    px-4 py-4
-    text-sm
-    sm:px-6
-  "
->
-    {% if pagina.has_previous %}
-      <a href="?page=1&{{ qs_keep }}"
-         class="
-  inline-flex
-  h-9
-  items-center
-  justify-center
-  rounded-lg
-  border border-slate-300
-  bg-white
-  px-3
-  text-sm
-  font-bold
-  text-slate-600
-  shadow-sm
-  transition
-  hover:bg-slate-100
-">
-        « Primero
-      </a>
-
-      <a href="?page={{ pagina.previous_page_number }}&{{ qs_keep }}"
-         class="
-  inline-flex
-  h-9
-  items-center
-  justify-center
-  rounded-lg
-  border border-slate-300
-  bg-white
-  px-3
-  text-sm
-  font-bold
-  text-slate-600
-  shadow-sm
-  transition
-  hover:bg-slate-100
-">
-        ‹ Anterior
-      </a>
-    {% endif %}
-
-    <span
-  class="
-    inline-flex
-    h-9
-    items-center
-    justify-center
-    rounded-lg
-    border border-cyan-200
-    bg-cyan-50
-    px-4
-    font-black
-    text-cyan-800
-  "
->
-      Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
-    </span>
-
-    {% if pagina.has_next %}
-      <a href="?page={{ pagina.next_page_number }}&{{ qs_keep }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
-        Siguiente ›
-      </a>
-
-      <a href="?page={{ pagina.paginator.num_pages }}&{{ qs_keep }}"
-         class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
-        Último »
-      </a>
-    {% endif %}
-  </div>
-</div>
-
 <script>
   function abrirModal(id) {
     const modal = document.getElementById(id);
+
     if (!modal) return;
+
     modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    document.body.classList.add('overflow-hidden');
   }
 
   function cerrarModal(id) {
     const modal = document.getElementById(id);
+
     if (!modal) return;
+
     modal.classList.add('hidden');
+    modal.classList.remove('flex');
+
+    document.body.classList.remove('overflow-hidden');
   }
 
   document.addEventListener('click', (e) => {
     const modal = e.target.closest('[id^="modal-"]');
 
-    if (modal && e.target === modal) {
+    if (
+      modal &&
+      e.target === modal
+    ) {
       modal.classList.add('hidden');
+      modal.classList.remove('flex');
+
+      document.body.classList.remove('overflow-hidden');
     }
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('[id^="modal-"]:not(.hidden)')
-        .forEach(m => m.classList.add('hidden'));
-    }
+    if (e.key !== 'Escape') return;
+
+    document
+      .querySelectorAll('[id^="modal-"]:not(.hidden)')
+      .forEach((modal) => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      });
+
+    document.body.classList.remove('overflow-hidden');
   });
 </script>
 
@@ -2125,6 +2681,247 @@ function syncFiltersWithUrl(){
   });
 })();
 </script>
+{% if request.user.is_superuser or request.user.es_admin_general or request.user.es_pm %}
+
+<script>
+(function () {
+
+  function zona() {
+    return document.getElementById('zonaTabla');
+  }
+
+  function getChecks() {
+    const z = zona();
+
+    if (!z) return [];
+
+    return Array.from(
+      z.querySelectorAll('.cotizacion-row-check')
+    );
+  }
+
+  function getSelectedChecks() {
+    return getChecks().filter(
+      checkbox => checkbox.checked
+    );
+  }
+
+  function actualizarBarraMasiva() {
+    const z = zona();
+
+    if (!z) return;
+
+    const seleccionados = getSelectedChecks();
+
+    const barra = z.querySelector(
+      '#bulkActionsBar'
+    );
+
+    const contador = z.querySelector(
+      '#bulkSelectedCount'
+    );
+
+    const selectAll = z.querySelector(
+      '#selectAllCotizaciones'
+    );
+
+    if (contador) {
+      contador.textContent = seleccionados.length;
+    }
+
+    if (barra) {
+
+      if (seleccionados.length) {
+        barra.classList.remove('hidden');
+        barra.classList.add('flex');
+
+      } else {
+        barra.classList.add('hidden');
+        barra.classList.remove('flex');
+      }
+    }
+
+    if (selectAll) {
+
+      const checks = getChecks();
+
+      selectAll.checked =
+        checks.length > 0 &&
+        seleccionados.length === checks.length;
+
+      selectAll.indeterminate =
+        seleccionados.length > 0 &&
+        seleccionados.length < checks.length;
+    }
+  }
+
+  function idsSeleccionados() {
+    return getSelectedChecks().map(
+      checkbox => checkbox.value
+    );
+  }
+
+  function enviarAccionMasiva(
+    accion,
+    mensaje
+  ) {
+    const ids = idsSeleccionados();
+
+    if (!ids.length) {
+      return;
+    }
+
+    if (!window.confirm(mensaje)) {
+      return;
+    }
+
+    const form = document.createElement('form');
+
+    form.method = 'POST';
+
+    form.action =
+      "{% url 'operaciones:accion_masiva_cotizaciones_pm' %}";
+
+    // CSRF
+    const csrf = document.createElement('input');
+
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = '{{ csrf_token }}';
+
+    form.appendChild(csrf);
+
+    // Acción
+    const inputAccion = document.createElement('input');
+
+    inputAccion.type = 'hidden';
+    inputAccion.name = 'accion';
+    inputAccion.value = accion;
+
+    form.appendChild(inputAccion);
+
+    // Retorno
+    const inputNext = document.createElement('input');
+
+    inputNext.type = 'hidden';
+    inputNext.name = 'next';
+    inputNext.value =
+      window.location.pathname +
+      window.location.search;
+
+    form.appendChild(inputNext);
+
+    // IDs
+    ids.forEach((id) => {
+
+      const input = document.createElement('input');
+
+      input.type = 'hidden';
+      input.name = 'servicio_ids';
+      input.value = id;
+
+      form.appendChild(input);
+    });
+
+    document.body.appendChild(form);
+
+    form.submit();
+  }
+
+  document.addEventListener(
+    'change',
+    function (e) {
+
+      const z = zona();
+
+      if (!z) return;
+
+      if (
+        e.target.matches(
+          '#selectAllCotizaciones'
+        )
+      ) {
+
+        const marcado = e.target.checked;
+
+        getChecks().forEach(
+          checkbox => {
+            checkbox.checked = marcado;
+          }
+        );
+
+        actualizarBarraMasiva();
+
+        return;
+      }
+
+      if (
+        e.target.matches(
+          '.cotizacion-row-check'
+        )
+      ) {
+
+        actualizarBarraMasiva();
+      }
+    }
+  );
+
+  document.addEventListener(
+    'click',
+    function (e) {
+
+      const approve = e.target.closest(
+        '#btnBulkApprove'
+      );
+
+      if (approve) {
+
+        const cantidad =
+          idsSeleccionados().length;
+
+        enviarAccionMasiva(
+          'aprobar',
+          (
+            '¿Confirmas aprobar ' +
+            cantidad +
+            ' cotización(es) seleccionada(s)?'
+          )
+        );
+
+        return;
+      }
+
+      const eliminar = e.target.closest(
+        '#btnBulkDelete'
+      );
+
+      if (eliminar) {
+
+        const cantidad =
+          idsSeleccionados().length;
+
+        enviarAccionMasiva(
+          'eliminar',
+          (
+            '¿Confirmas eliminar definitivamente ' +
+            cantidad +
+            ' cotización(es)?\n\n' +
+            'Esta acción no se puede deshacer.'
+          )
+        );
+      }
+    }
+  );
+
+  actualizarBarraMasiva();
+
+  window.actualizarBarraMasivaCotizaciones =
+    actualizarBarraMasiva;
+
+})();
+</script>
+
+{% endif %}
 </div>
 </div>
 {% endblock %}

@@ -1,0 +1,429 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Recomendación para {{ batch.codigo_semana }}
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-6 sm:px-6">
+
+  <div
+    class="
+      mx-auto
+      max-w-6xl
+      overflow-hidden
+      rounded-3xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+    "
+  >
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50
+        px-6 py-6
+      "
+    >
+
+      <p
+        class="
+          text-[11px]
+          font-black
+          uppercase
+          tracking-[0.15em]
+          text-cyan-700
+        "
+      >
+        Recomendación operacional
+      </p>
+
+      <h1 class="mt-1 text-2xl font-black text-slate-900">
+        Completar {{ batch.codigo_semana }}
+      </h1>
+
+      <p class="mt-2 text-sm text-slate-500">
+        El sistema analizó los sitios actuales de la semana
+        junto con los disponibles en {{ mensual }}.
+      </p>
+
+    </div>
+
+
+    <div
+      class="
+        grid
+        gap-3
+        border-b border-slate-100
+        bg-slate-50
+        px-6 py-4
+        sm:grid-cols-4
+      "
+    >
+
+      <div class="rounded-xl bg-white p-3">
+        <p class="text-[10px] font-black uppercase text-slate-400">
+          Sitios anteriores
+        </p>
+
+        <p class="mt-1 text-xl font-black">
+          {{ diagnostico.cantidad_sitios_residuales }}
+        </p>
+      </div>
+
+      <div class="rounded-xl bg-white p-3">
+        <p class="text-[10px] font-black uppercase text-slate-400">
+          Días restantes
+        </p>
+
+        <p class="mt-1 text-xl font-black">
+          {{ diagnostico.cantidad_dias_restantes }}
+        </p>
+      </div>
+
+      <div class="rounded-xl bg-white p-3">
+        <p class="text-[10px] font-black uppercase text-slate-400">
+          Capacidad restante
+        </p>
+
+        <p class="mt-1 text-xl font-black">
+          {{ diagnostico.capacidad_restante }}
+        </p>
+      </div>
+
+      <div class="rounded-xl bg-emerald-50 p-3">
+        <p class="text-[10px] font-black uppercase text-emerald-600">
+          Nuevos recomendados
+        </p>
+
+        <p class="mt-1 text-xl font-black text-emerald-800">
+          {{ resultado.cantidad_recomendada }}
+        </p>
+      </div>
+
+    </div>
+
+
+    {% if resultado.advertencias %}
+
+      <div class="px-6 pt-5">
+
+        {% for mensaje in resultado.advertencias %}
+
+          <div
+            class="
+              mb-2
+              rounded-xl
+              border border-amber-200
+              bg-amber-50
+              px-4 py-3
+              text-sm
+              font-semibold
+              text-amber-800
+            "
+          >
+            {{ mensaje }}
+          </div>
+
+        {% endfor %}
+
+      </div>
+
+    {% endif %}
+
+
+    <form
+      method="post"
+      action="{% url 'planificacion:confirmar_completar_semana' mensual.pk batch.pk %}"
+    >
+
+      {% csrf_token %}
+
+      <div class="p-6">
+
+        <div
+          class="
+            mb-4
+            flex
+            flex-col
+            gap-2
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+
+          <div>
+
+            <h2 class="text-sm font-black uppercase text-slate-800">
+              Sitios recomendados
+            </h2>
+
+            <p class="mt-1 text-xs text-slate-500">
+              Puedes quitar cualquiera o modificar manualmente la selección.
+            </p>
+
+          </div>
+
+          <label class="flex items-center gap-2 text-sm font-bold text-slate-600">
+
+            <input
+              type="checkbox"
+              id="seleccionar-todos-recomendados"
+              checked
+              class="h-4 w-4 accent-cyan-600"
+            >
+
+            Seleccionar todos
+
+          </label>
+
+        </div>
+
+
+        <div class="overflow-x-auto rounded-2xl border border-slate-200">
+
+          <table class="min-w-full text-sm">
+
+            <thead class="bg-slate-50">
+
+              <tr>
+
+                <th class="w-12 px-4 py-3"></th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  ID Claro
+                </th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  Nombre
+                </th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  Región
+                </th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  Comuna
+                </th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  Zona
+                </th>
+
+                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
+                  Condición acceso
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody>
+
+              {% for sitio in recomendados %}
+
+                <tr class="border-t border-slate-100">
+
+                  <td class="px-4 py-3 text-center">
+
+                    <input
+                      type="checkbox"
+                      name="sitio_ids"
+                      value="{{ sitio.sitio_planificado_id }}"
+                      checked
+                      class="
+                        recomendacion-checkbox
+                        h-4 w-4
+                        accent-cyan-600
+                      "
+                    >
+
+                  </td>
+
+                  <td class="px-4 py-3 font-black text-slate-900">
+                    {{ sitio.id_claro|default:"—" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-slate-700">
+                    {{ sitio.nombre|default:"—" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-slate-600">
+                    {{ sitio.region|default:"—" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-slate-600">
+                    {{ sitio.comuna|default:"—" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-slate-600">
+                    {{ sitio.tipo_zona|default:"—" }}
+                  </td>
+
+                  <td class="px-4 py-3 text-slate-600">
+                    {{ sitio.condicion_acceso|default:"—" }}
+                  </td>
+
+                </tr>
+
+              {% empty %}
+
+                <tr>
+
+                  <td
+                    colspan="7"
+                    class="px-4 py-10 text-center text-slate-500"
+                  >
+                    No se encontraron sitios recomendables.
+                  </td>
+
+                </tr>
+
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="
+          flex
+          flex-col-reverse
+          gap-3
+          border-t border-slate-200
+          bg-slate-50
+          px-6 py-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <a
+          href="{% url 'planificacion:completar_semana_anterior' mensual.pk %}"
+          class="
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-center
+            text-sm
+            font-bold
+            text-slate-700
+          "
+        >
+          ← Volver
+        </a>
+
+
+        <button
+          type="submit"
+          class="
+            rounded-xl
+            bg-gradient-to-r
+            from-emerald-600
+            to-teal-600
+            px-5 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+          "
+        >
+          Confirmar e incorporar a {{ batch.codigo_semana }}
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<script>
+(function () {
+
+  const master =
+    document.getElementById(
+      'seleccionar-todos-recomendados'
+    );
+
+  if (!master) {
+    return;
+  }
+
+  function checks() {
+    return Array.from(
+      document.querySelectorAll(
+        '.recomendacion-checkbox'
+      )
+    );
+  }
+
+  master.addEventListener(
+    'change',
+    function () {
+
+      checks().forEach(
+        function (checkbox) {
+
+          checkbox.checked =
+            master.checked;
+
+        }
+      );
+
+    }
+  );
+
+  document.addEventListener(
+    'change',
+    function (event) {
+
+      if (
+        !event.target.matches(
+          '.recomendacion-checkbox'
+        )
+      ) {
+        return;
+      }
+
+      const todos = checks();
+
+      const marcados =
+        todos.filter(
+          checkbox =>
+            checkbox.checked
+        );
+
+      master.checked =
+        todos.length > 0
+        &&
+        marcados.length === todos.length;
+
+      master.indeterminate =
+        marcados.length > 0
+        &&
+        marcados.length < todos.length;
+
+    }
+  );
+
+})();
+</script>
+
+{% endblock %}

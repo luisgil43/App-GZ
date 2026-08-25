@@ -1,0 +1,1558 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Análisis del Batch Semanal
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto max-w-[1700px]">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div class="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+
+    <div>
+
+      <p class="text-sm font-medium text-slate-500">
+        {{ mensual }}
+      </p>
+
+      <h1 class="mt-1 text-2xl font-black text-slate-900">
+        Análisis inteligente del batch
+      </h1>
+
+      <p class="mt-1 max-w-4xl text-sm text-slate-600">
+        El motor analiza geografía, concentración, capacidad de las
+        cuadrillas, composición urbano/rural, acceso, bases operacionales
+        y el impacto que cada alternativa deja sobre el resto del mes.
+      </p>
+
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+
+      <a
+        href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+        class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+      >
+        Volver al batch
+      </a>
+
+      <a
+        href="{% url 'planificacion:analizar_batch_semanal' batch.id %}?recalcular=1"
+        class="rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-900"
+      >
+        Recalcular análisis
+      </a>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- CONTEXTO                                               -->
+  <!-- ====================================================== -->
+
+  <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3">
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+      <p class="text-xs font-black uppercase text-slate-500">
+        Universo analizado
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-slate-900">
+        {{ analisis.universo_total }}
+      </p>
+
+    </div>
+
+
+    <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+
+      <p class="text-xs font-black uppercase text-blue-700">
+        Objetivo semanal
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-blue-900">
+        {{ analisis.objetivo }}
+      </p>
+
+    </div>
+
+
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+
+      <p class="text-xs font-black uppercase text-emerald-700">
+        Propuestas generadas
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-emerald-900">
+        {{ propuestas|length }}
+      </p>
+
+    </div>
+
+  </div>
+
+
+  {% if propuestas %}
+
+  <!-- ====================================================== -->
+  <!-- COMPARATIVA                                            -->
+  <!-- ====================================================== -->
+
+  <div class="grid gap-5 xl:grid-cols-3">
+
+    {% for propuesta in propuestas %}
+
+    <div
+      class="
+        overflow-hidden
+        rounded-3xl
+        border
+        bg-white
+        shadow-sm
+        {% if propuesta.recomendada %}
+          border-blue-300 ring-2 ring-blue-100
+        {% else %}
+          border-slate-200
+        {% endif %}
+      "
+    >
+
+      <!-- ================================================== -->
+      <!-- CABECERA PROPUESTA                                  -->
+      <!-- ================================================== -->
+
+      <div class="border-b border-slate-100 p-5">
+
+        <div class="flex items-start justify-between gap-3">
+
+          <div>
+
+            {% if propuesta.recomendada %}
+
+            <span
+              class="
+                mb-2
+                inline-flex
+                rounded-full
+                bg-blue-600
+                px-2.5 py-1
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-white
+              "
+            >
+              Recomendada
+            </span>
+
+            {% endif %}
+
+            <h2 class="text-xl font-black text-slate-900">
+              Propuesta {{ propuesta.posicion }}
+            </h2>
+
+            <p class="mt-1 text-xs font-bold text-slate-500">
+              {{ propuesta.codigo }}
+            </p>
+
+          </div>
+
+
+          <div class="text-right">
+
+            <p class="text-[10px] font-black uppercase text-slate-400">
+              Score GZ
+            </p>
+
+            <p class="text-4xl font-black text-slate-900">
+              {{ propuesta.score_total|floatformat:1 }}
+            </p>
+
+            <p class="text-xs font-bold text-slate-400">
+              /100
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <p class="mt-4 text-sm leading-relaxed text-slate-600">
+          {{ propuesta.motivo }}
+        </p>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- MÉTRICAS PRINCIPALES                                -->
+      <!-- ================================================== -->
+
+      <div class="grid grid-cols-3 gap-2 p-4">
+
+        <div class="rounded-xl bg-slate-50 p-3">
+
+          <p class="text-[10px] font-black uppercase text-slate-400">
+            Sitios propuestos
+          </p>
+
+          <p class="mt-1 text-xl font-black text-slate-900">
+            {{ propuesta.principales|length }}
+          </p>
+
+        </div>
+
+
+        <div class="rounded-xl bg-blue-50 p-3">
+
+          <p class="text-[10px] font-black uppercase text-blue-500">
+            Urbanos
+          </p>
+
+          <p class="mt-1 text-xl font-black text-blue-800">
+            {{ propuesta.metricas.urbanos }}
+          </p>
+
+        </div>
+
+
+        <div class="rounded-xl bg-amber-50 p-3">
+
+          <p class="text-[10px] font-black uppercase text-amber-600">
+            Rurales
+          </p>
+
+          <p class="mt-1 text-xl font-black text-amber-800">
+            {{ propuesta.metricas.rurales }}
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- ACCESO DESDE BASES                                  -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 px-5 py-4">
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400">
+          Acceso desde bases operacionales
+        </p>
+
+
+        <div class="mt-3 grid grid-cols-2 gap-2">
+
+          <div class="rounded-xl border border-cyan-100 bg-cyan-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-cyan-600">
+              Base más favorable
+            </p>
+
+            {% if propuesta.metricas.minutos_base_minimos != None %}
+
+            <p class="mt-1 text-lg font-black text-cyan-900">
+              {{ propuesta.metricas.minutos_base_minimos }} min
+            </p>
+
+            {% else %}
+
+            <p class="mt-1 text-lg font-black text-slate-400">
+              —
+            </p>
+
+            {% endif %}
+
+
+            {% if propuesta.metricas.distancia_base_minima_km != None %}
+
+            <p class="mt-0.5 text-xs text-cyan-700">
+              {{ propuesta.metricas.distancia_base_minima_km|floatformat:1 }} km
+              al punto medio
+            </p>
+
+            {% endif %}
+
+          </div>
+
+
+          <div class="rounded-xl border border-blue-100 bg-blue-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-blue-600">
+              Promedio bases
+            </p>
+
+            {% if propuesta.metricas.minutos_base_promedio != None %}
+
+            <p class="mt-1 text-lg font-black text-blue-900">
+              {{ propuesta.metricas.minutos_base_promedio }} min
+            </p>
+
+            {% else %}
+
+            <p class="mt-1 text-lg font-black text-slate-400">
+              —
+            </p>
+
+            {% endif %}
+
+
+            {% if propuesta.metricas.distancia_base_media_km != None %}
+
+            <p class="mt-0.5 text-xs text-blue-700">
+              {{ propuesta.metricas.distancia_base_media_km|floatformat:1 }} km
+              promedio
+            </p>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- CUADRILLAS                                          -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 px-5 py-4">
+
+        <div class="flex items-center justify-between gap-3">
+
+          <div>
+
+            <p class="text-xs font-black uppercase tracking-wide text-slate-400">
+              Distribución operacional
+            </p>
+
+            <p class="mt-1 text-xs text-slate-500">
+              Simulación estimada del uso de las cuadrillas.
+            </p>
+
+          </div>
+
+
+          <div class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600">
+            {{ propuesta.metricas.total_salidas }} salidas
+          </div>
+
+        </div>
+
+
+        {% if propuesta.metricas.resumen_cuadrillas %}
+
+        <div class="mt-3 space-y-2">
+
+          {% for cuadrilla in propuesta.metricas.resumen_cuadrillas %}
+
+          <div
+            class="
+              rounded-2xl
+              border
+              p-3
+              {% if cuadrilla.utilizada %}
+                border-emerald-200 bg-emerald-50/60
+              {% else %}
+                border-slate-200 bg-slate-50
+              {% endif %}
+            "
+            data-cuadrilla-distribucion
+            data-propuesta-posicion="{{ propuesta.posicion }}"
+            data-cuadrilla-nombre="{{ cuadrilla.nombre }}"
+          >
+
+            <div class="flex items-start justify-between gap-3">
+
+              <div>
+
+                <div class="flex flex-wrap items-center gap-2">
+
+                  <p class="text-sm font-black text-slate-900">
+                    {{ cuadrilla.nombre }}
+                  </p>
+
+
+                  {% if cuadrilla.utilizada %}
+
+                  <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+                    Utilizada
+                  </span>
+
+                  {% else %}
+
+                  <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">
+                    Disponible
+                  </span>
+
+                  {% endif %}
+
+                </div>
+
+
+                {% if cuadrilla.tipo_vehiculo %}
+
+                <p class="mt-0.5 text-[11px] text-slate-500">
+                  {{ cuadrilla.tipo_vehiculo }}
+                </p>
+
+                {% endif %}
+
+
+                {% if cuadrilla.base_nombre %}
+
+                <p class="mt-0.5 text-[11px] text-slate-500">
+                  Base: {{ cuadrilla.base_nombre }}
+                </p>
+
+                {% endif %}
+
+              </div>
+
+
+              <div class="text-right">
+
+                <p class="text-[10px] font-black uppercase text-slate-400">
+                  Sitios
+                </p>
+
+                <p class="text-xl font-black text-slate-900">
+                  {{ cuadrilla.sitios }}
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div class="mt-3 grid grid-cols-2 gap-2">
+
+              <div class="rounded-lg bg-white/80 p-2">
+
+                <p class="text-[9px] font-black uppercase text-slate-400">
+                  Días utilizados
+                </p>
+
+                <p class="mt-0.5 text-sm font-black text-slate-800">
+                  {{ cuadrilla.salidas }}
+                  de
+                  {{ cuadrilla.dias_disponibles }}
+                </p>
+
+              </div>
+
+
+              <div class="rounded-lg bg-white/80 p-2">
+
+                <p class="text-[9px] font-black uppercase text-slate-400">
+                  Uso semanal
+                </p>
+
+                <p class="mt-0.5 text-sm font-black text-slate-800">
+                  {{ cuadrilla.utilizacion_dias_porcentaje|floatformat:0 }}%
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div class="mt-2 rounded-xl border border-slate-200 bg-white/80 p-2.5">
+
+              <p class="text-[9px] font-black uppercase text-slate-400">
+                Plan de salidas
+              </p>
+
+              <p
+                class="mt-1 text-xs font-bold leading-relaxed text-slate-800"
+                data-distribucion-salidas
+              >
+                —
+              </p>
+
+            </div>
+
+
+            <div class="mt-2 flex flex-wrap gap-1.5">
+
+              {% if cuadrilla.permite_urbano %}
+
+              <span class="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                Urbano
+              </span>
+
+              {% endif %}
+
+
+              {% if cuadrilla.permite_rural %}
+
+              <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                Rural
+              </span>
+
+              {% endif %}
+
+
+              {% if cuadrilla.trabaja_sabado %}
+
+              <span class="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-bold text-violet-700">
+                Incluye sábado
+              </span>
+
+              {% endif %}
+
+            </div>
+
+          </div>
+
+          {% endfor %}
+
+        </div>
+
+        {% endif %}
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- SIMULACIÓN                                          -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 px-5 py-4">
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400">
+          Simulación operacional
+        </p>
+
+
+        <div class="mt-3 grid grid-cols-2 gap-2">
+
+          <div class="rounded-xl bg-slate-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-slate-400">
+              Sitios simulados
+            </p>
+
+            <p class="mt-1 text-xl font-black text-slate-900">
+              {{ propuesta.metricas.sitios_planificados }}
+            </p>
+
+          </div>
+
+
+          <div class="rounded-xl bg-slate-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-slate-400">
+              Salidas
+            </p>
+
+            <p class="mt-1 text-xl font-black text-slate-900">
+              {{ propuesta.metricas.total_salidas }}
+            </p>
+
+          </div>
+
+
+          <div class="rounded-xl bg-emerald-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-emerald-600">
+              Jornadas con 3 sitios
+            </p>
+
+            <p class="mt-1 text-xl font-black text-emerald-800">
+              {{ propuesta.metricas.salidas_3_sitios }}
+            </p>
+
+          </div>
+
+
+          <div class="rounded-xl bg-blue-50 p-3">
+
+            <p class="text-[10px] font-black uppercase text-blue-600">
+              Jornadas con 2 sitios
+            </p>
+
+            <p class="mt-1 text-xl font-black text-blue-800">
+              {{ propuesta.metricas.salidas_2_sitios }}
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {% if propuesta.metricas.salidas_1_sitio %}
+
+        <div class="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+
+          El motor encontró
+          {{ propuesta.metricas.salidas_1_sitio }}
+
+          {% if propuesta.metricas.salidas_1_sitio == 1 %}
+            jornada con solamente 1 sitio.
+          {% else %}
+            jornadas con solamente 1 sitio cada una.
+          {% endif %}
+
+        </div>
+
+        {% endif %}
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- SCORES INTERNOS                                     -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 px-5 py-4">
+
+        <div class="space-y-3">
+
+          <div>
+
+            <div class="flex justify-between text-xs font-bold">
+
+              <span class="text-slate-500">
+                Geografía
+              </span>
+
+              <span>
+                {{ propuesta.score_geografico|floatformat:1 }}
+              </span>
+
+            </div>
+
+
+            <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+
+              <div
+                class="h-full rounded-full bg-blue-500"
+                style="width: {{ propuesta.score_geografico }}%;"
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div class="flex justify-between text-xs font-bold">
+
+              <span class="text-slate-500">
+                Eficiencia operacional
+              </span>
+
+              <span>
+                {{ propuesta.score_capacidad|floatformat:1 }}
+              </span>
+
+            </div>
+
+
+            <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+
+              <div
+                class="h-full rounded-full bg-emerald-500"
+                style="width: {{ propuesta.score_capacidad }}%;"
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div class="flex justify-between text-xs font-bold">
+
+              <span class="text-slate-500">
+                Accesos
+              </span>
+
+              <span>
+                {{ propuesta.score_acceso|floatformat:1 }}
+              </span>
+
+            </div>
+
+
+            <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+
+              <div
+                class="h-full rounded-full bg-cyan-500"
+                style="width: {{ propuesta.score_acceso }}%;"
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div class="flex justify-between text-xs font-bold">
+
+              <span class="text-slate-500">
+                Balance resto del mes
+              </span>
+
+              <span>
+                {{ propuesta.score_balance_mensual|floatformat:1 }}
+              </span>
+
+            </div>
+
+
+            <div class="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+
+              <div
+                class="h-full rounded-full bg-violet-500"
+                style="width: {{ propuesta.score_balance_mensual }}%;"
+              ></div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- CONCENTRACIONES                                     -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 px-5 py-4">
+
+        {% if propuesta.metricas.modo_cierre_mensual %}
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400">
+          Agrupaciones del cierre mensual
+        </p>
+
+        {% else %}
+
+        <p class="text-xs font-black uppercase tracking-wide text-slate-400">
+          Zona territorial propuesta
+        </p>
+
+        {% endif %}
+
+
+        <div class="mt-3 space-y-2">
+
+          {% for cluster in propuesta.clusters %}
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+
+            <div class="flex items-center justify-between gap-3">
+
+              <div>
+
+                {% if propuesta.metricas.modo_cierre_mensual %}
+
+                <p class="text-sm font-black text-slate-800">
+                  Sector {{ forloop.counter }}
+                </p>
+
+                {% else %}
+
+                <p class="text-sm font-black text-slate-800">
+                  Zona semanal
+                </p>
+
+                {% endif %}
+
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                  {{ cluster.cantidad }} sitios ·
+                  {{ cluster.urbanos }} urbanos ·
+                  {{ cluster.rurales }} rurales
+                </p>
+
+              </div>
+
+
+              <div class="text-right">
+
+                <p class="text-[10px] uppercase text-slate-400">
+                  Compactación
+                </p>
+
+                <p class="font-black text-slate-800">
+                  {{ cluster.score_compactacion|floatformat:0 }}/100
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <p class="mt-2 text-[11px] text-slate-500">
+              Radio aproximado:
+              {{ cluster.radio_km|floatformat:1 }} km
+            </p>
+
+          </div>
+
+          {% endfor %}
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- ACCIONES                                            -->
+      <!-- ================================================== -->
+
+      <div class="border-t border-slate-100 p-4">
+
+        <button
+          type="button"
+          onclick="mostrarMapaPropuesta({{ propuesta.posicion }})"
+          class="mb-2 w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+        >
+          Ver análisis en mapa
+        </button>
+
+
+        <details class="mb-3">
+
+          <summary class="cursor-pointer text-center text-xs font-bold text-slate-500 hover:text-slate-800">
+            Ver sitios de la propuesta
+          </summary>
+
+
+          <div class="mt-3 max-h-64 overflow-y-auto rounded-xl border border-slate-200">
+
+            {% for sitio in propuesta.principales %}
+
+            <div class="border-b border-slate-100 px-3 py-2 last:border-b-0">
+
+              <div class="flex justify-between gap-2">
+
+                <div>
+
+                  <p class="text-xs font-black text-slate-800">
+                    {{ sitio.id_claro }}
+                  </p>
+
+                  <p class="text-[11px] text-slate-500">
+                    {{ sitio.nombre }}
+                  </p>
+
+                </div>
+
+
+                <div class="text-right text-[10px] text-slate-500">
+
+                  {{ sitio.comuna }}
+
+                  <br>
+
+                  {{ sitio.tipo_zona }}
+
+                </div>
+
+              </div>
+
+            </div>
+
+            {% endfor %}
+
+          </div>
+
+        </details>
+
+
+        <form
+          method="post"
+          action="{% url 'planificacion:aplicar_propuesta_batch' batch.id propuesta.posicion %}"
+        >
+
+          {% csrf_token %}
+
+          <button
+            type="submit"
+            class="
+              w-full
+              rounded-xl
+              px-4 py-3
+              text-sm
+              font-black
+              text-white
+              shadow-sm
+              transition
+              {% if propuesta.recomendada %}
+                bg-blue-600 hover:bg-blue-700
+              {% else %}
+                bg-slate-800 hover:bg-slate-900
+              {% endif %}
+            "
+          >
+            Usar esta propuesta
+          </button>
+
+        </form>
+
+      </div>
+
+    </div>
+
+    {% endfor %}
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- MAPA                                                   -->
+  <!-- ====================================================== -->
+
+  <div
+    id="mapa-analisis-container"
+    class="mt-6 hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+  >
+
+    <div class="flex flex-col gap-3 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
+
+      <div>
+
+        <h2
+          id="mapa-titulo"
+          class="text-lg font-black text-slate-900"
+        >
+          Análisis geográfico
+        </h2>
+
+        <p class="mt-1 text-sm text-slate-500">
+          Sitios principales y perímetro territorial de la propuesta.
+        </p>
+
+      </div>
+
+
+      <button
+        type="button"
+        onclick="cerrarMapaPropuesta()"
+        class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+      >
+        Cerrar mapa
+      </button>
+
+    </div>
+
+
+    {% if google_maps_api_key %}
+
+    <div
+      id="mapa-analisis"
+      style="height: 650px; width: 100%;"
+    ></div>
+
+    {% else %}
+
+    <div class="p-8 text-center">
+
+      <p class="font-bold text-amber-700">
+        Falta configurar GOOGLE_MAPS_API_KEY.
+      </p>
+
+      <p class="mt-2 text-sm text-slate-500">
+        El análisis geográfico ya está calculado.
+        Al configurar la API de Google Maps podremos visualizar
+        aquí todos los puntos y sus perímetros.
+      </p>
+
+    </div>
+
+    {% endif %}
+
+  </div>
+
+
+  {% else %}
+
+  <!-- ====================================================== -->
+  <!-- SIN PROPUESTAS                                         -->
+  <!-- ====================================================== -->
+
+  <div class="rounded-3xl border border-amber-200 bg-amber-50 p-8 text-center">
+
+    <h2 class="text-lg font-black text-amber-900">
+      El motor no pudo generar propuestas
+    </h2>
+
+    <p class="mt-2 text-sm text-amber-700">
+      Revisa que los sitios tengan coordenadas válidas,
+      que existan cuadrillas activas con bases operacionales
+      configuradas y que el objetivo semanal sea compatible
+      con los sitios disponibles.
+    </p>
+
+  </div>
+
+  {% endif %}
+
+</div>
+
+</div>
+
+
+{{ propuestas|json_script:"propuestas-motor-data" }}
+
+
+<script>
+
+let mapaAnalisis = null;
+
+let objetosMapa = [];
+
+
+const propuestasMotor = JSON.parse(
+  document.getElementById(
+    "propuestas-motor-data"
+  )?.textContent || "[]"
+);
+
+
+/* ======================================================== */
+/* DISTRIBUCIÓN REAL DE SALIDAS POR CUADRILLA              */
+/* ======================================================== */
+
+function construirTextoDistribucion(
+  salidas
+) {
+
+  const conteos = {
+    3: 0,
+    2: 0,
+    1: 0
+  };
+
+
+  salidas.forEach(
+    function (salida) {
+
+      const cantidad =
+        Number(
+          salida.cantidad_sitios || 0
+        );
+
+
+      if (
+        cantidad === 1
+        ||
+        cantidad === 2
+        ||
+        cantidad === 3
+      ) {
+
+        conteos[cantidad] += 1;
+
+      }
+
+    }
+  );
+
+
+  const partes = [];
+
+
+  if (conteos[3] > 0) {
+
+    if (conteos[3] === 1) {
+
+      partes.push(
+        "1 salida de 3 sitios"
+      );
+
+    } else {
+
+      partes.push(
+        conteos[3]
+        + " salidas de 3 sitios"
+      );
+
+    }
+
+  }
+
+
+  if (conteos[2] > 0) {
+
+    if (conteos[2] === 1) {
+
+      partes.push(
+        "1 salida de 2 sitios"
+      );
+
+    } else {
+
+      partes.push(
+        conteos[2]
+        + " salidas de 2 sitios"
+      );
+
+    }
+
+  }
+
+
+  if (conteos[1] > 0) {
+
+    if (conteos[1] === 1) {
+
+      partes.push(
+        "1 salida de 1 sitio"
+      );
+
+    } else {
+
+      partes.push(
+        conteos[1]
+        + " salidas de 1 sitio"
+      );
+
+    }
+
+  }
+
+
+  if (!partes.length) {
+
+    return "Sin salidas simuladas";
+
+  }
+
+
+  return partes.join(
+    " + "
+  );
+
+}
+
+
+function actualizarDistribucionesCuadrillas() {
+
+  document
+    .querySelectorAll(
+      "[data-cuadrilla-distribucion]"
+    )
+    .forEach(
+      function (card) {
+
+        const propuestaPosicion =
+          Number(
+            card.dataset.propuestaPosicion
+          );
+
+
+        const cuadrillaNombre =
+          (
+            card.dataset.cuadrillaNombre
+            ||
+            ""
+          ).trim();
+
+
+        const propuesta =
+          propuestasMotor.find(
+            function (item) {
+
+              return (
+                Number(item.posicion)
+                ===
+                propuestaPosicion
+              );
+
+            }
+          );
+
+
+        if (!propuesta) {
+          return;
+        }
+
+
+        const salidas =
+          (
+            propuesta.metricas
+            &&
+            Array.isArray(
+              propuesta.metricas.salidas
+            )
+          )
+            ? propuesta.metricas.salidas
+            : [];
+
+
+        const salidasCuadrilla =
+          salidas.filter(
+            function (salida) {
+
+              const display =
+                (
+                  salida.cuadrilla_display
+                  ||
+                  ""
+                ).trim();
+
+
+              return (
+                display === cuadrillaNombre
+              );
+
+            }
+          );
+
+
+        const nodo =
+          card.querySelector(
+            "[data-distribucion-salidas]"
+          );
+
+
+        if (!nodo) {
+          return;
+        }
+
+
+        nodo.textContent =
+          construirTextoDistribucion(
+            salidasCuadrilla
+          );
+
+      }
+    );
+
+}
+
+
+/* ======================================================== */
+/* MAPA                                                     */
+/* ======================================================== */
+
+function limpiarObjetosMapa() {
+
+  objetosMapa.forEach(
+    function (objeto) {
+
+      if (objeto.setMap) {
+        objeto.setMap(null);
+      }
+
+    }
+  );
+
+
+  objetosMapa = [];
+
+}
+
+
+function obtenerPropuesta(
+  posicion
+) {
+
+  return propuestasMotor.find(
+    function (propuesta) {
+
+      return propuesta.posicion === posicion;
+
+    }
+  );
+
+}
+
+
+function cerrarMapaPropuesta() {
+
+  document
+    .getElementById(
+      "mapa-analisis-container"
+    )
+    ?.classList.add(
+      "hidden"
+    );
+
+}
+
+
+function mostrarMapaPropuesta(
+  posicion
+) {
+
+  const propuesta =
+    obtenerPropuesta(
+      posicion
+    );
+
+
+  if (!propuesta) {
+    return;
+  }
+
+
+  const container =
+    document.getElementById(
+      "mapa-analisis-container"
+    );
+
+
+  container?.classList.remove(
+    "hidden"
+  );
+
+
+  document.getElementById(
+    "mapa-titulo"
+  ).textContent =
+    "Análisis geográfico · Propuesta "
+    + posicion;
+
+
+  container?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
+
+
+  if (
+    typeof google === "undefined"
+    ||
+    !google.maps
+  ) {
+    return;
+  }
+
+
+  dibujarPropuestaEnMapa(
+    propuesta
+  );
+
+}
+
+
+function dibujarPropuestaEnMapa(
+  propuesta
+) {
+
+  const mapaNode =
+    document.getElementById(
+      "mapa-analisis"
+    );
+
+
+  if (!mapaNode) {
+    return;
+  }
+
+
+  if (!mapaAnalisis) {
+
+    mapaAnalisis =
+      new google.maps.Map(
+        mapaNode,
+        {
+          zoom: 8,
+          center: {
+            lat: -33.45,
+            lng: -70.66
+          },
+          mapTypeControl: true,
+          streetViewControl: false,
+          fullscreenControl: true
+        }
+      );
+
+  }
+
+
+  limpiarObjetosMapa();
+
+
+  const bounds =
+    new google.maps.LatLngBounds();
+
+
+  propuesta.principales.forEach(
+    function (sitio) {
+
+      if (
+        sitio.latitud == null
+        ||
+        sitio.longitud == null
+      ) {
+        return;
+      }
+
+
+      const posicion = {
+        lat: sitio.latitud,
+        lng: sitio.longitud
+      };
+
+
+      const marker =
+        new google.maps.Marker({
+          position: posicion,
+          map: mapaAnalisis,
+          label: {
+            text: "P",
+            color: "#ffffff",
+            fontWeight: "700"
+          },
+          title:
+            sitio.id_claro
+            + " - "
+            + sitio.nombre
+        });
+
+
+      const info =
+        new google.maps.InfoWindow({
+          content: `
+            <div style="min-width:220px">
+
+              <strong>${sitio.id_claro}</strong><br>
+
+              ${sitio.nombre || ""}
+
+              <br><br>
+
+              <strong>Comuna:</strong>
+              ${sitio.comuna || "—"}<br>
+
+              <strong>Zona:</strong>
+              ${sitio.tipo_zona || "—"}<br>
+
+              <strong>Acceso:</strong>
+              ${sitio.condicion_acceso || "Sin información"}
+
+              <br><br>
+
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=${sitio.latitud},${sitio.longitud}"
+                target="_blank"
+                rel="noopener"
+              >
+                Abrir ubicación en Google Maps
+              </a>
+
+            </div>
+          `
+        });
+
+
+      marker.addListener(
+        "click",
+        function () {
+
+          info.open({
+            map: mapaAnalisis,
+            anchor: marker
+          });
+
+        }
+      );
+
+
+      objetosMapa.push(
+        marker
+      );
+
+
+      bounds.extend(
+        posicion
+      );
+
+    }
+  );
+
+
+  propuesta.clusters.forEach(
+    function (cluster) {
+
+      if (
+        !cluster.perimetro
+        ||
+        cluster.perimetro.length < 3
+      ) {
+        return;
+      }
+
+
+      const polygon =
+        new google.maps.Polygon({
+          paths: cluster.perimetro,
+          strokeOpacity: 0.75,
+          strokeWeight: 2,
+          fillOpacity: 0.08,
+          map: mapaAnalisis
+        });
+
+
+      objetosMapa.push(
+        polygon
+      );
+
+    }
+  );
+
+
+  if (!bounds.isEmpty()) {
+
+    mapaAnalisis.fitBounds(
+      bounds,
+      50
+    );
+
+  }
+
+}
+
+
+/* ======================================================== */
+/* INICIALIZACIÓN                                            */
+/* ======================================================== */
+
+document.addEventListener(
+  "DOMContentLoaded",
+  function () {
+
+    actualizarDistribucionesCuadrillas();
+
+  }
+);
+
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  defer
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}"
+></script>
+
+{% endif %}
+
+{% endblock %}

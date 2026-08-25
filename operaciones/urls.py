@@ -286,4 +286,9 @@ urlpatterns = [
         views.descargar_formato_sitios_excel,
         name="descargar_formato_sitios",
     ),
+    path(
+        "cotizaciones/accion-masiva/",
+        views.accion_masiva_cotizaciones_pm,
+        name="accion_masiva_cotizaciones_pm",
+    ),
 ]

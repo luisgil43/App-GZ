@@ -1,0 +1,734 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Mapa de salida
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1750px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-5
+        flex
+        flex-col
+        gap-4
+        xl:flex-row
+        xl:items-center
+        xl:justify-between
+      "
+    >
+
+      <div>
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.15em]
+            text-blue-700
+          "
+        >
+          Ruta operacional
+        </p>
+
+        <h1
+          class="
+            mt-1
+            text-2xl
+            font-black
+            text-slate-900
+          "
+        >
+          {{ salida.cuadrilla_nombre }}
+        </h1>
+
+        <div
+          class="
+            mt-2
+            flex
+            flex-wrap
+            items-center
+            gap-2
+            text-sm
+            text-slate-600
+          "
+        >
+
+          <span>
+            {{ salida.fecha|date:"l d/m/Y" }}
+          </span>
+
+          <span class="text-slate-300">
+            ·
+          </span>
+
+          <span>
+            {{ salida.disponibilidad_cuadrilla.tipo_vehiculo }}
+          </span>
+
+          <span class="text-slate-300">
+            ·
+          </span>
+
+          <span class="font-bold text-slate-900">
+            {{ mapa.total_sitios }} sitio(s)
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div class="flex flex-wrap gap-2">
+
+        <a
+          href="{% url 'planificacion:detalle_planificacion_diaria' batch.id %}"
+          class="
+            rounded-xl
+            border
+            border-slate-300
+            bg-white
+            px-4
+            py-2.5
+            text-sm
+            font-bold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Volver a planificación
+        </a>
+
+
+        {% if mapa.url_google_maps %}
+
+          <a
+            href="{{ mapa.url_google_maps }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="
+              rounded-xl
+              bg-blue-600
+              px-4
+              py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-sm
+              transition
+              hover:bg-blue-700
+            "
+          >
+            Abrir ruta en Google Maps
+          </a>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- LAYOUT                                               -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        grid
+        gap-4
+        xl:grid-cols-[340px_minmax(0,1fr)]
+      "
+    >
+
+      <!-- ================================================== -->
+      <!-- RUTA                                               -->
+      <!-- ================================================== -->
+
+      <aside
+        class="
+          overflow-hidden
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
+
+        <div
+          class="
+            border-b
+            border-slate-200
+            bg-slate-900
+            px-4
+            py-4
+            text-white
+          "
+        >
+
+          <div
+            class="
+              text-xs
+              font-black
+              uppercase
+              tracking-wide
+              text-slate-300
+            "
+          >
+            Secuencia
+          </div>
+
+          <div class="mt-1 text-lg font-black">
+            Ruta del día
+          </div>
+
+        </div>
+
+
+        <div class="divide-y divide-slate-100">
+
+          {% if mapa.base %}
+
+            <div class="p-4">
+
+              <div class="flex gap-3">
+
+                <span
+                  class="
+                    flex
+                    h-8
+                    w-8
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-slate-900
+                    text-xs
+                    font-black
+                    text-white
+                  "
+                >
+                  B
+                </span>
+
+                <div>
+
+                  <div class="text-xs font-black text-slate-400">
+                    SALIDA
+                  </div>
+
+                  <div class="mt-0.5 font-bold text-slate-900">
+                    {{ mapa.base.nombre }}
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          {% endif %}
+
+
+          {% for sitio in mapa.sitios %}
+
+            <div class="p-4">
+
+              <div class="flex gap-3">
+
+                <span
+                  class="
+                    flex
+                    h-8
+                    w-8
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-blue-600
+                    text-xs
+                    font-black
+                    text-white
+                  "
+                >
+                  {{ sitio.orden }}
+                </span>
+
+                <div class="min-w-0">
+
+                  <div class="font-black text-slate-900">
+                    {{ sitio.id_claro }}
+                  </div>
+
+                  <div class="mt-0.5 text-sm font-semibold text-slate-700">
+                    {{ sitio.nombre }}
+                  </div>
+
+                  <div class="mt-1 text-xs text-slate-500">
+                    {{ sitio.comuna }}
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          {% endfor %}
+
+
+          {% if mapa.base %}
+
+            <div class="p-4">
+
+              <div class="flex gap-3">
+
+                <span
+                  class="
+                    flex
+                    h-8
+                    w-8
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-slate-900
+                    text-xs
+                    font-black
+                    text-white
+                  "
+                >
+                  B
+                </span>
+
+                <div>
+
+                  <div class="text-xs font-black text-slate-400">
+                    RETORNO
+                  </div>
+
+                  <div class="mt-0.5 font-bold text-slate-900">
+                    {{ mapa.base.nombre }}
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          {% endif %}
+
+        </div>
+
+      </aside>
+
+
+      <!-- ================================================== -->
+      <!-- MAPA                                               -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          overflow-hidden
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          shadow-sm
+        "
+      >
+
+        {% if google_maps_api_key %}
+
+          <div
+            id="mapa-salida-diaria"
+            class="h-[76vh] min-h-[650px] w-full"
+          ></div>
+
+        {% else %}
+
+          <div class="p-10 text-center text-amber-700">
+            Google Maps no está configurado.
+          </div>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+{{ mapa|json_script:"mapa-salida-data" }}
+
+
+<script>
+(function () {
+
+  const mapaData = JSON.parse(
+    document.getElementById(
+      "mapa-salida-data"
+    )?.textContent || "{}"
+  );
+
+
+  function escaparHtml(valor) {
+    const div = document.createElement(
+      "div"
+    );
+
+    div.textContent =
+      valor == null
+        ? ""
+        : String(valor);
+
+    return div.innerHTML;
+  }
+
+
+  window.inicializarMapaSalidaDiaria =
+    async function () {
+
+      const nodo =
+        document.getElementById(
+          "mapa-salida-diaria"
+        );
+
+      if (
+        !nodo
+        ||
+        !window.google
+        ||
+        !google.maps
+      ) {
+        return;
+      }
+
+
+      const {
+        AdvancedMarkerElement,
+        PinElement
+      } =
+        await google.maps.importLibrary(
+          "marker"
+        );
+
+
+      const mapa =
+        new google.maps.Map(
+          nodo,
+          {
+            center: {
+              lat: -33.4489,
+              lng: -70.6693
+            },
+            zoom: 10,
+            mapId: "DEMO_MAP_ID",
+            streetViewControl: false,
+            fullscreenControl: true,
+            mapTypeControl: true
+          }
+        );
+
+
+      const bounds =
+        new google.maps.LatLngBounds();
+
+      const camino = [];
+
+
+      /* ================================================ */
+      /* BASE                                             */
+      /* ================================================ */
+
+      if (mapaData.base) {
+
+        const posicionBase = {
+          lat: Number(
+            mapaData.base.latitud
+          ),
+          lng: Number(
+            mapaData.base.longitud
+          )
+        };
+
+
+        const pinBase =
+          new PinElement({
+            background: "#0f172a",
+            borderColor: "#020617",
+            glyphColor: "#ffffff",
+            glyph: "B",
+            scale: 1.15
+          });
+
+
+        new AdvancedMarkerElement({
+          map: mapa,
+          position: posicionBase,
+          content: pinBase.element,
+          title: mapaData.base.nombre
+        });
+
+
+        bounds.extend(
+          posicionBase
+        );
+
+        camino.push(
+          posicionBase
+        );
+
+      }
+
+
+      /* ================================================ */
+      /* SITIOS                                           */
+      /* ================================================ */
+
+      mapaData.sitios.forEach(
+        function (sitio) {
+
+          const posicion = {
+            lat: Number(
+              sitio.latitud
+            ),
+            lng: Number(
+              sitio.longitud
+            )
+          };
+
+
+          const pin =
+            new PinElement({
+              background:
+                mapaData.color.marcador,
+
+              borderColor:
+                mapaData.color.borde,
+
+              glyphColor:
+                "#ffffff",
+
+              glyph:
+                String(
+                  sitio.orden
+                ),
+
+              scale: 1.1
+            });
+
+
+          const marker =
+            new AdvancedMarkerElement({
+              map: mapa,
+              position: posicion,
+              content: pin.element,
+              title:
+                sitio.id_claro
+                + " - "
+                + sitio.nombre
+            });
+
+
+          const contenido = `
+            <div
+              style="
+                min-width:260px;
+                max-width:340px;
+                font-family:Arial,sans-serif;
+              "
+            >
+
+              <div
+                style="
+                  font-size:17px;
+                  font-weight:800;
+                "
+              >
+                ${escaparHtml(sitio.id_claro)}
+              </div>
+
+              <div
+                style="
+                  margin-top:3px;
+                  font-size:14px;
+                  font-weight:700;
+                "
+              >
+                ${escaparHtml(sitio.nombre)}
+              </div>
+
+              <hr
+                style="
+                  border:0;
+                  border-top:1px solid #e5e7eb;
+                  margin:10px 0;
+                "
+              >
+
+              <div>
+                <strong>Orden:</strong>
+                ${escaparHtml(sitio.orden)}
+              </div>
+
+              <div>
+                <strong>Cuadrilla:</strong>
+                ${escaparHtml(mapaData.cuadrilla_nombre)}
+              </div>
+
+              <div>
+                <strong>Comuna:</strong>
+                ${escaparHtml(sitio.comuna || "—")}
+              </div>
+
+              <div>
+                <strong>Zona:</strong>
+                ${escaparHtml(sitio.tipo_zona || "—")}
+              </div>
+
+              <div>
+                <strong>Permiso:</strong>
+                ${escaparHtml(sitio.estado_permiso)}
+              </div>
+
+              <div>
+                <strong>Operación:</strong>
+                ${escaparHtml(sitio.estado_operativo)}
+              </div>
+
+              <div
+                style="
+                  margin-top:8px;
+                  font-size:12px;
+                  color:#64748b;
+                "
+              >
+                ${escaparHtml(sitio.direccion || "")}
+              </div>
+
+              <div style="margin-top:12px;">
+
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=${sitio.latitud},${sitio.longitud}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Abrir sitio en Google Maps
+                </a>
+
+              </div>
+
+            </div>
+          `;
+
+
+          const info =
+            new google.maps.InfoWindow({
+              content: contenido
+            });
+
+
+          marker.addListener(
+            "click",
+            function () {
+
+              info.open({
+                map: mapa,
+                anchor: marker
+              });
+
+            }
+          );
+
+
+          bounds.extend(
+            posicion
+          );
+
+          camino.push(
+            posicion
+          );
+
+        }
+      );
+
+
+      /* ================================================ */
+      /* RETORNO A BASE                                   */
+      /* ================================================ */
+
+      if (mapaData.base) {
+
+        camino.push({
+          lat: Number(
+            mapaData.base.latitud
+          ),
+          lng: Number(
+            mapaData.base.longitud
+          )
+        });
+
+      }
+
+
+      /* ================================================ */
+      /* LÍNEA VISUAL DE SECUENCIA                        */
+      /* ================================================ */
+
+      if (camino.length >= 2) {
+
+        new google.maps.Polyline({
+          path: camino,
+          geodesic: true,
+          strokeColor:
+            mapaData.color.marcador,
+          strokeOpacity: 0.75,
+          strokeWeight: 4,
+          map: mapa
+        });
+
+      }
+
+
+      if (!bounds.isEmpty()) {
+
+        mapa.fitBounds(
+          bounds,
+          70
+        );
+
+      }
+
+    };
+
+})();
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=inicializarMapaSalidaDiaria"
+></script>
+
+{% endif %}
+
+{% endblock %}

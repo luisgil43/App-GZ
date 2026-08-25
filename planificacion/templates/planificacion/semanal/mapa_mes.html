@@ -1,0 +1,460 @@
+{% extends "dashboard_admin/base.html" %}
+{% load static %}
+
+{% block title %}
+Mapa mensual de batches
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1600px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-5
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-blue-50
+          px-5
+          py-5
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        "
+      >
+
+        <div>
+
+          <p
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-blue-700
+            "
+          >
+            Planificación mensual
+          </p>
+
+          <h1
+            class="
+              mt-1
+              text-2xl
+              font-black
+              tracking-tight
+              text-slate-900
+            "
+          >
+            Mapa de batches del mes
+          </h1>
+
+          <p class="mt-1 text-sm text-slate-500">
+            {{ mensual }} · Visualización conjunta de todas las semanas.
+          </p>
+
+        </div>
+
+
+        <a
+          href="{% url 'planificacion:lista_planificacion_semanal' mensual.id %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-sm
+            font-semibold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Volver a semanas
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- LEYENDA                                              -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-4
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        p-4
+        shadow-sm
+      "
+    >
+
+      <div class="flex flex-wrap gap-3">
+
+        {% for fila in resumen_batches %}
+
+          <div
+            class="
+              flex
+              items-center
+              gap-2
+              rounded-xl
+              border border-slate-200
+              bg-slate-50
+              px-3 py-2
+            "
+          >
+
+            <span
+              class="h-3 w-3 rounded-full"
+              data-batch-color="{{ forloop.counter0 }}"
+            ></span>
+
+            <div>
+
+              <div class="text-xs font-black text-slate-800">
+
+                {% if fila.batch.nombre %}
+                  {{ fila.batch.nombre }}
+                {% else %}
+                  Semana {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+                {% endif %}
+
+              </div>
+
+              <div class="text-[11px] text-slate-500">
+                {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+                · {{ fila.cantidad_puntos }} sitio(s)
+              </div>
+
+            </div>
+
+          </div>
+
+        {% endfor %}
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MAPA                                                 -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        id="mapa-batches"
+        class="h-[72vh] min-h-[600px] w-full"
+      ></div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+{{ puntos_mapa|json_script:"puntos-batches-mes" }}
+
+
+<script>
+(function () {
+
+  const COLORES = [
+    "#2563eb",
+    "#dc2626",
+    "#16a34a",
+    "#9333ea",
+    "#ea580c",
+    "#0891b2",
+    "#be123c",
+    "#4f46e5",
+    "#65a30d",
+    "#ca8a04"
+  ];
+
+
+  document
+    .querySelectorAll(
+      '[data-batch-color]'
+    )
+    .forEach(
+      function (node) {
+
+        const indice =
+          parseInt(
+            node.dataset.batchColor || '0',
+            10
+          );
+
+        node.style.backgroundColor =
+          COLORES[
+            indice % COLORES.length
+          ];
+
+      }
+    );
+
+
+  window.inicializarMapaBatchesMes =
+    function () {
+
+      const nodeDatos =
+        document.getElementById(
+          'puntos-batches-mes'
+        );
+
+      const puntos =
+        nodeDatos
+        ? JSON.parse(
+            nodeDatos.textContent
+          )
+        : [];
+
+
+      const mapa =
+        new google.maps.Map(
+          document.getElementById(
+            'mapa-batches'
+          ),
+          {
+            center: {
+              lat: -33.4489,
+              lng: -70.6693
+            },
+            zoom: 8,
+            mapTypeControl: true,
+            streetViewControl: false,
+            fullscreenControl: true
+          }
+        );
+
+
+      if (!puntos.length) {
+        return;
+      }
+
+
+      const bounds =
+        new google.maps.LatLngBounds();
+
+
+      const batchesIds = [];
+
+      puntos.forEach(
+        function (punto) {
+
+          if (
+            !batchesIds.includes(
+              punto.batch_id
+            )
+          ) {
+            batchesIds.push(
+              punto.batch_id
+            );
+          }
+
+        }
+      );
+
+
+      puntos.forEach(
+        function (punto) {
+
+          const indiceBatch =
+            batchesIds.indexOf(
+              punto.batch_id
+            );
+
+          const color =
+            COLORES[
+              indiceBatch
+              % COLORES.length
+            ];
+
+
+          const posicion = {
+            lat: punto.lat,
+            lng: punto.lng
+          };
+
+
+          const marker =
+            new google.maps.Marker(
+              {
+                position: posicion,
+                map: mapa,
+                title: punto.id_claro,
+                label: {
+                  text:
+                    String(
+                      indiceBatch + 1
+                    ),
+                  color: "#ffffff",
+                  fontWeight: "700"
+                },
+                icon: {
+                  path:
+                    google.maps.SymbolPath.CIRCLE,
+                  scale:
+                    punto.es_reserva
+                    ? 8
+                    : 10,
+                  fillColor: color,
+                  fillOpacity:
+                    punto.es_reserva
+                    ? 0.55
+                    : 0.95,
+                  strokeColor: "#ffffff",
+                  strokeWeight: 2
+                }
+              }
+            );
+
+
+          const info =
+            new google.maps.InfoWindow(
+              {
+                content: `
+                  <div style="
+                    min-width:220px;
+                    padding:4px;
+                    font-family:Arial,sans-serif;
+                  ">
+                    <div style="
+                      font-size:15px;
+                      font-weight:700;
+                      margin-bottom:5px;
+                    ">
+                      ${punto.id_claro || "Sitio"}
+                    </div>
+
+                    <div style="
+                      font-size:12px;
+                      line-height:1.6;
+                    ">
+                      <strong>Batch:</strong>
+                      ${punto.batch_nombre}
+                      <br>
+
+                      <strong>Semana:</strong>
+                      ${punto.fecha}
+                      <br>
+
+                      <strong>Nombre:</strong>
+                      ${punto.nombre || "-"}
+                      <br>
+
+                      <strong>Comuna:</strong>
+                      ${punto.comuna || "-"}
+                      <br>
+
+                      <strong>Zona:</strong>
+                      ${punto.tipo_zona || "-"}
+                      <br>
+
+                      <strong>Tipo:</strong>
+                      ${punto.es_reserva ? "Reserva" : "Principal"}
+                    </div>
+                  </div>
+                `
+              }
+            );
+
+
+          marker.addListener(
+            "click",
+            function () {
+
+              info.open(
+                {
+                  anchor: marker,
+                  map: mapa
+                }
+              );
+
+            }
+          );
+
+
+          bounds.extend(
+            posicion
+          );
+
+        }
+      );
+
+
+      mapa.fitBounds(
+        bounds
+      );
+
+
+      google.maps.event.addListenerOnce(
+        mapa,
+        "bounds_changed",
+        function () {
+
+          if (
+            mapa.getZoom()
+            > 14
+          ) {
+            mapa.setZoom(
+              14
+            );
+          }
+
+        }
+      );
+
+    };
+
+})();
+</script>
+
+
+<script
+  src="https://maps.googleapis.com/maps/api/js?key={{ GOOGLE_MAPS_API_KEY }}&callback=inicializarMapaBatchesMes"
+  async
+  defer
+></script>
+
+{% endblock %}

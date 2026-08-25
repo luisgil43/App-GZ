@@ -1,0 +1,417 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+{% if modo == "editar" %}
+Editar Planificación Mensual
+{% else %}
+Nueva Planificación Mensual
+{% endif %}
+{% endblock %}
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto w-full max-w-4xl">
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/40
+        px-5 py-5
+        sm:px-6 sm:py-6
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <div
+            class="
+              flex
+              h-12 w-12
+              shrink-0
+              items-center
+              justify-center
+              rounded-2xl
+              border border-cyan-100
+              bg-gradient-to-br
+              from-cyan-50
+              to-blue-100
+              text-2xl
+              shadow-sm
+            "
+          >
+            🗓️
+          </div>
+
+
+          <div>
+
+            <p
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-700
+              "
+            >
+              Planificación
+            </p>
+
+            <h1
+              class="
+                mt-0.5
+                text-2xl
+                font-black
+                tracking-tight
+                text-slate-900
+                sm:text-3xl
+              "
+            >
+              {% if modo == "editar" %}
+                Editar planificación mensual
+              {% else %}
+                Nueva planificación mensual
+              {% endif %}
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-500">
+              {% if modo == "editar" %}
+                Modifica los datos generales de esta planificación mensual.
+              {% else %}
+                Crea el mes que recibirá la asignación de sitios del cliente.
+              {% endif %}
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <a
+          href="{% url 'planificacion:planificaciones_mensuales' %}"
+          class="
+            inline-flex
+            w-fit
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-sm
+            font-bold
+            text-slate-600
+            shadow-sm
+            transition
+            hover:bg-slate-100
+          "
+        >
+          ← Volver
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- FORMULARIO                                           -->
+    <!-- ==================================================== -->
+
+    <form
+      method="post"
+      class="px-5 py-5 sm:px-6 sm:py-6"
+    >
+
+      {% csrf_token %}
+
+
+      {% if form.non_field_errors %}
+
+        <div
+          class="
+            mb-5
+            rounded-2xl
+            border border-red-200
+            bg-red-50
+            px-4 py-3
+            text-sm
+            font-semibold
+            text-red-700
+          "
+        >
+
+          {% for error in form.non_field_errors %}
+            <p>{{ error }}</p>
+          {% endfor %}
+
+        </div>
+
+      {% endif %}
+
+
+      <div class="grid gap-5 sm:grid-cols-2">
+
+        <!-- AÑO -->
+
+        <div>
+
+          <label
+            for="{{ form.anio.id_for_label }}"
+            class="
+              mb-2
+              block
+              text-sm
+              font-black
+              text-slate-700
+            "
+          >
+            Año
+          </label>
+
+          {{ form.anio }}
+
+          {% if form.anio.errors %}
+
+            <div class="mt-1 text-xs font-semibold text-red-600">
+              {{ form.anio.errors }}
+            </div>
+
+          {% endif %}
+
+        </div>
+
+
+        <!-- MES -->
+
+        <div>
+
+          <label
+            for="{{ form.mes.id_for_label }}"
+            class="
+              mb-2
+              block
+              text-sm
+              font-black
+              text-slate-700
+            "
+          >
+            Mes
+          </label>
+
+          {{ form.mes }}
+
+          {% if form.mes.errors %}
+
+            <div class="mt-1 text-xs font-semibold text-red-600">
+              {{ form.mes.errors }}
+            </div>
+
+          {% endif %}
+
+        </div>
+
+      </div>
+
+
+      <!-- OBSERVACIONES -->
+
+      <div class="mt-5">
+
+        <label
+          for="{{ form.observaciones.id_for_label }}"
+          class="
+            mb-2
+            block
+            text-sm
+            font-black
+            text-slate-700
+          "
+        >
+          Observaciones
+        </label>
+
+        {{ form.observaciones }}
+
+        <p class="mt-1 text-[11px] text-slate-400">
+          Opcional. Puedes dejar notas generales del mes.
+        </p>
+
+        {% if form.observaciones.errors %}
+
+          <div class="mt-1 text-xs font-semibold text-red-600">
+            {{ form.observaciones.errors }}
+          </div>
+
+        {% endif %}
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- EXPLICACIÓN                                        -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          mt-6
+          grid
+          gap-3
+          md:grid-cols-2
+        "
+      >
+
+        <div
+          class="
+            rounded-2xl
+            border border-cyan-100
+            bg-cyan-50/60
+            px-4 py-3
+          "
+        >
+
+          <p class="text-sm font-black text-cyan-900">
+            ¿Qué ocurre después?
+          </p>
+
+          <p class="mt-1 text-xs leading-relaxed text-cyan-800">
+            Al crear el mes podrás subir la planilla de asignación
+            recibida del cliente.
+          </p>
+
+        </div>
+
+
+        <div
+          class="
+            rounded-2xl
+            border border-emerald-100
+            bg-emerald-50/60
+            px-4 py-3
+          "
+        >
+
+          <p class="text-sm font-black text-emerald-900">
+            Sin duplicar información
+          </p>
+
+          <p class="mt-1 text-xs leading-relaxed text-emerald-800">
+            Solo utilizaremos el ID Claro. Ubicación, comuna,
+            zona y datos de acceso vendrán de nuestras bases.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- ACCIONES                                           -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          mt-6
+          flex
+          flex-wrap
+          items-center
+          justify-end
+          gap-2
+          border-t border-slate-100
+          pt-5
+        "
+      >
+
+        <a
+          href="{% url 'planificacion:planificaciones_mensuales' %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-sm
+            font-bold
+            text-slate-600
+            shadow-sm
+            transition
+            hover:bg-slate-100
+          "
+        >
+          Cancelar
+        </a>
+
+
+        <button
+          type="submit"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border border-emerald-200
+            bg-gradient-to-r
+            from-emerald-600
+            to-teal-600
+            px-5 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          {% if modo == "editar" %}
+            ✓ Guardar cambios
+          {% else %}
+            ✓ Crear planificación
+          {% endif %}
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+</div>
+
+{% endblock %}

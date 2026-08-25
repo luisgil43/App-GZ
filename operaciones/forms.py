@@ -108,9 +108,6 @@ class AsignarTrabajadoresForm(forms.Form):
         return trabajadores
 
 
-
-
-
 class MovimientoUsuarioForm(forms.ModelForm):
     cargos = forms.CharField(
         widget=forms.TextInput(
@@ -428,7 +425,7 @@ class MovimientoUsuarioForm(forms.ModelForm):
             cleaned['kilometraje_servicio_flota'] = None
 
         return cleaned
-    
+
 def validar_rut_chileno(rut):
     """Valida el dígito verificador del RUT chileno."""
     if not rut:
@@ -465,34 +462,205 @@ def verificar_rut_sii(rut):
 class SitioMovilForm(forms.ModelForm):
     class Meta:
         model = SitioMovil
+
         fields = [
-            "id_sites", "id_claro", "id_sites_new", "region", "nombre", "direccion",
-            "latitud", "longitud", "comuna", "tipo_construccion", "altura",
-            "candado_bt", "condiciones_acceso", "claves", "llaves", "cantidad_llaves",
-            "observaciones_generales", "zonas_conflictivas", "alarmas", "guardias",
-            "nivel", "descripcion",
+            "id_sites",
+            "id_claro",
+            "id_sites_new",
+            "region",
+            "nombre",
+            "direccion",
+            "latitud",
+            "longitud",
+            "comuna",
+            "tipo_construccion",
+            "altura",
+            "tipo_zona",
+            "candado_bt",
+            "condiciones_acceso",
+            "claves",
+            "llaves",
+            "cantidad_llaves",
+            "observaciones_generales",
+            "zonas_conflictivas",
+            "alarmas",
+            "guardias",
         ]
+
         widgets = {
-            "direccion": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "condiciones_acceso": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
-            "observaciones_generales": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
-            "descripcion": forms.Textarea(attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}),
-            "zonas_conflictivas": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "claves": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "llaves": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "tipo_construccion": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "region": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "nombre": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "comuna": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "id_sites": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "id_claro": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "id_sites_new": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "candado_bt": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "alarmas": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "guardias": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "nivel": forms.TextInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "altura": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
-            "cantidad_llaves": forms.NumberInput(attrs={"class": "border rounded-lg w-full px-3 py-2"}),
-            "latitud": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
-            "longitud": forms.NumberInput(attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}),
+            "id_sites": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "id_claro": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "id_sites_new": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "region": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "nombre": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "direccion": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "latitud": forms.NumberInput(
+                attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "longitud": forms.NumberInput(
+                attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "comuna": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "tipo_construccion": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "altura": forms.NumberInput(
+                attrs={"step": "any", "class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "tipo_zona": forms.Select(
+                choices=[
+                    ("", "---------"),
+                    ("Urbano", "Urbano"),
+                    ("Rural", "Rural"),
+                    ("No_Identificado", "No Identificado"),
+                ],
+                attrs={"class": "border rounded-lg w-full px-3 py-2 bg-white"},
+            ),
+            "candado_bt": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "condiciones_acceso": forms.Select(
+                choices=[
+                    ("", "---------"),
+                    ("Sin Información", "Sin Información"),
+                    ("Libre Acceso", "Libre Acceso"),
+                    ("Correos - Confirmación", "Correos - Confirmación"),
+                    ("Correos-Sin Confirmación", "Correos-Sin Confirmación"),
+                    ("Llamadas", "Llamadas"),
+                    ("Formularios", "Formularios"),
+                    ("Certificación", "Certificación"),
+                ],
+                attrs={"class": "border rounded-lg w-full px-3 py-2 bg-white"},
+            ),
+            "claves": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "llaves": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "cantidad_llaves": forms.NumberInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "observaciones_generales": forms.Textarea(
+                attrs={"rows": 3, "class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "zonas_conflictivas": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "alarmas": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
+            "guardias": forms.TextInput(
+                attrs={"class": "border rounded-lg w-full px-3 py-2"}
+            ),
         }
+
+        labels = {
+            "id_sites": "ID Sites",
+            "id_claro": "ID Claro",
+            "id_sites_new": "ID Sites NEW",
+            "region": "Región",
+            "nombre": "Nombre",
+            "direccion": "Dirección",
+            "latitud": "Latitud",
+            "longitud": "Longitud",
+            "comuna": "Comuna",
+            "tipo_construccion": "Tipo de Construcción",
+            "altura": "Altura",
+            "tipo_zona": "Tipo de Zona",
+            "candado_bt": "Candado BT",
+            "condiciones_acceso": "Condiciones de acceso",
+            "claves": "Claves",
+            "llaves": "Llaves",
+            "cantidad_llaves": "Cantidad de Llaves",
+            "observaciones_generales": "Observaciones Generales",
+            "zonas_conflictivas": "Sitios zonas conflictivas",
+            "alarmas": "Alarmas",
+            "guardias": "Guardias",
+        }
+
+    def clean_tipo_zona(self):
+        """
+        Normaliza Tipo de Zona también cuando
+        el sitio se edita manualmente.
+        """
+
+        value = self.cleaned_data.get("tipo_zona")
+
+        if value in (None, ""):
+            return None
+
+        value = str(value).strip()
+
+        equivalencias = {
+            "U": "Urbano",
+            "u": "Urbano",
+            "Urbano": "Urbano",
+            "urbano": "Urbano",
+            "R": "Rural",
+            "r": "Rural",
+            "Rural": "Rural",
+            "rural": "Rural",
+            "#N/D": "No_Identificado",
+            "N/D": "No_Identificado",
+            "No Identificado": "No_Identificado",
+            "No_Identificado": "No_Identificado",
+        }
+
+        return equivalencias.get(value, value)
+
+    def clean_condiciones_acceso(self):
+        """
+        Normaliza Condiciones de acceso también
+        cuando el registro se edita manualmente.
+
+        Acepta tanto códigos como nombres.
+        """
+
+        value = self.cleaned_data.get("condiciones_acceso")
+
+        if value in (None, ""):
+            return None
+
+        value = str(value).strip()
+
+        equivalencias = {
+            "0": "Sin Información",
+            "0.0": "Sin Información",
+            "Sin Información": "Sin Información",
+            "1": "Libre Acceso",
+            "1.0": "Libre Acceso",
+            "Libre Acceso": "Libre Acceso",
+            "2": "Correos - Confirmación",
+            "2.0": "Correos - Confirmación",
+            "Correos - Confirmación": "Correos - Confirmación",
+            "3": "Correos-Sin Confirmación",
+            "3.0": "Correos-Sin Confirmación",
+            "Correos-Sin Confirmación": "Correos-Sin Confirmación",
+            "Correos - Sin Confirmación": "Correos-Sin Confirmación",
+            "4": "Llamadas",
+            "4.0": "Llamadas",
+            "Llamadas": "Llamadas",
+            "5": "Formularios",
+            "5.0": "Formularios",
+            "Formularios": "Formularios",
+            "6": "Certificación",
+            "6.0": "Certificación",
+            "Certificación": "Certificación",
+        }
+
+        return equivalencias.get(value, value)

@@ -1,0 +1,695 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Mapa diario
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1750px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-5
+        flex
+        flex-col
+        gap-4
+        xl:flex-row
+        xl:items-center
+        xl:justify-between
+      "
+    >
+
+      <div>
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.15em]
+            text-cyan-700
+          "
+        >
+          Operación diaria
+        </p>
+
+        <h1
+          class="
+            mt-1
+            text-2xl
+            font-black
+            text-slate-900
+          "
+        >
+          Mapa del día
+        </h1>
+
+        <p class="mt-1 text-sm text-slate-600">
+          {{ fecha|date:"l d/m/Y" }}
+          ·
+          {{ mapa.total_cuadrillas }} cuadrilla(s)
+          ·
+          {{ mapa.total_sitios }} sitio(s)
+        </p>
+
+      </div>
+
+
+      <a
+        href="{% url 'planificacion:detalle_planificacion_diaria' batch.id %}"
+        class="
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-4
+          py-2.5
+          text-sm
+          font-bold
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-50
+        "
+      >
+        Volver a planificación
+      </a>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- LEYENDA                                              -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-4
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-4
+        shadow-sm
+      "
+    >
+
+      <div class="flex flex-wrap gap-3">
+
+        {% for cuadrilla in mapa.cuadrillas %}
+
+          <button
+            type="button"
+            onclick="enfocarCuadrilla('{{ cuadrilla.codigo|escapejs }}')"
+            class="
+              flex
+              items-center
+              gap-3
+              rounded-xl
+              border
+              border-slate-200
+              bg-slate-50
+              px-3
+              py-2
+              text-left
+              transition
+              hover:bg-white
+              hover:shadow-sm
+            "
+          >
+
+            <span
+              class="h-4 w-4 rounded-full"
+              style="
+                background:
+                {{ cuadrilla.color.marcador }};
+              "
+            ></span>
+
+            <span>
+
+              <span
+                class="
+                  block
+                  text-xs
+                  font-black
+                  text-slate-800
+                "
+              >
+                {{ cuadrilla.nombre }}
+              </span>
+
+              <span
+                class="
+                  block
+                  text-[10px]
+                  text-slate-500
+                "
+              >
+                {{ cuadrilla.tipo_vehiculo }}
+                ·
+                {{ cuadrilla.cantidad }} sitio(s)
+              </span>
+
+            </span>
+
+          </button>
+
+        {% endfor %}
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MAPA                                                 -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        overflow-hidden
+        rounded-3xl
+        border
+        border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      {% if google_maps_api_key %}
+
+        <div
+          id="mapa-dia"
+          class="h-[78vh] min-h-[680px] w-full"
+        ></div>
+
+      {% else %}
+
+        <div
+          class="
+            p-10
+            text-center
+            font-bold
+            text-amber-700
+          "
+        >
+          Google Maps no está configurado.
+        </div>
+
+      {% endif %}
+
+    </div>
+
+  </div>
+
+</div>
+
+
+{{ mapa|json_script:"mapa-dia-data" }}
+
+
+<script>
+(function () {
+
+  const mapaData =
+    JSON.parse(
+      document.getElementById(
+        "mapa-dia-data"
+      )?.textContent || "{}"
+    );
+
+  let mapa = null;
+
+  const boundsCuadrillas = {};
+
+
+  function escaparHtml(valor) {
+
+    const div =
+      document.createElement(
+        "div"
+      );
+
+    div.textContent =
+      valor == null
+        ? ""
+        : String(valor);
+
+    return div.innerHTML;
+
+  }
+
+
+  window.inicializarMapaDia =
+    async function () {
+
+      const nodo =
+        document.getElementById(
+          "mapa-dia"
+        );
+
+      if (
+        !nodo
+        ||
+        !window.google
+        ||
+        !google.maps
+      ) {
+        return;
+      }
+
+
+      const {
+        AdvancedMarkerElement,
+        PinElement
+      } =
+        await google.maps.importLibrary(
+          "marker"
+        );
+
+
+      mapa =
+        new google.maps.Map(
+          nodo,
+          {
+            center: {
+              lat: -33.4489,
+              lng: -70.6693
+            },
+            zoom: 9,
+            mapId: "DEMO_MAP_ID",
+            streetViewControl: false,
+            fullscreenControl: true,
+            mapTypeControl: true
+          }
+        );
+
+
+      const boundsGlobal =
+        new google.maps.LatLngBounds();
+
+
+      mapaData.cuadrillas.forEach(
+        function (cuadrilla) {
+
+          const boundsCuadrilla =
+            new google.maps.LatLngBounds();
+
+          const camino = [];
+
+
+          /* ============================================ */
+          /* BASE                                         */
+          /* ============================================ */
+
+          if (cuadrilla.base) {
+
+            const posicionBase = {
+              lat:
+                Number(
+                  cuadrilla.base.latitud
+                ),
+
+              lng:
+                Number(
+                  cuadrilla.base.longitud
+                )
+            };
+
+
+            const pinBase =
+              new PinElement({
+                background:
+                  cuadrilla.color.borde,
+
+                borderColor:
+                  "#0f172a",
+
+                glyphColor:
+                  "#ffffff",
+
+                glyph:
+                  "B",
+
+                scale:
+                  1.0
+              });
+
+
+            new AdvancedMarkerElement({
+              map: mapa,
+              position: posicionBase,
+              content: pinBase.element,
+              title:
+                cuadrilla.nombre
+                + " - "
+                + cuadrilla.base.nombre
+            });
+
+
+            boundsCuadrilla.extend(
+              posicionBase
+            );
+
+            boundsGlobal.extend(
+              posicionBase
+            );
+
+            camino.push(
+              posicionBase
+            );
+
+          }
+
+
+          /* ============================================ */
+          /* SITIOS                                       */
+          /* ============================================ */
+
+          cuadrilla.sitios.forEach(
+            function (sitio) {
+
+              const posicion = {
+                lat:
+                  Number(
+                    sitio.latitud
+                  ),
+
+                lng:
+                  Number(
+                    sitio.longitud
+                  )
+              };
+
+
+              const pin =
+                new PinElement({
+                  background:
+                    cuadrilla
+                      .color
+                      .marcador,
+
+                  borderColor:
+                    cuadrilla
+                      .color
+                      .borde,
+
+                  glyphColor:
+                    "#ffffff",
+
+                  glyph:
+                    String(
+                      sitio.orden
+                    ),
+
+                  scale:
+                    1.05
+                });
+
+
+              const marker =
+                new AdvancedMarkerElement({
+                  map: mapa,
+                  position: posicion,
+                  content: pin.element,
+
+                  title:
+                    sitio.id_claro
+                    + " - "
+                    + sitio.nombre
+                });
+
+
+              const contenido = `
+                <div
+                  style="
+                    min-width:260px;
+                    max-width:340px;
+                    font-family:Arial,sans-serif;
+                  "
+                >
+
+                  <div
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:8px;
+                      margin-bottom:8px;
+                    "
+                  >
+
+                    <span
+                      style="
+                        width:12px;
+                        height:12px;
+                        border-radius:999px;
+                        background:${cuadrilla.color.marcador};
+                        display:inline-block;
+                      "
+                    ></span>
+
+                    <strong>
+                      ${escaparHtml(cuadrilla.nombre)}
+                    </strong>
+
+                  </div>
+
+
+                  <div
+                    style="
+                      font-size:17px;
+                      font-weight:800;
+                    "
+                  >
+                    ${escaparHtml(sitio.id_claro)}
+                  </div>
+
+
+                  <div
+                    style="
+                      margin-top:3px;
+                      font-size:14px;
+                      font-weight:700;
+                    "
+                  >
+                    ${escaparHtml(sitio.nombre)}
+                  </div>
+
+
+                  <hr
+                    style="
+                      border:0;
+                      border-top:1px solid #e5e7eb;
+                      margin:10px 0;
+                    "
+                  >
+
+
+                  <div>
+                    <strong>Orden:</strong>
+                    ${escaparHtml(sitio.orden)}
+                    de
+                    ${cuadrilla.sitios.length}
+                  </div>
+
+                  <div>
+                    <strong>Comuna:</strong>
+                    ${escaparHtml(sitio.comuna || "—")}
+                  </div>
+
+                  <div>
+                    <strong>Zona:</strong>
+                    ${escaparHtml(sitio.tipo_zona || "—")}
+                  </div>
+
+                  <div>
+                    <strong>Permiso:</strong>
+                    ${escaparHtml(sitio.estado_permiso)}
+                  </div>
+
+                  <div>
+                    <strong>Operación:</strong>
+                    ${escaparHtml(sitio.estado_operativo)}
+                  </div>
+
+
+                  <div
+                    style="
+                      margin-top:8px;
+                      font-size:12px;
+                      color:#64748b;
+                    "
+                  >
+                    ${escaparHtml(sitio.direccion || "")}
+                  </div>
+
+
+                  <div style="margin-top:12px;">
+
+                    <a
+                      href="https://www.google.com/maps/search/?api=1&query=${sitio.latitud},${sitio.longitud}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Abrir sitio en Google Maps
+                    </a>
+
+                  </div>
+
+                </div>
+              `;
+
+
+              const info =
+                new google.maps.InfoWindow({
+                  content:
+                    contenido
+                });
+
+
+              marker.addListener(
+                "click",
+                function () {
+
+                  info.open({
+                    map: mapa,
+                    anchor: marker
+                  });
+
+                }
+              );
+
+
+              boundsCuadrilla.extend(
+                posicion
+              );
+
+              boundsGlobal.extend(
+                posicion
+              );
+
+              camino.push(
+                posicion
+              );
+
+            }
+          );
+
+
+          /* ============================================ */
+          /* RETORNO                                      */
+          /* ============================================ */
+
+          if (cuadrilla.base) {
+
+            camino.push({
+              lat:
+                Number(
+                  cuadrilla.base.latitud
+                ),
+
+              lng:
+                Number(
+                  cuadrilla.base.longitud
+                )
+            });
+
+          }
+
+
+          /* ============================================ */
+          /* SECUENCIA DE LA CUADRILLA                    */
+          /* ============================================ */
+
+          if (camino.length >= 2) {
+
+            new google.maps.Polyline({
+              path: camino,
+              geodesic: true,
+
+              strokeColor:
+                cuadrilla
+                  .color
+                  .marcador,
+
+              strokeOpacity: 0.65,
+
+              strokeWeight: 4,
+
+              map: mapa
+            });
+
+          }
+
+
+          boundsCuadrillas[
+            cuadrilla.codigo
+          ] = boundsCuadrilla;
+
+        }
+      );
+
+
+      if (!boundsGlobal.isEmpty()) {
+
+        mapa.fitBounds(
+          boundsGlobal,
+          60
+        );
+
+      }
+
+    };
+
+
+  window.enfocarCuadrilla =
+    function (codigo) {
+
+      if (!mapa) {
+        return;
+      }
+
+
+      const bounds =
+        boundsCuadrillas[
+          codigo
+        ];
+
+
+      if (
+        bounds
+        &&
+        !bounds.isEmpty()
+      ) {
+
+        mapa.fitBounds(
+          bounds,
+          80
+        );
+
+      }
+
+    };
+
+})();
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=inicializarMapaDia"
+></script>
+
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,1242 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Importar Asignación Mensual
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<style>
+  /* ======================================================== */
+  /* CONTENEDOR                                               */
+  /* ======================================================== */
+
+  .asignacion-import-shell {
+    width: 100%;
+    max-width: 1450px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .asignacion-import-top {
+    width: 100%;
+    max-width: 1120px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ======================================================== */
+  /* TABLA                                                    */
+  /* ======================================================== */
+
+  .asignacion-preview-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  .asignacion-preview-wrap::-webkit-scrollbar {
+    height: 9px;
+  }
+
+  .asignacion-preview-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .asignacion-preview-wrap::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  #asignacion-preview-table {
+    min-width: 1250px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #asignacion-preview-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+
+    border-bottom: 1px solid #cbd5e1;
+
+    background:
+      linear-gradient(
+        180deg,
+        #f8fafc 0%,
+        #f1f5f9 100%
+      );
+
+    color: #334155;
+
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+
+    white-space: nowrap;
+  }
+
+  #asignacion-preview-table tbody td {
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  #asignacion-preview-table tbody tr {
+    transition: background-color 0.18s ease;
+  }
+
+  #asignacion-preview-table tbody tr:hover {
+    background: rgba(236, 254, 255, 0.55);
+  }
+
+  .asignacion-list-scroll {
+    max-height: 230px;
+    overflow-y: auto;
+  }
+</style>
+
+
+<div class="asignacion-import-shell">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div class="asignacion-import-top">
+
+    <div
+      class="
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+        sm:rounded-3xl
+      "
+    >
+
+      <div
+        class="
+          border-b border-slate-100
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-cyan-50/40
+          px-5 py-5
+          sm:px-6
+        "
+      >
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-4
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+
+          <div>
+
+            <p
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-700
+              "
+            >
+              Planificación
+            </p>
+
+            <h1
+              class="
+                mt-0.5
+                text-2xl
+                font-black
+                tracking-tight
+                text-slate-900
+                sm:text-3xl
+              "
+            >
+              Importar asignación mensual
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Incorpora los sitios asignados por el cliente para
+              {{ planificacion.mes|stringformat:"02d" }}/{{ planificacion.anio }}.
+            </p>
+
+          </div>
+
+
+          <a
+            href="{% url 'planificacion:lista_asignacion_mensual' planificacion.pk %}"
+            class="
+              inline-flex
+              w-fit
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4 py-2.5
+              text-sm
+              font-bold
+              text-slate-600
+              shadow-sm
+              transition
+              hover:bg-slate-100
+            "
+          >
+            ← Volver
+          </a>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- SUBIDA DEL ARCHIVO                                     -->
+  <!-- ====================================================== -->
+
+  {% if not preview %}
+
+    <div class="asignacion-import-top mt-5">
+
+      <div
+        class="
+          overflow-hidden
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          shadow-sm
+          sm:rounded-3xl
+        "
+      >
+
+        <div
+          class="
+            grid
+            gap-5
+            p-5
+            md:grid-cols-[minmax(0,1fr)_330px]
+            sm:p-6
+          "
+        >
+
+          <!-- IZQUIERDA -->
+
+          <div>
+
+            <h2 class="text-lg font-black text-slate-900">
+              Archivo de asignación
+            </h2>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Puedes subir la planilla completa recibida del cliente.
+              El sistema buscará automáticamente la columna ID o ID Claro.
+            </p>
+
+
+            <form
+              method="post"
+              enctype="multipart/form-data"
+              class="mt-5"
+            >
+
+              {% csrf_token %}
+
+              <div>
+
+                <label
+                  class="
+                    mb-2
+                    block
+                    text-sm
+                    font-black
+                    text-slate-700
+                  "
+                >
+                  Archivo Excel
+                </label>
+
+                {{ form.archivo }}
+
+                {% if form.archivo.errors %}
+
+                  <div
+                    class="
+                      mt-2
+                      rounded-xl
+                      border border-red-200
+                      bg-red-50
+                      px-3 py-2
+                      text-xs
+                      font-semibold
+                      text-red-700
+                    "
+                  >
+                    {{ form.archivo.errors }}
+                  </div>
+
+                {% endif %}
+
+              </div>
+
+
+              <div
+                class="
+                  mt-5
+                  flex
+                  justify-end
+                  border-t border-slate-100
+                  pt-4
+                "
+              >
+
+                <button
+                  type="submit"
+                  class="
+                    inline-flex
+                    items-center
+                    justify-center
+                    rounded-xl
+                    border border-emerald-200
+                    bg-gradient-to-r
+                    from-emerald-600
+                    to-teal-600
+                    px-5 py-2.5
+                    text-sm
+                    font-black
+                    text-white
+                    shadow-md
+                    transition
+                    hover:-translate-y-0.5
+                    hover:shadow-lg
+                  "
+                >
+                  Analizar archivo
+                </button>
+
+              </div>
+
+            </form>
+
+          </div>
+
+
+          <!-- DERECHA -->
+
+          <aside
+            class="
+              rounded-2xl
+              border border-cyan-100
+              bg-cyan-50/60
+              p-4
+            "
+          >
+
+            <p class="text-sm font-black text-cyan-900">
+              ¿Qué información utilizaremos?
+            </p>
+
+            <p class="mt-2 text-xs leading-relaxed text-cyan-800">
+              Solo utilizaremos el ID del sitio para buscarlo en
+              Sitios Móviles mediante ID Claro.
+            </p>
+
+            <p class="mt-3 text-xs leading-relaxed text-slate-600">
+              Región, comuna, dirección, coordenadas, zona y demás
+              información operativa se obtendrán de nuestras bases.
+            </p>
+
+            <div
+              class="
+                mt-4
+                rounded-xl
+                border border-emerald-100
+                bg-white/70
+                px-3 py-3
+              "
+            >
+              <p class="text-xs font-black text-emerald-800">
+                La importación no modifica Sitios Móviles.
+              </p>
+
+              <p class="mt-1 text-[11px] leading-relaxed text-emerald-700">
+                La tabla maestra se utiliza únicamente para validar
+                y vincular cada ID.
+              </p>
+            </div>
+
+          </aside>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+
+  <!-- ====================================================== -->
+  <!-- PREVIEW                                                -->
+  <!-- ====================================================== -->
+
+  {% if preview %}
+
+    <!-- ==================================================== -->
+    <!-- ARCHIVO                                              -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mt-5
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        px-4 py-4
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-3
+          md:flex-row
+          md:items-center
+          md:justify-between
+        "
+      >
+
+        <div>
+
+          <p
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-wide
+              text-slate-400
+            "
+          >
+            Archivo analizado
+          </p>
+
+          <p class="mt-0.5 font-black text-slate-800">
+            {{ nombre_archivo|default:"Archivo Excel" }}
+          </p>
+
+          <p class="mt-1 text-xs text-slate-500">
+            Hoja:
+            <strong>{{ nombre_hoja|default:"—" }}</strong>
+
+            <span class="mx-1 text-slate-300">|</span>
+
+            Columna detectada:
+            <strong class="text-cyan-700">
+              {{ columna_id_detectada|default:"—" }}
+            </strong>
+          </p>
+
+        </div>
+
+
+        <div class="flex flex-wrap gap-2">
+
+          <form method="post">
+
+            {% csrf_token %}
+
+            <input
+              type="hidden"
+              name="accion"
+              value="cancelar"
+            >
+
+            <input
+              type="hidden"
+              name="token"
+              value="{{ token }}"
+            >
+
+            <button
+              type="submit"
+              class="
+                rounded-xl
+                border border-slate-300
+                bg-white
+                px-4 py-2.5
+                text-sm
+                font-bold
+                text-slate-600
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              Cancelar
+            </button>
+
+          </form>
+
+
+          <form method="post">
+
+            {% csrf_token %}
+
+            <input
+              type="hidden"
+              name="accion"
+              value="confirmar"
+            >
+
+            <input
+              type="hidden"
+              name="token"
+              value="{{ token }}"
+            >
+
+            <button
+              type="submit"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                border border-emerald-200
+                bg-gradient-to-r
+                from-emerald-600
+                to-teal-600
+                px-4 py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              Confirmar importación
+            </button>
+
+          </form>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- RESUMEN                                              -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mt-4
+        grid
+        grid-cols-2
+        gap-3
+        md:grid-cols-3
+        xl:grid-cols-6
+      "
+    >
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <p class="text-[11px] font-black uppercase text-slate-400">
+          Filas
+        </p>
+
+        <p class="mt-1 text-2xl font-black text-slate-900">
+          {{ resumen.total_filas|default:0 }}
+        </p>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+
+        <p class="text-[11px] font-black uppercase text-cyan-700">
+          IDs detectados
+        </p>
+
+        <p class="mt-1 text-2xl font-black text-cyan-800">
+          {{ resumen.total_ids_detectados|default:0 }}
+        </p>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+
+        <p class="text-[11px] font-black uppercase text-blue-700">
+          IDs únicos
+        </p>
+
+        <p class="mt-1 text-2xl font-black text-blue-800">
+          {{ resumen.ids_unicos|default:0 }}
+        </p>
+
+      </div>
+
+
+      <div
+        class="
+          rounded-2xl
+          border
+          p-4
+
+          {% if resumen.ids_repetidos %}
+            border-amber-200
+            bg-amber-50
+          {% else %}
+            border-slate-200
+            bg-slate-50
+          {% endif %}
+        "
+      >
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+
+            {% if resumen.ids_repetidos %}
+              text-amber-700
+            {% else %}
+              text-slate-500
+            {% endif %}
+          "
+        >
+          Repetidos
+        </p>
+
+        <p
+          class="
+            mt-1
+            text-2xl
+            font-black
+
+            {% if resumen.ids_repetidos %}
+              text-amber-800
+            {% else %}
+              text-slate-700
+            {% endif %}
+          "
+        >
+          {{ resumen.ids_repetidos|default:0 }}
+        </p>
+
+      </div>
+
+
+      <div
+        class="
+          rounded-2xl
+          border
+          p-4
+
+          {% if resumen.no_encontrados %}
+            border-red-200
+            bg-red-50
+          {% else %}
+            border-emerald-200
+            bg-emerald-50
+          {% endif %}
+        "
+      >
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+
+            {% if resumen.no_encontrados %}
+              text-red-700
+            {% else %}
+              text-emerald-700
+            {% endif %}
+          "
+        >
+          No encontrados
+        </p>
+
+        <p
+          class="
+            mt-1
+            text-2xl
+            font-black
+
+            {% if resumen.no_encontrados %}
+              text-red-800
+            {% else %}
+              text-emerald-800
+            {% endif %}
+          "
+        >
+          {{ resumen.no_encontrados|default:0 }}
+        </p>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+
+        <p class="text-[11px] font-black uppercase text-emerald-700">
+          Vinculados
+        </p>
+
+        <p class="mt-1 text-2xl font-black text-emerald-800">
+          {{ resumen.vinculados|default:0 }}
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- REPETIDOS + ERRORES                                  -->
+    <!-- ==================================================== -->
+
+    {% if repetidos or errores %}
+
+      <div
+        class="
+          mt-4
+          grid
+          gap-4
+          lg:grid-cols-2
+        "
+      >
+
+        <!-- REPETIDOS -->
+
+        {% if repetidos %}
+
+          <div
+            class="
+              overflow-hidden
+              rounded-2xl
+              border border-amber-200
+              bg-white
+              shadow-sm
+            "
+          >
+
+            <div
+              class="
+                border-b border-amber-100
+                bg-amber-50
+                px-4 py-3
+              "
+            >
+
+              <h3 class="text-sm font-black text-amber-900">
+                IDs repetidos en el archivo
+              </h3>
+
+              <p class="mt-0.5 text-[11px] text-amber-700">
+                Se incorporará cada sitio una sola vez al mes.
+              </p>
+
+            </div>
+
+
+            <div class="asignacion-list-scroll divide-y divide-slate-100">
+
+              {% for repetido in repetidos %}
+
+                <div
+                  class="
+                    flex
+                    items-center
+                    justify-between
+                    gap-3
+                    px-4 py-2.5
+                    hover:bg-amber-50/40
+                  "
+                >
+
+                  <span class="font-mono text-sm font-black text-amber-800">
+
+                    {% if repetido.id_claro %}
+                      {{ repetido.id_claro }}
+                    {% elif repetido.id %}
+                      {{ repetido.id }}
+                    {% elif repetido.id_origen %}
+                      {{ repetido.id_origen }}
+                    {% else %}
+                      {{ repetido }}
+                    {% endif %}
+
+                  </span>
+
+
+                  {% if repetido.cantidad %}
+
+                    <span class="text-xs font-semibold text-slate-500">
+                      {{ repetido.cantidad }} registros
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+        {% endif %}
+
+
+        <!-- ERRORES -->
+
+        {% if errores %}
+
+          <div
+            class="
+              overflow-hidden
+              rounded-2xl
+              border border-red-200
+              bg-white
+              shadow-sm
+            "
+          >
+
+            <div
+              class="
+                border-b border-red-100
+                bg-red-50
+                px-4 py-3
+              "
+            >
+
+              <h3 class="text-sm font-black text-red-900">
+                Registros con problemas
+              </h3>
+
+              <p class="mt-0.5 text-[11px] text-red-700">
+                Revisa estos registros antes de confirmar.
+              </p>
+
+            </div>
+
+
+            <div class="asignacion-list-scroll divide-y divide-slate-100">
+
+              {% for error in errores %}
+
+                <div class="px-4 py-2.5">
+
+                  <p class="text-xs font-bold text-red-800">
+
+                    {% if error.fila %}
+                      Fila {{ error.fila }}
+                    {% else %}
+                      Registro
+                    {% endif %}
+
+                  </p>
+
+                  <p class="mt-0.5 text-xs text-red-700">
+                    {{ error.error|default:error }}
+                  </p>
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+        {% endif %}
+
+      </div>
+
+    {% endif %}
+
+
+    <!-- ==================================================== -->
+    <!-- VISTA PREVIA                                         -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mt-4
+        overflow-hidden
+        rounded-2xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+        sm:rounded-3xl
+      "
+    >
+
+      <div
+        class="
+          border-b border-slate-200
+          bg-gradient-to-r
+          from-slate-50
+          to-white
+          px-4 py-4
+        "
+      >
+
+        <h2 class="font-black text-slate-800">
+          Vista previa
+        </h2>
+
+        <p class="mt-0.5 text-xs text-slate-500">
+          Esta información se obtiene de la tabla maestra de Sitios Móviles.
+          La planilla de asignación solo determina qué IDs pertenecen al mes.
+        </p>
+
+      </div>
+
+
+      <div class="asignacion-preview-wrap">
+
+        <table
+          id="asignacion-preview-table"
+          class="w-full text-sm"
+        >
+
+          <thead>
+
+            <tr>
+
+              <th class="px-3 py-3 text-left">
+                Fila
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                ID Claro
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Resultado
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Nombre sitio
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Región
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Comuna
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Tipo zona
+              </th>
+
+              <th class="px-3 py-3 text-left">
+                Dirección
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            {% for item in preview %}
+
+              <tr>
+
+                <!-- FILA -->
+
+                <td class="px-3 py-3 text-slate-500">
+                  {{ item.fila|default:"—" }}
+                </td>
+
+
+                <!-- ID -->
+
+                <td
+                  class="
+                    whitespace-nowrap
+                    px-3 py-3
+                    font-black
+                    text-slate-900
+                  "
+                >
+                  {{ item.id_original|default:"—" }}
+                </td>
+
+
+                <!-- RESULTADO -->
+
+                <td class="px-3 py-3">
+
+                  {% if item.estado == "nuevo" %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-emerald-50
+                        px-2.5 py-1
+                        text-xs
+                        font-black
+                        text-emerald-700
+                      "
+                    >
+                      Nuevo
+                    </span>
+
+
+                  {% elif item.estado == "ya_existente" or item.estado == "existente" %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-blue-50
+                        px-2.5 py-1
+                        text-xs
+                        font-black
+                        text-blue-700
+                      "
+                    >
+                      Ya existe en el mes
+                    </span>
+
+
+                  {% elif item.estado == "repetido" %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-amber-50
+                        px-2.5 py-1
+                        text-xs
+                        font-black
+                        text-amber-700
+                      "
+                    >
+                      Repetido
+                    </span>
+
+
+                  {% elif item.estado == "no_encontrado" %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-red-50
+                        px-2.5 py-1
+                        text-xs
+                        font-black
+                        text-red-700
+                      "
+                    >
+                      No encontrado
+                    </span>
+
+
+                  {% else %}
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        bg-slate-100
+                        px-2.5 py-1
+                        text-xs
+                        font-bold
+                        text-slate-600
+                      "
+                    >
+                      {{ item.estado|default:"Revisar" }}
+                    </span>
+
+                  {% endif %}
+
+                </td>
+
+
+                <!-- NOMBRE -->
+
+                <td class="min-w-[220px] px-3 py-3">
+
+                  <div class="font-bold text-slate-800">
+                    {{ item.nombre|default:"—" }}
+                  </div>
+
+                </td>
+
+
+                <!-- REGION -->
+
+                <td
+                  class="
+                    whitespace-nowrap
+                    px-3 py-3
+                    text-slate-700
+                  "
+                >
+                  {{ item.region|default:"—" }}
+                </td>
+
+
+                <!-- COMUNA -->
+
+                <td
+                  class="
+                    whitespace-nowrap
+                    px-3 py-3
+                    text-slate-700
+                  "
+                >
+                  {{ item.comuna|default:"—" }}
+                </td>
+
+
+                <!-- ZONA -->
+
+                <td class="px-3 py-3">
+
+                  {% if item.tipo_zona %}
+
+                    {% if item.tipo_zona|lower == "rural" %}
+
+                      <span
+                        class="
+                          inline-flex
+                          rounded-full
+                          border border-amber-200
+                          bg-amber-50
+                          px-2.5 py-1
+                          text-xs
+                          font-black
+                          text-amber-700
+                        "
+                      >
+                        Rural
+                      </span>
+
+                    {% elif item.tipo_zona|lower == "urbano" or item.tipo_zona|lower == "urbana" %}
+
+                      <span
+                        class="
+                          inline-flex
+                          rounded-full
+                          border border-cyan-200
+                          bg-cyan-50
+                          px-2.5 py-1
+                          text-xs
+                          font-black
+                          text-cyan-700
+                        "
+                      >
+                        Urbano
+                      </span>
+
+                    {% else %}
+
+                      <span class="text-slate-700">
+                        {{ item.tipo_zona }}
+                      </span>
+
+                    {% endif %}
+
+                  {% else %}
+
+                    <span class="text-slate-400">
+                      —
+                    </span>
+
+                  {% endif %}
+
+                </td>
+
+
+                <!-- DIRECCION -->
+
+                <td
+                  class="
+                    min-w-[300px]
+                    whitespace-normal
+                    px-3 py-3
+                    text-xs
+                    leading-relaxed
+                    text-slate-700
+                  "
+                >
+                  {{ item.direccion|default:"—" }}
+                </td>
+
+              </tr>
+
+            {% empty %}
+
+              <tr>
+
+                <td
+                  colspan="8"
+                  class="
+                    px-4 py-12
+                    text-center
+                    text-slate-500
+                  "
+                >
+                  No existen registros para mostrar.
+                </td>
+
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+</div>
+
+</div>
+
+{% endblock %}

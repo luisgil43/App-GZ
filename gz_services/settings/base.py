@@ -103,11 +103,11 @@ INSTALLED_APPS = [
     "cloudinary_storage",
     # Storage S3/Wasabi para los nuevos campos (no afecta Cloudinary)
     "storages",
-
     # Tus apps
     "liquidaciones",
     "dashboard",
     "operaciones",
+    "planificacion",
     "prevencion",
     "rrhh",
     "flota",
@@ -121,7 +121,7 @@ INSTALLED_APPS = [
     "dal",
     "dal_select2",
     "widget_tweaks",
-    'geo_cam',
+    "geo_cam",
     "django.contrib.humanize",
 ]
 
@@ -452,3 +452,16 @@ GOOGLE_MAPS_KEY = os.getenv("GOOGLE_MAPS_KEY", "")
 
 # Clave de servidor (Geocoding): restringir por IP del servidor o sin restricción si no tienes IP fija
 GOOGLE_MAPS_SERVER_KEY = os.getenv("GOOGLE_MAPS_SERVER_KEY", "")
+
+
+# ===============================
+# GOOGLE MAPS PLATFORM
+# ===============================
+
+# Clave de navegador para los mapas de Planificación.
+# Debe estar restringida en Google Cloud por sitios web
+# y únicamente a las APIs que realmente utilizamos.
+GOOGLE_MAPS_API_KEY = os.getenv(
+    "GOOGLE_MAPS_API_KEY",
+    "",
+)

@@ -1,0 +1,794 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}Importar Base de Contactos{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<style>
+  .import-shell {
+    width: 100%;
+    max-width: 1450px;
+    margin: 0 auto;
+  }
+
+  .import-top {
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .preview-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  .preview-table-wrap::-webkit-scrollbar {
+    height: 9px;
+  }
+
+  .preview-table-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .preview-table-wrap::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  #contactos-preview-table {
+    min-width: 2350px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #contactos-preview-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    border-bottom: 1px solid #cbd5e1;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: #334155;
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .025em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  #contactos-preview-table tbody td {
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: top;
+  }
+
+  #contactos-preview-table tbody tr {
+    transition: background-color .18s ease;
+  }
+
+  #contactos-preview-table tbody tr:hover {
+    background: rgba(236, 254, 255, .55);
+  }
+
+  .celda-texto-largo {
+    min-width: 310px;
+    max-width: 390px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+
+  .celda-correo {
+    min-width: 220px;
+    max-width: 300px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .id-falla-scroll {
+    max-height: 190px;
+    overflow-y: auto;
+  }
+</style>
+
+
+<div class="import-shell">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA / CONTROL SUPERIOR                            -->
+  <!-- ====================================================== -->
+
+  <div class="import-top">
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl">
+
+      <div class="bg-gradient-to-r from-slate-50 via-white to-cyan-50/40 px-5 py-5 sm:px-6">
+
+        <div class="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+
+          <!-- IZQUIERDA -->
+          <div class="flex min-w-0 items-center gap-3">
+
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-50 to-blue-100 text-2xl shadow-sm">
+              📇
+            </div>
+
+            <div class="min-w-0">
+              <p class="text-[11px] font-black uppercase tracking-[.14em] text-cyan-700">
+                Planificación
+              </p>
+
+              <h1 class="mt-0.5 text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                Importar Base de Contactos
+              </h1>
+
+              <p class="mt-1 text-sm text-slate-500">
+                Actualiza contactos y condiciones de acceso entregadas por el cliente.
+              </p>
+            </div>
+
+          </div>
+
+
+          <!-- DERECHA -->
+          <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+
+            <a href="{% url 'planificacion:descargar_formato_contactos' %}"
+               class="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-700 transition hover:bg-blue-100">
+              📄 Formato
+            </a>
+
+            <a href="{% url 'planificacion:listar_contactos' %}"
+               class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-100">
+              ← Volver
+            </a>
+
+          </div>
+
+        </div>
+
+
+        <!-- AUDITORÍA -->
+        <div class="mt-4">
+
+          {% if ultima_importacion %}
+
+            <div class="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600 shadow-sm">
+
+              <span>
+                🕒
+                <strong class="font-bold text-slate-700">Última actualización:</strong>
+                {{ ultima_importacion.aplicado_en|date:"d/m/Y H:i" }}
+              </span>
+
+              {% if ultima_importacion.creado_por %}
+                <span class="text-slate-300">|</span>
+                <span>
+                  👤
+                  <strong class="font-bold text-slate-700">Modificado por:</strong>
+                  {{ ultima_importacion.creado_por.get_full_name|default:ultima_importacion.creado_por.username }}
+                </span>
+              {% endif %}
+
+            </div>
+
+          {% else %}
+
+            <div class="inline-flex items-center rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-xs font-medium text-slate-500">
+              🕒 Aún no existen importaciones registradas.
+            </div>
+
+          {% endif %}
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- SUBIR ARCHIVO                                          -->
+  <!-- ====================================================== -->
+
+  {% if not preview %}
+
+    <div class="import-top mt-5">
+      <div class="rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl">
+
+        <div class="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_330px] sm:p-6">
+
+          <!-- IZQUIERDA -->
+          <div>
+
+            <div class="flex items-center gap-3">
+              <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-xl">
+                📥
+              </div>
+
+              <div>
+                <h2 class="font-black text-slate-900">Importar archivo Excel</h2>
+                <p class="mt-0.5 text-xs text-slate-500">
+                  Primero analizaremos todo el archivo antes de guardar.
+                </p>
+              </div>
+            </div>
+
+
+            <form method="post" enctype="multipart/form-data" class="mt-5">
+              {% csrf_token %}
+
+              <label class="mb-2 block text-sm font-black text-slate-700">
+                Archivo Excel
+              </label>
+
+              {{ form.archivo }}
+
+              {% if form.archivo.errors %}
+                <div class="mt-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                  {{ form.archivo.errors }}
+                </div>
+              {% endif %}
+
+              <div class="mt-5 flex justify-end border-t border-slate-100 pt-4">
+                <button type="submit"
+                        class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2.5 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+                  🔎 Analizar archivo
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+
+
+          <!-- DERECHA -->
+          <aside class="rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4">
+
+            <div class="flex gap-3">
+              <div class="text-xl">ℹ️</div>
+
+              <div>
+                <p class="text-sm font-black text-slate-700">
+                  Importación no destructiva
+                </p>
+
+                <p class="mt-1 text-xs leading-relaxed text-slate-600">
+                  Si una celda viene vacía, se conservará el valor existente.
+                  La base de Sitios Móviles se usa únicamente para validar y
+                  vincular IDs.
+                </p>
+
+                <p class="mt-3 text-xs font-bold leading-relaxed text-cyan-800">
+                  Esta importación nunca crea ni modifica sitios.
+                </p>
+              </div>
+            </div>
+
+          </aside>
+
+        </div>
+
+      </div>
+    </div>
+
+  {% endif %}
+
+
+  <!-- ====================================================== -->
+  <!-- PREVIEW                                                -->
+  <!-- ====================================================== -->
+
+  {% if preview %}
+
+    <!-- ARCHIVO + ACCIONES -->
+    <div class="mt-5 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+
+      <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+
+        <div>
+          <p class="text-[11px] font-black uppercase tracking-wide text-slate-400">
+            Archivo analizado
+          </p>
+
+          <p class="mt-0.5 font-black text-slate-800">
+            {{ nombre_archivo|default:"Archivo Excel" }}
+          </p>
+
+          <p class="mt-0.5 text-xs text-slate-500">
+            Hoja: {{ sheet_name }}
+            · {{ preview_total }} registros analizados
+          </p>
+        </div>
+
+
+        <div class="flex flex-wrap gap-2">
+
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="cancelar">
+            <input type="hidden" name="token" value="{{ token }}">
+
+            <button type="submit"
+                    class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 shadow-sm transition hover:bg-slate-100">
+              Cancelar
+            </button>
+          </form>
+
+
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="confirmar">
+            <input type="hidden" name="token" value="{{ token }}">
+
+            <button type="submit"
+                    class="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-sm font-black text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg">
+              ✓ Confirmar importación
+            </button>
+          </form>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- RESUMEN + IDS SIN VINCULAR                          -->
+    <!-- ==================================================== -->
+
+    <div class="mt-4 grid gap-4 xl:grid-cols-[1fr_410px]">
+
+      <!-- TARJETAS -->
+      <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-black uppercase text-slate-400">Filas</p>
+          <p class="mt-1 text-2xl font-black text-slate-900">{{ resumen.total_filas }}</p>
+        </div>
+
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+          <p class="text-[11px] font-black uppercase text-emerald-700">Nuevos</p>
+          <p class="mt-1 text-2xl font-black text-emerald-800">{{ resumen.nuevos }}</p>
+        </div>
+
+        <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+          <p class="text-[11px] font-black uppercase text-blue-700">Actualizar</p>
+          <p class="mt-1 text-2xl font-black text-blue-800">{{ resumen.actualizados }}</p>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p class="text-[11px] font-black uppercase text-slate-500">Sin cambios</p>
+          <p class="mt-1 text-2xl font-black text-slate-700">{{ resumen.sin_cambios }}</p>
+        </div>
+
+        <div class="rounded-2xl border p-4 {% if resumen.no_vinculados %}border-amber-200 bg-amber-50{% else %}border-slate-200 bg-slate-50{% endif %}">
+          <p class="text-[11px] font-black uppercase {% if resumen.no_vinculados %}text-amber-700{% else %}text-slate-500{% endif %}">
+            Sin vincular
+          </p>
+
+          <p class="mt-1 text-2xl font-black {% if resumen.no_vinculados %}text-amber-800{% else %}text-slate-700{% endif %}">
+            {{ resumen.no_vinculados }}
+          </p>
+
+          {% if resumen.no_vinculados %}
+            <p class="mt-1 text-[10px] font-bold text-amber-700">
+              {{ ids_unicos_no_vinculados }} ID{{ ids_unicos_no_vinculados|pluralize }} único{{ ids_unicos_no_vinculados|pluralize }}
+            </p>
+          {% endif %}
+        </div>
+
+      </div>
+
+
+      <!-- IDS SIN VINCULAR -->
+      <div class="rounded-2xl border {% if ids_no_vinculados %}border-amber-200 bg-white{% else %}border-emerald-200 bg-emerald-50{% endif %} shadow-sm">
+
+        {% if ids_no_vinculados %}
+
+          <div class="flex items-center justify-between gap-3 border-b border-amber-100 bg-amber-50 px-4 py-3">
+
+            <div>
+              <h3 class="text-sm font-black text-amber-900">
+                ⚠ IDs sin vincular
+              </h3>
+
+              <p class="mt-0.5 text-[11px] text-amber-700">
+                {{ filas_no_vinculadas }} filas · {{ ids_unicos_no_vinculados }} IDs únicos
+              </p>
+            </div>
+
+          </div>
+
+
+          <div class="id-falla-scroll divide-y divide-slate-100">
+
+            {% for item in ids_no_vinculados %}
+
+              <div class="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-amber-50/40">
+
+                <div class="min-w-0">
+
+                  <span class="font-mono text-sm font-black text-amber-800">
+                    {{ item.id_origen }}
+                  </span>
+
+                  <span class="ml-2 text-[11px] font-semibold text-slate-500">
+                    {{ item.cantidad }} registro{{ item.cantidad|pluralize }}
+                  </span>
+
+                </div>
+
+                <div class="max-w-[200px] truncate text-right text-[11px] text-slate-500"
+                     title="{% for fila in item.filas %}{{ fila }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                  Filas:
+                  {% for fila in item.filas %}
+                    {{ fila }}{% if not forloop.last %}, {% endif %}
+                  {% endfor %}
+                </div>
+
+              </div>
+
+            {% endfor %}
+
+          </div>
+
+
+          <div class="border-t border-amber-100 bg-amber-50/40 px-4 py-2.5">
+            <p class="text-[11px] leading-relaxed text-amber-800">
+              Estos contactos pueden guardarse sin vínculo, pero nunca crearán
+              ni modificarán registros en Sitios Móviles.
+            </p>
+          </div>
+
+        {% else %}
+
+          <div class="flex h-full min-h-[112px] items-center gap-3 px-4 py-4">
+
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-lg">
+              ✓
+            </div>
+
+            <div>
+              <h3 class="text-sm font-black text-emerald-800">
+                Todos los IDs vinculados
+              </h3>
+
+              <p class="mt-0.5 text-xs text-emerald-700">
+                Todos encontraron coincidencia con la tabla maestra.
+              </p>
+            </div>
+
+          </div>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- TABLA                                                -->
+    <!-- ==================================================== -->
+
+    <div class="mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl">
+
+      <div class="flex flex-col gap-2 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+          <h2 class="font-black text-slate-800">
+            Vista previa
+          </h2>
+
+          <p class="mt-0.5 text-xs text-slate-500">
+            Mostrando los {{ preview_total }} registros analizados.
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="preview-table-wrap">
+
+        <table id="contactos-preview-table" class="w-full text-sm">
+
+          <thead>
+            <tr>
+              <th class="px-3 py-3 text-left">Fila</th>
+              <th class="px-3 py-3 text-left">Estado</th>
+              <th class="px-3 py-3 text-left">Vínculo</th>
+
+              <th class="px-3 py-3 text-left">REGIÓN</th>
+              <th class="px-3 py-3 text-left">ID</th>
+              <th class="px-3 py-3 text-left">NOMBRE SITIO</th>
+              <th class="px-3 py-3 text-left">PROPIETARIO</th>
+              <th class="px-3 py-3 text-left">TELÉFONO</th>
+              <th class="px-3 py-3 text-left">CORREO</th>
+              <th class="px-3 py-3 text-left">FECHA</th>
+              <th class="px-3 py-3 text-left">RESPONSABLE</th>
+              <th class="px-3 py-3 text-left">OBSERVACIONES</th>
+              <th class="px-3 py-3 text-left">ACCIÓN</th>
+
+              <th class="px-3 py-3 text-left">Cambios</th>
+            </tr>
+          </thead>
+
+
+          <tbody>
+
+            {% for item in preview %}
+
+              <tr>
+
+                <!-- FILA -->
+                <td class="px-3 py-3 text-slate-500">
+                  {{ item.fila }}
+                </td>
+
+
+                <!-- ESTADO -->
+                <td class="px-3 py-3">
+
+                  {% if item.estado == "nuevo" %}
+                    <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                      Nuevo
+                    </span>
+
+                  {% elif item.estado == "actualizar" %}
+                    <span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
+                      Actualizar
+                    </span>
+
+                  {% else %}
+                    <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">
+                      Sin cambios
+                    </span>
+                  {% endif %}
+
+                </td>
+
+
+                <!-- VINCULO -->
+                <td class="px-3 py-3">
+
+                  {% if item.vinculado %}
+
+                    <div class="text-xs font-black text-emerald-700">
+                      ✓ Vinculado
+                    </div>
+
+                    {% if item.vinculo_por %}
+                      <div class="mt-0.5 text-[10px] text-slate-400">
+                        {{ item.vinculo_por }}
+                      </div>
+                    {% endif %}
+
+                  {% else %}
+
+                    <span class="text-xs font-black text-amber-700">
+                      ⚠ Sin vincular
+                    </span>
+
+                  {% endif %}
+
+                </td>
+
+
+                <!-- REGION -->
+                <td class="whitespace-nowrap px-3 py-3 font-semibold text-slate-700">
+                  {{ item.region|default:"—" }}
+                </td>
+
+
+                <!-- ID -->
+                <td class="whitespace-nowrap px-3 py-3 font-black text-slate-900">
+                  {{ item.id_origen }}
+                </td>
+
+
+                <!-- NOMBRE -->
+                <td class="min-w-[210px] px-3 py-3 font-semibold text-slate-700">
+                  {{ item.nombre_sitio|default:"—" }}
+                </td>
+
+
+                <!-- PROPIETARIO -->
+                <td class="min-w-[210px] px-3 py-3 text-slate-700">
+                  {{ item.propietario|default:"—" }}
+                </td>
+
+
+                <!-- TELEFONO -->
+                <td class="whitespace-nowrap px-3 py-3 text-slate-700">
+                  {{ item.telefono|default:"—" }}
+                </td>
+
+
+                <!-- CORREO -->
+                <td class="celda-correo px-3 py-3 text-cyan-700">
+                  {{ item.correo|default:"—" }}
+                </td>
+
+
+                <!-- FECHA -->
+                <td class="whitespace-nowrap px-3 py-3 text-slate-600">
+                  {% if item.fecha_informacion %}
+                    {{ item.fecha_informacion|date:"d/m/Y" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+
+
+                <!-- RESPONSABLE -->
+                <td class="min-w-[130px] px-3 py-3 text-slate-700">
+                  {{ item.responsable|default:"—" }}
+                </td>
+
+
+                <!-- OBSERVACIONES -->
+                <td class="celda-texto-largo px-3 py-3 text-xs text-slate-700">
+
+                  {% if item.observaciones %}
+                    {{ item.observaciones|linebreaksbr }}
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+
+                </td>
+
+
+                <!-- ACCION -->
+                <td class="celda-texto-largo px-3 py-3 text-xs text-slate-700">
+
+                  {% if item.accion %}
+                    <div class="rounded-xl border border-cyan-100 bg-cyan-50/50 px-3 py-2">
+                      {{ item.accion|linebreaksbr }}
+                    </div>
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+
+                </td>
+
+
+                <!-- CAMBIOS -->
+                <td class="min-w-[280px] px-3 py-3">
+
+                  {% if item.estado == "nuevo" %}
+
+                    <div class="rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                      <p class="text-xs font-black text-emerald-700">
+                        Nuevo contacto
+                      </p>
+
+                      <p class="mt-0.5 text-[11px] text-emerald-600">
+                        Se incorporará a la base.
+                      </p>
+                    </div>
+
+
+                  {% elif item.cambios %}
+
+                    <details>
+
+                      <summary class="cursor-pointer text-xs font-black text-blue-600">
+                        {{ item.cambios|length }}
+                        cambio{{ item.cambios|length|pluralize }}
+                      </summary>
+
+                      <div class="mt-2 min-w-[290px] space-y-2">
+
+                        {% for cambio in item.cambios %}
+
+                          <div class="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+
+                            <p class="text-[10px] font-black uppercase text-slate-500">
+                              {{ cambio.campo }}
+                            </p>
+
+                            <div class="mt-1 grid gap-1 text-xs">
+
+                              <p class="whitespace-normal break-words text-red-600">
+                                <strong>Antes:</strong>
+                                {{ cambio.antes }}
+                              </p>
+
+                              <p class="whitespace-normal break-words font-semibold text-emerald-700">
+                                <strong>Nuevo:</strong>
+                                {{ cambio.despues }}
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                        {% endfor %}
+
+                      </div>
+
+                    </details>
+
+
+                  {% else %}
+
+                    <span class="text-xs text-slate-400">
+                      Sin modificaciones
+                    </span>
+
+                  {% endif %}
+
+                </td>
+
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- ERRORES REALES DEL ARCHIVO                           -->
+    <!-- ==================================================== -->
+
+    {% if errores %}
+
+      <div class="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+
+        <div class="flex items-center justify-between gap-3">
+
+          <div class="flex items-center gap-2">
+            <span class="text-xl">⚠️</span>
+
+            <div>
+              <h3 class="font-black text-red-800">
+                Filas con problemas
+              </h3>
+
+              <p class="text-xs text-red-600">
+                {{ errores_total }} error{{ errores_total|pluralize }} detectado{{ errores_total|pluralize }}.
+              </p>
+            </div>
+          </div>
+
+        </div>
+
+
+        <div class="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+
+          {% for error in errores %}
+
+            <div class="rounded-xl border border-red-200 bg-white/70 px-3 py-2 text-xs text-red-700">
+              <strong>Fila {{ error.fila }}:</strong>
+              {{ error.error }}
+            </div>
+
+          {% endfor %}
+
+        </div>
+
+        {% if errores_total > errores|length %}
+          <p class="mt-3 text-xs font-semibold text-red-700">
+            Se muestran los primeros {{ errores|length }} de {{ errores_total }} errores.
+          </p>
+        {% endif %}
+
+      </div>
+
+    {% endif %}
+
+  {% endif %}
+
+</div>
+
+{% endblock %}

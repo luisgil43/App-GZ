@@ -1,0 +1,1491 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Planificación Mensual
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+
+<style>
+  .planificacion-shell {
+    width: 100%;
+    max-width: 1250px;
+  }
+
+  .month-card {
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  .month-card:hover {
+    transform: translateY(-2px);
+    border-color: #bae6fd;
+    box-shadow:
+      0 12px 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .progress-track {
+    height: 7px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: #e2e8f0;
+  }
+
+  .progress-bar {
+    height: 100%;
+    border-radius: 999px;
+    background:
+      linear-gradient(
+        90deg,
+        #0891b2,
+        #14b8a6
+      );
+  }
+
+  /* ====================================================== */
+  /* MODAL ELIMINAR PLANIFICACIÓN                          */
+  /* ====================================================== */
+
+  .monthly-delete-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+
+    display: none;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 20px;
+
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
+  .monthly-delete-modal.is-open {
+    display: flex;
+  }
+
+  .monthly-delete-modal-card {
+    width: 100%;
+    max-width: 460px;
+
+    overflow: hidden;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 24px;
+
+    background: #ffffff;
+
+    box-shadow:
+      0 30px 70px rgba(15, 23, 42, 0.22),
+      0 8px 20px rgba(15, 23, 42, 0.10);
+
+    animation: monthlyDeleteModalIn 0.18s ease-out;
+  }
+
+  @keyframes monthlyDeleteModalIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .monthly-delete-modal-icon {
+    display: flex;
+
+    width: 54px;
+    height: 54px;
+
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border: 1px solid #fecaca;
+    border-radius: 18px;
+
+    background: #fef2f2;
+
+    font-size: 24px;
+
+    color: #dc2626;
+  }
+
+  .monthly-delete-modal-close {
+    display: inline-flex;
+
+    width: 36px;
+    height: 36px;
+
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+
+    background: #ffffff;
+
+    color: #64748b;
+
+    transition:
+      background 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .monthly-delete-modal-close:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #0f172a;
+  }
+</style>
+
+<div class="planificacion-shell">
+
+  <!-- ====================================================== -->
+  <!-- ENCABEZADO                                             -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <div
+      class="
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/50
+        px-5 py-5
+        sm:px-6 sm:py-6
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <div
+            class="
+              flex
+              h-12 w-12
+              shrink-0
+              items-center
+              justify-center
+              rounded-2xl
+              border border-cyan-100
+              bg-gradient-to-br
+              from-cyan-50
+              to-blue-100
+              text-2xl
+              shadow-sm
+            "
+          >
+            🗓️
+          </div>
+
+          <div>
+
+            <p
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-700
+              "
+            >
+              Planificación
+            </p>
+
+            <h1
+              class="
+                mt-0.5
+                text-2xl
+                font-black
+                tracking-tight
+                text-slate-900
+                sm:text-3xl
+              "
+            >
+              Planificación Mensual
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Administra los sitios asignados y prepara la operación semanal.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
+
+          <a
+            href="{% url 'planificacion:crear_planificacion_mensual' %}"
+            class="
+              inline-flex
+              w-fit
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border border-emerald-200
+              bg-gradient-to-r
+              from-emerald-600
+              to-teal-600
+              px-4 py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+            "
+          >
+            ➕ Nueva planificación
+          </a>
+
+        {% endif %}
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- EXPLICACIÓN RÁPIDA                                     -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      mt-4
+      grid
+      gap-3
+      md:grid-cols-3
+    "
+  >
+
+    <div
+      class="
+        rounded-2xl
+        border border-blue-100
+        bg-blue-50/60
+        px-4 py-3
+      "
+    >
+
+      <p class="text-xs font-black text-blue-800">
+        1 · Asignación mensual
+      </p>
+
+      <p class="mt-1 text-xs leading-relaxed text-blue-700">
+        Se carga la planilla del cliente y se utilizan únicamente
+        los ID Claro para construir el universo del mes.
+      </p>
+
+    </div>
+
+
+    <div
+      class="
+        rounded-2xl
+        border border-amber-100
+        bg-amber-50/60
+        px-4 py-3
+      "
+    >
+
+      <p class="text-xs font-black text-amber-800">
+        2 · Preparación
+      </p>
+
+      <p class="mt-1 text-xs leading-relaxed text-amber-700">
+        Se analizan ubicación, zona, accesos, permisos y
+        restricciones antes de proponer sitios.
+      </p>
+
+    </div>
+
+
+    <div
+      class="
+        rounded-2xl
+        border border-emerald-100
+        bg-emerald-50/60
+        px-4 py-3
+      "
+    >
+
+      <p class="text-xs font-black text-emerald-800">
+        3 · Operación semanal
+      </p>
+
+      <p class="mt-1 text-xs leading-relaxed text-emerald-700">
+        El motor construirá batches, rutas y días de trabajo
+        según capacidad y sitios habilitados.
+      </p>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- PLANIFICACIONES                                        -->
+  <!-- ====================================================== -->
+
+  <div class="mt-5">
+
+    <div class="mb-3 flex items-center justify-between gap-3">
+
+      <div>
+
+        <h2 class="font-black text-slate-800">
+          Meses disponibles
+        </h2>
+
+        <p class="mt-0.5 text-xs text-slate-500">
+          Abre un mes para revisar sus sitios y continuar la planificación.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <div class="grid gap-4 lg:grid-cols-2">
+
+      {% for planificacion in planificaciones %}
+
+        <div
+          class="
+            month-card
+            overflow-hidden
+            rounded-2xl
+            border border-slate-200
+            bg-white
+            shadow-sm
+          "
+        >
+
+          <!-- CABECERA TARJETA -->
+
+          <div
+            class="
+              border-b border-slate-100
+              bg-gradient-to-r
+              from-slate-50
+              to-white
+              px-5 py-4
+            "
+          >
+
+            <div
+              class="
+                flex
+                items-start
+                justify-between
+                gap-3
+              "
+            >
+
+              <div>
+
+                <div class="flex items-center gap-2">
+
+                  <h3
+                    class="
+                      text-xl
+                      font-black
+                      text-slate-900
+                    "
+                  >
+
+                    {% if planificacion.mes == 1 %}
+                      Enero
+                    {% elif planificacion.mes == 2 %}
+                      Febrero
+                    {% elif planificacion.mes == 3 %}
+                      Marzo
+                    {% elif planificacion.mes == 4 %}
+                      Abril
+                    {% elif planificacion.mes == 5 %}
+                      Mayo
+                    {% elif planificacion.mes == 6 %}
+                      Junio
+                    {% elif planificacion.mes == 7 %}
+                      Julio
+                    {% elif planificacion.mes == 8 %}
+                      Agosto
+                    {% elif planificacion.mes == 9 %}
+                      Septiembre
+                    {% elif planificacion.mes == 10 %}
+                      Octubre
+                    {% elif planificacion.mes == 11 %}
+                      Noviembre
+                    {% elif planificacion.mes == 12 %}
+                      Diciembre
+                    {% endif %}
+
+                    {{ planificacion.anio }}
+
+                  </h3>
+
+
+                  {% if planificacion.estado == "borrador" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border border-slate-200
+                        bg-slate-100
+                        px-2 py-0.5
+                        text-[10px]
+                        font-black
+                        text-slate-600
+                      "
+                    >
+                      Borrador
+                    </span>
+
+                  {% elif planificacion.estado == "en_preparacion" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border border-amber-200
+                        bg-amber-50
+                        px-2 py-0.5
+                        text-[10px]
+                        font-black
+                        text-amber-700
+                      "
+                    >
+                      En preparación
+                    </span>
+
+                  {% elif planificacion.estado == "activa" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border border-emerald-200
+                        bg-emerald-50
+                        px-2 py-0.5
+                        text-[10px]
+                        font-black
+                        text-emerald-700
+                      "
+                    >
+                      Activa
+                    </span>
+
+                  {% elif planificacion.estado == "cerrada" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border border-blue-200
+                        bg-blue-50
+                        px-2 py-0.5
+                        text-[10px]
+                        font-black
+                        text-blue-700
+                      "
+                    >
+                      Cerrada
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+
+                <p class="mt-1 text-xs text-slate-500">
+
+                  Creada
+                  {{ planificacion.creado_en|date:"d/m/Y H:i" }}
+
+                  {% if planificacion.creado_por %}
+
+                    ·
+                    {{ planificacion.creado_por.get_full_name|default:planificacion.creado_por.username }}
+
+                  {% endif %}
+
+                </p>
+
+              </div>
+
+
+              <a
+                href="{% url 'planificacion:lista_asignacion_mensual' planificacion.pk %}"
+                class="
+                  inline-flex
+                  shrink-0
+                  items-center
+                  justify-center
+                  gap-1.5
+                  rounded-xl
+                  bg-slate-900
+                  px-3.5 py-2
+                  text-xs
+                  font-black
+                  text-white
+                  shadow-sm
+                  transition
+                  hover:bg-slate-800
+                "
+              >
+                Abrir →
+              </a>
+
+            </div>
+
+          </div>
+
+
+          <!-- MÉTRICAS -->
+
+          <div class="px-5 py-4">
+
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+
+              <!-- TOTAL -->
+
+              <div
+                class="
+                  rounded-xl
+                  border border-slate-200
+                  bg-slate-50
+                  px-3 py-3
+                "
+              >
+
+                <p
+                  class="
+                    text-[10px]
+                    font-black
+                    uppercase
+                    text-slate-400
+                  "
+                >
+                  Sitios
+                </p>
+
+                <p
+                  class="
+                    mt-0.5
+                    text-xl
+                    font-black
+                    text-slate-800
+                  "
+                >
+                  {{ planificacion.total_sitios }}
+                </p>
+
+              </div>
+
+
+              <!-- PLANIFICADOS -->
+
+              <div
+                class="
+                  rounded-xl
+                  border border-blue-100
+                  bg-blue-50
+                  px-3 py-3
+                "
+              >
+
+                <p
+                  class="
+                    text-[10px]
+                    font-black
+                    uppercase
+                    text-blue-600
+                  "
+                >
+                  Planificados
+                </p>
+
+                <p
+                  class="
+                    mt-0.5
+                    text-xl
+                    font-black
+                    text-blue-800
+                  "
+                >
+                  {{ planificacion.sitios_planificados }}
+                </p>
+
+              </div>
+
+
+              <!-- APROBADOS -->
+
+              <div
+                class="
+                  rounded-xl
+                  border border-emerald-100
+                  bg-emerald-50
+                  px-3 py-3
+                "
+              >
+
+                <p
+                  class="
+                    text-[10px]
+                    font-black
+                    uppercase
+                    text-emerald-600
+                  "
+                >
+                  Permisos OK
+                </p>
+
+                <p
+                  class="
+                    mt-0.5
+                    text-xl
+                    font-black
+                    text-emerald-800
+                  "
+                >
+                  {{ planificacion.permisos_aprobados }}
+                </p>
+
+              </div>
+
+
+              <!-- PENDIENTES -->
+
+              <div
+                class="
+                  rounded-xl
+                  border border-amber-100
+                  bg-amber-50
+                  px-3 py-3
+                "
+              >
+
+                <p
+                  class="
+                    text-[10px]
+                    font-black
+                    uppercase
+                    text-amber-600
+                  "
+                >
+                  Permisos pend.
+                </p>
+
+                <p
+                  class="
+                    mt-0.5
+                    text-xl
+                    font-black
+                    text-amber-800
+                  "
+                >
+                  {{ planificacion.permisos_pendientes }}
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <!-- OBSERVACIÓN -->
+
+            {% if planificacion.observaciones %}
+
+              <div
+                class="
+                  mt-3
+                  rounded-xl
+                  border border-slate-100
+                  bg-slate-50/70
+                  px-3 py-2
+                  text-xs
+                  leading-relaxed
+                  text-slate-600
+                "
+              >
+                {{ planificacion.observaciones }}
+              </div>
+
+            {% endif %}
+
+
+            <!-- ACCIONES -->
+
+            <div
+              class="
+                mt-4
+                flex
+                flex-wrap
+                items-center
+                justify-between
+                gap-2
+                border-t border-slate-100
+                pt-3
+              "
+            >
+
+              <span class="text-[11px] text-slate-400">
+                Actualizado:
+                {{ planificacion.actualizado_en|date:"d/m/Y H:i" }}
+              </span>
+
+
+              <div class="flex flex-wrap gap-2">
+
+                <!-- ==================================================== -->
+                <!-- VER SITIOS                                           -->
+                <!-- ==================================================== -->
+
+                <a
+                  href="{% url 'planificacion:lista_asignacion_mensual' planificacion.pk %}"
+                  class="
+                    inline-flex
+                    items-center
+                    gap-1.5
+                    rounded-lg
+                    border border-cyan-200
+                    bg-cyan-50
+                    px-3 py-1.5
+                    text-xs
+                    font-black
+                    text-cyan-700
+                    transition
+                    hover:bg-cyan-100
+                  "
+                >
+                  📋 Ver sitios
+                </a>
+
+
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
+
+                  <!-- ================================================== -->
+                  <!-- IMPORTAR                                           -->
+                  <!-- ================================================== -->
+
+                  <a
+                    href="{% url 'planificacion:importar_asignacion_mensual' planificacion.pk %}"
+                    class="
+                      inline-flex
+                      items-center
+                      gap-1.5
+                      rounded-lg
+                      border border-emerald-200
+                      bg-emerald-50
+                      px-3 py-1.5
+                      text-xs
+                      font-black
+                      text-emerald-700
+                      transition
+                      hover:bg-emerald-100
+                    "
+                  >
+                    📥 Importar
+                  </a>
+
+
+                  <!-- ================================================== -->
+                  <!-- EDITAR                                             -->
+                  <!-- ================================================== -->
+
+                  <a
+                    href="{% url 'planificacion:editar_planificacion_mensual' planificacion.pk %}"
+                    class="
+                      inline-flex
+                      items-center
+                      gap-1.5
+                      rounded-lg
+                      border border-amber-200
+                      bg-amber-50
+                      px-3 py-1.5
+                      text-xs
+                      font-black
+                      text-amber-700
+                      transition
+                      hover:bg-amber-100
+                    "
+                  >
+                    ✏️ Editar
+                  </a>
+
+
+                  <!-- ================================================== -->
+                  <!-- ELIMINAR - SOLO ADMINISTRADOR                      -->
+                  <!-- ================================================== -->
+
+                  {% if request.user.es_admin_general %}
+
+                  <button
+                    type="button"
+                    data-delete-month
+                    data-delete-url="{% url 'planificacion:eliminar_planificacion_mensual' planificacion.pk %}"
+                    data-delete-name="{% if planificacion.mes == 1 %}Enero{% elif planificacion.mes == 2 %}Febrero{% elif planificacion.mes == 3 %}Marzo{% elif planificacion.mes == 4 %}Abril{% elif planificacion.mes == 5 %}Mayo{% elif planificacion.mes == 6 %}Junio{% elif planificacion.mes == 7 %}Julio{% elif planificacion.mes == 8 %}Agosto{% elif planificacion.mes == 9 %}Septiembre{% elif planificacion.mes == 10 %}Octubre{% elif planificacion.mes == 11 %}Noviembre{% elif planificacion.mes == 12 %}Diciembre{% endif %} {{ planificacion.anio }}"
+                    data-delete-sites="{{ planificacion.total_sitios }}"
+                    class="
+                      inline-flex
+                      items-center
+                      gap-1.5
+                      rounded-lg
+                      border border-red-200
+                      bg-red-50
+                      px-3 py-1.5
+                      text-xs
+                      font-black
+                      text-red-700
+                      transition
+                      hover:bg-red-100
+                    "
+                  >
+                    🗑️ Eliminar
+                  </button>
+
+                {% endif %}
+
+                {% endif %}
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      {% empty %}
+
+        <div
+          class="
+            col-span-full
+            rounded-3xl
+            border border-dashed border-slate-300
+            bg-white
+            px-6 py-14
+            text-center
+          "
+        >
+
+          <div
+            class="
+              mx-auto
+              flex
+              h-14 w-14
+              items-center
+              justify-center
+              rounded-2xl
+              bg-slate-100
+              text-3xl
+            "
+          >
+            🗓️
+          </div>
+
+          <h3 class="mt-4 font-black text-slate-800">
+            Aún no hay planificaciones
+          </h3>
+
+          <p class="mt-1 text-sm text-slate-500">
+            Crea el primer mes para comenzar a incorporar sitios.
+          </p>
+
+
+          {% if request.user.es_admin_general or request.user.es_pm or request.user.es_supervisor%}
+
+            <a
+              href="{% url 'planificacion:crear_planificacion_mensual' %}"
+              class="
+                mt-4
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-emerald-600
+                px-4 py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-sm
+                transition
+                hover:bg-emerald-700
+              "
+            >
+              ➕ Crear planificación
+            </a>
+
+          {% endif %}
+
+        </div>
+
+      {% endfor %}
+<!-- ======================================================== -->
+<!-- MODAL ELIMINAR PLANIFICACIÓN MENSUAL                     -->
+<!-- ======================================================== -->
+
+<div
+  id="monthly-delete-modal"
+  class="monthly-delete-modal"
+  aria-hidden="true"
+>
+
+  <div
+    class="monthly-delete-modal-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="monthly-delete-modal-title"
+  >
+
+    <!-- CABECERA -->
+
+    <div
+      class="
+        flex
+        items-start
+        justify-between
+        gap-4
+        border-b
+        border-slate-100
+        px-5
+        py-5
+        sm:px-6
+      "
+    >
+
+      <div class="flex min-w-0 items-start gap-4">
+
+        <div class="monthly-delete-modal-icon">
+          🗑️
+        </div>
+
+        <div class="min-w-0">
+
+          <p
+            class="
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-red-600
+            "
+          >
+            Eliminar planificación
+          </p>
+
+          <h2
+            id="monthly-delete-modal-title"
+            class="
+              mt-1
+              text-xl
+              font-black
+              tracking-tight
+              text-slate-900
+            "
+          >
+            ¿Eliminar este mes?
+          </h2>
+
+        </div>
+
+      </div>
+
+
+      <button
+        type="button"
+        id="monthly-delete-modal-close"
+        class="monthly-delete-modal-close"
+        aria-label="Cerrar"
+      >
+        ✕
+      </button>
+
+    </div>
+
+
+    <!-- CONTENIDO -->
+
+    <div class="px-5 py-5 sm:px-6">
+
+      <p class="text-sm leading-relaxed text-slate-600">
+        Estás a punto de eliminar:
+      </p>
+
+
+      <div
+        class="
+          mt-3
+          rounded-2xl
+          border
+          border-slate-200
+          bg-slate-50
+          px-4
+          py-3
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-slate-400
+          "
+        >
+          Planificación mensual
+        </div>
+
+        <div
+          id="monthly-delete-modal-name"
+          class="
+            mt-1
+            text-lg
+            font-black
+            text-slate-900
+          "
+        >
+          —
+        </div>
+
+      </div>
+
+
+      <div
+        class="
+          mt-4
+          rounded-2xl
+          border
+          border-amber-200
+          bg-amber-50
+          px-4
+          py-3
+        "
+      >
+
+        <div class="flex items-start gap-3">
+
+          <div class="pt-0.5 text-lg">
+            ⚠️
+          </div>
+
+          <div>
+
+            <p class="text-sm font-black text-amber-900">
+              Esta acción no se puede deshacer
+            </p>
+
+            <p
+            class="
+              mt-1
+              text-xs
+              leading-relaxed
+              text-amber-800
+            "
+          >
+            Esta eliminación es administrativa y forzada.
+            Se eliminarán los sitios planificados del mes,
+            batches semanales, salidas diarias y demás
+            información de planificación asociada.
+            Los sitios maestros y la información del módulo
+            Operaciones permanecerán intactos.
+          </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ACCIONES -->
+
+    <div
+      class="
+        flex
+        flex-col-reverse
+        gap-2
+        border-t
+        border-slate-100
+        bg-slate-50/70
+        px-5
+        py-4
+        sm:flex-row
+        sm:justify-end
+        sm:px-6
+      "
+    >
+
+      <button
+        type="button"
+        id="monthly-delete-modal-cancel"
+        class="
+          inline-flex
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-4
+          py-2.5
+          text-sm
+          font-bold
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-100
+        "
+      >
+        Cancelar
+      </button>
+
+
+      <form
+        id="monthly-delete-form"
+        method="post"
+      >
+
+        {% csrf_token %}
+
+        {% if request.user.es_admin_general %}
+
+          <button
+            type="submit"
+            class="
+              inline-flex
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border
+              border-red-600
+              bg-red-600
+              px-4
+              py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-sm
+              transition
+              hover:bg-red-700
+              sm:w-auto
+            "
+          >
+            🗑️ Sí, eliminar
+          </button>
+
+        {% endif %}
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+    </div>
+
+  </div>
+
+</div>
+<script>
+document.addEventListener(
+  "DOMContentLoaded",
+  function () {
+
+    /* ====================================================== */
+    /* ELEMENTOS                                              */
+    /* ====================================================== */
+
+    const modal =
+      document.getElementById(
+        "monthly-delete-modal"
+      );
+
+    const modalName =
+      document.getElementById(
+        "monthly-delete-modal-name"
+      );
+
+    const deleteForm =
+      document.getElementById(
+        "monthly-delete-form"
+      );
+
+    const closeButton =
+      document.getElementById(
+        "monthly-delete-modal-close"
+      );
+
+    const cancelButton =
+      document.getElementById(
+        "monthly-delete-modal-cancel"
+      );
+
+    const deleteButtons =
+      document.querySelectorAll(
+        "[data-delete-month]"
+      );
+
+
+    /* ====================================================== */
+    /* SEGURIDAD                                              */
+    /* ====================================================== */
+
+    if (
+      !modal
+      ||
+      !modalName
+      ||
+      !deleteForm
+    ) {
+      return;
+    }
+
+
+    /* ====================================================== */
+    /* ABRIR MODAL                                            */
+    /* ====================================================== */
+
+    function openDeleteModal(
+      button
+    ) {
+
+      const url =
+        button.dataset.deleteUrl
+        ||
+        "";
+
+      const name =
+        (
+          button.dataset.deleteName
+          ||
+          ""
+        )
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim();
+
+
+      if (!url) {
+
+        console.error(
+          "No se encontró la URL de eliminación."
+        );
+
+        return;
+      }
+
+
+      deleteForm.action =
+        url;
+
+
+      modalName.textContent =
+        name
+        ||
+        "Planificación mensual";
+
+
+      modal.classList.add(
+        "is-open"
+      );
+
+
+      modal.setAttribute(
+        "aria-hidden",
+        "false"
+      );
+
+
+      /*
+       * IMPORTANTE
+       * =====================================================
+       *
+       * No modificamos document.body.style.overflow.
+       *
+       * Así el scrollbar vertical de la página permanece
+       * visible cuando se abre el modal.
+       */
+    }
+
+
+    /* ====================================================== */
+    /* CERRAR MODAL                                           */
+    /* ====================================================== */
+
+    function closeDeleteModal() {
+
+      modal.classList.remove(
+        "is-open"
+      );
+
+
+      modal.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+
+      deleteForm.action =
+        "";
+
+
+      modalName.textContent =
+        "—";
+    }
+
+
+    /* ====================================================== */
+    /* BOTONES ELIMINAR                                       */
+    /* ====================================================== */
+
+    deleteButtons.forEach(
+      function (button) {
+
+        button.addEventListener(
+          "click",
+          function () {
+
+            openDeleteModal(
+              button
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+    /* ====================================================== */
+    /* BOTÓN X                                                */
+    /* ====================================================== */
+
+    if (closeButton) {
+
+      closeButton.addEventListener(
+        "click",
+        function () {
+
+          closeDeleteModal();
+
+        }
+      );
+
+    }
+
+
+    /* ====================================================== */
+    /* CANCELAR                                               */
+    /* ====================================================== */
+
+    if (cancelButton) {
+
+      cancelButton.addEventListener(
+        "click",
+        function () {
+
+          closeDeleteModal();
+
+        }
+      );
+
+    }
+
+
+    /* ====================================================== */
+    /* CLICK FUERA                                            */
+    /* ====================================================== */
+
+    modal.addEventListener(
+      "click",
+      function (event) {
+
+        if (
+          event.target === modal
+        ) {
+
+          closeDeleteModal();
+
+        }
+
+      }
+    );
+
+
+    /* ====================================================== */
+    /* ESCAPE                                                 */
+    /* ====================================================== */
+
+    document.addEventListener(
+      "keydown",
+      function (event) {
+
+        if (
+          event.key === "Escape"
+          &&
+          modal.classList.contains(
+            "is-open"
+          )
+        ) {
+
+          closeDeleteModal();
+
+        }
+
+      }
+    );
+
+  }
+);
+</script>
+{% endblock %}

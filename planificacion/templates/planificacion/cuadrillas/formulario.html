@@ -1,0 +1,1300 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+{{ titulo }}
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto max-w-5xl">
+
+  <style>
+
+    /* ====================================================== */
+    /* CONTROLES                                              */
+    /* ====================================================== */
+
+    .form-control-cuadrilla {
+      width: 100%;
+
+      border: 1px solid #cbd5e1;
+      border-radius: 0.85rem;
+
+      background: #ffffff;
+
+      padding:
+        0.78rem
+        0.9rem;
+
+      font-size: 0.9rem;
+      color: #0f172a;
+
+      outline: none;
+
+      transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease;
+    }
+
+    .form-control-cuadrilla:focus {
+      border-color: #06b6d4;
+
+      box-shadow:
+        0 0 0 3px
+        rgba(6, 182, 212, 0.12);
+    }
+
+    .checkbox-cuadrilla {
+      width: 1.05rem;
+      height: 1.05rem;
+
+      flex-shrink: 0;
+
+      cursor: pointer;
+    }
+
+    /* ====================================================== */
+    /* BLOQUES DE TIEMPO                                      */
+    /* ====================================================== */
+
+    .time-control-group {
+      display: grid;
+
+      grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr);
+
+      gap: 0.75rem;
+    }
+
+    .time-control-box {
+      position: relative;
+    }
+
+    .time-control-unit {
+      position: absolute;
+
+      right: 0.85rem;
+      top: 50%;
+
+      transform:
+        translateY(-50%);
+
+      pointer-events: none;
+
+      font-size: 0.72rem;
+      font-weight: 800;
+
+      color: #94a3b8;
+
+      text-transform: uppercase;
+    }
+
+    .time-control-box
+    .form-control-cuadrilla {
+      padding-right: 4.2rem;
+    }
+
+  </style>
+
+
+  <!-- ====================================================== -->
+  <!-- CONTENEDOR                                             -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/50
+        px-5 py-5
+        sm:px-6
+      "
+    >
+
+      <p
+        class="
+          text-[11px]
+          font-black
+          uppercase
+          tracking-[0.14em]
+          text-cyan-700
+        "
+      >
+        Planificación · Cuadrillas
+      </p>
+
+
+      <h1
+        class="
+          mt-1
+          text-2xl
+          font-black
+          tracking-tight
+          text-slate-900
+          sm:text-3xl
+        "
+      >
+        {{ titulo }}
+      </h1>
+
+
+      <p
+        class="
+          mt-1
+          max-w-3xl
+          text-sm
+          leading-relaxed
+          text-slate-500
+        "
+      >
+        Define el punto habitual de salida,
+        vehículo, integrantes y características
+        que utilizará el motor de planificación.
+      </p>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- FORMULARIO                                           -->
+    <!-- ==================================================== -->
+
+    <form method="post">
+
+      {% csrf_token %}
+
+
+      <div class="space-y-7 p-5 sm:p-6">
+
+        <!-- ================================================= -->
+        <!-- ERRORES GENERALES                                 -->
+        <!-- ================================================= -->
+
+        {% if form.non_field_errors %}
+
+          <div
+            class="
+              rounded-xl
+              border border-red-200
+              bg-red-50
+              px-4 py-3
+              text-sm
+              font-semibold
+              text-red-700
+            "
+          >
+
+            {% for error in form.non_field_errors %}
+
+              <p>
+                {{ error }}
+              </p>
+
+            {% endfor %}
+
+          </div>
+
+        {% endif %}
+
+
+        <!-- ================================================= -->
+        <!-- IDENTIFICACIÓN                                    -->
+        <!-- ================================================= -->
+
+        <section>
+
+          <h2
+            class="
+              text-base
+              font-black
+              text-slate-900
+            "
+          >
+            Identificación
+          </h2>
+
+
+          <p
+            class="
+              mt-1
+              text-sm
+              text-slate-500
+            "
+          >
+            El código interno y el orden se generan
+            automáticamente.
+          </p>
+
+
+          <div class="mt-4">
+
+            <label
+              for="{{ form.nombre.id_for_label }}"
+              class="
+                text-xs
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-500
+              "
+            >
+              Nombre de la cuadrilla
+            </label>
+
+
+            <div class="mt-1">
+              {{ form.nombre }}
+            </div>
+
+
+            <p
+              class="
+                mt-1.5
+                text-[11px]
+                text-slate-400
+              "
+            >
+              Ejemplo:
+              Cuadrilla 1,
+              C1,
+              Cuadrilla Valparaíso.
+            </p>
+
+
+            {% for error in form.nombre.errors %}
+
+              <p
+                class="
+                  mt-1
+                  text-xs
+                  font-semibold
+                  text-red-600
+                "
+              >
+                {{ error }}
+              </p>
+
+            {% endfor %}
+
+          </div>
+
+
+          <!-- ================================================= -->
+          <!-- INTEGRANTES                                       -->
+          <!-- ================================================= -->
+
+          <div class="mt-6">
+
+            <label
+              class="
+                text-xs
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-500
+              "
+            >
+              Integrantes de la cuadrilla
+            </label>
+
+
+            <p
+              class="
+                mt-1
+                text-xs
+                leading-relaxed
+                text-slate-400
+              "
+            >
+              Selecciona las personas que conforman
+              habitualmente esta cuadrilla.
+              Solamente aparecen usuarios activos con
+              rol usuario.
+            </p>
+
+
+            <div
+              class="
+                mt-3
+                grid
+                gap-2
+                sm:grid-cols-2
+                lg:grid-cols-3
+              "
+            >
+
+              {% for checkbox in form.integrantes %}
+
+                <label
+                  class="
+                    flex
+                    cursor-pointer
+                    items-center
+                    gap-3
+                    rounded-xl
+                    border border-slate-200
+                    bg-white
+                    px-4
+                    py-3
+                    transition
+                    hover:border-cyan-300
+                    hover:bg-cyan-50/50
+                  "
+                >
+
+                  {{ checkbox.tag }}
+
+
+                  <div class="min-w-0 flex-1">
+
+                    <div
+                      class="
+                        truncate
+                        text-sm
+                        font-bold
+                        text-slate-800
+                      "
+                    >
+                      {{ checkbox.choice_label }}
+                    </div>
+
+                  </div>
+
+                </label>
+
+
+              {% empty %}
+
+                <div
+                  class="
+                    col-span-full
+                    rounded-xl
+                    border border-amber-200
+                    bg-amber-50
+                    px-4 py-3
+                  "
+                >
+
+                  <p
+                    class="
+                      text-sm
+                      font-bold
+                      text-amber-800
+                    "
+                  >
+                    No existen usuarios disponibles.
+                  </p>
+
+                  <p
+                    class="
+                      mt-1
+                      text-xs
+                      leading-relaxed
+                      text-amber-700
+                    "
+                  >
+                    Debes tener usuarios activos con
+                    el rol usuario para incorporarlos
+                    a una cuadrilla.
+                  </p>
+
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+
+            {% for error in form.integrantes.errors %}
+
+              <p
+                class="
+                  mt-2
+                  text-xs
+                  font-semibold
+                  text-red-600
+                "
+              >
+                {{ error }}
+              </p>
+
+            {% endfor %}
+
+          </div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- CAPACIDAD OPERACIONAL                              -->
+        <!-- ================================================= -->
+
+        <section
+          class="
+            border-t
+            border-slate-100
+            pt-6
+          "
+        >
+
+          <h2
+            class="
+              text-base
+              font-black
+              text-slate-900
+            "
+          >
+            Capacidad operacional
+          </h2>
+
+
+          <p
+            class="
+              mt-1
+              text-sm
+              text-slate-500
+            "
+          >
+            Indica el vehículo y el tipo de sitios
+            que esta cuadrilla puede ejecutar.
+          </p>
+
+
+          <!-- VEHÍCULO -->
+
+          <div class="mt-4">
+
+            <label
+              for="{{ form.tipo_vehiculo.id_for_label }}"
+              class="
+                text-xs
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-500
+              "
+            >
+              Vehículo
+            </label>
+
+
+            <div class="mt-1">
+              {{ form.tipo_vehiculo }}
+            </div>
+
+
+            {% for error in form.tipo_vehiculo.errors %}
+
+              <p
+                class="
+                  mt-1
+                  text-xs
+                  font-semibold
+                  text-red-600
+                "
+              >
+                {{ error }}
+              </p>
+
+            {% endfor %}
+
+          </div>
+
+
+          <!-- COBERTURA -->
+
+          <div
+            class="
+              mt-4
+              grid
+              gap-3
+              sm:grid-cols-3
+            "
+          >
+
+            <label
+              class="
+                flex
+                cursor-pointer
+                items-center
+                gap-3
+                rounded-xl
+                border border-blue-200
+                bg-blue-50
+                p-4
+                transition
+                hover:bg-blue-100/60
+              "
+            >
+
+              {{ form.permite_urbano }}
+
+              <span
+                class="
+                  text-sm
+                  font-bold
+                  text-blue-800
+                "
+              >
+                Puede ejecutar urbano
+              </span>
+
+            </label>
+
+
+            <label
+              class="
+                flex
+                cursor-pointer
+                items-center
+                gap-3
+                rounded-xl
+                border border-amber-200
+                bg-amber-50
+                p-4
+                transition
+                hover:bg-amber-100/60
+              "
+            >
+
+              {{ form.permite_rural }}
+
+              <span
+                class="
+                  text-sm
+                  font-bold
+                  text-amber-800
+                "
+              >
+                Puede ejecutar rural
+              </span>
+
+            </label>
+
+
+            <label
+              class="
+                flex
+                cursor-pointer
+                items-center
+                gap-3
+                rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                p-4
+                transition
+                hover:bg-emerald-100/60
+              "
+            >
+
+              {{ form.activa }}
+
+              <span
+                class="
+                  text-sm
+                  font-bold
+                  text-emerald-800
+                "
+              >
+                Cuadrilla activa
+              </span>
+
+            </label>
+
+          </div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- BASE HABITUAL                                     -->
+        <!-- ================================================= -->
+
+        <section
+          class="
+            border-t
+            border-slate-100
+            pt-6
+          "
+        >
+
+          <h2
+            class="
+              text-base
+              font-black
+              text-slate-900
+            "
+          >
+            Base habitual de salida
+          </h2>
+
+
+          <p
+            class="
+              mt-1
+              text-sm
+              leading-relaxed
+              text-slate-500
+            "
+          >
+            El motor utilizará esta ubicación como
+            punto de origen y regreso para calcular
+            los recorridos de la cuadrilla.
+          </p>
+
+
+          <div
+            class="
+              mt-4
+              grid
+              gap-4
+              md:grid-cols-2
+            "
+          >
+
+            <div>
+
+              <label
+                for="{{ form.base_nombre.id_for_label }}"
+                class="
+                  text-xs
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-slate-500
+                "
+              >
+                Nombre de la base
+              </label>
+
+
+              <div class="mt-1">
+                {{ form.base_nombre }}
+              </div>
+
+
+              <p
+                class="
+                  mt-1.5
+                  text-[11px]
+                  text-slate-400
+                "
+              >
+                Ejemplo:
+                Base Ñuñoa,
+                Bodega Santiago,
+                Casa César.
+              </p>
+
+
+              {% for error in form.base_nombre.errors %}
+
+                <p
+                  class="
+                    mt-1
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+            </div>
+
+
+            <div>
+
+              <label
+                for="{{ form.direccion_base.id_for_label }}"
+                class="
+                  text-xs
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-slate-500
+                "
+              >
+                Dirección
+              </label>
+
+
+              <div class="mt-1">
+                {{ form.direccion_base }}
+              </div>
+
+
+              <p
+                class="
+                  mt-1.5
+                  text-[11px]
+                  text-slate-400
+                "
+              >
+                Incluye comuna y ciudad cuando sea posible
+                para mejorar la precisión.
+              </p>
+
+
+              {% for error in form.direccion_base.errors %}
+
+                <p
+                  class="
+                    mt-1
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+
+          {% if cuadrilla and cuadrilla.tiene_base_operacional %}
+
+            <div
+              class="
+                mt-4
+                rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                px-4 py-3
+              "
+            >
+
+              <div
+                class="
+                  flex
+                  flex-col
+                  gap-1
+                  sm:flex-row
+                  sm:items-center
+                  sm:justify-between
+                "
+              >
+
+                <div>
+
+                  <p
+                    class="
+                      text-[10px]
+                      font-black
+                      uppercase
+                      tracking-wide
+                      text-emerald-700
+                    "
+                  >
+                    Ubicación geográfica
+                  </p>
+
+                  <p
+                    class="
+                      mt-0.5
+                      text-sm
+                      font-bold
+                      text-emerald-900
+                    "
+                  >
+                    Coordenadas configuradas
+                  </p>
+
+                </div>
+
+
+                <div
+                  class="
+                    text-xs
+                    font-semibold
+                    text-emerald-800
+                  "
+                >
+                  {{ cuadrilla.base_latitud }},
+                  {{ cuadrilla.base_longitud }}
+                </div>
+
+              </div>
+
+            </div>
+
+          {% endif %}
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- PARÁMETROS DE JORNADA                              -->
+        <!-- ================================================= -->
+
+        <section
+          class="
+            border-t
+            border-slate-100
+            pt-6
+          "
+        >
+
+          <h2
+            class="
+              text-base
+              font-black
+              text-slate-900
+            "
+          >
+            Parámetros de jornada
+          </h2>
+
+
+          <p
+            class="
+              mt-1
+              text-sm
+              leading-relaxed
+              text-slate-500
+            "
+          >
+            Estos son los valores habituales de la cuadrilla.
+            En una semana particular podremos modificarlos
+            sin alterar esta configuración base.
+          </p>
+
+
+          <div
+            class="
+              mt-5
+              grid
+              gap-4
+              lg:grid-cols-2
+            "
+          >
+
+            <div
+              class="
+                rounded-2xl
+                border border-slate-200
+                bg-slate-50/70
+                p-4
+              "
+            >
+
+              <p
+                class="
+                  text-xs
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-slate-500
+                "
+              >
+                Jornada habitual
+              </p>
+
+
+              <p
+                class="
+                  mt-1
+                  text-xs
+                  leading-relaxed
+                  text-slate-400
+                "
+              >
+                Tiempo total disponible para
+                desplazamiento y ejecución durante el día.
+              </p>
+
+
+              <div
+                class="
+                  time-control-group
+                  mt-4
+                "
+              >
+
+                <div>
+
+                  <label
+                    for="{{ form.jornada_horas.id_for_label }}"
+                    class="
+                      text-[11px]
+                      font-bold
+                      text-slate-500
+                    "
+                  >
+                    Horas
+                  </label>
+
+
+                  <div class="time-control-box mt-1">
+
+                    {{ form.jornada_horas }}
+
+                    <span class="time-control-unit">
+                      h
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                <div>
+
+                  <label
+                    for="{{ form.jornada_minutos.id_for_label }}"
+                    class="
+                      text-[11px]
+                      font-bold
+                      text-slate-500
+                    "
+                  >
+                    Minutos
+                  </label>
+
+
+                  <div class="time-control-box mt-1">
+
+                    {{ form.jornada_minutos }}
+
+                    <span class="time-control-unit">
+                      min
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {% for error in form.jornada_horas.errors %}
+
+                <p
+                  class="
+                    mt-2
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+
+              {% for error in form.jornada_minutos.errors %}
+
+                <p
+                  class="
+                    mt-2
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+            </div>
+
+
+            <div
+              class="
+                rounded-2xl
+                border border-cyan-200
+                bg-cyan-50/50
+                p-4
+              "
+            >
+
+              <p
+                class="
+                  text-xs
+                  font-black
+                  uppercase
+                  tracking-wide
+                  text-cyan-700
+                "
+              >
+                Tiempo estimado por sitio
+              </p>
+
+
+              <p
+                class="
+                  mt-1
+                  text-xs
+                  leading-relaxed
+                  text-slate-500
+                "
+              >
+                Duración promedio utilizada inicialmente
+                por el motor para evaluar si caben
+                uno, dos o tres sitios en una salida.
+              </p>
+
+
+              <div
+                class="
+                  time-control-group
+                  mt-4
+                "
+              >
+
+                <div>
+
+                  <label
+                    for="{{ form.trabajo_sitio_horas.id_for_label }}"
+                    class="
+                      text-[11px]
+                      font-bold
+                      text-slate-500
+                    "
+                  >
+                    Horas
+                  </label>
+
+
+                  <div class="time-control-box mt-1">
+
+                    {{ form.trabajo_sitio_horas }}
+
+                    <span class="time-control-unit">
+                      h
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                <div>
+
+                  <label
+                    for="{{ form.trabajo_sitio_minutos.id_for_label }}"
+                    class="
+                      text-[11px]
+                      font-bold
+                      text-slate-500
+                    "
+                  >
+                    Minutos
+                  </label>
+
+
+                  <div class="time-control-box mt-1">
+
+                    {{ form.trabajo_sitio_minutos }}
+
+                    <span class="time-control-unit">
+                      min
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              {% for error in form.trabajo_sitio_horas.errors %}
+
+                <p
+                  class="
+                    mt-2
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+
+              {% for error in form.trabajo_sitio_minutos.errors %}
+
+                <p
+                  class="
+                    mt-2
+                    text-xs
+                    font-semibold
+                    text-red-600
+                  "
+                >
+                  {{ error }}
+                </p>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+        </section>
+
+
+        <!-- ================================================= -->
+        <!-- OBSERVACIONES                                     -->
+        <!-- ================================================= -->
+
+        <section
+          class="
+            border-t
+            border-slate-100
+            pt-6
+          "
+        >
+
+          <label
+            for="{{ form.observaciones.id_for_label }}"
+            class="
+              text-xs
+              font-black
+              uppercase
+              tracking-wide
+              text-slate-500
+            "
+          >
+            Observaciones
+          </label>
+
+
+          <div class="mt-1">
+            {{ form.observaciones }}
+          </div>
+
+
+          {% for error in form.observaciones.errors %}
+
+            <p
+              class="
+                mt-1
+                text-xs
+                font-semibold
+                text-red-600
+              "
+            >
+              {{ error }}
+            </p>
+
+          {% endfor %}
+
+        </section>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- BOTONES                                            -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          flex
+          flex-col-reverse
+          gap-2
+          border-t border-slate-100
+          bg-slate-50
+          px-5 py-4
+          sm:flex-row
+          sm:justify-end
+          sm:px-6
+        "
+      >
+
+        <a
+          href="{% url 'planificacion:listar_cuadrillas' %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-sm
+            font-bold
+            text-slate-700
+            transition
+            hover:bg-slate-100
+          "
+        >
+          Cancelar
+        </a>
+
+
+        <button
+          type="submit"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            bg-gradient-to-r
+            from-cyan-600
+            to-blue-600
+            px-5 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+
+          {% if modo == "editar" %}
+
+            Guardar cambios
+
+          {% else %}
+
+            Crear cuadrilla
+
+          {% endif %}
+
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+</div>
+
+{% endblock %}

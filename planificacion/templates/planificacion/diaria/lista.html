@@ -1,0 +1,1158 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Planificación Diaria
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1700px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        flex
+        flex-col
+        gap-4
+        xl:flex-row
+        xl:items-end
+        xl:justify-between
+      "
+    >
+
+      <div class="max-w-4xl">
+
+        <div
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.16em]
+            text-cyan-700
+          "
+        >
+          Operación diaria
+        </div>
+
+        <h1
+          class="
+            mt-1
+            text-2xl
+            font-black
+            text-slate-900
+            sm:text-3xl
+          "
+        >
+          Planificación Diaria
+        </h1>
+
+        <p
+          class="
+            mt-2
+            max-w-3xl
+            text-sm
+            leading-relaxed
+            text-slate-500
+          "
+        >
+          Organiza los sitios aprobados por día y cuadrilla,
+          revisa su avance operacional y accede directamente
+          a la asignación de técnicos.
+        </p>
+
+      </div>
+
+
+      <div class="flex flex-wrap gap-2">
+
+        <a
+          href="{% url 'planificacion:planificaciones_mensuales' %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-slate-300
+            bg-white
+            px-4
+            py-2.5
+            text-sm
+            font-bold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Planificación mensual
+        </a>
+
+
+        <a
+          href="{% url 'planificacion:listar_cuadrillas' %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-cyan-200
+            bg-cyan-50
+            px-4
+            py-2.5
+            text-sm
+            font-bold
+            text-cyan-700
+            shadow-sm
+            transition
+            hover:bg-cyan-100
+          "
+        >
+          Cuadrillas
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- DESCRIPCIÓN DEL FLUJO                                -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        overflow-hidden
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          grid
+          gap-px
+          bg-slate-200
+          sm:grid-cols-2
+          xl:grid-cols-5
+        "
+      >
+
+        <div class="bg-white p-4">
+
+          <div class="text-[10px] font-black uppercase text-slate-400">
+            01
+          </div>
+
+          <div class="mt-1 font-black text-slate-900">
+            Batch semanal
+          </div>
+
+          <div class="mt-1 text-xs leading-relaxed text-slate-500">
+            Sitios seleccionados por el motor semanal.
+          </div>
+
+        </div>
+
+
+        <div class="bg-white p-4">
+
+          <div class="text-[10px] font-black uppercase text-slate-400">
+            02
+          </div>
+
+          <div class="mt-1 font-black text-slate-900">
+            Permisos
+          </div>
+
+          <div class="mt-1 text-xs leading-relaxed text-slate-500">
+            El cliente aprueba o rechaza los accesos.
+          </div>
+
+        </div>
+
+
+        <div class="bg-white p-4">
+
+          <div class="text-[10px] font-black uppercase text-slate-400">
+            03
+          </div>
+
+          <div class="mt-1 font-black text-slate-900">
+            Planificación diaria
+          </div>
+
+          <div class="mt-1 text-xs leading-relaxed text-slate-500">
+            El motor distribuye sitios entre días y cuadrillas.
+          </div>
+
+        </div>
+
+
+        <div class="bg-white p-4">
+
+          <div class="text-[10px] font-black uppercase text-slate-400">
+            04
+          </div>
+
+          <div class="mt-1 font-black text-slate-900">
+            Operaciones
+          </div>
+
+          <div class="mt-1 text-xs leading-relaxed text-slate-500">
+            Se asignan técnicos y comienza la ejecución real.
+          </div>
+
+        </div>
+
+
+        <div class="bg-white p-4">
+
+          <div class="text-[10px] font-black uppercase text-slate-400">
+            05
+          </div>
+
+          <div class="mt-1 font-black text-slate-900">
+            Finalizado
+          </div>
+
+          <div class="mt-1 text-xs leading-relaxed text-slate-500">
+            El supervisor aprueba y el sitio queda cerrado.
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- LISTADO                                              -->
+    <!-- ==================================================== -->
+
+    {% if filas %}
+
+      <div class="space-y-4">
+
+        {% for fila in filas %}
+
+          <article
+            class="
+              overflow-hidden
+              rounded-2xl
+              border
+              border-slate-200
+              bg-white
+              shadow-sm
+              transition
+              hover:border-slate-300
+              hover:shadow-md
+            "
+          >
+
+            <div
+              class="
+                grid
+                xl:grid-cols-[minmax(260px,1.25fr)_minmax(620px,2.6fr)_220px]
+              "
+            >
+
+              <!-- ========================================== -->
+              <!-- INFORMACIÓN DE LA SEMANA                   -->
+              <!-- ========================================== -->
+
+              <div
+                class="
+                  border-b
+                  border-slate-200
+                  p-5
+                  xl:border-b-0
+                  xl:border-r
+                "
+              >
+
+                <div class="flex flex-wrap items-center gap-2">
+
+                  <span
+                    class="
+                      rounded-full
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      px-2.5
+                      py-1
+                      text-[10px]
+                      font-black
+                      uppercase
+                      tracking-wide
+                      text-slate-500
+                    "
+                  >
+                    {{ fila.mensual }}
+                  </span>
+
+
+                  {% if fila.estado_diario == "finalizada" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        bg-emerald-600
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-white
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% elif fila.estado_diario == "en_ejecucion" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-violet-200
+                        bg-violet-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-violet-700
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% elif fila.estado_diario == "parcial" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-orange-200
+                        bg-orange-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-orange-700
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% elif fila.estado_diario == "asignada" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-blue-200
+                        bg-blue-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-blue-700
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% elif fila.estado_diario == "planificada" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-cyan-200
+                        bg-cyan-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-cyan-700
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% elif fila.estado_diario == "lista_planificar" %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-amber-200
+                        bg-amber-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-amber-700
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+
+                  {% else %}
+
+                    <span
+                      class="
+                        rounded-full
+                        border
+                        border-slate-200
+                        bg-slate-100
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-slate-600
+                      "
+                    >
+                      {{ fila.estado_diario_texto }}
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+
+                <h2
+                  class="
+                    mt-3
+                    text-xl
+                    font-black
+                    text-slate-900
+                  "
+                >
+                  {% if fila.batch.nombre %}
+                    {{ fila.batch.nombre }}
+                  {% else %}
+                    Semana {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+                  {% endif %}
+                </h2>
+
+
+                <div class="mt-2 text-sm text-slate-500">
+
+                  Inicio:
+
+                  <span class="font-bold text-slate-700">
+                    {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+                  </span>
+
+                </div>
+
+
+                <div class="mt-1 text-sm text-slate-500">
+
+                  Estado semanal:
+
+                  <span class="font-bold text-slate-700">
+                    {{ fila.batch.get_estado_display }}
+                  </span>
+
+                </div>
+
+
+                {% if fila.batch.generado_por_motor %}
+
+                  <div class="mt-3">
+
+                    <span
+                      class="
+                        inline-flex
+                        rounded-full
+                        border
+                        border-cyan-200
+                        bg-cyan-50
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-bold
+                        text-cyan-700
+                      "
+                    >
+                      Batch generado por motor
+                    </span>
+
+                  </div>
+
+                {% endif %}
+
+              </div>
+
+
+              <!-- ========================================== -->
+              <!-- MÉTRICAS                                   -->
+              <!-- ========================================== -->
+
+              <div class="p-4 sm:p-5">
+
+                <div
+                  class="
+                    grid
+                    grid-cols-2
+                    gap-2
+                    sm:grid-cols-3
+                    lg:grid-cols-6
+                  "
+                >
+
+                  <!-- SALIDAS -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-slate-400
+                      "
+                    >
+                      Salidas
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-slate-900
+                      "
+                    >
+                      {{ fila.resumen.total_salidas }}
+                    </div>
+
+                  </div>
+
+
+                  <!-- SITIOS -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-cyan-200
+                      bg-cyan-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-cyan-600
+                      "
+                    >
+                      Planificados
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-cyan-800
+                      "
+                    >
+                      {{ fila.resumen.total_sitios }}
+                    </div>
+
+                  </div>
+
+
+                  <!-- PENDIENTES -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-amber-200
+                      bg-amber-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-amber-600
+                      "
+                    >
+                      Por programar
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-amber-800
+                      "
+                    >
+                      {{ fila.cantidad_pendientes_planificar }}
+                    </div>
+
+                  </div>
+
+
+                  <!-- ASIGNADOS -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-blue-200
+                      bg-blue-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-blue-600
+                      "
+                    >
+                      Asignados
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-blue-800
+                      "
+                    >
+                      {{ fila.resumen.asignados }}
+                    </div>
+
+                  </div>
+
+
+                  <!-- EJECUCIÓN -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-violet-200
+                      bg-violet-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-violet-600
+                      "
+                    >
+                      Ejecución
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-violet-800
+                      "
+                    >
+                      {{ fila.resumen.en_ejecucion }}
+                    </div>
+
+                  </div>
+
+
+                  <!-- FINALIZADOS -->
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-emerald-200
+                      bg-emerald-50
+                      p-3
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-emerald-600
+                      "
+                    >
+                      Finalizados
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-emerald-800
+                      "
+                    >
+                      {{ fila.resumen.finalizados }}
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+                <!-- ======================================== -->
+                <!-- PROGRESO                                 -->
+                <!-- ======================================== -->
+
+                {% if fila.resumen.total_sitios %}
+
+                  <div class="mt-4">
+
+                    <div
+                      class="
+                        mb-1
+                        flex
+                        items-center
+                        justify-between
+                        gap-3
+                        text-xs
+                      "
+                    >
+
+                      <span class="font-bold text-slate-500">
+                        Avance operacional
+                      </span>
+
+                      <span class="font-black text-slate-700">
+                        {{ fila.resumen.finalizados }}
+                        /
+                        {{ fila.resumen.total_sitios }}
+                      </span>
+
+                    </div>
+
+
+                    <div
+                      class="
+                        h-2
+                        overflow-hidden
+                        rounded-full
+                        bg-slate-100
+                      "
+                    >
+
+                      {% widthratio fila.resumen.finalizados fila.resumen.total_sitios 100 as progreso %}
+
+                      <div
+                        class="
+                          h-full
+                          rounded-full
+                          bg-emerald-500
+                          transition-all
+                        "
+                        style="width: {{ progreso }}%;"
+                      ></div>
+
+                    </div>
+
+                  </div>
+
+                {% endif %}
+
+
+                <!-- ======================================== -->
+                <!-- RESUMEN DE SALIDAS                       -->
+                <!-- ======================================== -->
+
+                {% if fila.resumen.total_salidas %}
+
+                  <div
+                    class="
+                      mt-4
+                      flex
+                      flex-wrap
+                      gap-2
+                    "
+                  >
+
+                    {% if fila.resumen.salidas_listas %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-cyan-200
+                          bg-cyan-50
+                          px-2.5
+                          py-1
+                          text-[10px]
+                          font-bold
+                          text-cyan-700
+                        "
+                      >
+                        {{ fila.resumen.salidas_listas }}
+                        lista(s)
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if fila.resumen.salidas_asignadas %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-blue-200
+                          bg-blue-50
+                          px-2.5
+                          py-1
+                          text-[10px]
+                          font-bold
+                          text-blue-700
+                        "
+                      >
+                        {{ fila.resumen.salidas_asignadas }}
+                        asignada(s)
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if fila.resumen.salidas_en_ejecucion %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-violet-200
+                          bg-violet-50
+                          px-2.5
+                          py-1
+                          text-[10px]
+                          font-bold
+                          text-violet-700
+                        "
+                      >
+                        {{ fila.resumen.salidas_en_ejecucion }}
+                        en ejecución
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if fila.resumen.salidas_parciales %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-orange-200
+                          bg-orange-50
+                          px-2.5
+                          py-1
+                          text-[10px]
+                          font-bold
+                          text-orange-700
+                        "
+                      >
+                        {{ fila.resumen.salidas_parciales }}
+                        parcial(es)
+                      </span>
+
+                    {% endif %}
+
+
+                    {% if fila.resumen.salidas_finalizadas %}
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-emerald-200
+                          bg-emerald-50
+                          px-2.5
+                          py-1
+                          text-[10px]
+                          font-bold
+                          text-emerald-700
+                        "
+                      >
+                        {{ fila.resumen.salidas_finalizadas }}
+                        finalizada(s)
+                      </span>
+
+                    {% endif %}
+
+                  </div>
+
+                {% endif %}
+
+              </div>
+
+
+              <!-- ========================================== -->
+              <!-- ACCIONES                                   -->
+              <!-- ========================================== -->
+
+              <div
+                class="
+                  flex
+                  flex-col
+                  justify-center
+                  gap-2
+                  border-t
+                  border-slate-200
+                  bg-slate-50
+                  p-4
+                  xl:border-l
+                  xl:border-t-0
+                "
+              >
+
+                <a
+                  href="{% url 'planificacion:detalle_planificacion_diaria' fila.batch.id %}"
+                  class="
+                    inline-flex
+                    w-full
+                    items-center
+                    justify-center
+                    rounded-xl
+                    bg-gradient-to-r
+                    from-cyan-600
+                    to-blue-600
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-black
+                    text-white
+                    shadow-sm
+                    transition
+                    hover:-translate-y-0.5
+                    hover:shadow-md
+                  "
+                >
+                  Abrir planificación
+                </a>
+
+
+                <a
+                  href="{% url 'planificacion:detalle_planificacion_semanal' fila.batch.id %}"
+                  class="
+                    inline-flex
+                    w-full
+                    items-center
+                    justify-center
+                    rounded-xl
+                    border
+                    border-slate-300
+                    bg-white
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-bold
+                    text-slate-700
+                    transition
+                    hover:bg-slate-100
+                  "
+                >
+                  Ver batch semanal
+                </a>
+
+
+                <a
+                  href="{% url 'planificacion:mapa_batch_semanal' fila.batch.id %}"
+                  class="
+                    inline-flex
+                    w-full
+                    items-center
+                    justify-center
+                    rounded-xl
+                    border
+                    border-emerald-200
+                    bg-emerald-50
+                    px-4
+                    py-2.5
+                    text-sm
+                    font-bold
+                    text-emerald-700
+                    transition
+                    hover:bg-emerald-100
+                  "
+                >
+                  Ver mapa
+                </a>
+
+              </div>
+
+            </div>
+
+          </article>
+
+        {% endfor %}
+
+      </div>
+
+
+    {% else %}
+
+      <!-- ================================================== -->
+      <!-- SIN BATCHES                                        -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          rounded-3xl
+          border
+          border-slate-200
+          bg-white
+          px-6
+          py-16
+          text-center
+          shadow-sm
+        "
+      >
+
+        <div
+          class="
+            mx-auto
+            flex
+            h-14
+            w-14
+            items-center
+            justify-center
+            rounded-2xl
+            bg-cyan-50
+            text-base
+            font-black
+            text-cyan-700
+          "
+        >
+          GZ
+        </div>
+
+
+        <h2
+          class="
+            mt-4
+            text-xl
+            font-black
+            text-slate-900
+          "
+        >
+          Todavía no existen semanas disponibles
+        </h2>
+
+
+        <p
+          class="
+            mx-auto
+            mt-2
+            max-w-2xl
+            text-sm
+            leading-relaxed
+            text-slate-500
+          "
+        >
+          La planificación diaria aparecerá aquí cuando existan
+          batches semanales dentro de la planificación mensual.
+        </p>
+
+
+        <a
+          href="{% url 'planificacion:planificaciones_mensuales' %}"
+          class="
+            mt-5
+            inline-flex
+            rounded-xl
+            bg-gradient-to-r
+            from-cyan-600
+            to-blue-600
+            px-5
+            py-3
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          Ir a planificación mensual
+        </a>
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+{% endblock %}

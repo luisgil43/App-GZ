@@ -1,7 +1,11 @@
 {% extends "dashboard_admin/base.html" %}
-{% block title %}Listado de Sitios Móviles{% endblock %}
+
+{% block title %}
+Listado de Sitios Móviles
+{% endblock %}
 
 {% block dashboard_content %}
+
 <div class="bg-white shadow mt-3 -mx-3 sm:mx-0 rounded-none sm:rounded-2xl px-3 py-4 sm:p-6">
 
 <style>
@@ -16,17 +20,20 @@
     background-color: white;
     transition: border-color 0.2s ease-in-out;
   }
+
   .campo-filtro:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
     outline: none;
   }
+
   .boton-filtrar {
     height: 2.25rem;
     font-size: 0.875rem;
     border-radius: 0.75rem;
     padding: 0 1rem;
   }
+
   .tabla-scroll {
     display: block;
     overflow-x: auto;
@@ -34,495 +41,1376 @@
   }
 </style>
 
-<div class="flex flex-wrap items-center justify-between mb-4 gap-3">
-  <div class="flex flex-wrap items-center gap-3">
-    <h2 class="text-2xl font-bold text-gray-800">
-      📋 Listado de Sitios Móviles
-    </h2>
 
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'operaciones:importar_sitios' %}"
-         class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-emerald-700 transition">
-        📥 Importar Sitios
-      </a>
+<!-- ====================================================== -->
+<!-- CABECERA -->
+<!-- ====================================================== -->
 
-      <a href="{% url 'operaciones:descargar_formato_sitios' %}"
-         class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
-        📄 Descargar formato
-      </a>
+<div class="flex flex-wrap items-start justify-between mb-4 gap-3">
+
+  <div>
+
+    <div class="flex flex-wrap items-center gap-3">
+
+      <h2 class="text-2xl font-bold text-gray-800">
+        📋 Listado de Sitios Móviles
+      </h2>
+
+      <div class="flex flex-wrap gap-2">
+
+        <a href="{% url 'operaciones:importar_sitios' %}"
+           class="flex items-center gap-1 bg-emerald-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-emerald-700 transition">
+          📥 Importar Sitios
+        </a>
+
+        <a href="{% url 'operaciones:descargar_formato_sitios' %}"
+           class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
+          📄 Descargar formato
+        </a>
+
+      </div>
+
     </div>
+
+
+    <!-- ================================================== -->
+    <!-- ÚLTIMA ACTUALIZACIÓN -->
+    <!-- ================================================== -->
+
+    <div class="mt-2">
+
+      {% if metadata_sitios and metadata_sitios.ultima_actualizacion %}
+
+        <div class="inline-flex flex-wrap items-center gap-x-2 gap-y-1
+                    text-xs sm:text-sm text-gray-600
+                    bg-gray-50 border border-gray-200
+                    rounded-lg px-3 py-1.5">
+
+          <span>
+            🕒
+            <strong class="font-semibold text-gray-700">
+              Última actualización:
+            </strong>
+
+            {{ metadata_sitios.ultima_actualizacion|date:"d/m/Y H:i" }}
+          </span>
+
+          <span class="hidden sm:inline text-gray-300">
+            |
+          </span>
+
+          <span>
+            👤
+            <strong class="font-semibold text-gray-700">
+              Actualizado por:
+            </strong>
+
+            {% if metadata_sitios.actualizado_por %}
+
+              {% if metadata_sitios.actualizado_por.get_full_name %}
+
+                {{ metadata_sitios.actualizado_por.get_full_name }}
+
+              {% else %}
+
+                {{ metadata_sitios.actualizado_por.username }}
+
+              {% endif %}
+
+            {% else %}
+
+              Usuario no disponible
+
+            {% endif %}
+          </span>
+
+        </div>
+
+      {% else %}
+
+        <div class="inline-flex items-center
+                    text-xs sm:text-sm text-gray-500
+                    bg-gray-50 border border-gray-200
+                    rounded-lg px-3 py-1.5">
+
+          🕒 Sin registro de actualización todavía.
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
   </div>
+
 </div>
 
-<!-- Filtros (compactos, independientes del ancho de la tabla) -->
+
+<!-- ====================================================== -->
+<!-- FILTROS -->
+<!-- ====================================================== -->
+
 <form id="filters-form"
       method="get"
       class="mb-3 text-sm">
 
-  <div class="inline-flex flex-wrap items-end gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+  <div class="inline-flex flex-wrap items-end gap-2
+              bg-gray-50 border border-gray-200
+              rounded-xl px-3 py-2">
 
     <div class="w-full sm:w-52">
+
       <input type="text"
              name="id_claro"
              value="{{ id_claro }}"
              placeholder="Buscar por ID Claro"
              class="border rounded-lg px-2 py-1.5 w-full"
              autocomplete="off">
+
     </div>
 
+
     <div class="w-full sm:w-52">
+
       <input type="text"
              name="id_new"
              value="{{ id_new }}"
              placeholder="Buscar por ID NEW"
              class="border rounded-lg px-2 py-1.5 w-full"
              autocomplete="off">
+
     </div>
+
 
     <div class="w-full sm:w-auto flex items-center gap-2">
+
       <button type="submit"
-              class="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 whitespace-nowrap">
+              class="px-3 py-1.5 rounded-lg
+                     bg-blue-600 text-white text-sm
+                     font-medium hover:bg-blue-700
+                     whitespace-nowrap">
+
         🔍 Filtrar
+
       </button>
 
+
       <a href="{% url 'operaciones:listar_sitios' %}"
-         class="px-3 py-1.5 rounded-lg bg-gray-100 text-red-600 text-sm font-medium hover:bg-gray-200 whitespace-nowrap">
+         class="px-3 py-1.5 rounded-lg
+                bg-gray-100 text-red-600 text-sm
+                font-medium hover:bg-gray-200
+                whitespace-nowrap">
+
         ❌ Limpiar
+
       </a>
+
     </div>
 
-    <!-- Mantener cantidad actual -->
-    <input type="hidden" name="cantidad" value="{{ cantidad }}">
+
+    <input type="hidden"
+           name="cantidad"
+           value="{{ cantidad }}">
+
   </div>
+
 </form>
 
-<!-- ⚙️ Columnas -->
+
+<!-- ====================================================== -->
+<!-- SELECTOR DE COLUMNAS -->
+<!-- ====================================================== -->
+
 <div class="flex justify-start mb-2">
+
   <details class="relative">
-    <summary class="cursor-pointer text-sm text-gray-700 px-3 py-1 border rounded-full bg-gray-50 hover:bg-gray-100 select-none">
+
+    <summary class="cursor-pointer
+                    text-sm text-gray-700
+                    px-3 py-1 border rounded-full
+                    bg-gray-50 hover:bg-gray-100
+                    select-none">
+
       ⚙️ Columnas
+
     </summary>
 
-    <div id="columnToggles" class="absolute left-0 mt-1 w-64 bg-white border rounded-xl shadow-lg p-3 z-10">
-      <p class="text-xs text-gray-500 mb-2">Mostrar / ocultar columnas</p>
+
+    <div id="columnToggles"
+         class="absolute left-0 mt-1
+                w-64 bg-white border rounded-xl
+                shadow-lg p-3 z-20
+                max-h-[70vh] overflow-y-auto">
+
+      <p class="text-xs text-gray-500 mb-2">
+        Mostrar / ocultar columnas
+      </p>
+
 
       <label class="flex items-center gap-2 mb-2 pb-2 border-b">
-        <input type="checkbox" id="col-toggle-all" checked>
-        <span class="font-semibold text-xs">Mostrar todas</span>
+
+        <input type="checkbox"
+               id="col-toggle-all"
+               checked>
+
+        <span class="font-semibold text-xs">
+          Mostrar todas
+        </span>
+
       </label>
 
+
       <div class="space-y-1 text-sm">
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="0" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="0"
+                 checked>
           <span>ID Sites</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="1" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="1"
+                 checked>
           <span>ID Claro</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="2" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="2"
+                 checked>
           <span>ID NEW</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="3" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="3"
+                 checked>
           <span>Región</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="4" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="4"
+                 checked>
           <span>Nombre</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="5" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="5"
+                 checked>
           <span>Dirección</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="6" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="6"
+                 checked>
           <span>Latitud</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="7" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="7"
+                 checked>
           <span>Longitud</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="8" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="8"
+                 checked>
           <span>Comuna</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="9" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="9"
+                 checked>
           <span>Construcción</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="10" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="10"
+                 checked>
           <span>Altura</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="11" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="11"
+                 checked>
+          <span>Tipo de Zona</span>
+        </label>
+
+
+        <label class="flex items-center gap-2">
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="12"
+                 checked>
           <span>Candado BT</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="12" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="13"
+                 checked>
           <span>Acceso</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="13" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="14"
+                 checked>
           <span>Claves</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="14" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="15"
+                 checked>
           <span>Llaves</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="15" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="16"
+                 checked>
           <span>Cantidad Llaves</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="16" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="17"
+                 checked>
           <span>Observaciones</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="17" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="18"
+                 checked>
           <span>Zonas Conflictivas</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="18" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="19"
+                 checked>
           <span>Alarmas</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="19" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="20"
+                 checked>
           <span>Guardias</span>
         </label>
+
+
         <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="20" checked>
-          <span>Nivel</span>
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="21" checked>
-          <span>Descripción</span>
-        </label>
-        <label class="flex items-center gap-2">
-          <input type="checkbox" class="col-toggle" data-col="22" checked>
+          <input type="checkbox"
+                 class="col-toggle"
+                 data-col="21"
+                 checked>
           <span>Acciones</span>
         </label>
+
       </div>
+
     </div>
+
   </details>
+
 </div>
 
-<!-- Tabla con scroll -->
+
+<!-- ====================================================== -->
+<!-- TABLA -->
+<!-- ====================================================== -->
+
 <div class="tabla-scroll overflow-x-auto">
-  <table data-columns-table="sitios-moviles"
-         class="table-auto w-full text-sm min-w-full sm:min-w-[1200px]"
+
+  <table data-columns-table="sitios-moviles-v2"
+         class="table-auto w-full text-sm
+                min-w-full sm:min-w-[1200px]"
          style="white-space: nowrap;">
-    <thead class="bg-gray-100 text-xs uppercase font-semibold text-center">
+
+    <thead class="bg-gray-100
+                  text-xs uppercase
+                  font-semibold text-center">
+
       <tr>
-        <th class="p-2 border">ID Sites</th>
-        <th class="p-2 border">ID Claro</th>
-        <th class="p-2 border">ID NEW</th>
-        <th class="p-2 border">Región</th>
-        <th class="p-2 border">Nombre</th>
-        <th class="p-2 border">Dirección</th>
-        <th class="p-2 border">Latitud</th>
-        <th class="p-2 border">Longitud</th>
-        <th class="p-2 border">Comuna</th>
-        <th class="p-2 border">Construcción</th>
-        <th class="p-2 border">Altura</th>
-        <th class="p-2 border">Candado BT</th>
-        <th class="p-2 border">Acceso</th>
-        <th class="p-2 border">Claves</th>
-        <th class="p-2 border">Llaves</th>
-        <th class="p-2 border">Cantidad Llaves</th>
-        <th class="p-2 border">Observaciones</th>
-        <th class="p-2 border">Zonas Conflictivas</th>
-        <th class="p-2 border">Alarmas</th>
-        <th class="p-2 border">Guardias</th>
-        <th class="p-2 border">Nivel</th>
-        <th class="p-2 border">Descripción</th>
-        <th class="p-2 border">Acciones</th>
+
+        <th class="p-2 border">
+          ID Sites
+        </th>
+
+        <th class="p-2 border">
+          ID Claro
+        </th>
+
+        <th class="p-2 border">
+          ID NEW
+        </th>
+
+        <th class="p-2 border">
+          Región
+        </th>
+
+        <th class="p-2 border">
+          Nombre
+        </th>
+
+        <th class="p-2 border">
+          Dirección
+        </th>
+
+        <th class="p-2 border">
+          Latitud
+        </th>
+
+        <th class="p-2 border">
+          Longitud
+        </th>
+
+        <th class="p-2 border">
+          Comuna
+        </th>
+
+        <th class="p-2 border">
+          Construcción
+        </th>
+
+        <th class="p-2 border">
+          Altura
+        </th>
+
+        <th class="p-2 border">
+          Tipo de Zona
+        </th>
+
+        <th class="p-2 border">
+          Candado BT
+        </th>
+
+        <th class="p-2 border">
+          Acceso
+        </th>
+
+        <th class="p-2 border">
+          Claves
+        </th>
+
+        <th class="p-2 border">
+          Llaves
+        </th>
+
+        <th class="p-2 border">
+          Cantidad Llaves
+        </th>
+
+        <th class="p-2 border">
+          Observaciones
+        </th>
+
+        <th class="p-2 border">
+          Zonas Conflictivas
+        </th>
+
+        <th class="p-2 border">
+          Alarmas
+        </th>
+
+        <th class="p-2 border">
+          Guardias
+        </th>
+
+        <th class="p-2 border">
+          Acciones
+        </th>
+
       </tr>
+
     </thead>
 
-    <tbody>
-      {% for sitio in sitios %}
-        <tr class="hover:bg-gray-50 text-center">
-          <td class="p-2 border">{{ sitio.id_sites }}</td>
-          <td class="p-2 border">{{ sitio.id_claro }}</td>
-          <td class="p-2 border">{{ sitio.id_sites_new }}</td>
-          <td class="p-2 border">{{ sitio.region }}</td>
-          <td class="p-2 border">{{ sitio.nombre }}</td>
-          <td class="p-2 border">{{ sitio.direccion }}</td>
-          <td class="p-2 border">{{ sitio.latitud }}</td>
-          <td class="p-2 border">{{ sitio.longitud }}</td>
-          <td class="p-2 border">{{ sitio.comuna }}</td>
-          <td class="p-2 border">{{ sitio.tipo_construccion }}</td>
-          <td class="p-2 border">{{ sitio.altura }}</td>
-          <td class="p-2 border">{{ sitio.candado_bt }}</td>
-          <td class="p-2 border">{{ sitio.condiciones_acceso }}</td>
-          <td class="p-2 border">{{ sitio.claves }}</td>
-          <td class="p-2 border">{{ sitio.llaves }}</td>
-          <td class="p-2 border">{{ sitio.cantidad_llaves }}</td>
-          <td class="p-2 border">{{ sitio.observaciones_generales }}</td>
-          <td class="p-2 border">{{ sitio.zonas_conflictivas }}</td>
-          <td class="p-2 border">{{ sitio.alarmas }}</td>
-          <td class="p-2 border">{{ sitio.guardias }}</td>
-          <td class="p-2 border">{{ sitio.nivel }}</td>
-          <td class="p-2 border">{{ sitio.descripcion }}</td>
-          <td class="p-2 border">
-            <a href="{% url 'operaciones:editar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
-               class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-full text-xs">
-              ✏️ Editar
-            </a>
 
-            <a href="{% url 'operaciones:eliminar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
-               class="inline-block bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-full text-xs ml-1">
-              🗑️ Eliminar
-            </a>
+    <tbody>
+
+      {% for sitio in sitios %}
+
+        <tr class="hover:bg-gray-50 text-center">
+
+          <td class="p-2 border">
+            {{ sitio.id_sites|default_if_none:"" }}
           </td>
+
+          <td class="p-2 border">
+            {{ sitio.id_claro|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.id_sites_new|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.region|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.nombre|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.direccion|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.latitud|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.longitud|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.comuna|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.tipo_construccion|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+            {{ sitio.altura|default_if_none:"" }}
+          </td>
+
+          <td class="p-2 border">
+
+            {% if sitio.tipo_zona == "Urbano" %}
+
+              <span class="inline-flex items-center
+                           px-2 py-0.5 rounded-full
+                           text-xs font-medium
+                           bg-blue-50 text-blue-700
+                           border border-blue-200">
+
+                Urbano
+
+              </span>
+
+            {% elif sitio.tipo_zona == "Rural" %}
+
+              <span class="inline-flex items-center
+                           px-2 py-0.5 rounded-full
+                           text-xs font-medium
+                           bg-green-50 text-green-700
+                           border border-green-200">
+
+                Rural
+
+              </span>
+
+            {% elif sitio.tipo_zona %}
+
+              {{ sitio.tipo_zona }}
+
+            {% endif %}
+
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.candado_bt|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+
+            {% if sitio.condiciones_acceso == "Libre Acceso" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-green-50 text-green-700
+                           border border-green-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso == "Certificación" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-red-50 text-red-700
+                           border border-red-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso == "Correos - Confirmación" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-cyan-50 text-cyan-700
+                           border border-cyan-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso == "Correos-Sin Confirmación" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-blue-50 text-blue-700
+                           border border-blue-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso == "Llamadas" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-yellow-50 text-yellow-700
+                           border border-yellow-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso == "Formularios" %}
+
+              <span class="inline-flex px-2 py-0.5
+                           rounded-full text-xs font-medium
+                           bg-orange-50 text-orange-700
+                           border border-orange-200">
+
+                {{ sitio.condiciones_acceso }}
+
+              </span>
+
+            {% elif sitio.condiciones_acceso %}
+
+              {{ sitio.condiciones_acceso }}
+
+            {% endif %}
+
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.claves|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.llaves|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.cantidad_llaves|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.observaciones_generales|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.zonas_conflictivas|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.alarmas|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+            {{ sitio.guardias|default_if_none:"" }}
+          </td>
+
+
+          <td class="p-2 border">
+
+            <div class="flex items-center justify-center gap-1">
+
+              <a href="{% url 'operaciones:editar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
+                 class="inline-block
+                        bg-blue-600 hover:bg-blue-700
+                        text-white px-3 py-1.5
+                        rounded-full text-xs">
+
+                ✏️ Editar
+
+              </a>
+
+
+              <a href="{% url 'operaciones:eliminar_sitio' sitio.pk %}?next={{ request.get_full_path|urlencode }}"
+                 class="inline-block
+                        bg-red-600 hover:bg-red-700
+                        text-white px-3 py-1.5
+                        rounded-full text-xs">
+
+                🗑️ Eliminar
+
+              </a>
+
+            </div>
+
+          </td>
+
         </tr>
+
+
       {% empty %}
+
         <tr>
-          <td colspan="23" class="text-center text-gray-500 p-4">
+
+          <td colspan="22"
+              class="text-center
+                     text-gray-500
+                     p-4">
+
             No hay sitios registrados.
+
           </td>
+
         </tr>
+
       {% endfor %}
+
     </tbody>
+
   </table>
+
 </div>
 
-<!-- Selector de cantidad -->
-<form method="get" class="mt-4 flex items-center gap-2">
-  <label for="cantidad" class="text-sm font-medium text-gray-700">Mostrar:</label>
+
+<!-- ====================================================== -->
+<!-- CANTIDAD -->
+<!-- ====================================================== -->
+
+<form method="get"
+      class="mt-4 flex items-center gap-2">
+
+  <label for="cantidad"
+         class="text-sm font-medium text-gray-700">
+
+    Mostrar:
+
+  </label>
+
 
   <select name="cantidad"
           id="cantidad"
           onchange="this.form.submit()"
           class="border rounded-lg px-3 py-1">
-    <option value="5" {% if cantidad == '5' %}selected{% endif %}>5</option>
-    <option value="10" {% if cantidad == '10' %}selected{% endif %}>10</option>
-    <option value="20" {% if cantidad == '20' %}selected{% endif %}>20</option>
-    <option value="50" {% if cantidad == '50' %}selected{% endif %}>50</option>
-    <option value="100" {% if cantidad == '100' %}selected{% endif %}>100</option>
+
+    <option value="5"
+            {% if cantidad == '5' %}selected{% endif %}>
+      5
+    </option>
+
+    <option value="10"
+            {% if cantidad == '10' %}selected{% endif %}>
+      10
+    </option>
+
+    <option value="20"
+            {% if cantidad == '20' %}selected{% endif %}>
+      20
+    </option>
+
+    <option value="50"
+            {% if cantidad == '50' %}selected{% endif %}>
+      50
+    </option>
+
+    <option value="100"
+            {% if cantidad == '100' %}selected{% endif %}>
+      100
+    </option>
+
   </select>
 
-  <input type="hidden" name="id_claro" value="{{ id_claro }}">
-  <input type="hidden" name="id_new" value="{{ id_new }}">
+
+  <input type="hidden"
+         name="id_claro"
+         value="{{ id_claro }}">
+
+  <input type="hidden"
+         name="id_new"
+         value="{{ id_new }}">
+
 </form>
 
-<!-- Paginación -->
+
+<!-- ====================================================== -->
+<!-- PAGINACIÓN -->
+<!-- ====================================================== -->
+
 <div class="mt-4 flex justify-center gap-2 text-sm">
+
   {% if pagina.has_previous %}
+
     <a href="?page=1&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
        class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+
       « Primero
+
     </a>
+
 
     <a href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
        class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+
       ‹ Anterior
+
     </a>
+
   {% endif %}
 
+
   <span class="px-3 py-1">
-    Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}
+
+    Página {{ pagina.number }}
+    de {{ pagina.paginator.num_pages }}
+
   </span>
 
+
   {% if pagina.has_next %}
+
     <a href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
        class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+
       Siguiente ›
+
     </a>
+
 
     <a href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&id_claro={{ id_claro|urlencode }}&id_new={{ id_new|urlencode }}"
        class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">
+
       Último »
+
     </a>
+
   {% endif %}
+
 </div>
 
 </div>
+
+
+<!-- ====================================================== -->
+<!-- CONSERVAR SCROLL -->
+<!-- ====================================================== -->
 
 <script>
-/* === Conservar scroll en "Listado de Sitios Móviles" === */
 (function () {
-  const KEY = 'sitios-moviles-scroll:' + location.pathname;
+
+  const KEY =
+    'sitios-moviles-scroll:' + location.pathname;
 
   function zone() {
-    return document.querySelector('.tabla-scroll');
+    return document.querySelector(
+      '.tabla-scroll'
+    );
   }
 
   function saveScroll() {
+
     try {
+
       const z = zone();
 
-      sessionStorage.setItem(KEY, JSON.stringify({
-        winX: window.scrollX || window.pageXOffset || 0,
-        winY: window.scrollY || window.pageYOffset || 0,
-        zoneX: z ? z.scrollLeft : 0,
-        zoneY: z ? z.scrollTop  : 0
-      }));
+      sessionStorage.setItem(
+        KEY,
+        JSON.stringify({
+          winX:
+            window.scrollX ||
+            window.pageXOffset ||
+            0,
+
+          winY:
+            window.scrollY ||
+            window.pageYOffset ||
+            0,
+
+          zoneX:
+            z ? z.scrollLeft : 0,
+
+          zoneY:
+            z ? z.scrollTop : 0
+        })
+      );
+
     } catch (_) {}
+
   }
 
-  function restoreScroll() {
-    try {
-      const s = JSON.parse(sessionStorage.getItem(KEY) || 'null');
-      if (!s) return;
 
-      requestAnimationFrame(() => window.scrollTo(s.winX || 0, s.winY || 0));
+  function restoreScroll() {
+
+    try {
+
+      const s = JSON.parse(
+        sessionStorage.getItem(KEY) || 'null'
+      );
+
+      if (!s) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+
+        window.scrollTo(
+          s.winX || 0,
+          s.winY || 0
+        );
+
+      });
 
       const z = zone();
 
       if (z) {
         z.scrollLeft = s.zoneX || 0;
-        z.scrollTop  = s.zoneY || 0;
+        z.scrollTop = s.zoneY || 0;
       }
+
     } catch (_) {}
+
   }
 
-  document.addEventListener('DOMContentLoaded', restoreScroll);
 
-  window.addEventListener('pageshow', (e) => {
-    if (e.persisted) restoreScroll();
-  });
+  document.addEventListener(
+    'DOMContentLoaded',
+    restoreScroll
+  );
 
-  window.addEventListener('beforeunload', saveScroll);
 
-  document.addEventListener('submit', (e) => {
-    if (e.target && e.target.matches('form')) saveScroll();
-  });
+  window.addEventListener(
+    'pageshow',
+    (e) => {
 
-  document.addEventListener('change', (e) => {
-    if (e.target && e.target.matches('select#cantidad')) saveScroll();
-  });
+      if (e.persisted) {
+        restoreScroll();
+      }
 
-  document.addEventListener('click', (e) => {
-    const a = e.target.closest('a[href*="page="]');
-    if (a) saveScroll();
-  });
+    }
+  );
+
+
+  window.addEventListener(
+    'beforeunload',
+    saveScroll
+  );
+
+
+  document.addEventListener(
+    'submit',
+    (e) => {
+
+      if (
+        e.target &&
+        e.target.matches('form')
+      ) {
+        saveScroll();
+      }
+
+    }
+  );
+
+
+  document.addEventListener(
+    'change',
+    (e) => {
+
+      if (
+        e.target &&
+        e.target.matches('select#cantidad')
+      ) {
+        saveScroll();
+      }
+
+    }
+  );
+
+
+  document.addEventListener(
+    'click',
+    (e) => {
+
+      const a = e.target.closest(
+        'a[href*="page="]'
+      );
+
+      if (a) {
+        saveScroll();
+      }
+
+    }
+  );
+
 })();
 </script>
 
+
+<!-- ====================================================== -->
+<!-- MOSTRAR / OCULTAR COLUMNAS -->
+<!-- ====================================================== -->
+
 <script>
 (function () {
-  const panel = document.getElementById('columnToggles');
-  if (!panel) return;
+
+  const panel =
+    document.getElementById(
+      'columnToggles'
+    );
+
+  if (!panel) {
+    return;
+  }
+
 
   const table =
-    document.querySelector('[data-columns-table]') ||
-    document.querySelector('table');
+    document.querySelector(
+      '[data-columns-table]'
+    ) ||
+    document.querySelector(
+      'table'
+    );
 
-  if (!table) return;
+  if (!table) {
+    return;
+  }
 
-  const tableId = table.dataset.columnsTable || location.pathname;
-  const STORAGE_KEY = 'cols:' + tableId;
+
+  const tableId =
+    table.dataset.columnsTable ||
+    location.pathname;
+
+  const STORAGE_KEY =
+    'cols:' + tableId;
+
 
   function loadState() {
+
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return {};
 
-      const obj = JSON.parse(raw);
+      const raw =
+        localStorage.getItem(
+          STORAGE_KEY
+        );
 
-      return obj && typeof obj === 'object' ? obj : {};
+      if (!raw) {
+        return {};
+      }
+
+      const obj =
+        JSON.parse(raw);
+
+      return (
+        obj &&
+        typeof obj === 'object'
+      )
+        ? obj
+        : {};
+
     } catch (e) {
+
       return {};
+
     }
+
   }
+
 
   function saveState(state) {
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(state)
+      );
+
     } catch (e) {}
+
   }
 
+
   function applyVisibility() {
-    const state = loadState();
 
-    const theadCells = table.querySelectorAll('thead tr th');
+    const state =
+      loadState();
 
-    theadCells.forEach((th, idx) => {
-      const visible = state[idx] !== false;
-      th.style.display = visible ? '' : 'none';
-    });
+    const theadCells =
+      table.querySelectorAll(
+        'thead tr th'
+      );
 
-    table.querySelectorAll('tbody tr').forEach((tr) => {
-      const tds = tr.querySelectorAll('td');
 
-      tds.forEach((td, idx) => {
-        const visible = state[idx] !== false;
-        td.style.display = visible ? '' : 'none';
+    theadCells.forEach(
+      (th, idx) => {
+
+        const visible =
+          state[idx] !== false;
+
+        th.style.display =
+          visible
+            ? ''
+            : 'none';
+
+      }
+    );
+
+
+    table
+      .querySelectorAll('tbody tr')
+      .forEach((tr) => {
+
+        const tds =
+          tr.querySelectorAll('td');
+
+        tds.forEach(
+          (td, idx) => {
+
+            const visible =
+              state[idx] !== false;
+
+            td.style.display =
+              visible
+                ? ''
+                : 'none';
+
+          }
+        );
+
       });
-    });
 
-    const checks = panel.querySelectorAll('.col-toggle');
-    const master = panel.querySelector('#col-toggle-all');
+
+    const checks =
+      panel.querySelectorAll(
+        '.col-toggle'
+      );
+
+    const master =
+      panel.querySelector(
+        '#col-toggle-all'
+      );
 
     let allOn = true;
 
+
     checks.forEach((cb) => {
-      const idx = parseInt(cb.dataset.col || '0', 10);
-      const visible = state[idx] !== false;
 
-      cb.checked = visible;
+      const idx =
+        parseInt(
+          cb.dataset.col || '0',
+          10
+        );
 
-      if (!visible) allOn = false;
+      const visible =
+        state[idx] !== false;
+
+      cb.checked =
+        visible;
+
+      if (!visible) {
+        allOn = false;
+      }
+
     });
+
 
     if (master) {
       master.checked = allOn;
     }
+
   }
+
 
   function bindToggles() {
-    const checks = panel.querySelectorAll('.col-toggle');
-    const master = panel.querySelector('#col-toggle-all');
+
+    const checks =
+      panel.querySelectorAll(
+        '.col-toggle'
+      );
+
+    const master =
+      panel.querySelector(
+        '#col-toggle-all'
+      );
+
 
     checks.forEach((cb) => {
-      cb.addEventListener('change', () => {
-        const idx = parseInt(cb.dataset.col || '0', 10);
-        const state = loadState();
 
-        state[idx] = cb.checked;
+      cb.addEventListener(
+        'change',
+        () => {
 
-        saveState(state);
-        applyVisibility();
-      });
+          const idx =
+            parseInt(
+              cb.dataset.col || '0',
+              10
+            );
+
+          const state =
+            loadState();
+
+          state[idx] =
+            cb.checked;
+
+          saveState(
+            state
+          );
+
+          applyVisibility();
+
+        }
+      );
+
     });
+
 
     if (master) {
-      master.addEventListener('change', () => {
-        const val = master.checked;
-        const state = loadState();
 
-        checks.forEach((cb) => {
-          const idx = parseInt(cb.dataset.col || '0', 10);
+      master.addEventListener(
+        'change',
+        () => {
 
-          cb.checked = val;
-          state[idx] = val;
-        });
+          const val =
+            master.checked;
 
-        saveState(state);
-        applyVisibility();
-      });
+          const state =
+            loadState();
+
+
+          checks.forEach(
+            (cb) => {
+
+              const idx =
+                parseInt(
+                  cb.dataset.col || '0',
+                  10
+                );
+
+              cb.checked =
+                val;
+
+              state[idx] =
+                val;
+
+            }
+          );
+
+
+          saveState(
+            state
+          );
+
+          applyVisibility();
+
+        }
+      );
+
     }
+
   }
+
 
   function bindOutsideClickToClose() {
-    const details = panel.closest('details');
-    if (!details) return;
 
-    document.addEventListener('click', (e) => {
-      if (!details.open) return;
-      if (details.contains(e.target)) return;
+    const details =
+      panel.closest(
+        'details'
+      );
 
-      details.open = false;
-    });
+    if (!details) {
+      return;
+    }
+
+
+    document.addEventListener(
+      'click',
+      (e) => {
+
+        if (!details.open) {
+          return;
+        }
+
+        if (
+          details.contains(
+            e.target
+          )
+        ) {
+          return;
+        }
+
+        details.open = false;
+
+      }
+    );
+
   }
+
 
   bindToggles();
   applyVisibility();
   bindOutsideClickToClose();
+
 })();
 </script>
 

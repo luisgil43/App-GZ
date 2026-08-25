@@ -136,6 +136,10 @@
             return false;
         }
 
+        /*
+        * El propio elemento puede estar marcado explícitamente
+        * como oculto.
+        */
         if (
             element.hidden ||
             element.classList.contains(
@@ -145,11 +149,40 @@
             return false;
         }
 
-        return (
+        const computedStyle =
             window.getComputedStyle(
                 element
-            ).display !== "none"
-        );
+            );
+
+        /*
+        * Validaciones visuales directas.
+        */
+        if (
+            computedStyle.display === "none" ||
+            computedStyle.visibility === "hidden"
+        ) {
+            return false;
+        }
+
+        /*
+        * IMPORTANTE:
+        *
+        * Un elemento hijo puede tener display:block aunque uno
+        * de sus padres tenga display:none.
+        *
+        * getClientRects() nos permite detectar que realmente
+        * no está participando visualmente en el documento.
+        *
+        * Esto evita que elementos internos de un modal oculto
+        * sean interpretados como modales visibles.
+        */
+        if (
+            element.getClientRects().length === 0
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     function setElementVisibility(
@@ -471,18 +504,49 @@
     /* ====================================================== */
 
     function getVisibleModals() {
-        return Array.from(
-            document.querySelectorAll(
-                [
-                    "[data-miltel-modal]",
-                    ".miltel-modal",
-                    '[id^="modal-"]'
-                ].join(",")
-            )
-        ).filter(
-            elementIsVisible
-        );
-    }
+
+            const modalSelector = [
+                "[data-miltel-modal]",
+                ".miltel-modal"
+            ].join(",");
+
+            return Array.from(
+                document.querySelectorAll(
+                    modalSelector
+                )
+            ).filter(
+                function (element) {
+
+                    /*
+                    * Si otro elemento considerado modal contiene
+                    * a este elemento, entonces este es solamente una
+                    * pieza interna del modal:
+                    *
+                    * modal-card
+                    * modal-titulo
+                    * modal-form
+                    * modal-icono
+                    * etc.
+                    *
+                    * No debe contarse como un modal independiente.
+                    */
+                    const modalPadre =
+                        element.parentElement
+                            ? element.parentElement.closest(
+                                modalSelector
+                            )
+                            : null;
+
+                    if (modalPadre) {
+                        return false;
+                    }
+
+                    return elementIsVisible(
+                        element
+                    );
+                }
+            );
+        }
 
     function updateBodyModalState() {
         const hasVisibleModal =
@@ -1181,8 +1245,7 @@
                     modalCloseButton.closest(
                         [
                             "[data-miltel-modal]",
-                            ".miltel-modal",
-                            '[id^="modal-"]'
+                            ".miltel-modal"
                         ].join(",")
                     )
                 );
@@ -1217,8 +1280,7 @@
             event.target.closest(
                 [
                     "[data-miltel-modal]",
-                    ".miltel-modal",
-                    '[id^="modal-"]'
+                    ".miltel-modal"
                 ].join(",")
             );
 

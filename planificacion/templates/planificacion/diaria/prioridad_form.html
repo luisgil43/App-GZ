@@ -1,0 +1,1023 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Prioridad de Planificación Diaria
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1450px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        overflow-hidden
+        rounded-3xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-amber-50
+          px-5
+          py-5
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        "
+      >
+
+        <div>
+
+          <div
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-amber-700
+            "
+          >
+            Planificación diaria
+          </div>
+
+          <h1
+            class="
+              mt-1
+              text-2xl
+              font-black
+              tracking-tight
+              text-slate-900
+            "
+          >
+            {% if modo == "editar" %}
+              Editar prioridad operacional
+            {% else %}
+              Nueva prioridad operacional
+            {% endif %}
+          </h1>
+
+          <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-600">
+
+            Define un sitio que debe condicionar la planificación diaria.
+            Puede actuar como punto ancla, exigir una cuadrilla específica
+            o una fecha determinada y hacer que los demás sitios de la
+            jornada se busquen alrededor de él.
+
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+
+            <span
+              class="
+                rounded-full
+                border border-slate-200
+                bg-white
+                px-3
+                py-1.5
+                text-xs
+                font-bold
+                text-slate-600
+              "
+            >
+              {{ mensual }}
+            </span>
+
+            <span
+              class="
+                rounded-full
+                border border-slate-200
+                bg-white
+                px-3
+                py-1.5
+                text-xs
+                font-bold
+                text-slate-600
+              "
+            >
+              {% if batch.nombre %}
+                {{ batch.nombre }}
+              {% else %}
+                Semana {{ batch.fecha_inicio|date:"d/m/Y" }}
+              {% endif %}
+            </span>
+
+            <span
+              class="
+                rounded-full
+                border border-blue-200
+                bg-blue-50
+                px-3
+                py-1.5
+                text-xs
+                font-bold
+                text-blue-700
+              "
+            >
+              Semana {{ batch.fecha_inicio|date:"d/m/Y" }}
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div>
+
+          <a
+            href="{% url 'planificacion:detalle_planificacion_diaria' batch.id %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4
+              py-2.5
+              text-sm
+              font-bold
+              text-slate-700
+              shadow-sm
+              transition
+              hover:bg-slate-50
+            "
+          >
+            Volver a planificación diaria
+          </a>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- ERRORES GENERALES                                    -->
+    <!-- ==================================================== -->
+
+    {% if form.non_field_errors %}
+
+      <div
+        class="
+          mb-5
+          rounded-2xl
+          border border-red-200
+          bg-red-50
+          p-4
+          text-sm
+          text-red-700
+        "
+      >
+
+        {% for error in form.non_field_errors %}
+          <div>{{ error }}</div>
+        {% endfor %}
+
+      </div>
+
+    {% endif %}
+
+
+    <!-- ==================================================== -->
+    <!-- FORMULARIO                                           -->
+    <!-- ==================================================== -->
+
+    <form method="post">
+
+      {% csrf_token %}
+
+      <div class="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+
+        <!-- ================================================= -->
+        <!-- COLUMNA PRINCIPAL                                 -->
+        <!-- ================================================= -->
+
+        <div class="space-y-5">
+
+          <!-- =============================================== -->
+          <!-- SITIO PRIORITARIO                               -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div class="mb-5">
+
+              <div
+                class="
+                  text-[11px]
+                  font-black
+                  uppercase
+                  tracking-[0.14em]
+                  text-blue-700
+                "
+              >
+                1. Sitio prioritario
+              </div>
+
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                Define el sitio que condicionará la jornada
+              </h2>
+
+              <p class="mt-1 text-sm text-slate-500">
+                El motor utilizará este sitio como referencia antes
+                de construir la salida normal de la cuadrilla.
+              </p>
+
+            </div>
+
+
+            <div class="grid gap-5 md:grid-cols-2">
+
+              <div class="md:col-span-2">
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.sitio_batch.label }}
+                </label>
+
+                {{ form.sitio_batch }}
+
+                {% if form.sitio_batch.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.sitio_batch.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.sitio_batch.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.prioridad.label }}
+                </label>
+
+                {{ form.prioridad }}
+
+                {% if form.prioridad.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.prioridad.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.prioridad.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div
+                class="
+                  flex
+                  items-center
+                  rounded-2xl
+                  border border-blue-200
+                  bg-blue-50
+                  px-4
+                  py-3
+                "
+              >
+
+                <label class="flex cursor-pointer items-start gap-3">
+
+                  {{ form.es_ancla }}
+
+                  <div>
+
+                    <div class="text-sm font-black text-blue-800">
+                      {{ form.es_ancla.label }}
+                    </div>
+
+                    <div class="mt-0.5 text-xs leading-relaxed text-blue-700">
+                      {{ form.es_ancla.help_text }}
+                    </div>
+
+                  </div>
+
+                </label>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- FECHA Y CUADRILLA                               -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div class="mb-5">
+
+              <div
+                class="
+                  text-[11px]
+                  font-black
+                  uppercase
+                  tracking-[0.14em]
+                  text-violet-700
+                "
+              >
+                2. Restricciones operacionales
+              </div>
+
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                Fecha y cuadrilla
+              </h2>
+
+              <p class="mt-1 text-sm text-slate-500">
+                Puedes dejar ambas abiertas o imponer una condición
+                específica cuando exista una necesidad del cliente,
+                acreditación o acceso.
+              </p>
+
+            </div>
+
+
+            <div class="grid gap-5 md:grid-cols-2">
+
+              <!-- FECHA -->
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.fecha_objetivo.label }}
+                </label>
+
+                {{ form.fecha_objetivo }}
+
+                {% if form.fecha_objetivo.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.fecha_objetivo.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.fecha_objetivo.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <!-- CUADRILLA -->
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.cuadrilla_obligatoria.label }}
+                </label>
+
+                {{ form.cuadrilla_obligatoria }}
+
+                {% if form.cuadrilla_obligatoria.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.cuadrilla_obligatoria.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.cuadrilla_obligatoria.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <!-- FECHA OBLIGATORIA -->
+
+              <div
+                class="
+                  rounded-2xl
+                  border border-violet-200
+                  bg-violet-50
+                  px-4
+                  py-3
+                "
+              >
+
+                <label class="flex cursor-pointer items-start gap-3">
+
+                  {{ form.fecha_es_obligatoria }}
+
+                  <div>
+
+                    <div class="text-sm font-black text-violet-800">
+                      {{ form.fecha_es_obligatoria.label }}
+                    </div>
+
+                    <div class="mt-0.5 text-xs leading-relaxed text-violet-700">
+                      {{ form.fecha_es_obligatoria.help_text }}
+                    </div>
+
+                  </div>
+
+                </label>
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- RADIO TERRITORIAL                               -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div class="mb-5">
+
+              <div
+                class="
+                  text-[11px]
+                  font-black
+                  uppercase
+                  tracking-[0.14em]
+                  text-emerald-700
+                "
+              >
+                3. Cercanía operacional
+              </div>
+
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                Cómo buscar los otros sitios
+              </h2>
+
+              <p class="mt-1 text-sm text-slate-500">
+                Primero intentaremos completar la jornada con sitios
+                cercanos al prioritario. Los límites máximos determinan
+                cuándo la decisión debe considerarse excepcional.
+              </p>
+
+            </div>
+
+
+            <div class="grid gap-5 md:grid-cols-2">
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.distancia_preferida_km.label }} (km)
+                </label>
+
+                {{ form.distancia_preferida_km }}
+
+                {% if form.distancia_preferida_km.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.distancia_preferida_km.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.distancia_preferida_km.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.distancia_maxima_km.label }} (km)
+                </label>
+
+                {{ form.distancia_maxima_km }}
+
+                {% if form.distancia_maxima_km.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.distancia_maxima_km.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.distancia_maxima_km.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.minutos_preferidos.label }} (min)
+                </label>
+
+                {{ form.minutos_preferidos }}
+
+                {% if form.minutos_preferidos.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.minutos_preferidos.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.minutos_preferidos.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.minutos_maximos.label }} (min)
+                </label>
+
+                {{ form.minutos_maximos }}
+
+                {% if form.minutos_maximos.help_text %}
+                  <p class="mt-1 text-xs text-slate-500">
+                    {{ form.minutos_maximos.help_text }}
+                  </p>
+                {% endif %}
+
+                {% for error in form.minutos_maximos.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- MOTIVO                                         -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div class="mb-5">
+
+              <div
+                class="
+                  text-[11px]
+                  font-black
+                  uppercase
+                  tracking-[0.14em]
+                  text-slate-500
+                "
+              >
+                4. Trazabilidad
+              </div>
+
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                Motivo y observaciones
+              </h2>
+
+            </div>
+
+
+            <div class="space-y-5">
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.motivo.label }}
+                </label>
+
+                {{ form.motivo }}
+
+                {% for error in form.motivo.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+
+              <div>
+
+                <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                  {{ form.observaciones.label }}
+                </label>
+
+                {{ form.observaciones }}
+
+                {% for error in form.observaciones.errors %}
+                  <p class="mt-1 text-xs font-semibold text-red-600">
+                    {{ error }}
+                  </p>
+                {% endfor %}
+
+              </div>
+
+            </div>
+
+          </section>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- COLUMNA DERECHA                                   -->
+        <!-- ================================================= -->
+
+        <aside class="space-y-5">
+
+          <!-- =============================================== -->
+          <!-- OBJETIVO DIARIO                                 -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-cyan-200
+              bg-gradient-to-br
+              from-cyan-50
+              via-white
+              to-blue-50
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-700
+              "
+            >
+              Objetivo diario
+            </div>
+
+            <div class="mt-2 text-4xl font-black text-slate-900">
+              3 sitios
+            </div>
+
+            <p class="mt-2 text-sm leading-relaxed text-slate-600">
+              La planificación normal intentará construir siempre una
+              jornada de tres sitios compatibles y cercanos.
+            </p>
+
+
+            <div class="mt-5">
+
+              <label class="mb-1.5 block text-sm font-bold text-slate-700">
+                {{ form.objetivo_sitios_salida.label }}
+              </label>
+
+              {{ form.objetivo_sitios_salida }}
+
+              {% for error in form.objetivo_sitios_salida.errors %}
+                <p class="mt-1 text-xs font-semibold text-red-600">
+                  {{ error }}
+                </p>
+              {% endfor %}
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- EXCEPCIONES                                     -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-amber-200
+              bg-white
+              p-5
+              shadow-sm
+            "
+          >
+
+            <div
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-amber-700
+              "
+            >
+              Excepciones
+            </div>
+
+            <h2 class="mt-1 text-lg font-black text-slate-900">
+              Si no conseguimos 3 sitios
+            </h2>
+
+            <p class="mt-1 text-sm leading-relaxed text-slate-500">
+              Estas reglas solamente entrarán en juego cuando la
+              combinación ideal no exista.
+            </p>
+
+
+            <div class="mt-5 space-y-3">
+
+              <label
+                class="
+                  flex
+                  cursor-pointer
+                  items-start
+                  gap-3
+                  rounded-2xl
+                  border border-slate-200
+                  bg-slate-50
+                  p-4
+                "
+              >
+
+                {{ form.permitir_salida_2_sitios }}
+
+                <div>
+
+                  <div class="text-sm font-black text-slate-800">
+                    {{ form.permitir_salida_2_sitios.label }}
+                  </div>
+
+                  <div class="mt-1 text-xs leading-relaxed text-slate-500">
+                    {{ form.permitir_salida_2_sitios.help_text }}
+                  </div>
+
+                </div>
+
+              </label>
+
+
+              <label
+                class="
+                  flex
+                  cursor-pointer
+                  items-start
+                  gap-3
+                  rounded-2xl
+                  border border-red-200
+                  bg-red-50
+                  p-4
+                "
+              >
+
+                {{ form.permitir_salida_1_sitio }}
+
+                <div>
+
+                  <div class="text-sm font-black text-red-800">
+                    {{ form.permitir_salida_1_sitio.label }}
+                  </div>
+
+                  <div class="mt-1 text-xs leading-relaxed text-red-700">
+                    {{ form.permitir_salida_1_sitio.help_text }}
+                  </div>
+
+                </div>
+
+              </label>
+
+
+              <label
+                class="
+                  flex
+                  cursor-pointer
+                  items-start
+                  gap-3
+                  rounded-2xl
+                  border border-amber-200
+                  bg-amber-50
+                  p-4
+                "
+              >
+
+                {{ form.requiere_confirmacion_excepcion }}
+
+                <div>
+
+                  <div class="text-sm font-black text-amber-800">
+                    {{ form.requiere_confirmacion_excepcion.label }}
+                  </div>
+
+                  <div class="mt-1 text-xs leading-relaxed text-amber-700">
+                    {{ form.requiere_confirmacion_excepcion.help_text }}
+                  </div>
+
+                </div>
+
+              </label>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- EJEMPLO OPERACIONAL                             -->
+          <!-- =============================================== -->
+
+          <section
+            class="
+              rounded-3xl
+              border border-slate-200
+              bg-slate-900
+              p-5
+              text-white
+              shadow-sm
+            "
+          >
+
+            <div
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-300
+              "
+            >
+              Cómo lo interpretará GZ
+            </div>
+
+            <div class="mt-4 space-y-3 text-sm leading-relaxed text-slate-300">
+
+              <p>
+                <span class="font-black text-white">1.</span>
+                El sitio prioritario se procesa primero.
+              </p>
+
+              <p>
+                <span class="font-black text-white">2.</span>
+                Si existe cuadrilla obligatoria, solo esa cuadrilla
+                puede recibir la salida.
+              </p>
+
+              <p>
+                <span class="font-black text-white">3.</span>
+                Se buscan dos sitios adicionales cercanos al ancla.
+              </p>
+
+              <p>
+                <span class="font-black text-white">4.</span>
+                Primero se respeta la distancia y tiempo preferidos.
+              </p>
+
+              <p>
+                <span class="font-black text-white">5.</span>
+                Si solamente existen sitios más alejados, se aplicarán
+                las reglas de excepción.
+              </p>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================== -->
+          <!-- GUARDAR                                        -->
+          <!-- =============================================== -->
+
+          <div
+            class="
+              sticky
+              bottom-4
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              p-4
+              shadow-xl
+            "
+          >
+
+            <button
+              type="submit"
+              class="
+                flex
+                w-full
+                items-center
+                justify-center
+                rounded-xl
+                bg-gradient-to-r
+                from-amber-500
+                to-orange-500
+                px-5
+                py-3
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              {% if modo == "editar" %}
+                Guardar cambios
+              {% else %}
+                Crear prioridad diaria
+              {% endif %}
+            </button>
+
+
+            <a
+              href="{% url 'planificacion:detalle_planificacion_diaria' batch.id %}"
+              class="
+                mt-2
+                flex
+                w-full
+                items-center
+                justify-center
+                rounded-xl
+                border border-slate-300
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-bold
+                text-slate-600
+                transition
+                hover:bg-slate-50
+              "
+            >
+              Cancelar
+            </a>
+
+          </div>
+
+        </aside>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+{% endblock %}

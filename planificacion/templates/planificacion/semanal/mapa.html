@@ -1,0 +1,615 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Mapa Semanal
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<div class="mx-auto max-w-[1750px]">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+
+    <div>
+
+      <p class="text-sm font-medium text-slate-500">
+        {{ mensual }}
+      </p>
+
+      <h1 class="mt-1 text-2xl font-black text-slate-900">
+        Mapa semanal
+      </h1>
+
+      <p class="mt-1 text-sm text-slate-600">
+        {{ batch.nombre|default:batch.fecha_inicio }}
+      </p>
+
+    </div>
+
+
+    <div class="flex flex-wrap gap-2">
+
+      <a
+        href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+        class="
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4 py-2.5
+          text-sm
+          font-bold
+          text-slate-700
+          shadow-sm
+          hover:bg-slate-50
+        "
+      >
+        Volver al batch
+      </a>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- RESUMEN                                                -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+      <p class="text-xs font-black uppercase text-slate-500">
+        Sitios del batch
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-slate-900">
+        {{ mapa.total_sitios }}
+      </p>
+
+    </div>
+
+
+    <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+
+      <p class="text-xs font-black uppercase text-blue-600">
+        Clusters
+      </p>
+
+      <p class="mt-1 text-2xl font-black text-blue-900">
+        {{ mapa.total_clusters }}
+      </p>
+
+    </div>
+
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+      <p class="text-xs font-black uppercase text-slate-500">
+        Semana
+      </p>
+
+      <p class="mt-1 text-lg font-black text-slate-900">
+        {{ batch.fecha_inicio|date:"d/m/Y" }}
+      </p>
+
+    </div>
+
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+      <p class="text-xs font-black uppercase text-slate-500">
+        Estado
+      </p>
+
+      <p class="mt-1 text-lg font-black text-slate-900">
+        {{ batch.get_estado_display }}
+      </p>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- LEYENDA                                                -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      mb-5
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      p-4
+      shadow-sm
+    "
+  >
+
+    <div class="flex flex-wrap gap-3">
+
+      {% for cluster in mapa.clusters %}
+
+        <button
+          type="button"
+          onclick="enfocarCluster('{{ cluster.codigo|escapejs }}')"
+          class="
+            flex
+            items-center
+            gap-3
+            rounded-xl
+            border border-slate-200
+            bg-slate-50
+            px-3 py-2
+            text-left
+            transition
+            hover:bg-white
+            hover:shadow-sm
+          "
+        >
+
+          <span
+            class="h-4 w-4 rounded-full"
+            style="background: {{ cluster.color.marcador }};"
+          ></span>
+
+          <span>
+
+            <span class="block text-xs font-black text-slate-800">
+              {{ cluster.nombre }}
+            </span>
+
+            <span class="block text-[10px] text-slate-500">
+              {{ cluster.cantidad }} sitios ·
+              {{ cluster.urbanos }} urbanos ·
+              {{ cluster.rurales }} rurales
+            </span>
+
+          </span>
+
+        </button>
+
+      {% endfor %}
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- MAPA                                                   -->
+  <!-- ====================================================== -->
+
+  <div
+    class="
+      overflow-hidden
+      rounded-3xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+    "
+  >
+
+    {% if google_maps_api_key %}
+
+      <div
+        id="mapa-batch"
+        style="
+          width: 100%;
+          height: 720px;
+        "
+      ></div>
+
+    {% else %}
+
+      <div class="p-10 text-center">
+
+        <p class="font-bold text-amber-700">
+          Google Maps no está configurado.
+        </p>
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+
+  {% if mapa.sin_cluster %}
+
+    <div
+      class="
+        mt-5
+        rounded-2xl
+        border border-amber-200
+        bg-amber-50
+        p-4
+      "
+    >
+
+      <p class="font-bold text-amber-800">
+        {{ mapa.sin_cluster|length }} sitio(s) no poseen cluster asignado.
+      </p>
+
+      <p class="mt-1 text-sm text-amber-700">
+        Esto puede ocurrir con sitios agregados manualmente después
+        de aplicar la propuesta del motor.
+      </p>
+
+    </div>
+
+  {% endif %}
+
+</div>
+
+</div>
+
+
+{{ mapa|json_script:"mapa-batch-data" }}
+
+
+<script>
+const mapaData = JSON.parse(
+  document.getElementById(
+    "mapa-batch-data"
+  )?.textContent || "{}"
+);
+
+let mapaBatch = null;
+
+const boundsClusters = {};
+const objetosMapa = [];
+
+
+function escaparHtml(valor) {
+  const div =
+    document.createElement("div");
+
+  div.textContent =
+    valor == null
+      ? ""
+      : String(valor);
+
+  return div.innerHTML;
+}
+
+
+async function inicializarMapaBatch() {
+  const nodo =
+    document.getElementById(
+      "mapa-batch"
+    );
+
+  if (
+    !nodo
+    ||
+    !window.google
+    ||
+    !google.maps
+  ) {
+    return;
+  }
+
+  const {
+    AdvancedMarkerElement,
+    PinElement
+  } = await google.maps.importLibrary(
+    "marker"
+  );
+
+  mapaBatch =
+    new google.maps.Map(
+      nodo,
+      {
+        center: {
+          lat: -33.45,
+          lng: -70.66
+        },
+        zoom: 8,
+        mapId: "DEMO_MAP_ID",
+        streetViewControl: false,
+        fullscreenControl: true,
+        mapTypeControl: true
+      }
+    );
+
+  const boundsGlobal =
+    new google.maps.LatLngBounds();
+
+
+  mapaData.clusters.forEach(
+    function (cluster) {
+
+      const boundsCluster =
+        new google.maps.LatLngBounds();
+
+
+      cluster.sitios.forEach(
+        function (sitio) {
+
+          if (
+            sitio.latitud == null
+            ||
+            sitio.longitud == null
+          ) {
+            return;
+          }
+
+          const posicion = {
+            lat: Number(
+              sitio.latitud
+            ),
+            lng: Number(
+              sitio.longitud
+            )
+          };
+
+
+          const pin =
+            new PinElement({
+              background:
+                cluster.color.marcador,
+
+              borderColor:
+                cluster.color.borde,
+
+              glyphColor:
+                "#ffffff",
+
+              glyph:
+                String(
+                  cluster.numero
+                ),
+
+              scale:
+                1.05
+            });
+
+
+          const marker =
+            new AdvancedMarkerElement({
+              map: mapaBatch,
+              position: posicion,
+              content: pin.element,
+              title:
+                sitio.id_claro
+                + " - "
+                + sitio.nombre
+            });
+
+
+          const contenido = `
+            <div
+              style="
+                min-width: 250px;
+                max-width: 330px;
+                font-family: Arial, sans-serif;
+              "
+            >
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:8px;
+                  margin-bottom:8px;
+                "
+              >
+                <span
+                  style="
+                    width:12px;
+                    height:12px;
+                    border-radius:999px;
+                    background:${cluster.color.marcador};
+                    display:inline-block;
+                  "
+                ></span>
+
+                <strong>
+                  ${escaparHtml(cluster.nombre)}
+                </strong>
+              </div>
+
+              <strong>
+                ${escaparHtml(sitio.id_claro)}
+              </strong>
+
+              <div style="margin-top:3px;">
+                ${escaparHtml(sitio.nombre)}
+              </div>
+
+              <hr
+                style="
+                  border:0;
+                  border-top:1px solid #e5e7eb;
+                  margin:10px 0;
+                "
+              >
+
+              <div>
+                <strong>Comuna:</strong>
+                ${escaparHtml(sitio.comuna || "—")}
+              </div>
+
+              <div>
+                <strong>Zona:</strong>
+                ${escaparHtml(sitio.tipo_zona || "—")}
+              </div>
+
+              <div>
+                <strong>Permiso:</strong>
+                ${escaparHtml(sitio.estado_permiso || "—")}
+              </div>
+
+              <div>
+                <strong>Acceso:</strong>
+                ${escaparHtml(
+                  sitio.condicion_acceso
+                  || "Sin información"
+                )}
+              </div>
+
+              <div
+                style="
+                  margin-top:10px;
+                  font-size:12px;
+                  color:#475569;
+                "
+              >
+                ${escaparHtml(sitio.direccion || "")}
+              </div>
+
+              <div style="margin-top:12px;">
+                <a
+                  href="https://www.google.com/maps/search/?api=1&query=${sitio.latitud},${sitio.longitud}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Abrir sitio en Google Maps
+                </a>
+              </div>
+            </div>
+          `;
+
+
+          const infoWindow =
+            new google.maps.InfoWindow({
+              content:
+                contenido
+            });
+
+
+          marker.addListener(
+            "click",
+            function () {
+
+              infoWindow.open({
+                map:
+                  mapaBatch,
+
+                anchor:
+                  marker
+              });
+
+            }
+          );
+
+
+          boundsCluster.extend(
+            posicion
+          );
+
+          boundsGlobal.extend(
+            posicion
+          );
+
+          objetosMapa.push(
+            marker
+          );
+
+        }
+      );
+
+
+      if (
+        cluster.perimetro
+        &&
+        cluster.perimetro.length >= 3
+      ) {
+
+        const polygon =
+          new google.maps.Polygon({
+            paths:
+              cluster.perimetro,
+
+            strokeColor:
+              cluster.color.borde,
+
+            strokeOpacity:
+              0.9,
+
+            strokeWeight:
+              3,
+
+            fillColor:
+              cluster.color.relleno,
+
+            fillOpacity:
+              0.12,
+
+            map:
+              mapaBatch
+          });
+
+
+        objetosMapa.push(
+          polygon
+        );
+
+      }
+
+
+      boundsClusters[
+        cluster.codigo
+      ] = boundsCluster;
+
+    }
+  );
+
+
+  if (
+    !boundsGlobal.isEmpty()
+  ) {
+    mapaBatch.fitBounds(
+      boundsGlobal,
+      40
+    );
+  }
+}
+
+
+function enfocarCluster(
+  codigo
+) {
+  if (!mapaBatch) {
+    return;
+  }
+
+  const bounds =
+    boundsClusters[
+      codigo
+    ];
+
+  if (
+    bounds
+    &&
+    !bounds.isEmpty()
+  ) {
+    mapaBatch.fitBounds(
+      bounds,
+      80
+    );
+  }
+}
+
+
+window.initMapaBatch =
+  inicializarMapaBatch;
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=initMapaBatch"
+></script>
+
+{% endif %}
+
+{% endblock %}

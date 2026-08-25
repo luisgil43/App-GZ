@@ -1,0 +1,704 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Programar sitio
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-5xl">
+
+    <div
+      class="
+        overflow-hidden
+        rounded-3xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <!-- ================================================== -->
+      <!-- CABECERA                                           -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          border-b
+          border-slate-200
+          bg-gradient-to-r
+          from-slate-900
+          to-slate-800
+          px-5
+          py-5
+          text-white
+          sm:px-6
+        "
+      >
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-4
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+
+          <div>
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-[0.16em]
+                text-slate-300
+              "
+            >
+              Decisión operacional manual
+            </div>
+
+            <h1 class="mt-1 text-2xl font-black">
+              Programar sitio
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-300">
+              Selecciona el día y la cuadrilla que ejecutará
+              este sitio.
+            </p>
+
+          </div>
+
+
+          <a
+            href="{{ volver_url }}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-white/20
+              bg-white/10
+              px-4
+              py-2.5
+              text-sm
+              font-bold
+              text-white
+              transition
+              hover:bg-white/20
+            "
+          >
+            Volver
+          </a>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- DATOS DEL SITIO                                    -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          border-b
+          border-slate-200
+          bg-slate-50
+          p-5
+          sm:p-6
+        "
+      >
+
+        <div
+          class="
+            grid
+            gap-4
+            md:grid-cols-2
+            xl:grid-cols-4
+          "
+        >
+
+          <div>
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-400
+              "
+            >
+              ID Claro
+            </div>
+
+            <div class="mt-1 text-lg font-black text-slate-900">
+              {{ identificador }}
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-400
+              "
+            >
+              Sitio
+            </div>
+
+            <div class="mt-1 font-bold text-slate-800">
+              {{ sitio.nombre|default:"Sin nombre" }}
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-400
+              "
+            >
+              Comuna
+            </div>
+
+            <div class="mt-1 font-bold text-slate-800">
+              {{ sitio.comuna|default:"—" }}
+            </div>
+
+          </div>
+
+
+          <div>
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-slate-400
+              "
+            >
+              Zona
+            </div>
+
+            <div class="mt-1 font-bold text-slate-800">
+              {{ sitio.tipo_zona|default:"—" }}
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {% if sitio.direccion %}
+
+          <div class="mt-4 text-sm text-slate-600">
+
+            <span class="font-bold text-slate-700">
+              Dirección:
+            </span>
+
+            {{ sitio.direccion }}
+
+          </div>
+
+        {% endif %}
+
+
+        <div class="mt-4 flex flex-wrap gap-2">
+
+          <span
+            class="
+              rounded-full
+              border border-emerald-200
+              bg-emerald-50
+              px-3
+              py-1
+              text-xs
+              font-black
+              text-emerald-700
+            "
+          >
+            {{ sitio_planificado.get_estado_permiso_display }}
+          </span>
+
+
+          <span
+            class="
+              rounded-full
+              border border-slate-200
+              bg-white
+              px-3
+              py-1
+              text-xs
+              font-bold
+              text-slate-600
+            "
+          >
+            Batch:
+
+            {% if batch.nombre %}
+              {{ batch.nombre }}
+            {% else %}
+              {{ batch.fecha_inicio|date:"d/m/Y" }}
+            {% endif %}
+
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- FORMULARIO                                         -->
+      <!-- ================================================== -->
+
+      <form
+        method="post"
+        class="p-5 sm:p-6"
+      >
+
+        {% csrf_token %}
+
+
+        {% if form.non_field_errors %}
+
+          <div
+            class="
+              mb-5
+              rounded-xl
+              border border-red-200
+              bg-red-50
+              p-4
+              text-sm
+              font-semibold
+              text-red-700
+            "
+          >
+
+            {{ form.non_field_errors }}
+
+          </div>
+
+        {% endif %}
+
+
+        <!-- ================================================= -->
+        <!-- FECHA / CUADRILLA                                 -->
+        <!-- ================================================= -->
+
+        <div class="grid gap-5 lg:grid-cols-2">
+
+          <div>
+
+            <label
+              for="{{ form.fecha.id_for_label }}"
+              class="
+                mb-2
+                block
+                text-sm
+                font-black
+                text-slate-800
+              "
+            >
+              {{ form.fecha.label }}
+            </label>
+
+            {{ form.fecha }}
+
+            {% if form.fecha.errors %}
+
+              <div class="mt-1 text-xs font-semibold text-red-600">
+                {{ form.fecha.errors|striptags }}
+              </div>
+
+            {% endif %}
+
+          </div>
+
+
+          <div>
+
+            <label
+              for="{{ form.disponibilidad_cuadrilla.id_for_label }}"
+              class="
+                mb-2
+                block
+                text-sm
+                font-black
+                text-slate-800
+              "
+            >
+              {{ form.disponibilidad_cuadrilla.label }}
+            </label>
+
+            {{ form.disponibilidad_cuadrilla }}
+
+            {% if form.disponibilidad_cuadrilla.errors %}
+
+              <div class="mt-1 text-xs font-semibold text-red-600">
+                {{ form.disponibilidad_cuadrilla.errors|striptags }}
+              </div>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- EXCEPCIÓN OPERACIONAL                             -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            mt-6
+            rounded-2xl
+            border border-amber-200
+            bg-amber-50
+            p-4
+          "
+        >
+
+          <div
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.12em]
+              text-amber-700
+            "
+          >
+            Excepción operacional
+          </div>
+
+          <p
+            class="
+              mt-1
+              text-sm
+              leading-relaxed
+              text-amber-800
+            "
+          >
+            El motor intenta trabajar normalmente con
+            3 sitios por cuadrilla y día. Si este sitio está
+            aislado, la programación puede producir una salida
+            de 1 o 2 sitios. El sistema te advertirá antes de
+            guardar una excepción.
+          </p>
+
+
+          <label
+            class="
+              mt-4
+              flex
+              cursor-pointer
+              items-start
+              gap-3
+            "
+          >
+
+            <div class="pt-0.5">
+              {{ form.confirmar_excepcion }}
+            </div>
+
+            <div>
+
+              <div class="text-sm font-black text-amber-900">
+                {{ form.confirmar_excepcion.label }}
+              </div>
+
+              <div class="mt-0.5 text-xs text-amber-700">
+                {{ form.confirmar_excepcion.help_text }}
+              </div>
+
+            </div>
+
+          </label>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- PROTECCIÓN DE SALIDA                              -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            mt-4
+            rounded-2xl
+            border border-blue-200
+            bg-blue-50
+            p-4
+          "
+        >
+
+          <label
+            class="
+              flex
+              cursor-pointer
+              items-start
+              gap-3
+            "
+          >
+
+            <div class="pt-0.5">
+              {{ form.bloquear_salida }}
+            </div>
+
+            <div>
+
+              <div class="text-sm font-black text-blue-900">
+                {{ form.bloquear_salida.label }}
+              </div>
+
+              <div class="mt-0.5 text-xs text-blue-700">
+                {{ form.bloquear_salida.help_text }}
+              </div>
+
+            </div>
+
+          </label>
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- PRIORIDAD                                        -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            mt-4
+            rounded-2xl
+            border border-yellow-200
+            bg-yellow-50
+            p-4
+          "
+        >
+
+          <label
+            class="
+              flex
+              cursor-pointer
+              items-start
+              gap-3
+            "
+          >
+
+            <div class="pt-0.5">
+              {{ form.marcar_como_prioridad }}
+            </div>
+
+
+            <div class="min-w-0 flex-1">
+
+              <div
+                class="
+                  flex
+                  flex-wrap
+                  items-center
+                  gap-2
+                "
+              >
+
+                <span
+                  class="
+                    text-lg
+                    leading-none
+                    text-yellow-400
+                  "
+                >
+                  ★
+                </span>
+
+                <div
+                  class="
+                    text-sm
+                    font-black
+                    text-yellow-900
+                  "
+                >
+                  {{ form.marcar_como_prioridad.label }}
+                </div>
+
+              </div>
+
+
+              <div
+                class="
+                  mt-1
+                  text-xs
+                  leading-relaxed
+                  text-yellow-700
+                "
+              >
+                {{ form.marcar_como_prioridad.help_text }}
+              </div>
+
+
+              <div
+                class="
+                  mt-2
+                  rounded-lg
+                  border border-yellow-200
+                  bg-white/60
+                  px-3
+                  py-2
+                  text-xs
+                  leading-relaxed
+                  text-yellow-800
+                "
+              >
+                Programar manualmente no convierte automáticamente
+                el sitio en prioritario. Marca esta opción solamente
+                cuando realmente deba tener preferencia sobre otros
+                sitios de la semana.
+              </div>
+
+            </div>
+
+          </label>
+
+
+          {% if form.marcar_como_prioridad.errors %}
+
+            <div class="mt-2 text-xs font-semibold text-red-600">
+              {{ form.marcar_como_prioridad.errors|striptags }}
+            </div>
+
+          {% endif %}
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- OBSERVACIONES                                    -->
+        <!-- ================================================= -->
+
+        <div class="mt-5">
+
+          <label
+            for="{{ form.observaciones.id_for_label }}"
+            class="
+              mb-2
+              block
+              text-sm
+              font-black
+              text-slate-800
+            "
+          >
+            {{ form.observaciones.label }}
+          </label>
+
+          {{ form.observaciones }}
+
+          {% if form.observaciones.errors %}
+
+            <div class="mt-1 text-xs font-semibold text-red-600">
+              {{ form.observaciones.errors|striptags }}
+            </div>
+
+          {% endif %}
+
+        </div>
+
+
+        <!-- ================================================= -->
+        <!-- ACCIONES                                         -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            mt-7
+            flex
+            flex-col-reverse
+            gap-2
+            border-t
+            border-slate-200
+            pt-5
+            sm:flex-row
+            sm:items-center
+            sm:justify-end
+          "
+        >
+
+          <a
+            href="{{ volver_url }}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-5
+              py-2.5
+              text-sm
+              font-bold
+              text-slate-700
+              transition
+              hover:bg-slate-50
+            "
+          >
+            Cancelar
+          </a>
+
+
+          <button
+            type="submit"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              bg-gradient-to-r
+              from-cyan-600
+              to-blue-600
+              px-5
+              py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+            "
+          >
+            Programar sitio
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+{% endblock %}

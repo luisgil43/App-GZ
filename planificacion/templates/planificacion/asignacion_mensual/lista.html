@@ -1,0 +1,3938 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Planificación Mensual
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<style>
+  /* ======================================================== */
+  /* ZONA SUPERIOR                                            */
+  /* ======================================================== */
+
+  .planificacion-mensual-top {
+    width: 100%;
+    max-width: 1180px;
+  }
+
+  /* ======================================================== */
+  /* TABLA                                                    */
+  /* ======================================================== */
+
+  .planificacion-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  .planificacion-table-wrap::-webkit-scrollbar {
+    height: 9px;
+  }
+
+  .planificacion-table-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .planificacion-table-wrap::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  #planificacion-mensual-table {
+    min-width: 2350px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #planificacion-mensual-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+
+    border-bottom: 1px solid #cbd5e1;
+
+    background:
+      linear-gradient(
+        180deg,
+        #f8fafc 0%,
+        #f1f5f9 100%
+      );
+
+    color: #334155;
+
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+
+    white-space: nowrap;
+  }
+
+  #planificacion-mensual-table tbody td {
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: top;
+  }
+
+  #planificacion-mensual-table tbody tr {
+    transition:
+      background-color 0.18s ease;
+  }
+
+  #planificacion-mensual-table tbody tr:hover {
+    background: rgba(236, 254, 255, 0.55);
+  }
+
+  .texto-largo {
+    min-width: 280px;
+    max-width: 380px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+  }
+
+  /* ======================================================== */
+  /* CONTACTO / ACCESO                                        */
+  /* ======================================================== */
+
+  .contacto-acceso-cell {
+    min-width: 360px;
+    max-width: 440px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .contacto-detalle {
+    min-width: 330px;
+    max-width: 420px;
+  }
+
+  /* ======================================================== */
+  /* ACCESO DEL SITIO                                         */
+  /* ======================================================== */
+
+  .acceso-sitio-cell {
+    min-width: 180px;
+    max-width: 260px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* ======================================================== */
+  /* PERMISO INLINE                                           */
+  /* ======================================================== */
+
+  .permiso-inline-select {
+    min-width: 150px;
+
+    border-radius: 999px;
+
+    padding:
+      0.4rem
+      2rem
+      0.4rem
+      0.75rem;
+
+    font-size: 0.75rem;
+    font-weight: 800;
+
+    outline: none;
+
+    cursor: pointer;
+
+    transition:
+      border-color 0.18s ease,
+      background-color 0.18s ease,
+      color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  .permiso-inline-select:focus {
+    box-shadow:
+      0 0 0 3px
+      rgba(34, 211, 238, 0.14);
+  }
+
+  .permiso-inline-select:disabled {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  .permiso-saving {
+    opacity: 0.65;
+  }
+
+  /* ======================================================== */
+  /* SELECCIÓN MASIVA                                         */
+  /* ======================================================== */
+
+  .seleccion-sitio-checkbox {
+    width: 1rem;
+    height: 1rem;
+
+    border-radius: 0.3rem;
+    border: 1px solid #cbd5e1;
+
+    accent-color: #0891b2;
+
+    cursor: pointer;
+  }
+
+  .seleccion-sitio-checkbox:disabled {
+    cursor: wait;
+    opacity: 0.55;
+  }
+
+  #planificacion-mensual-table tbody tr.fila-seleccionada {
+    background: rgba(236, 254, 255, 0.82);
+  }
+
+  #planificacion-mensual-table tbody tr.fila-seleccionada:hover {
+    background: rgba(207, 250, 254, 0.82);
+  }
+
+  .bulk-permisos-select {
+    min-width: 180px;
+
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+
+    background: white;
+
+    padding:
+      0.6rem
+      2rem
+      0.6rem
+      0.85rem;
+
+    font-size: 0.8rem;
+    font-weight: 800;
+
+    color: #334155;
+
+    outline: none;
+  }
+
+  .bulk-permisos-select:focus {
+    border-color: #06b6d4;
+
+    box-shadow:
+      0 0 0 3px
+      rgba(34, 211, 238, 0.14);
+  }
+
+  .bulk-permisos-select:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+    /* ======================================================== */
+  /* FILTROS                                                  */
+  /* ======================================================== */
+
+  .filtros-planificacion {
+    width: 100%;
+  }
+
+  .filtro-planificacion-input,
+  .filtro-planificacion-select {
+    width: 100%;
+    min-height: 42px;
+
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+
+    background: #ffffff;
+
+    padding:
+      0.6rem
+      0.8rem;
+
+    color: #334155;
+
+    font-size: 0.8rem;
+    font-weight: 700;
+
+    outline: none;
+
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  .filtro-planificacion-input:focus,
+  .filtro-planificacion-select:focus {
+    border-color: #06b6d4;
+
+    box-shadow:
+      0 0 0 3px
+      rgba(34, 211, 238, 0.14);
+  }
+
+  .fila-filtrada-oculta {
+    display: none !important;
+  }
+</style>
+
+
+<!-- ====================================================== -->
+<!-- ZONA SUPERIOR                                         -->
+<!-- ====================================================== -->
+
+<div class="planificacion-mensual-top">
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <!-- ================================================== -->
+    <!-- CABECERA                                           -->
+    <!-- ================================================== -->
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/40
+        px-4 py-5
+        sm:px-6
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <div>
+
+          <p
+            class="
+              text-[11px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-cyan-700
+            "
+          >
+            Planificación
+          </p>
+
+          <h1
+            class="
+              mt-0.5
+              text-2xl
+              font-black
+              tracking-tight
+              text-slate-900
+              sm:text-3xl
+            "
+          >
+            Planificación mensual
+            {{ planificacion.mes|stringformat:"02d" }}/{{ planificacion.anio }}
+          </h1>
+
+          <p class="mt-1 text-sm text-slate-500">
+            Sitios incorporados al mes y datos necesarios
+            para preparar permisos, semanas y rutas.
+          </p>
+
+        </div>
+
+
+        <div class="flex flex-wrap gap-2">
+
+          <a
+            href="{% url 'planificacion:planificaciones_mensuales' %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4 py-2.5
+              text-sm
+              font-bold
+              text-slate-600
+              shadow-sm
+              transition
+              hover:bg-slate-100
+            "
+          >
+            Volver
+          </a>
+
+
+          <a
+            href="{% url 'planificacion:lista_planificacion_semanal' planificacion.pk %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-cyan-200
+              bg-gradient-to-r
+              from-cyan-600
+              to-blue-600
+              px-4 py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+            "
+          >
+            Planificación semanal
+          </a>
+
+
+          <a
+            href="{% url 'planificacion:importar_asignacion_mensual' planificacion.pk %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-emerald-200
+              bg-gradient-to-r
+              from-emerald-600
+              to-teal-600
+              px-4 py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+            "
+          >
+            Importar asignación
+          </a>
+
+        </div>
+
+      </div>
+
+
+      {% if planificacion.observaciones %}
+
+        <div
+          class="
+            mt-4
+            rounded-xl
+            border border-slate-200
+            bg-white/80
+            px-3 py-2
+            text-xs
+            text-slate-600
+          "
+        >
+          <strong class="text-slate-700">
+            Observaciones:
+          </strong>
+
+          {{ planificacion.observaciones }}
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <!-- ================================================== -->
+    <!-- RESUMEN                                            -->
+    <!-- ================================================== -->
+
+    <div
+      class="
+        grid
+        gap-3
+        bg-gradient-to-br
+        from-slate-50
+        via-white
+        to-slate-100
+        px-4 py-4
+        sm:grid-cols-2
+        lg:grid-cols-4
+        sm:px-6
+      "
+    >
+
+      <div
+        class="
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          p-4
+          shadow-sm
+        "
+      >
+        <p class="text-[11px] font-black uppercase text-slate-400">
+          Sitios del mes
+        </p>
+
+        <p
+          id="resumen-total-sitios"
+          class="mt-1 text-2xl font-black text-slate-900"
+        >
+          {{ sitios|length }}
+        </p>
+      </div>
+
+
+      <div
+        class="
+          rounded-2xl
+          border border-amber-200
+          bg-amber-50
+          p-4
+        "
+      >
+        <p class="text-[11px] font-black uppercase text-amber-700">
+          Pendientes permiso
+        </p>
+
+        <p
+          id="resumen-permisos-pendientes"
+          class="mt-1 text-2xl font-black text-amber-800"
+        >
+          0
+        </p>
+      </div>
+
+
+      <div
+        class="
+          rounded-2xl
+          border border-emerald-200
+          bg-emerald-50
+          p-4
+        "
+      >
+        <p class="text-[11px] font-black uppercase text-emerald-700">
+          Permisos aprobados
+        </p>
+
+        <p
+          id="resumen-permisos-aprobados"
+          class="mt-1 text-2xl font-black text-emerald-800"
+        >
+          0
+        </p>
+      </div>
+
+
+      <div
+        class="
+          rounded-2xl
+          border border-blue-200
+          bg-blue-50
+          p-4
+        "
+      >
+        <p class="text-[11px] font-black uppercase text-blue-700">
+          Planificados
+        </p>
+
+        <p
+          id="resumen-planificados"
+          class="mt-1 text-2xl font-black text-blue-800"
+        >
+          0
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- COMPLETAR SEMANA OPERACIONAL ANTERIOR                 -->
+<!-- ====================================================== -->
+
+{% if oportunidad_completar %}
+
+  {% with batch=oportunidad_completar.batch diagnostico=oportunidad_completar.diagnostico %}
+
+    <div
+      class="
+        mt-5
+        overflow-hidden
+        rounded-2xl
+        border border-amber-200
+        bg-gradient-to-r
+        from-amber-50
+        via-white
+        to-cyan-50/40
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          px-4
+          py-4
+          sm:px-5
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        "
+      >
+
+        <!-- ================================================ -->
+        <!-- INFORMACIÓN                                     -->
+        <!-- ================================================ -->
+
+        <div class="min-w-0">
+
+          <div
+            class="
+              flex
+              flex-wrap
+              items-center
+              gap-2
+            "
+          >
+
+            <span
+              class="
+                inline-flex
+                items-center
+                rounded-full
+                border border-amber-200
+                bg-amber-100
+                px-2.5
+                py-1
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-amber-800
+              "
+            >
+              Continuidad operacional
+            </span>
+
+
+            <span
+              class="
+                inline-flex
+                rounded-full
+                border border-slate-200
+                bg-white
+                px-2.5
+                py-1
+                text-xs
+                font-black
+                text-slate-700
+              "
+            >
+              {{ diagnostico.codigo_semana }}
+            </span>
+
+          </div>
+
+
+          <h2
+            class="
+              mt-2
+              text-lg
+              font-black
+              text-slate-900
+            "
+          >
+            La semana
+            {{ diagnostico.codigo_semana }}
+            todavía está incompleta
+          </h2>
+
+
+          <p
+            class="
+              mt-1
+              max-w-4xl
+              text-sm
+              leading-relaxed
+              text-slate-600
+            "
+          >
+            El objetivo operacional era de
+
+            <strong class="text-slate-900">
+              {{ diagnostico.objetivo_batch }}
+            </strong>
+
+            sitios y actualmente posee
+
+            <strong class="text-slate-900">
+              {{ diagnostico.cantidad_actual_batch }}
+            </strong>.
+
+            Faltan
+
+            <strong class="text-amber-700">
+              {{ diagnostico.faltantes_objetivo }}
+            </strong>
+
+            sitio(s) para alcanzar el objetivo.
+          </p>
+
+
+          <div
+            class="
+              mt-3
+              flex
+              flex-wrap
+              gap-2
+            "
+          >
+
+            <span
+              class="
+                inline-flex
+                rounded-lg
+                border border-slate-200
+                bg-white
+                px-2.5
+                py-1.5
+                text-xs
+                font-semibold
+                text-slate-600
+              "
+            >
+              {{ diagnostico.fecha_inicio|date:"d/m/Y" }}
+              al
+              {{ diagnostico.fecha_fin|date:"d/m/Y" }}
+            </span>
+
+
+            <span
+              class="
+                inline-flex
+                rounded-lg
+                border border-blue-200
+                bg-blue-50
+                px-2.5
+                py-1.5
+                text-xs
+                font-bold
+                text-blue-700
+              "
+            >
+              {{ diagnostico.cantidad_dias_restantes }}
+              día(s) operacionales disponibles
+            </span>
+
+
+            {% if diagnostico.sitios_a_incorporar > 0 %}
+
+              <span
+                class="
+                  inline-flex
+                  rounded-lg
+                  border border-emerald-200
+                  bg-emerald-50
+                  px-2.5
+                  py-1.5
+                  text-xs
+                  font-bold
+                  text-emerald-700
+                "
+              >
+                Recomendación inicial:
+                hasta
+                {{ diagnostico.sitios_a_incorporar }}
+                sitio(s)
+              </span>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+
+        <!-- ================================================ -->
+        <!-- ACCIÓN                                          -->
+        <!-- ================================================ -->
+
+        <div class="shrink-0">
+
+          <a
+            href="{% url 'planificacion:completar_semana_anterior' planificacion.pk %}"
+            class="
+              inline-flex
+              w-full
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border border-amber-300
+              bg-gradient-to-r
+              from-amber-500
+              to-orange-500
+              px-4
+              py-2.5
+              text-sm
+              font-black
+              text-white
+              shadow-md
+              transition
+              hover:-translate-y-0.5
+              hover:shadow-lg
+              lg:w-auto
+            "
+          >
+
+            Completar
+            {{ diagnostico.codigo_semana }}
+
+          </a>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  {% endwith %}
+
+{% endif %}
+
+<!-- ====================================================== -->
+<!-- FILTROS                                               -->
+<!-- ====================================================== -->
+
+<div
+  class="
+    filtros-planificacion
+    mt-5
+    rounded-2xl
+    border border-slate-200
+    bg-white
+    px-4
+    py-4
+    shadow-sm
+    sm:px-5
+  "
+>
+
+  <div
+    class="
+      flex
+      flex-col
+      gap-1
+    "
+  >
+
+    <p
+      class="
+        text-sm
+        font-black
+        text-slate-800
+      "
+    >
+      Filtrar sitios
+    </p>
+
+    <p
+      class="
+        text-xs
+        text-slate-500
+      "
+    >
+      Filtra únicamente por ID Claro, condición de acceso, permiso o estado.
+    </p>
+
+  </div>
+
+
+  <div
+    class="
+      mt-4
+      grid
+      gap-3
+      sm:grid-cols-2
+      xl:grid-cols-4
+    "
+  >
+
+    <!-- ==================================================== -->
+    <!-- ID CLARO                                             -->
+    <!-- ==================================================== -->
+
+    <div>
+
+      <label
+        for="filtro-id-claro"
+        class="
+          mb-1.5
+          block
+          text-[11px]
+          font-black
+          uppercase
+          tracking-wide
+          text-slate-500
+        "
+      >
+        ID Claro
+      </label>
+
+      <input
+        type="text"
+        id="filtro-id-claro"
+        placeholder="Ej.: 05_067"
+        autocomplete="off"
+        class="filtro-planificacion-input"
+      >
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- CONDICIÓN DE ACCESO                                  -->
+    <!-- ==================================================== -->
+
+    <div>
+
+      <label
+        for="filtro-condicion-acceso"
+        class="
+          mb-1.5
+          block
+          text-[11px]
+          font-black
+          uppercase
+          tracking-wide
+          text-slate-500
+        "
+      >
+        Condición de acceso
+      </label>
+
+      <select
+        id="filtro-condicion-acceso"
+        class="filtro-planificacion-select"
+      >
+
+        <option value="">
+          Todas
+        </option>
+
+        <option value="Libre Acceso">
+          Libre Acceso
+        </option>
+
+        <option value="Correos - Confirmación">
+          Correos - Confirmación
+        </option>
+
+        <option value="Correos-Sin Confirmación">
+          Correos-Sin Confirmación
+        </option>
+
+        <option value="Certificación">
+          Certificación
+        </option>
+
+        <option value="__sin_informacion__">
+          Sin información
+        </option>
+
+      </select>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- PERMISO                                               -->
+    <!-- ==================================================== -->
+
+    <div>
+
+      <label
+        for="filtro-permiso"
+        class="
+          mb-1.5
+          block
+          text-[11px]
+          font-black
+          uppercase
+          tracking-wide
+          text-slate-500
+        "
+      >
+        Permiso
+      </label>
+
+      <select
+        id="filtro-permiso"
+        class="filtro-planificacion-select"
+      >
+
+        <option value="">
+          Todos
+        </option>
+
+        <option value="sin_gestion">
+          Sin gestión
+        </option>
+
+        <option value="por_solicitar">
+          Por solicitar
+        </option>
+
+        <option value="solicitado">
+          Solicitado
+        </option>
+
+        <option value="en_espera">
+          En espera
+        </option>
+
+        <option value="aprobado">
+          Aprobado
+        </option>
+
+        <option value="rechazado">
+          Rechazado
+        </option>
+
+        <option value="no_requiere">
+          No requiere
+        </option>
+
+      </select>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- ESTADO                                                -->
+    <!-- ==================================================== -->
+
+    <div>
+
+      <label
+        for="filtro-estado"
+        class="
+          mb-1.5
+          block
+          text-[11px]
+          font-black
+          uppercase
+          tracking-wide
+          text-slate-500
+        "
+      >
+        Estado
+      </label>
+
+      <select
+        id="filtro-estado"
+        class="filtro-planificacion-select"
+      >
+
+        <option value="">
+          Todos
+        </option>
+
+        <option value="pendiente">
+          Pendiente
+        </option>
+
+        <option value="por_contactar">
+          Por contactar
+        </option>
+
+        <option value="gestionando_permiso">
+          Gestionando permiso
+        </option>
+
+        <option value="listo_planificar">
+          Listo para planificar
+        </option>
+
+        <option value="planificado">
+          Planificado
+        </option>
+
+        <option value="en_ruta">
+          En ruta
+        </option>
+
+        <option value="en_ejecucion">
+          En ejecución
+        </option>
+
+        <option value="completado">
+          Completado
+        </option>
+
+        <option value="reprogramado">
+          Reprogramado
+        </option>
+
+        <option value="bloqueado">
+          Bloqueado
+        </option>
+
+        <option value="cancelado">
+          Cancelado
+        </option>
+
+        <option value="no_ejecutado">
+          No ejecutado
+        </option>
+
+      </select>
+
+    </div>
+
+  </div>
+
+
+  <div
+    class="
+      mt-4
+      flex
+      flex-wrap
+      items-center
+      justify-between
+      gap-2
+      border-t
+      border-slate-100
+      pt-3
+    "
+  >
+
+    <p
+      class="
+        text-xs
+        text-slate-500
+      "
+    >
+      Mostrando
+      <strong
+        id="contador-sitios-filtrados"
+        class="text-slate-800"
+      >
+        {{ sitios|length }}
+      </strong>
+      sitio(s).
+    </p>
+
+
+    <button
+      type="button"
+      id="limpiar-filtros-planificacion"
+      class="
+        inline-flex
+        items-center
+        justify-center
+        rounded-lg
+        border
+        border-slate-300
+        bg-white
+        px-3
+        py-1.5
+        text-xs
+        font-black
+        text-slate-600
+        transition
+        hover:bg-slate-50
+      "
+    >
+      Limpiar filtros
+    </button>
+
+  </div>
+
+</div>
+<!-- ====================================================== -->
+<!-- ACCIONES MASIVAS DE PERMISOS                          -->
+<!-- ====================================================== -->
+
+<div
+  id="barra-permisos-masivos"
+  class="
+    mt-5
+    rounded-2xl
+    border border-slate-200
+    bg-white
+    px-4 py-3
+    shadow-sm
+    sm:px-5
+  "
+>
+
+  <div
+    class="
+      flex
+      flex-col
+      gap-3
+      lg:flex-row
+      lg:items-center
+      lg:justify-between
+    "
+  >
+
+    <div>
+
+      <div class="flex flex-wrap items-center gap-2">
+
+        <span
+          id="cantidad-sitios-seleccionados"
+          class="
+            inline-flex
+            h-8
+            min-w-8
+            items-center
+            justify-center
+            rounded-full
+            bg-cyan-50
+            px-2
+            text-xs
+            font-black
+            text-cyan-700
+          "
+        >
+          0
+        </span>
+
+        <p class="text-sm font-black text-slate-800">
+          Sitios seleccionados
+        </p>
+
+      </div>
+
+      <p class="mt-1 text-xs text-slate-500">
+        Selecciona uno o varios sitios para cambiar su permiso al mismo tiempo.
+      </p>
+
+    </div>
+
+
+    <div
+      class="
+        flex
+        flex-col
+        gap-2
+        sm:flex-row
+        sm:items-center
+      "
+    >
+
+      <select
+        id="permiso-masivo-select"
+        class="bulk-permisos-select"
+      >
+
+        <option value="">
+          Seleccionar permiso
+        </option>
+
+        <option value="sin_gestion">
+          Sin gestión
+        </option>
+
+        <option value="por_solicitar">
+          Por solicitar
+        </option>
+
+        <option value="solicitado">
+          Solicitado
+        </option>
+
+        <option value="en_espera">
+          En espera
+        </option>
+
+        <option value="aprobado">
+          Aprobado
+        </option>
+
+        <option value="rechazado">
+          Rechazado
+        </option>
+
+        <option value="no_requiere">
+          No requiere
+        </option>
+
+      </select>
+
+
+      <button
+        type="button"
+        id="aplicar-permiso-masivo"
+        disabled
+        class="
+          inline-flex
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          border border-cyan-200
+          bg-gradient-to-r
+          from-cyan-600
+          to-blue-600
+          px-4
+          py-2.5
+          text-sm
+          font-black
+          text-white
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+          disabled:cursor-not-allowed
+          disabled:opacity-40
+          disabled:hover:translate-y-0
+          disabled:hover:shadow-sm
+        "
+      >
+
+        <span data-bulk-button-text>
+          Aplicar a seleccionados
+        </span>
+
+        <span
+          data-bulk-spinner
+          class="hidden"
+        >
+          ...
+        </span>
+
+      </button>
+
+
+      <button
+        type="button"
+        id="limpiar-seleccion-sitios"
+        disabled
+        class="
+          inline-flex
+          items-center
+          justify-center
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4
+          py-2.5
+          text-sm
+          font-bold
+          text-slate-600
+          transition
+          hover:bg-slate-50
+          disabled:cursor-not-allowed
+          disabled:opacity-40
+        "
+      >
+        Limpiar selección
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- TABLA                                                 -->
+<!-- ====================================================== -->
+
+<div
+  class="
+    mt-5
+    overflow-hidden
+    rounded-2xl
+    border border-slate-200
+    bg-white
+    shadow-sm
+    sm:rounded-3xl
+  "
+>
+
+  <div class="planificacion-table-wrap">
+
+    <table
+      id="planificacion-mensual-table"
+      class="w-full text-sm"
+    >
+
+      <thead>
+
+        <tr>
+
+          <th
+            class="
+              w-[54px]
+              px-4 py-3
+              text-center
+            "
+          >
+
+            <input
+              type="checkbox"
+              id="seleccionar-todos-sitios"
+              class="seleccion-sitio-checkbox"
+              aria-label="Seleccionar todos los sitios"
+            >
+
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            ID CLARO
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            NOMBRE
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            REGIÓN
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            COMUNA
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            TIPO DE ZONA
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            DIRECCIÓN
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            CONTACTO / ACCESO
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            CONDICIÓN DE ACCESO
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            PERMISO
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            ESTADO
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            FECHA PLANIFICADA
+          </th>
+
+          <th class="px-4 py-3 text-left">
+            ALERTA
+          </th>
+
+        </tr>
+
+      </thead>
+
+
+      <tbody>
+
+        {% for item in sitios %}
+
+          <tr
+            id="sitio-planificado-row-{{ item.pk }}"
+            data-sitio-planificado-row
+            data-sitio-planificado-id="{{ item.pk }}"
+            data-permiso-url="{% url 'planificacion:actualizar_permiso_inline' item.pk %}"
+
+            data-id-claro="{{ item.sitio.id_claro|default:'' }}"
+            data-condicion-acceso="{{ item.sitio.condiciones_acceso|default:'' }}"
+            data-permiso="{{ item.estado_permiso }}"
+            data-estado-filtro="{{ item.estado }}"
+          >
+
+            <!-- ================================================= -->
+            <!-- SELECCIONAR                                       -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                w-[54px]
+                px-4 py-3
+                text-center
+              "
+            >
+
+              <input
+                type="checkbox"
+                class="seleccion-sitio-checkbox"
+                data-sitio-checkbox
+                value="{{ item.pk }}"
+                aria-label="Seleccionar {{ item.sitio.id_claro|default:'sitio' }}"
+              >
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- ID CLARO                                         -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                whitespace-nowrap
+                px-4 py-3
+                font-black
+                text-slate-900
+              "
+            >
+              {{ item.sitio.id_claro|default:"—" }}
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- NOMBRE                                           -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                min-w-[220px]
+                px-4 py-3
+                font-semibold
+                text-slate-800
+              "
+            >
+              {{ item.sitio.nombre|default:"—" }}
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- REGIÓN                                           -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                whitespace-nowrap
+                px-4 py-3
+                text-slate-600
+              "
+            >
+              {{ item.sitio.region|default:"—" }}
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- COMUNA                                           -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                whitespace-nowrap
+                px-4 py-3
+                text-slate-700
+              "
+            >
+              {{ item.sitio.comuna|default:"—" }}
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- TIPO ZONA                                        -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                whitespace-nowrap
+                px-4 py-3
+              "
+            >
+
+              {% if item.sitio.tipo_zona %}
+
+                <span
+                  class="
+                    inline-flex
+                    rounded-full
+                    border border-slate-200
+                    bg-slate-50
+                    px-2.5 py-1
+                    text-xs
+                    font-bold
+                    text-slate-700
+                  "
+                >
+                  {{ item.sitio.tipo_zona }}
+                </span>
+
+              {% else %}
+
+                <span class="text-slate-400">
+                  —
+                </span>
+
+              {% endif %}
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- DIRECCIÓN                                        -->
+            <!-- ================================================= -->
+
+            <td class="texto-largo px-4 py-3 text-slate-700">
+              {{ item.sitio.direccion_proyecto|default:item.sitio.direccion|default:"—" }}
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- CONTACTO / ACCESO                                 -->
+            <!-- ================================================= -->
+
+            <td class="contacto-acceso-cell px-4 py-3">
+
+              {% with contactos=item.sitio.contactos_planificacion_cargados %}
+
+                {% if contactos %}
+
+                  {% with principal=contactos.0 %}
+
+                    <div>
+
+                      {% if principal.propietario %}
+
+                        <div class="font-bold text-slate-800">
+                          {{ principal.propietario }}
+                        </div>
+
+                      {% endif %}
+
+
+                      {% if principal.telefono %}
+
+                        <div
+                          class="
+                            mt-1
+                            whitespace-pre-line
+                            text-xs
+                            font-semibold
+                            text-slate-700
+                          "
+                        >
+                          {{ principal.telefono }}
+                        </div>
+
+                      {% endif %}
+
+
+                      {% if principal.correo %}
+
+                        <div
+                          class="
+                            mt-1
+                            whitespace-pre-line
+                            break-words
+                            text-xs
+                            font-medium
+                            text-cyan-700
+                          "
+                        >
+                          {{ principal.correo }}
+                        </div>
+
+                      {% endif %}
+
+
+                      {% if not principal.propietario and not principal.telefono and not principal.correo %}
+
+                        <span class="text-xs text-slate-400">
+                          Información disponible
+                        </span>
+
+                      {% endif %}
+
+
+                      <details class="mt-2">
+
+                        <summary
+                          class="
+                            inline-flex
+                            cursor-pointer
+                            list-none
+                            items-center
+                            gap-2
+                            rounded-lg
+                            border border-slate-200
+                            bg-slate-50
+                            px-2.5 py-1.5
+                            text-[11px]
+                            font-black
+                            text-slate-600
+                            transition
+                            hover:border-cyan-200
+                            hover:bg-cyan-50
+                            hover:text-cyan-700
+                          "
+                        >
+
+                          Ver detalles
+
+                          {% if contactos|length > 1 %}
+
+                            <span
+                              class="
+                                rounded-full
+                                bg-slate-200
+                                px-1.5
+                                py-0.5
+                                text-[9px]
+                                font-black
+                                text-slate-600
+                              "
+                            >
+                              {{ contactos|length }}
+                            </span>
+
+                          {% endif %}
+
+                        </summary>
+
+
+                        <div
+                          class="
+                            contacto-detalle
+                            mt-2
+                            space-y-3
+                            rounded-2xl
+                            border border-slate-200
+                            bg-slate-50/70
+                            p-3
+                          "
+                        >
+
+                          {% for contacto in contactos %}
+
+                            <div
+                              class="
+                                rounded-xl
+                                border border-slate-200
+                                bg-white
+                                p-3
+                                shadow-sm
+                              "
+                            >
+
+                              <div
+                                class="
+                                  flex
+                                  flex-wrap
+                                  items-start
+                                  justify-between
+                                  gap-2
+                                "
+                              >
+
+                                <div>
+
+                                  <p
+                                    class="
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      tracking-wide
+                                      text-slate-400
+                                    "
+                                  >
+                                    Contacto {{ forloop.counter }}
+                                  </p>
+
+
+                                  {% if contacto.propietario %}
+
+                                    <p
+                                      class="
+                                        mt-0.5
+                                        font-bold
+                                        text-slate-800
+                                      "
+                                    >
+                                      {{ contacto.propietario }}
+                                    </p>
+
+                                  {% endif %}
+
+
+                                  {% if contacto.tipo_contacto %}
+
+                                    <p
+                                      class="
+                                        mt-0.5
+                                        text-[11px]
+                                        text-slate-500
+                                      "
+                                    >
+                                      {{ contacto.tipo_contacto }}
+                                    </p>
+
+                                  {% endif %}
+
+                                </div>
+
+
+                                {% if contacto.prioridad_contacto == 1 %}
+
+                                  <span
+                                    class="
+                                      rounded-full
+                                      border border-cyan-200
+                                      bg-cyan-50
+                                      px-2
+                                      py-0.5
+                                      text-[9px]
+                                      font-black
+                                      uppercase
+                                      text-cyan-700
+                                    "
+                                  >
+                                    Principal
+                                  </span>
+
+                                {% endif %}
+
+                              </div>
+
+
+                              {% if contacto.telefono or contacto.correo %}
+
+                                <div
+                                  class="
+                                    mt-3
+                                    grid
+                                    gap-3
+                                    sm:grid-cols-2
+                                  "
+                                >
+
+                                  {% if contacto.telefono %}
+
+                                    <div>
+
+                                      <p
+                                        class="
+                                          text-[10px]
+                                          font-black
+                                          uppercase
+                                          text-slate-400
+                                        "
+                                      >
+                                        Teléfono
+                                      </p>
+
+                                      <div
+                                        class="
+                                          mt-1
+                                          whitespace-pre-line
+                                          break-words
+                                          text-xs
+                                          font-semibold
+                                          text-slate-700
+                                        "
+                                      >
+                                        {{ contacto.telefono }}
+                                      </div>
+
+                                    </div>
+
+                                  {% endif %}
+
+
+                                  {% if contacto.correo %}
+
+                                    <div>
+
+                                      <p
+                                        class="
+                                          text-[10px]
+                                          font-black
+                                          uppercase
+                                          text-slate-400
+                                        "
+                                      >
+                                        Correo
+                                      </p>
+
+                                      <div
+                                        class="
+                                          mt-1
+                                          whitespace-pre-line
+                                          break-words
+                                          text-xs
+                                          font-medium
+                                          text-cyan-700
+                                        "
+                                      >
+                                        {{ contacto.correo }}
+                                      </div>
+
+                                    </div>
+
+                                  {% endif %}
+
+                                </div>
+
+                              {% endif %}
+
+
+                              {% if contacto.responsable %}
+
+                                <div class="mt-3">
+
+                                  <p
+                                    class="
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      text-slate-400
+                                    "
+                                  >
+                                    Responsable
+                                  </p>
+
+                                  <p
+                                    class="
+                                      mt-1
+                                      text-xs
+                                      text-slate-700
+                                    "
+                                  >
+                                    {{ contacto.responsable }}
+                                  </p>
+
+                                </div>
+
+                              {% endif %}
+
+
+                              {% if contacto.observaciones %}
+
+                                <div class="mt-3">
+
+                                  <p
+                                    class="
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      text-slate-400
+                                    "
+                                  >
+                                    Observaciones
+                                  </p>
+
+                                  <div
+                                    class="
+                                      mt-1
+                                      whitespace-pre-line
+                                      break-words
+                                      text-xs
+                                      leading-relaxed
+                                      text-slate-700
+                                    "
+                                  >
+                                    {{ contacto.observaciones }}
+                                  </div>
+
+                                </div>
+
+                              {% endif %}
+
+
+                              {% if contacto.accion %}
+
+                                <div class="mt-3">
+
+                                  <p
+                                    class="
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      text-slate-400
+                                    "
+                                  >
+                                    Acción
+                                  </p>
+
+                                  <div
+                                    class="
+                                      mt-1
+                                      whitespace-pre-line
+                                      break-words
+                                      rounded-xl
+                                      border border-cyan-100
+                                      bg-cyan-50/60
+                                      px-3
+                                      py-2
+                                      text-xs
+                                      font-medium
+                                      leading-relaxed
+                                      text-slate-700
+                                    "
+                                  >
+                                    {{ contacto.accion }}
+                                  </div>
+
+                                </div>
+
+                              {% endif %}
+
+
+                              {% if contacto.fecha_informacion or contacto.actualizado_por %}
+
+                                <div
+                                  class="
+                                    mt-3
+                                    border-t border-slate-100
+                                    pt-2
+                                    text-[10px]
+                                    text-slate-400
+                                  "
+                                >
+
+                                  {% if contacto.fecha_informacion %}
+
+                                    <span>
+                                      Información:
+                                      {{ contacto.fecha_informacion|date:"d/m/Y" }}
+                                    </span>
+
+                                  {% endif %}
+
+
+                                  {% if contacto.actualizado_por %}
+
+                                    {% if contacto.fecha_informacion %}
+                                      <span class="mx-1">
+                                        ·
+                                      </span>
+                                    {% endif %}
+
+                                    <span>
+                                      Actualizado por
+                                      {{ contacto.actualizado_por.get_full_name|default:contacto.actualizado_por.username }}
+                                    </span>
+
+                                  {% endif %}
+
+                                </div>
+
+                              {% endif %}
+
+                            </div>
+
+                          {% endfor %}
+
+                        </div>
+
+                      </details>
+
+                    </div>
+
+                  {% endwith %}
+
+
+                {% else %}
+
+                  <div
+                    class="
+                      rounded-xl
+                      border border-amber-100
+                      bg-amber-50
+                      px-3
+                      py-2
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-xs
+                        font-bold
+                        text-amber-700
+                      "
+                    >
+                      Sin información de contacto
+                    </p>
+
+                  </div>
+
+                {% endif %}
+
+              {% endwith %}
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- CONDICIÓN DE ACCESO                               -->
+            <!-- ================================================= -->
+
+            <td class="condicion-acceso-sitio-cell px-4 py-3">
+
+              {% if item.sitio.condiciones_acceso %}
+
+                {% if item.sitio.condiciones_acceso == "Libre Acceso" %}
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      border border-emerald-200
+                      bg-emerald-50
+                      px-3
+                      py-1
+                      text-xs
+                      font-bold
+                      text-emerald-700
+                    "
+                  >
+                    {{ item.sitio.condiciones_acceso }}
+                  </span>
+
+                {% elif item.sitio.condiciones_acceso == "Correos - Confirmación" %}
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      border border-cyan-200
+                      bg-cyan-50
+                      px-3
+                      py-1
+                      text-xs
+                      font-bold
+                      text-cyan-700
+                    "
+                  >
+                    {{ item.sitio.condiciones_acceso }}
+                  </span>
+
+                {% elif item.sitio.condiciones_acceso == "Certificación" %}
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      border border-red-200
+                      bg-red-50
+                      px-3
+                      py-1
+                      text-xs
+                      font-bold
+                      text-red-700
+                    "
+                  >
+                    {{ item.sitio.condiciones_acceso }}
+                  </span>
+
+                {% else %}
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      border border-slate-200
+                      bg-slate-50
+                      px-3
+                      py-1
+                      text-xs
+                      font-bold
+                      text-slate-700
+                    "
+                  >
+                    {{ item.sitio.condiciones_acceso }}
+                  </span>
+
+                {% endif %}
+
+              {% else %}
+
+                <span class="text-xs text-slate-500">
+                  Sin Información
+                </span>
+
+              {% endif %}
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- PERMISO INLINE                                    -->
+            <!-- ================================================= -->
+
+            <td class="min-w-[175px] px-4 py-3">
+
+              <div class="relative inline-flex">
+
+                <select
+                  data-permiso-select
+                  data-valor-anterior="{{ item.estado_permiso }}"
+                  onchange="actualizarPermisoInline(this)"
+                  class="permiso-inline-select"
+                >
+
+                  <option
+                    value="sin_gestion"
+                    {% if item.estado_permiso == "sin_gestion" %}selected{% endif %}
+                  >
+                    Sin gestión
+                  </option>
+
+                  <option
+                    value="por_solicitar"
+                    {% if item.estado_permiso == "por_solicitar" %}selected{% endif %}
+                  >
+                    Por solicitar
+                  </option>
+
+                  <option
+                    value="solicitado"
+                    {% if item.estado_permiso == "solicitado" %}selected{% endif %}
+                  >
+                    Solicitado
+                  </option>
+
+                  <option
+                    value="en_espera"
+                    {% if item.estado_permiso == "en_espera" %}selected{% endif %}
+                  >
+                    En espera
+                  </option>
+
+                  <option
+                    value="aprobado"
+                    {% if item.estado_permiso == "aprobado" %}selected{% endif %}
+                  >
+                    Aprobado
+                  </option>
+
+                  <option
+                    value="rechazado"
+                    {% if item.estado_permiso == "rechazado" %}selected{% endif %}
+                  >
+                    Rechazado
+                  </option>
+
+                  <option
+                    value="no_requiere"
+                    {% if item.estado_permiso == "no_requiere" %}selected{% endif %}
+                  >
+                    No requiere
+                  </option>
+
+                </select>
+
+
+                <span
+                  data-permiso-saving
+                  class="
+                    pointer-events-none
+                    absolute
+                    right-7
+                    top-1/2
+                    hidden
+                    -translate-y-1/2
+                    text-[10px]
+                    font-black
+                    text-cyan-700
+                  "
+                >
+                  ...
+                </span>
+
+              </div>
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- ESTADO                                           -->
+            <!-- ================================================= -->
+
+            <td class="min-w-[150px] whitespace-nowrap px-4 py-3">
+
+              <span
+                data-estado-badge
+                data-estado="{{ item.estado }}"
+                class="
+                  inline-flex
+                  rounded-full
+                  px-2.5
+                  py-1
+                  text-xs
+                  font-bold
+                "
+              >
+                {{ item.get_estado_display }}
+              </span>
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- FECHA                                            -->
+            <!-- ================================================= -->
+
+            <td
+              class="
+                whitespace-nowrap
+                px-4 py-3
+                text-slate-600
+              "
+            >
+
+              {% if item.fecha_planificada %}
+
+                {{ item.fecha_planificada|date:"d/m/Y" }}
+
+              {% else %}
+
+                —
+
+              {% endif %}
+
+            </td>
+
+
+            <!-- ================================================= -->
+            <!-- ALERTA                                           -->
+            <!-- ================================================= -->
+
+            <td class="texto-largo px-4 py-3">
+
+              {% if item.alerta_motor %}
+
+                <span
+                  class="
+                    text-xs
+                    font-semibold
+                    text-amber-700
+                  "
+                >
+                  {{ item.alerta_motor }}
+                </span>
+
+              {% else %}
+
+                <span class="text-slate-400">
+                  —
+                </span>
+
+              {% endif %}
+
+            </td>
+
+          </tr>
+
+        {% empty %}
+
+          <tr>
+
+            <td
+              colspan="13"
+              class="px-4 py-14 text-center"
+            >
+
+              <div
+                class="
+                  mx-auto
+                  flex
+                  h-12 w-12
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-slate-100
+                  text-xl
+                  font-black
+                  text-slate-500
+                "
+              >
+                0
+              </div>
+
+              <p class="mt-3 font-bold text-slate-700">
+                Aún no hay sitios incorporados
+              </p>
+
+              <p class="mt-1 text-xs text-slate-500">
+                Importa la planilla de asignación del cliente
+                para comenzar a trabajar este mes.
+              </p>
+
+
+              <a
+                href="{% url 'planificacion:importar_asignacion_mensual' planificacion.pk %}"
+                class="
+                  mt-4
+                  inline-flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border border-emerald-200
+                  bg-emerald-600
+                  px-4 py-2.5
+                  text-sm
+                  font-black
+                  text-white
+                  transition
+                  hover:bg-emerald-700
+                "
+              >
+                Importar asignación
+              </a>
+
+            </td>
+
+          </tr>
+
+        {% endfor %}
+
+      </tbody>
+
+    </table>
+
+  </div>
+
+</div>
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- JAVASCRIPT PERMISOS                                   -->
+<!-- ====================================================== -->
+
+<script>
+(function () {
+
+  /* ======================================================== */
+  /* CSRF                                                     */
+  /* ======================================================== */
+
+  function obtenerCsrfToken() {
+    return (
+      document
+        .querySelector(
+          'meta[name="csrf-token"]'
+        )
+        ?.getAttribute('content')
+      || ''
+    );
+  }
+
+
+  /* ======================================================== */
+  /* COLOR DEL PERMISO                                        */
+  /* ======================================================== */
+
+  function aplicarColorPermiso(select) {
+    if (!select) {
+      return;
+    }
+
+    select.classList.remove(
+      'border-slate-200',
+      'border-amber-200',
+      'border-blue-200',
+      'border-emerald-200',
+      'border-red-200',
+
+      'bg-white',
+      'bg-slate-50',
+      'bg-amber-50',
+      'bg-blue-50',
+      'bg-emerald-50',
+      'bg-red-50',
+
+      'text-slate-700',
+      'text-amber-800',
+      'text-blue-800',
+      'text-emerald-800',
+      'text-red-800'
+    );
+
+    const estado =
+      select.value || '';
+
+    if (
+      estado === 'aprobado'
+      ||
+      estado === 'no_requiere'
+    ) {
+      select.classList.add(
+        'border-emerald-200',
+        'bg-emerald-50',
+        'text-emerald-800'
+      );
+
+      return;
+    }
+
+    if (
+      estado === 'rechazado'
+    ) {
+      select.classList.add(
+        'border-red-200',
+        'bg-red-50',
+        'text-red-800'
+      );
+
+      return;
+    }
+
+    if (
+      estado === 'por_solicitar'
+      ||
+      estado === 'solicitado'
+      ||
+      estado === 'en_espera'
+    ) {
+      select.classList.add(
+        'border-amber-200',
+        'bg-amber-50',
+        'text-amber-800'
+      );
+
+      return;
+    }
+
+    select.classList.add(
+      'border-slate-200',
+      'bg-slate-50',
+      'text-slate-700'
+    );
+  }
+
+
+  /* ======================================================== */
+  /* COLOR DEL ESTADO                                         */
+  /* ======================================================== */
+
+  function aplicarColorEstado(
+    badge,
+    estado
+  ) {
+    if (!badge) {
+      return;
+    }
+
+    badge.classList.remove(
+      'bg-slate-100',
+      'bg-amber-50',
+      'bg-blue-50',
+      'bg-emerald-50',
+      'bg-red-50',
+
+      'text-slate-700',
+      'text-amber-700',
+      'text-blue-700',
+      'text-emerald-700',
+      'text-red-700'
+    );
+
+    if (
+      estado === 'listo_planificar'
+      ||
+      estado === 'planificado'
+      ||
+      estado === 'completado'
+    ) {
+      badge.classList.add(
+        'bg-emerald-50',
+        'text-emerald-700'
+      );
+
+      return;
+    }
+
+    if (
+      estado === 'por_contactar'
+      ||
+      estado === 'gestionando_permiso'
+    ) {
+      badge.classList.add(
+        'bg-amber-50',
+        'text-amber-700'
+      );
+
+      return;
+    }
+
+    if (
+      estado === 'en_ruta'
+      ||
+      estado === 'en_ejecucion'
+      ||
+      estado === 'reprogramado'
+    ) {
+      badge.classList.add(
+        'bg-blue-50',
+        'text-blue-700'
+      );
+
+      return;
+    }
+
+    if (
+      estado === 'bloqueado'
+      ||
+      estado === 'cancelado'
+      ||
+      estado === 'no_ejecutado'
+    ) {
+      badge.classList.add(
+        'bg-red-50',
+        'text-red-700'
+      );
+
+      return;
+    }
+
+    badge.classList.add(
+      'bg-slate-100',
+      'text-slate-700'
+    );
+  }
+
+
+  /* ======================================================== */
+  /* ACTUALIZAR RESUMEN                                       */
+  /* ======================================================== */
+
+  function actualizarResumen() {
+    const filas =
+      document.querySelectorAll(
+        '[data-sitio-planificado-row]'
+      );
+
+    let pendientesPermiso = 0;
+
+    let permisosAprobados = 0;
+
+    let planificados = 0;
+
+
+    filas.forEach(
+      function (row) {
+
+        const permiso =
+          row.querySelector(
+            '[data-permiso-select]'
+          )?.value || '';
+
+        const estado =
+          row.querySelector(
+            '[data-estado-badge]'
+          )?.dataset.estado || '';
+
+
+        if (
+          permiso === 'por_solicitar'
+          ||
+          permiso === 'solicitado'
+          ||
+          permiso === 'en_espera'
+        ) {
+          pendientesPermiso += 1;
+        }
+
+
+        if (
+          permiso === 'aprobado'
+        ) {
+          permisosAprobados += 1;
+        }
+
+
+        if (
+          estado === 'planificado'
+          ||
+          estado === 'en_ruta'
+          ||
+          estado === 'en_ejecucion'
+          ||
+          estado === 'completado'
+        ) {
+          planificados += 1;
+        }
+
+      }
+    );
+
+
+    const pendientesNode =
+      document.getElementById(
+        'resumen-permisos-pendientes'
+      );
+
+    const aprobadosNode =
+      document.getElementById(
+        'resumen-permisos-aprobados'
+      );
+
+    const planificadosNode =
+      document.getElementById(
+        'resumen-planificados'
+      );
+
+
+    if (pendientesNode) {
+      pendientesNode.textContent =
+        String(pendientesPermiso);
+    }
+
+    if (aprobadosNode) {
+      aprobadosNode.textContent =
+        String(permisosAprobados);
+    }
+
+    if (planificadosNode) {
+      planificadosNode.textContent =
+        String(planificados);
+    }
+  }
+
+
+    /* ======================================================== */
+  /* APLICAR RESPUESTA DEL BACKEND A UNA FILA                 */
+  /* ======================================================== */
+
+  function aplicarRespuestaPermiso(
+    row,
+    select,
+    data,
+    nuevoEstado
+  ) {
+    const sitio =
+      data.sitio_planificado
+      ||
+      data.sitio
+      ||
+      {};
+
+    select.value =
+      sitio.estado_permiso
+      ||
+      nuevoEstado;
+
+    select.dataset.valorAnterior =
+      select.value;
+
+    /*
+     * Mantener sincronizado el valor usado
+     * por el filtro de permiso.
+     */
+    row.dataset.permiso =
+      select.value;
+
+    aplicarColorPermiso(
+      select
+    );
+
+    const badge =
+      row.querySelector(
+        '[data-estado-badge]'
+      );
+
+    if (badge) {
+
+      const estado =
+        sitio.estado || '';
+
+      const estadoDisplay =
+        sitio.estado_display
+        ||
+        sitio.estado_label
+        ||
+        sitio.estado
+        ||
+        '—';
+
+      badge.textContent =
+        estadoDisplay;
+
+      badge.dataset.estado =
+        estado;
+
+      /*
+       * Mantener sincronizado el valor usado
+       * por el filtro de estado.
+       */
+      row.dataset.estadoFiltro =
+        estado;
+
+      aplicarColorEstado(
+        badge,
+        estado
+      );
+    }
+
+    /*
+     * Si hay filtros activos, reevaluamos la tabla.
+     *
+     * Ejemplo:
+     * estamos viendo solamente "Por solicitar"
+     * y cambiamos un sitio a "Aprobado".
+     * Ese sitio debe desaparecer inmediatamente.
+     */
+    aplicarFiltrosPlanificacion();
+  }
+
+
+  /* ======================================================== */
+  /* ENVIAR CAMBIO DE PERMISO                                 */
+  /* ======================================================== */
+
+  async function guardarPermisoFila(
+    row,
+    select,
+    nuevoEstado
+  ) {
+    const url =
+      row.dataset.permisoUrl;
+
+    if (!url) {
+      throw new Error(
+        'No existe data-permiso-url en la fila.'
+      );
+    }
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'estado_permiso',
+      nuevoEstado
+    );
+
+    const response =
+      await fetch(
+        url,
+        {
+          method: 'POST',
+
+          headers: {
+            'X-CSRFToken':
+              obtenerCsrfToken(),
+
+            'X-Requested-With':
+              'XMLHttpRequest'
+          },
+
+          body: formData
+        }
+      );
+
+    let data = null;
+
+    try {
+      data =
+        await response.json();
+
+    } catch (_) {
+      data = null;
+    }
+
+    if (
+      !response.ok
+      ||
+      !data
+      ||
+      !data.ok
+    ) {
+      throw new Error(
+        data?.mensaje
+        ||
+        'No fue posible actualizar el permiso.'
+      );
+    }
+
+    aplicarRespuestaPermiso(
+      row,
+      select,
+      data,
+      nuevoEstado
+    );
+
+    return data;
+  }
+
+
+  /* ======================================================== */
+  /* ACTUALIZAR PERMISO INDIVIDUAL                            */
+  /* ======================================================== */
+
+  window.actualizarPermisoInline =
+    async function (select) {
+
+      const row =
+        select.closest(
+          '[data-sitio-planificado-row]'
+        );
+
+      if (!row) {
+        return;
+      }
+
+      const valorAnterior =
+        select.dataset.valorAnterior || '';
+
+      const nuevoEstado =
+        select.value || '';
+
+      if (
+        valorAnterior === nuevoEstado
+      ) {
+        return;
+      }
+
+      const saving =
+        row.querySelector(
+          '[data-permiso-saving]'
+        );
+
+      select.disabled = true;
+
+      row.classList.add(
+        'permiso-saving'
+      );
+
+      if (saving) {
+        saving.classList.remove(
+          'hidden'
+        );
+      }
+
+      try {
+
+        await guardarPermisoFila(
+          row,
+          select,
+          nuevoEstado
+        );
+
+        actualizarResumen();
+
+      } catch (error) {
+
+        console.error(
+          'Error actualizando permiso:',
+          error
+        );
+
+        select.value =
+          valorAnterior;
+
+        aplicarColorPermiso(
+          select
+        );
+
+        alert(
+          error.message
+          ||
+          'Ocurrió un error al actualizar el permiso.'
+        );
+
+      } finally {
+
+        select.disabled =
+          false;
+
+        row.classList.remove(
+          'permiso-saving'
+        );
+
+        if (saving) {
+          saving.classList.add(
+            'hidden'
+          );
+        }
+
+      }
+
+    };
+
+
+  /* ======================================================== */
+  /* ELEMENTOS DE SELECCIÓN MASIVA                            */
+  /* ======================================================== */
+
+  const selectorTodos =
+    document.getElementById(
+      'seleccionar-todos-sitios'
+    );
+
+  const selectorPermisoMasivo =
+    document.getElementById(
+      'permiso-masivo-select'
+    );
+
+  const botonAplicarMasivo =
+    document.getElementById(
+      'aplicar-permiso-masivo'
+    );
+
+  const botonLimpiarSeleccion =
+    document.getElementById(
+      'limpiar-seleccion-sitios'
+    );
+
+  const contadorSeleccionados =
+    document.getElementById(
+      'cantidad-sitios-seleccionados'
+    );
+    /* ======================================================== */
+    /* ELEMENTOS DE FILTRO                                      */
+    /* ======================================================== */
+
+    const filtroIdClaro =
+      document.getElementById(
+        'filtro-id-claro'
+      );
+
+    const filtroCondicionAcceso =
+      document.getElementById(
+        'filtro-condicion-acceso'
+      );
+
+    const filtroPermiso =
+      document.getElementById(
+        'filtro-permiso'
+      );
+
+    const filtroEstado =
+      document.getElementById(
+        'filtro-estado'
+      );
+
+    const botonLimpiarFiltros =
+      document.getElementById(
+        'limpiar-filtros-planificacion'
+      );
+
+    const contadorSitiosFiltrados =
+      document.getElementById(
+        'contador-sitios-filtrados'
+      );
+    /* ======================================================== */
+  /* NORMALIZACIÓN DE TEXTO                                   */
+  /* ======================================================== */
+
+  function normalizarTextoFiltro(valor) {
+    return String(
+      valor || ''
+    )
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(
+        /[\u0300-\u036f]/g,
+        ''
+      );
+  }
+
+
+  /* ======================================================== */
+  /* FILAS VISIBLES                                           */
+  /* ======================================================== */
+
+  function obtenerFilasVisibles() {
+    return Array.from(
+      document.querySelectorAll(
+        '[data-sitio-planificado-row]'
+      )
+    )
+      .filter(
+        function (row) {
+          return !row.classList.contains(
+            'fila-filtrada-oculta'
+          );
+        }
+      );
+  }
+
+
+  /* ======================================================== */
+  /* APLICAR FILTROS                                          */
+  /* ======================================================== */
+
+  function aplicarFiltrosPlanificacion() {
+
+    const valorId =
+      normalizarTextoFiltro(
+        filtroIdClaro?.value
+      );
+
+    const valorCondicion =
+      filtroCondicionAcceso?.value
+      ||
+      '';
+
+    const valorPermiso =
+      filtroPermiso?.value
+      ||
+      '';
+
+    const valorEstado =
+      filtroEstado?.value
+      ||
+      '';
+
+
+    const filas =
+      document.querySelectorAll(
+        '[data-sitio-planificado-row]'
+      );
+
+
+    let visibles = 0;
+
+
+    filas.forEach(
+      function (row) {
+
+        const idClaro =
+          normalizarTextoFiltro(
+            row.dataset.idClaro
+          );
+
+        const condicion =
+          row.dataset.condicionAcceso
+          ||
+          '';
+
+        const permiso =
+          row.dataset.permiso
+          ||
+          row.querySelector(
+            '[data-permiso-select]'
+          )?.value
+          ||
+          '';
+
+        const estado =
+          row.dataset.estadoFiltro
+          ||
+          row.querySelector(
+            '[data-estado-badge]'
+          )?.dataset.estado
+          ||
+          '';
+
+
+        let coincideId = true;
+
+        let coincideCondicion = true;
+
+        let coincidePermiso = true;
+
+        let coincideEstado = true;
+
+
+        /* ================================================== */
+        /* ID CLARO                                           */
+        /* ================================================== */
+
+        if (valorId) {
+
+          coincideId =
+            idClaro.includes(
+              valorId
+            );
+        }
+
+
+        /* ================================================== */
+        /* CONDICIÓN DE ACCESO                                */
+        /* ================================================== */
+
+        if (valorCondicion) {
+
+          if (
+            valorCondicion ===
+            '__sin_informacion__'
+          ) {
+
+            coincideCondicion =
+              !String(
+                condicion || ''
+              ).trim();
+
+          } else {
+
+            coincideCondicion =
+              condicion ===
+              valorCondicion;
+          }
+        }
+
+
+        /* ================================================== */
+        /* PERMISO                                            */
+        /* ================================================== */
+
+        if (valorPermiso) {
+
+          coincidePermiso =
+            permiso ===
+            valorPermiso;
+        }
+
+
+        /* ================================================== */
+        /* ESTADO                                             */
+        /* ================================================== */
+
+        if (valorEstado) {
+
+          coincideEstado =
+            estado ===
+            valorEstado;
+        }
+
+
+        const visible =
+          coincideId
+          &&
+          coincideCondicion
+          &&
+          coincidePermiso
+          &&
+          coincideEstado;
+
+
+        row.classList.toggle(
+          'fila-filtrada-oculta',
+          !visible
+        );
+
+
+        if (visible) {
+          visibles += 1;
+
+        } else {
+
+          const checkbox =
+            row.querySelector(
+              '[data-sitio-checkbox]'
+            );
+
+          if (checkbox) {
+            checkbox.checked =
+              false;
+          }
+        }
+
+      }
+    );
+
+
+    if (
+      contadorSitiosFiltrados
+    ) {
+      contadorSitiosFiltrados.textContent =
+        String(
+          visibles
+        );
+    }
+
+
+    actualizarEstadoSeleccion();
+  }
+
+  /* ======================================================== */
+  /* OBTENER CHECKBOXES                                       */
+  /* ======================================================== */
+
+  function obtenerCheckboxesSitios() {
+    return Array.from(
+      document.querySelectorAll(
+        '[data-sitio-checkbox]'
+      )
+    );
+  }
+    function obtenerCheckboxesSitiosVisibles() {
+    return obtenerFilasVisibles()
+      .map(
+        function (row) {
+          return row.querySelector(
+            '[data-sitio-checkbox]'
+          );
+        }
+      )
+      .filter(Boolean);
+  }
+
+  function obtenerCheckboxesSeleccionados() {
+    return obtenerCheckboxesSitios()
+      .filter(
+        function (checkbox) {
+          return checkbox.checked;
+        }
+      );
+  }
+
+
+  /* ======================================================== */
+  /* ACTUALIZAR ESTADO VISUAL DE SELECCIÓN                    */
+  /* ======================================================== */
+
+    function actualizarEstadoSeleccion() {
+
+    const checkboxes =
+      obtenerCheckboxesSitios();
+
+    const checkboxesVisibles =
+      obtenerCheckboxesSitiosVisibles();
+
+    const seleccionados =
+      checkboxes.filter(
+        function (checkbox) {
+          return checkbox.checked;
+        }
+      );
+
+    const seleccionadosVisibles =
+      checkboxesVisibles.filter(
+        function (checkbox) {
+          return checkbox.checked;
+        }
+      );
+
+
+    checkboxes.forEach(
+      function (checkbox) {
+
+        const row =
+          checkbox.closest(
+            '[data-sitio-planificado-row]'
+          );
+
+        if (!row) {
+          return;
+        }
+
+        row.classList.toggle(
+          'fila-seleccionada',
+          checkbox.checked
+        );
+
+      }
+    );
+
+
+    if (contadorSeleccionados) {
+
+      contadorSeleccionados.textContent =
+        String(
+          seleccionados.length
+        );
+    }
+
+
+    if (selectorTodos) {
+
+      if (
+        checkboxesVisibles.length > 0
+        &&
+        seleccionadosVisibles.length ===
+          checkboxesVisibles.length
+      ) {
+
+        selectorTodos.checked =
+          true;
+
+        selectorTodos.indeterminate =
+          false;
+
+      } else if (
+        seleccionadosVisibles.length > 0
+      ) {
+
+        selectorTodos.checked =
+          false;
+
+        selectorTodos.indeterminate =
+          true;
+
+      } else {
+
+        selectorTodos.checked =
+          false;
+
+        selectorTodos.indeterminate =
+          false;
+      }
+    }
+
+
+    actualizarDisponibilidadAccionesMasivas();
+  }
+
+
+  /* ======================================================== */
+  /* DISPONIBILIDAD DE BOTONES                                */
+  /* ======================================================== */
+
+  function actualizarDisponibilidadAccionesMasivas() {
+    const cantidad =
+      obtenerCheckboxesSeleccionados().length;
+
+    const permisoElegido =
+      selectorPermisoMasivo?.value || '';
+
+    if (botonAplicarMasivo) {
+      botonAplicarMasivo.disabled =
+        cantidad === 0
+        ||
+        !permisoElegido;
+    }
+
+    if (botonLimpiarSeleccion) {
+      botonLimpiarSeleccion.disabled =
+        cantidad === 0;
+    }
+  }
+
+
+  /* ======================================================== */
+  /* SELECCIONAR TODOS                                        */
+  /* ======================================================== */
+
+    if (selectorTodos) {
+
+    selectorTodos.addEventListener(
+      'change',
+      function () {
+
+        const marcado =
+          selectorTodos.checked;
+
+        obtenerCheckboxesSitiosVisibles()
+          .forEach(
+            function (checkbox) {
+
+              if (
+                !checkbox.disabled
+              ) {
+
+                checkbox.checked =
+                  marcado;
+              }
+
+            }
+          );
+
+        actualizarEstadoSeleccion();
+      }
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* CHECKBOX INDIVIDUAL                                      */
+  /* ======================================================== */
+
+  document.addEventListener(
+    'change',
+    function (event) {
+
+      if (
+        event.target.matches(
+          '[data-sitio-checkbox]'
+        )
+      ) {
+        actualizarEstadoSeleccion();
+      }
+
+    }
+  );
+
+
+  /* ======================================================== */
+  /* SELECT MASIVO                                            */
+  /* ======================================================== */
+
+  if (selectorPermisoMasivo) {
+
+    selectorPermisoMasivo.addEventListener(
+      'change',
+      function () {
+        actualizarDisponibilidadAccionesMasivas();
+      }
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* LIMPIAR SELECCIÓN                                        */
+  /* ======================================================== */
+
+  function limpiarSeleccion() {
+
+    obtenerCheckboxesSitios()
+      .forEach(
+        function (checkbox) {
+          checkbox.checked =
+            false;
+        }
+      );
+
+    actualizarEstadoSeleccion();
+  }
+
+
+  if (botonLimpiarSeleccion) {
+
+    botonLimpiarSeleccion.addEventListener(
+      'click',
+      function () {
+        limpiarSeleccion();
+      }
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* CAMBIO MASIVO                                            */
+  /* ======================================================== */
+
+  if (botonAplicarMasivo) {
+
+    botonAplicarMasivo.addEventListener(
+      'click',
+      async function () {
+
+        const nuevoEstado =
+          selectorPermisoMasivo?.value || '';
+
+        const seleccionados =
+          obtenerCheckboxesSeleccionados();
+
+        if (
+          !nuevoEstado
+          ||
+          seleccionados.length === 0
+        ) {
+          return;
+        }
+
+
+        const textoBoton =
+          botonAplicarMasivo.querySelector(
+            '[data-bulk-button-text]'
+          );
+
+        const spinner =
+          botonAplicarMasivo.querySelector(
+            '[data-bulk-spinner]'
+          );
+
+
+        botonAplicarMasivo.disabled =
+          true;
+
+        if (selectorPermisoMasivo) {
+          selectorPermisoMasivo.disabled =
+            true;
+        }
+
+        if (selectorTodos) {
+          selectorTodos.disabled =
+            true;
+        }
+
+        if (botonLimpiarSeleccion) {
+          botonLimpiarSeleccion.disabled =
+            true;
+        }
+
+        if (textoBoton) {
+          textoBoton.textContent =
+            'Actualizando...';
+        }
+
+        if (spinner) {
+          spinner.classList.remove(
+            'hidden'
+          );
+        }
+
+
+        let actualizados = 0;
+
+        const errores = [];
+
+
+        try {
+
+          for (
+            const checkbox
+            of seleccionados
+          ) {
+
+            const row =
+              checkbox.closest(
+                '[data-sitio-planificado-row]'
+              );
+
+            if (!row) {
+              continue;
+            }
+
+
+            const select =
+              row.querySelector(
+                '[data-permiso-select]'
+              );
+
+            if (!select) {
+              continue;
+            }
+
+
+            const valorAnterior =
+              select.dataset.valorAnterior
+              ||
+              select.value
+              ||
+              '';
+
+
+            checkbox.disabled =
+              true;
+
+            select.disabled =
+              true;
+
+            row.classList.add(
+              'permiso-saving'
+            );
+
+
+            const saving =
+              row.querySelector(
+                '[data-permiso-saving]'
+              );
+
+            if (saving) {
+              saving.classList.remove(
+                'hidden'
+              );
+            }
+
+
+            try {
+
+              if (
+                valorAnterior !== nuevoEstado
+              ) {
+
+                await guardarPermisoFila(
+                  row,
+                  select,
+                  nuevoEstado
+                );
+
+              }
+
+              actualizados += 1;
+
+              checkbox.checked =
+                false;
+
+
+            } catch (error) {
+
+              console.error(
+                'Error en actualización masiva:',
+                error
+              );
+
+              select.value =
+                valorAnterior;
+
+              aplicarColorPermiso(
+                select
+              );
+
+              errores.push(
+                {
+                  id:
+                    row.dataset.sitioPlanificadoId
+                    ||
+                    '',
+                  mensaje:
+                    error.message
+                    ||
+                    'Error desconocido.'
+                }
+              );
+
+
+            } finally {
+
+              checkbox.disabled =
+                false;
+
+              select.disabled =
+                false;
+
+              row.classList.remove(
+                'permiso-saving'
+              );
+
+              if (saving) {
+                saving.classList.add(
+                  'hidden'
+                );
+              }
+
+            }
+
+          }
+
+
+          actualizarResumen();
+
+          actualizarEstadoSeleccion();
+
+
+          if (
+            errores.length > 0
+          ) {
+
+            alert(
+              (
+                'Se actualizaron '
+                +
+                actualizados
+                +
+                ' sitio(s), pero '
+                +
+                errores.length
+                +
+                ' no pudieron actualizarse.'
+              )
+            );
+
+          }
+
+
+        } finally {
+
+          if (selectorPermisoMasivo) {
+            selectorPermisoMasivo.disabled =
+              false;
+
+            selectorPermisoMasivo.value =
+              '';
+          }
+
+          if (selectorTodos) {
+            selectorTodos.disabled =
+              false;
+          }
+
+          if (textoBoton) {
+            textoBoton.textContent =
+              'Aplicar a seleccionados';
+          }
+
+          if (spinner) {
+            spinner.classList.add(
+              'hidden'
+            );
+          }
+
+          actualizarEstadoSeleccion();
+
+        }
+
+      }
+    );
+
+  }
+
+    /* ======================================================== */
+  /* EVENTOS DE FILTROS                                       */
+  /* ======================================================== */
+
+  if (filtroIdClaro) {
+
+    filtroIdClaro.addEventListener(
+      'input',
+      function () {
+        aplicarFiltrosPlanificacion();
+      }
+    );
+
+  }
+
+
+  if (filtroCondicionAcceso) {
+
+    filtroCondicionAcceso.addEventListener(
+      'change',
+      function () {
+        aplicarFiltrosPlanificacion();
+      }
+    );
+
+  }
+
+
+  if (filtroPermiso) {
+
+    filtroPermiso.addEventListener(
+      'change',
+      function () {
+        aplicarFiltrosPlanificacion();
+      }
+    );
+
+  }
+
+
+  if (filtroEstado) {
+
+    filtroEstado.addEventListener(
+      'change',
+      function () {
+        aplicarFiltrosPlanificacion();
+      }
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* LIMPIAR FILTROS                                          */
+  /* ======================================================== */
+
+  if (botonLimpiarFiltros) {
+
+    botonLimpiarFiltros.addEventListener(
+      'click',
+      function () {
+
+        if (filtroIdClaro) {
+          filtroIdClaro.value =
+            '';
+        }
+
+        if (filtroCondicionAcceso) {
+          filtroCondicionAcceso.value =
+            '';
+        }
+
+        if (filtroPermiso) {
+          filtroPermiso.value =
+            '';
+        }
+
+        if (filtroEstado) {
+          filtroEstado.value =
+            '';
+        }
+
+        aplicarFiltrosPlanificacion();
+
+      }
+    );
+
+  }
+  /* ======================================================== */
+  /* INICIALIZACIÓN                                           */
+  /* ======================================================== */
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    function () {
+
+      document
+        .querySelectorAll(
+          '[data-permiso-select]'
+        )
+        .forEach(
+          function (select) {
+
+            aplicarColorPermiso(
+              select
+            );
+
+          }
+        );
+
+
+      document
+        .querySelectorAll(
+          '[data-estado-badge]'
+        )
+        .forEach(
+          function (badge) {
+
+            aplicarColorEstado(
+              badge,
+              badge.dataset.estado || ''
+            );
+
+          }
+        );
+
+
+      actualizarResumen();
+
+      aplicarFiltrosPlanificacion();
+
+      actualizarEstadoSeleccion();
+
+    }
+  );
+
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,4031 @@
+{% extends "dashboard_admin/base.html" %}
+{% load planificacion_formatos %}
+{% block title %}
+Planificación Diaria
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto w-full max-w-[1800px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        overflow-hidden
+        rounded-3xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-5
+          p-5
+          sm:p-6
+          xl:flex-row
+          xl:items-center
+          xl:justify-between
+        "
+      >
+
+        <!-- INFORMACIÓN -->
+
+        <div class="min-w-0">
+
+          <div
+            class="
+              text-xs
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-cyan-700
+            "
+          >
+            Operación semanal
+          </div>
+
+          <h1 class="mt-1 text-2xl font-black text-slate-900 sm:text-3xl">
+            Planificación diaria
+          </h1>
+
+          <div
+            class="
+              mt-3
+              flex
+              flex-wrap
+              items-center
+              gap-x-2
+              gap-y-2
+              text-sm
+              text-slate-600
+            "
+          >
+
+            <span class="text-slate-500">
+              Mes:
+            </span>
+
+            <span class="font-bold text-slate-900">
+              {{ mensual }}
+            </span>
+
+            <span class="hidden text-slate-300 sm:inline">
+              ·
+            </span>
+
+
+            <span class="text-slate-500">
+              Batch:
+            </span>
+
+            <span class="font-bold text-slate-900">
+
+              {% if batch.nombre %}
+                {{ batch.nombre }}
+              {% else %}
+                Semana {{ batch.fecha_inicio|date:"d/m/Y" }}
+              {% endif %}
+
+            </span>
+
+            <span class="hidden text-slate-300 sm:inline">
+              ·
+            </span>
+
+
+            <span class="text-slate-500">
+              Inicio:
+            </span>
+
+            <span class="font-bold text-slate-900">
+              {{ batch.fecha_inicio|date:"d/m/Y" }}
+            </span>
+
+          </div>
+
+
+          <div class="mt-3 flex flex-wrap gap-2">
+
+            <span
+              class="
+                inline-flex
+                items-center
+                rounded-full
+                border border-slate-200
+                bg-slate-50
+                px-3
+                py-1
+                text-xs
+                font-bold
+                text-slate-600
+              "
+            >
+              Estado semanal:
+              <span class="ml-1 text-slate-900">
+                {{ batch.get_estado_display }}
+              </span>
+            </span>
+
+
+            {% if resumen.total_salidas %}
+
+              <span
+                class="
+                  inline-flex
+                  items-center
+                  rounded-full
+                  border border-cyan-200
+                  bg-cyan-50
+                  px-3
+                  py-1
+                  text-xs
+                  font-bold
+                  text-cyan-700
+                "
+              >
+                {{ resumen.total_salidas }}
+                salida(s) programada(s)
+              </span>
+
+            {% endif %}
+
+
+            {% if pendientes_planificar %}
+
+              <span
+                class="
+                  inline-flex
+                  items-center
+                  rounded-full
+                  border border-amber-200
+                  bg-amber-50
+                  px-3
+                  py-1
+                  text-xs
+                  font-bold
+                  text-amber-700
+                "
+              >
+                {{ pendientes_planificar|length }}
+                aprobado(s) pendiente(s)
+              </span>
+
+            {% endif %}
+
+          </div>
+
+        </div>
+
+
+        <!-- ACCIONES PRINCIPALES -->
+
+          <div
+            class="
+              flex
+              shrink-0
+              flex-wrap
+              gap-2
+              xl:max-w-[780px]
+              xl:justify-end
+            "
+          >
+
+            <!-- ==================================================== -->
+            <!-- VOLVER A LISTA DE PLANIFICACIÓN DIARIA               -->
+            <!-- ==================================================== -->
+
+            <a
+              href="{% url 'planificacion:planificacion_diaria' %}"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border border-slate-300
+                bg-slate-100
+                px-4
+                py-2.5
+                text-sm
+                font-bold
+                text-slate-700
+                shadow-sm
+                transition
+                hover:border-slate-400
+                hover:bg-slate-200
+              "
+            >
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="h-4 w-4"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M19 12H5M11 18l-6-6 6-6"
+                />
+              </svg>
+
+              Volver a planificación
+
+            </a>
+
+
+            <!-- ==================================================== -->
+            <!-- VOLVER AL BATCH SEMANAL                              -->
+            <!-- ==================================================== -->
+
+            <a
+              href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                border border-slate-300
+                bg-white
+                px-4
+                py-2.5
+                text-sm
+                font-bold
+                text-slate-700
+                shadow-sm
+                transition
+                hover:bg-slate-50
+              "
+            >
+              Volver al batch
+            </a>
+
+
+            <!-- ==================================================== -->
+            <!-- MAPA SEMANAL                                         -->
+            <!-- ==================================================== -->
+
+            <a
+              href="{% url 'planificacion:mapa_batch_semanal' batch.id %}"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                px-4
+                py-2.5
+                text-sm
+                font-bold
+                text-emerald-700
+                shadow-sm
+                transition
+                hover:bg-emerald-100
+              "
+            >
+              Ver mapa semanal
+            </a>
+
+
+            <!-- ==================================================== -->
+            <!-- SINCRONIZAR ESTADOS                                  -->
+            <!-- ==================================================== -->
+
+            <form
+              method="post"
+              action="{% url 'planificacion:sincronizar_planificacion_diaria' batch.id %}"
+            >
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="
+                  inline-flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  border border-blue-200
+                  bg-blue-50
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-bold
+                  text-blue-700
+                  shadow-sm
+                  transition
+                  hover:bg-blue-100
+                "
+              >
+                Sincronizar estados
+              </button>
+
+            </form>
+
+
+            <!-- ==================================================== -->
+            <!-- GENERAR / RECALCULAR                                 -->
+            <!-- ==================================================== -->
+
+            <form
+              method="post"
+              action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
+            >
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="
+                  inline-flex
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-gradient-to-r
+                  from-cyan-600
+                  to-blue-600
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-black
+                  text-white
+                  shadow-md
+                  transition
+                  hover:-translate-y-0.5
+                  hover:shadow-lg
+                "
+              >
+
+                {% if resumen.total_salidas %}
+                  Recalcular planificación
+                {% else %}
+                  Generar planificación
+                {% endif %}
+
+              </button>
+
+            </form>
+
+          </div>
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- RESUMEN OPERACIONAL                                  -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        grid
+        grid-cols-2
+        gap-3
+        sm:grid-cols-4
+        xl:grid-cols-8
+      "
+    >
+
+      <!-- SALIDAS -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          p-4
+          shadow-sm
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-slate-500
+          "
+        >
+          Salidas
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-slate-900">
+          {{ resumen.total_salidas }}
+        </div>
+
+      </div>
+
+
+      <!-- PLANIFICADOS -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-cyan-200
+          bg-cyan-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-cyan-700
+          "
+        >
+          Planificados
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-cyan-800">
+          {{ resumen.total_sitios }}
+        </div>
+
+      </div>
+
+
+      <!-- PENDIENTES -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-amber-200
+          bg-amber-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-amber-700
+          "
+        >
+          Pendientes asignar
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-amber-800">
+          {{ resumen_operaciones.pendientes_asignar }}
+        </div>
+
+      </div>
+
+
+      <!-- ASIGNADOS -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-blue-200
+          bg-blue-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-blue-700
+          "
+        >
+          Asignados
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-blue-800">
+          {{ resumen_operaciones.asignados }}
+        </div>
+
+      </div>
+
+
+      <!-- EJECUCIÓN -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-violet-200
+          bg-violet-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-violet-700
+          "
+        >
+          En ejecución
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-violet-800">
+          {{ resumen_operaciones.en_ejecucion }}
+        </div>
+
+      </div>
+
+
+      <!-- REVISIÓN -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-orange-200
+          bg-orange-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-orange-700
+          "
+        >
+          Revisión
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-orange-800">
+          {{ resumen_operaciones.revision }}
+        </div>
+
+      </div>
+
+
+      <!-- FINALIZADOS -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-emerald-200
+          bg-emerald-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-emerald-700
+          "
+        >
+          Finalizados
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-emerald-800">
+          {{ resumen_operaciones.finalizados }}
+        </div>
+
+      </div>
+
+
+      <!-- SIN SERVICIO -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-red-200
+          bg-red-50
+          p-4
+        "
+      >
+
+        <div
+          class="
+            text-[10px]
+            font-black
+            uppercase
+            tracking-wide
+            text-red-700
+          "
+        >
+          Sin servicio
+        </div>
+
+        <div class="mt-1 text-2xl font-black text-red-800">
+          {{ resumen_operaciones.sin_servicio }}
+        </div>
+
+      </div>
+
+    </div>
+
+
+        <!-- ==================================================== -->
+    <!-- APROBADOS PENDIENTES DE PROGRAMAR                    -->
+    <!-- ==================================================== -->
+
+    {% if pendientes_planificar %}
+
+      <div
+        class="
+          mb-6
+          overflow-hidden
+          rounded-2xl
+          border border-amber-200
+          bg-white
+          shadow-sm
+        "
+      >
+
+        <!-- ================================================== -->
+        <!-- CABECERA                                           -->
+        <!-- ================================================== -->
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-4
+            border-b border-amber-100
+            bg-gradient-to-r
+            from-amber-50
+            via-white
+            to-white
+            p-5
+            xl:flex-row
+            xl:items-center
+            xl:justify-between
+          "
+        >
+
+          <!-- ================================================= -->
+          <!-- INFORMACIÓN                                       -->
+          <!-- ================================================= -->
+
+          <div class="min-w-0">
+
+            <div
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.13em]
+                text-amber-700
+              "
+            >
+              Aprobados sin salida
+            </div>
+
+
+            <div class="mt-1 flex items-end gap-2">
+
+              <div class="text-2xl font-black text-slate-900">
+                {{ pendientes_planificar|length }}
+              </div>
+
+              <div class="pb-1 text-sm font-semibold text-slate-600">
+                sitio(s) pendiente(s) de programación
+              </div>
+
+            </div>
+
+
+            <p
+              class="
+                mt-1
+                max-w-4xl
+                text-sm
+                leading-relaxed
+                text-slate-600
+              "
+            >
+              Estos sitios ya están habilitados para trabajo,
+              pero todavía no pertenecen a una salida diaria.
+              Puedes mantenerlos en este mes, programarlos
+              manualmente o seleccionar únicamente los que
+              deseas trasladar al mes siguiente.
+            </p>
+
+          </div>
+
+
+          <!-- ================================================= -->
+          <!-- ACCIONES                                          -->
+          <!-- ================================================= -->
+
+          <div
+            class="
+              flex
+              shrink-0
+              flex-col
+              gap-2
+              sm:flex-row
+              sm:flex-wrap
+              xl:justify-end
+            "
+          >
+
+            <!-- =============================================== -->
+            <!-- MAPA DE PENDIENTES                              -->
+            <!-- =============================================== -->
+
+            <a
+              href="{% url 'planificacion:mapa_pendientes_planificacion_diaria' batch.id %}"
+              class="
+                inline-flex
+                w-full
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                px-4
+                py-2.5
+                text-sm
+                font-black
+                text-emerald-700
+                shadow-sm
+                transition
+                hover:border-emerald-300
+                hover:bg-emerald-100
+                sm:w-auto
+              "
+            >
+
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                class="h-4 w-4"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 21s6-5.686 6-11a6 6 0 1 0-12 0c0 5.314 6 11 6 11Z"
+                />
+
+                <circle
+                  cx="12"
+                  cy="10"
+                  r="2"
+                />
+              </svg>
+
+              Ver pendientes en mapa
+
+            </a>
+
+
+            <!-- =============================================== -->
+            <!-- RECALCULAR                                      -->
+            <!-- =============================================== -->
+
+            <form
+              method="post"
+              action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
+            >
+
+              {% csrf_token %}
+
+              <button
+                type="submit"
+                class="
+                  inline-flex
+                  w-full
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-amber-600
+                  px-5
+                  py-2.5
+                  text-sm
+                  font-black
+                  text-white
+                  shadow-sm
+                  transition
+                  hover:bg-amber-700
+                  sm:w-auto
+                "
+              >
+                Recalcular con aprobados
+              </button>
+
+            </form>
+
+
+            <!-- =============================================== -->
+            <!-- TRASLADAR SELECCIONADOS                         -->
+            <!-- =============================================== -->
+
+            <form
+              id="form-traslado-mes-siguiente"
+              method="post"
+              action="{% url 'planificacion:trasladar_pendientes_mes_siguiente_planificacion_diaria' batch.id %}"
+            >
+
+              {% csrf_token %}
+
+              <button
+                type="button"
+                onclick="prepararTrasladoMesSiguiente();"
+                class="
+                  inline-flex
+                  w-full
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border border-blue-200
+                  bg-blue-50
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-black
+                  text-blue-700
+                  shadow-sm
+                  transition
+                  hover:border-blue-300
+                  hover:bg-blue-100
+                  sm:w-auto
+                "
+              >
+
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="h-4 w-4"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M5 12h14M13 6l6 6-6 6"
+                  />
+                </svg>
+
+                Pasar seleccionados
+
+              </button>
+
+            </form>
+
+          </div>
+
+        </div>
+
+
+        <!-- ================================================== -->
+        <!-- SITIOS PENDIENTES                                  -->
+        <!-- ================================================== -->
+
+        <div
+          class="
+            grid
+            gap-px
+            bg-slate-200
+            sm:grid-cols-2
+            lg:grid-cols-3
+            xl:grid-cols-4
+          "
+        >
+
+          {% for item in pendientes_planificar %}
+
+            <div
+              class="
+                bg-white
+                p-4
+                transition
+                hover:bg-slate-50
+              "
+            >
+
+              <div class="flex items-start gap-3">
+
+                <!-- ========================================= -->
+                <!-- CHECKBOX                                  -->
+                <!-- ========================================= -->
+
+                <label
+                  class="
+                    mt-0.5
+                    inline-flex
+                    h-8
+                    w-8
+                    shrink-0
+                    cursor-pointer
+                    items-center
+                    justify-center
+                    rounded-lg
+                    border border-blue-200
+                    bg-blue-50
+                    transition
+                    hover:border-blue-300
+                    hover:bg-blue-100
+                  "
+                  title="Seleccionar para trasladar al mes siguiente"
+                >
+
+                  <input
+                    type="checkbox"
+                    name="sitios_trasladar"
+                    value="{{ item.id }}"
+                    form="form-traslado-mes-siguiente"
+                    class="
+                      h-4
+                      w-4
+                      cursor-pointer
+                      accent-blue-600
+                    "
+                  >
+
+                </label>
+
+
+                <!-- ========================================= -->
+                <!-- CONTENIDO                                 -->
+                <!-- ========================================= -->
+
+                <div class="min-w-0 flex-1">
+
+                  <div
+                    class="
+                      flex
+                      items-start
+                      justify-between
+                      gap-3
+                    "
+                  >
+
+                    <div class="min-w-0 flex-1">
+
+                      <div class="flex flex-wrap items-center gap-2">
+
+                        <div class="font-black text-slate-900">
+                          {{ item.sitio_planificado.sitio.id_claro|default:item.sitio_planificado.sitio.id_sites }}
+                        </div>
+
+
+                        {% if item.es_prioridad %}
+
+                          <form
+                            method="post"
+                            action="{% url 'planificacion:quitar_prioridad_planificacion_diaria' item.prioridad_id %}"
+                            class="inline-flex"
+                          >
+
+                            {% csrf_token %}
+
+                            <button
+                              type="submit"
+                              title="Quitar prioridad"
+                              aria-label="Quitar prioridad de {{ item.sitio_planificado.sitio.id_claro|default:item.sitio_planificado.sitio.id_sites }}"
+                              class="
+                                inline-flex
+                                h-7
+                                w-7
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-full
+                                border border-amber-300
+                                bg-amber-100
+                                text-base
+                                text-amber-500
+                                shadow-sm
+                                transition
+                                hover:scale-105
+                                hover:border-amber-400
+                                hover:bg-amber-200
+                                hover:text-amber-600
+                                focus:outline-none
+                                focus:ring-2
+                                focus:ring-amber-300
+                                focus:ring-offset-1
+                              "
+                            >
+                              ★
+                            </button>
+
+                          </form>
+
+                        {% endif %}
+
+                      </div>
+
+
+                      <div
+                        class="
+                          mt-0.5
+                          truncate
+                          text-xs
+                          font-semibold
+                          text-slate-600
+                        "
+                      >
+                        {{ item.sitio_planificado.sitio.nombre|default:"Sin nombre" }}
+                      </div>
+
+
+                      <div class="mt-1 text-xs text-slate-500">
+                        {{ item.sitio_planificado.sitio.comuna|default:"—" }}
+                      </div>
+
+                    </div>
+
+
+                    <span
+                      class="
+                        shrink-0
+                        rounded-full
+                        border border-emerald-200
+                        bg-emerald-50
+                        px-2
+                        py-1
+                        text-[10px]
+                        font-black
+                        text-emerald-700
+                      "
+                    >
+                      Aprobado
+                    </span>
+
+                  </div>
+
+
+                  <!-- ======================================= -->
+                  <!-- PROGRAMACIÓN MANUAL                     -->
+                  <!-- ======================================= -->
+
+
+                  <div class="mt-3 grid gap-2">
+
+                    <a
+                      href="{% url 'planificacion:programar_sitio_manual_planificacion_diaria' batch.id item.id %}"
+                      class="
+                        inline-flex
+                        w-full
+                        items-center
+                        justify-center
+                        rounded-xl
+                        border border-blue-200
+                        bg-blue-50
+                        px-3
+                        py-2
+                        text-xs
+                        font-black
+                        text-blue-700
+                        transition
+                        hover:border-blue-300
+                        hover:bg-blue-100
+                      "
+                    >
+                      Programar manualmente
+                    </a>
+
+
+                    <a
+                      href="{% url 'planificacion:seleccionar_semana_destino' item.id %}"
+                      class="
+                        inline-flex
+                        w-full
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-xl
+                        border border-violet-200
+                        bg-violet-50
+                        px-3
+                        py-2
+                        text-xs
+                        font-black
+                        text-violet-700
+                        transition
+                        hover:border-violet-300
+                        hover:bg-violet-100
+                      "
+                    >
+
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        class="h-4 w-4"
+                        aria-hidden="true"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M5 12h14M13 6l6 6-6 6"
+                        />
+                      </svg>
+
+                      Mover de semana
+
+                    </a>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          {% endfor %}
+        </div>
+
+      </div>
+
+    {% endif %}
+
+    <!-- ==================================================== -->
+    <!-- SIN PLANIFICACIÓN                                    -->
+    <!-- ==================================================== -->
+
+    {% if not dias %}
+
+      <div
+        class="
+          rounded-3xl
+          border border-slate-200
+          bg-white
+          px-6
+          py-16
+          text-center
+          shadow-sm
+        "
+      >
+
+        <div
+          class="
+            mx-auto
+            flex
+            h-14
+            w-14
+            items-center
+            justify-center
+            rounded-2xl
+            bg-cyan-50
+            text-base
+            font-black
+            text-cyan-700
+          "
+        >
+          GZ
+        </div>
+
+        <h2 class="mt-4 text-xl font-black text-slate-900">
+          Todavía no existen salidas diarias
+        </h2>
+
+        <p
+          class="
+            mx-auto
+            mt-2
+            max-w-2xl
+            text-sm
+            leading-relaxed
+            text-slate-500
+          "
+        >
+          Cuando existan sitios con permiso aprobado o que no
+          requieran permiso, el motor podrá distribuirlos por
+          cuadrilla y fecha utilizando la configuración
+          operacional de esta semana.
+        </p>
+
+
+        {% if pendientes_planificar %}
+
+          <form
+            method="post"
+            action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
+            class="mt-6"
+          >
+            {% csrf_token %}
+
+            <button
+              type="submit"
+              class="
+                rounded-xl
+                bg-gradient-to-r
+                from-cyan-600
+                to-blue-600
+                px-5
+                py-3
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              Generar planificación diaria
+            </button>
+
+          </form>
+
+        {% endif %}
+
+      </div>
+
+
+    {% else %}
+
+
+      <!-- ================================================== -->
+      <!-- CALENDARIO OPERACIONAL                             -->
+      <!-- ================================================== -->
+
+      <div class="space-y-6">
+
+        {% for dia in dias %}
+
+          <section
+            class="
+              overflow-hidden
+              rounded-3xl
+              border border-slate-200
+              bg-white
+              shadow-sm
+            "
+          >
+
+            <!-- ============================================ -->
+            <!-- ENCABEZADO DEL DÍA                          -->
+            <!-- ============================================ -->
+
+            <div
+              class="
+                border-b
+                border-slate-200
+                bg-gradient-to-r
+                from-slate-900
+                via-slate-850
+                to-slate-800
+                px-5
+                py-4
+                text-white
+              "
+            >
+
+              <div
+                class="
+                  flex
+                  flex-col
+                  gap-3
+                  sm:flex-row
+                  sm:items-center
+                  sm:justify-between
+                "
+              >
+
+                <div>
+
+                  <div
+                    class="
+                      text-[10px]
+                      font-black
+                      uppercase
+                      tracking-[0.16em]
+                      text-slate-300
+                    "
+                  >
+                    Jornada operacional
+                  </div>
+
+                  <h2 class="mt-1 text-xl font-black capitalize">
+                    {{ dia.fecha|date:"l d/m/Y" }}
+                  </h2>
+
+                </div>
+
+
+                <div class="flex flex-wrap items-center gap-2">
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      bg-white/10
+                      px-3
+                      py-1.5
+                      text-xs
+                      font-bold
+                      text-white
+                    "
+                  >
+                    {{ dia.salidas|length }} cuadrilla(s)
+                  </span>
+
+
+                  <!-- =============================================== -->
+                  <!-- ASIGNAR DÍA COMPLETO                             -->
+                  <!-- =============================================== -->
+
+                  <a
+                    href="{% url 'planificacion:preview_asignacion_dia' batch.id dia.fecha|date:'Y-m-d' %}"
+                    class="
+                      inline-flex
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-emerald-300
+                      bg-emerald-500
+                      px-3.5
+                      py-2
+                      text-xs
+                      font-black
+                      text-white
+                      shadow-sm
+                      transition
+                      hover:bg-emerald-600
+                    "
+                  >
+
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                      />
+                      <circle cx="9" cy="7" r="4" />
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M19 8v6M22 11h-6"
+                      />
+                    </svg>
+
+                    Asignar día
+
+                  </a>
+
+
+                  <!-- =============================================== -->
+                  <!-- MAPA DEL DÍA                                     -->
+                  <!-- =============================================== -->
+
+                  <a
+                    href="{% url 'planificacion:mapa_dia_planificacion_diaria' batch.id dia.fecha|date:'Y-m-d' %}"
+                    class="
+                      inline-flex
+                      items-center
+                      justify-center
+                      rounded-xl
+                      border
+                      border-white/20
+                      bg-white
+                      px-3.5
+                      py-2
+                      text-xs
+                      font-black
+                      text-slate-900
+                      shadow-sm
+                      transition
+                      hover:bg-slate-100
+                    "
+                  >
+                    Ver mapa del día
+                  </a>
+
+                </div>
+              </div>
+
+            </div>
+
+
+            <!-- ============================================ -->
+            <!-- CUADRILLAS                                  -->
+            <!-- ============================================ -->
+            <!--
+              En desktop usamos las 3 columnas completas.
+
+              Con C1, C2 y C3:
+                  | C1 | C2 | C3 |
+
+              Ya no queda media pantalla libre a la derecha.
+            -->
+
+            <div
+              class="
+                grid
+                items-start
+                gap-4
+                p-4
+                lg:grid-cols-2
+                2xl:grid-cols-3
+              "
+            >
+
+              {% for salida_ui in dia.salidas %}
+
+                <article
+                  class="
+                    min-w-0
+                    overflow-hidden
+                    rounded-2xl
+                    border
+                    shadow-sm
+                    {% if salida_ui.todos_finalizados %}
+                      border-emerald-200
+                      bg-emerald-50/30
+                    {% else %}
+                      border-slate-200
+                      bg-white
+                    {% endif %}
+                  "
+                >
+
+                  <!-- ====================================== -->
+                  <!-- CABECERA CUADRILLA                    -->
+                  <!-- ====================================== -->
+
+                  <div
+                    class="
+                      border-b
+                      border-slate-200
+                      bg-slate-50
+                      px-4
+                      py-4
+                    "
+                  >
+
+                    <div
+                      class="
+                        flex
+                        items-start
+                        justify-between
+                        gap-3
+                      "
+                    >
+
+                      <div class="min-w-0">
+
+                        <div
+                          class="
+                            truncate
+                            text-lg
+                            font-black
+                            text-slate-900
+                          "
+                        >
+                          {{ salida_ui.cuadrilla_nombre }}
+                        </div>
+
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+
+                          <span
+                            class="
+                              rounded-full
+                              border border-slate-200
+                              bg-white
+                              px-2.5
+                              py-1
+                              text-[11px]
+                              font-semibold
+                              text-slate-600
+                            "
+                          >
+                            {{ salida_ui.disponibilidad.tipo_vehiculo }}
+                          </span>
+
+
+                          <span
+                            class="
+                              rounded-full
+                              border border-slate-200
+                              bg-white
+                              px-2.5
+                              py-1
+                              text-[11px]
+                              font-semibold
+                              text-slate-600
+                            "
+                          >
+                            {{ salida_ui.cantidad_sitios }}
+                            sitio(s)
+                          </span>
+
+
+                          {% if salida_ui.salida.jornada_extendida %}
+
+                            <span
+                              class="
+                                rounded-full
+                                border border-amber-200
+                                bg-amber-50
+                                px-2.5
+                                py-1
+                                text-[11px]
+                                font-black
+                                text-amber-700
+                              "
+                            >
+                              Extendida
+                              {% if salida_ui.salida.exceso_jornada_minutos %}
+                                +{{ salida_ui.salida.exceso_jornada_minutos }} min
+                              {% endif %}
+                            </span>
+
+                          {% endif %}
+
+                        </div>
+
+                      </div>
+
+
+                      <div class="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+
+                        <div class="text-left sm:text-right">
+
+                          <div
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-slate-400
+                            "
+                          >
+                            Estado
+                          </div>
+
+                          <div class="mt-0.5 font-black text-slate-900">
+                            {{ salida_ui.salida.get_estado_display }}
+                          </div>
+
+                        </div>
+
+
+                        <!-- =============================================== -->
+                        <!-- ASIGNAR CUADRILLA COMPLETA                       -->
+                        <!-- =============================================== -->
+
+                        <a
+                          href="{% url 'planificacion:preview_asignacion_salida' salida_ui.salida.id %}"
+                          class="
+                            inline-flex
+                            items-center
+                            justify-center
+                            gap-1.5
+                            rounded-lg
+                            border
+                            border-emerald-200
+                            bg-emerald-50
+                            px-3
+                            py-1.5
+                            text-xs
+                            font-black
+                            text-emerald-700
+                            transition
+                            hover:border-emerald-300
+                            hover:bg-emerald-100
+                          "
+                        >
+
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            class="h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+                            />
+                            <circle cx="9" cy="7" r="4" />
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M19 8v6M22 11h-6"
+                            />
+                          </svg>
+
+                          Asignar cuadrilla
+
+                        </a>
+
+
+                        <!-- =============================================== -->
+                        <!-- MAPA DE LA SALIDA                                -->
+                        <!-- =============================================== -->
+
+                        <a
+                          href="{% url 'planificacion:mapa_salida_planificacion_diaria' salida_ui.salida.id %}"
+                          class="
+                            inline-flex
+                            items-center
+                            justify-center
+                            rounded-lg
+                            border
+                            border-blue-200
+                            bg-blue-50
+                            px-3
+                            py-1.5
+                            text-xs
+                            font-black
+                            text-blue-700
+                            transition
+                            hover:bg-blue-100
+                          "
+                        >
+                          Ver mapa de salida
+                        </a>
+
+                      </div>
+                    </div>
+
+
+                    <!-- MÉTRICAS DE RUTA -->
+
+                    <div class="mt-3 grid grid-cols-3 gap-2">
+
+                      <div
+                        class="
+                          rounded-xl
+                          border border-slate-200
+                          bg-white
+                          p-2.5
+                        "
+                      >
+
+                        <div
+                          class="
+                            text-[9px]
+                            font-black
+                            uppercase
+                            tracking-wide
+                            text-slate-400
+                          "
+                        >
+                          Viaje
+                        </div>
+
+                        <div class="mt-1 text-sm font-black text-slate-800">
+                          {{ salida_ui.salida.minutos_viaje_estimados|duracion_humana }}
+                          <span class="text-[10px] font-semibold text-slate-400">
+                            min
+                          </span>
+                        </div>
+
+                      </div>
+
+
+                      <div
+                        class="
+                          rounded-xl
+                          border border-slate-200
+                          bg-white
+                          p-2.5
+                        "
+                      >
+
+                        <div
+                          class="
+                            text-[9px]
+                            font-black
+                            uppercase
+                            tracking-wide
+                            text-slate-400
+                          "
+                        >
+                          Trabajo
+                        </div>
+
+                        <div class="mt-1 text-sm font-black text-slate-800">
+                          {{ salida_ui.salida.minutos_trabajo_estimados|duracion_humana }}
+                          <span class="text-[10px] font-semibold text-slate-400">
+                            min
+                          </span>
+                        </div>
+
+                      </div>
+
+
+                      <div
+                        class="
+                          rounded-xl
+                          border border-slate-200
+                          bg-white
+                          p-2.5
+                        "
+                      >
+
+                        <div
+                          class="
+                            text-[9px]
+                            font-black
+                            uppercase
+                            tracking-wide
+                            text-slate-400
+                          "
+                        >
+                          Jornada
+                        </div>
+
+                        <div class="mt-1 text-sm font-black text-slate-800">
+                          {{ salida_ui.salida.minutos_total_estimados|duracion_humana }}
+                          <span class="text-[10px] font-semibold text-slate-400">
+                            min
+                          </span>
+                        </div>
+
+                      </div>
+
+                    </div>
+
+
+                    <!-- DISTANCIAS -->
+
+                    {% if salida_ui.salida.distancia_vial_estimada_km or salida_ui.salida.distancia_directa_km %}
+
+                      <div
+                        class="
+                          mt-3
+                          flex
+                          flex-wrap
+                          items-center
+                          gap-x-3
+                          gap-y-1
+                          text-[11px]
+                          text-slate-500
+                        "
+                      >
+
+                        {% if salida_ui.salida.distancia_vial_estimada_km %}
+
+                          <span>
+                            Ruta estimada:
+                            <strong class="text-slate-700">
+                              {{ salida_ui.salida.distancia_vial_estimada_km }} km
+                            </strong>
+                          </span>
+
+                        {% endif %}
+
+
+                        {% if salida_ui.salida.distancia_directa_km %}
+
+                          <span>
+                            Directa:
+                            <strong class="text-slate-700">
+                              {{ salida_ui.salida.distancia_directa_km }} km
+                            </strong>
+                          </span>
+
+                        {% endif %}
+
+                      </div>
+
+                    {% endif %}
+
+                  </div>
+
+
+                  <!-- ====================================== -->
+                  <!-- SITIOS ACTIVOS                         -->
+                  <!-- ====================================== -->
+
+                  <div class="divide-y divide-slate-100">
+
+                    {% for fila in salida_ui.sitios %}
+
+                      {% if not fila.finalizado %}
+
+                        <div
+                          class="
+                            p-4
+                            transition
+                            hover:bg-slate-50
+                          "
+                        >
+
+                          <!-- ====================================== -->
+                          <!-- IDENTIFICACIÓN / PRIORIDAD / ACCIONES  -->
+                          <!-- ====================================== -->
+
+                          <div
+                            class="
+                              flex
+                              items-start
+                              justify-between
+                              gap-3
+                            "
+                          >
+
+                            <!-- ==================================== -->
+                            <!-- INFORMACIÓN DEL SITIO                -->
+                            <!-- ==================================== -->
+
+                            <div class="min-w-0 flex-1">
+
+                              <div class="flex flex-wrap items-center gap-2">
+
+                                <!-- ORDEN -->
+
+                                <span
+                                  class="
+                                    flex
+                                    h-7
+                                    w-7
+                                    shrink-0
+                                    items-center
+                                    justify-center
+                                    rounded-full
+                                    bg-slate-900
+                                    text-xs
+                                    font-black
+                                    text-white
+                                  "
+                                >
+                                  {{ fila.orden }}
+                                </span>
+
+
+                                <!-- ID CLARO -->
+
+                                <span
+                                  class="
+                                    text-sm
+                                    font-black
+                                    text-slate-900
+                                  "
+                                >
+                                  {{ fila.id_claro }}
+                                </span>
+
+
+                                <!-- ID NEW -->
+
+                                {% if fila.id_new %}
+
+                                  <span
+                                    class="
+                                      rounded-full
+                                      border border-slate-200
+                                      bg-white
+                                      px-2
+                                      py-0.5
+                                      text-[9px]
+                                      font-bold
+                                      text-slate-500
+                                    "
+                                  >
+                                    {{ fila.id_new }}
+                                  </span>
+
+                                {% endif %}
+
+
+                                <!-- ================================= -->
+                                <!-- PRIORIDAD                         -->
+                                <!-- ================================= -->
+
+                                {% if fila.es_prioridad %}
+
+                                  <form
+                                    method="post"
+                                    action="{% url 'planificacion:quitar_prioridad_planificacion_diaria' fila.prioridad_id %}"
+                                    class="inline-flex"
+                                  >
+                                    {% csrf_token %}
+
+                                    <button
+                                    type="submit"
+                                    title="Quitar prioridad"
+                                    aria-label="Quitar prioridad de {{ fila.id_claro }}"
+                                    class="
+                                      inline-flex
+                                      h-7
+                                      w-7
+                                      shrink-0
+                                      items-center
+                                      justify-center
+                                      rounded-full
+                                      border border-yellow-300
+                                      bg-yellow-50
+                                      text-base
+                                      text-yellow-400
+                                      shadow-sm
+                                      transition
+                                      hover:scale-105
+                                      hover:border-yellow-400
+                                      hover:bg-yellow-100
+                                      hover:text-yellow-500
+                                      focus:outline-none
+                                      focus:ring-2
+                                      focus:ring-yellow-300
+                                      focus:ring-offset-1
+                                    "
+                                  >
+                                    ★
+                                  </button>
+
+                                  </form>
+
+                                {% endif %}
+
+                              </div>
+
+
+                              <!-- NOMBRE -->
+
+                              <div
+                                class="
+                                  mt-2
+                                  truncate
+                                  text-sm
+                                  font-bold
+                                  text-slate-800
+                                "
+                              >
+                                {{ fila.nombre|default:"Sin nombre" }}
+                              </div>
+
+
+                              <!-- COMUNA / DIRECCIÓN -->
+
+                              <div
+                                class="
+                                  mt-1
+                                  text-xs
+                                  leading-relaxed
+                                  text-slate-500
+                                "
+                              >
+
+                                <span class="font-semibold text-slate-600">
+                                  {{ fila.comuna|default:"—" }}
+                                </span>
+
+                                {% if fila.direccion %}
+                                  · {{ fila.direccion }}
+                                {% endif %}
+
+                              </div>
+
+
+                              <!-- ================================================ -->
+                              <!-- CONDICIÓN DE ACCESO                              -->
+                              <!-- ================================================ -->
+
+                              {% if fila.condiciones_acceso %}
+
+                                <div class="mt-2">
+
+                                  {% if fila.condiciones_acceso|lower == "libre acceso" %}
+
+                                    <span
+                                      class="
+                                        inline-flex
+                                        items-center
+                                        rounded-full
+                                        border border-emerald-200
+                                        bg-emerald-50
+                                        px-2.5
+                                        py-1
+                                        text-[10px]
+                                        font-black
+                                        text-emerald-700
+                                      "
+                                    >
+                                      {{ fila.condiciones_acceso }}
+                                    </span>
+
+                                  {% else %}
+
+                                    <span
+                                      class="
+                                        inline-flex
+                                        items-center
+                                        rounded-full
+                                        border border-amber-200
+                                        bg-amber-50
+                                        px-2.5
+                                        py-1
+                                        text-[10px]
+                                        font-black
+                                        text-amber-700
+                                      "
+                                    >
+                                      {{ fila.condiciones_acceso }}
+                                    </span>
+
+                                  {% endif %}
+
+                                </div>
+
+                              {% endif %}
+
+
+                              <!-- INDICADOR TEXTUAL DE PRIORIDAD -->
+
+                              {% if fila.es_prioridad %}
+
+                                <div class="mt-2">
+
+                                  <span
+                                    class="
+                                      inline-flex
+                                      items-center
+                                      gap-1.5
+                                      rounded-full
+                                      border border-amber-200
+                                      bg-amber-50
+                                      px-2.5
+                                      py-1
+                                      text-[10px]
+                                      font-black
+                                      text-amber-700
+                                    "
+                                  >
+                                    <span class="text-yellow-400">
+                                      ★
+                                    </span>
+
+                                    Sitio prioritario
+                                  </span>
+
+                                </div>
+
+                              {% endif %}
+
+                            </div>
+
+
+                            <!-- ==================================== -->
+                            <!-- ZONA                                 -->
+                            <!-- ==================================== -->
+
+                            <div class="shrink-0">
+
+                              {% if "rural" in fila.tipo_zona|lower %}
+
+                                <span
+                                  class="
+                                    rounded-full
+                                    border border-amber-200
+                                    bg-amber-50
+                                    px-2
+                                    py-1
+                                    text-[9px]
+                                    font-black
+                                    uppercase
+                                    text-amber-700
+                                  "
+                                >
+                                  Rural
+                                </span>
+
+                              {% elif fila.tipo_zona %}
+
+                                <span
+                                  class="
+                                    rounded-full
+                                    border border-blue-200
+                                    bg-blue-50
+                                    px-2
+                                    py-1
+                                    text-[9px]
+                                    font-black
+                                    uppercase
+                                    text-blue-700
+                                  "
+                                >
+                                  Urbano
+                                </span>
+
+                              {% endif %}
+
+                            </div>
+
+                          </div>
+
+
+                          <!-- ESTADOS -->
+
+                          <div class="mt-3 flex flex-wrap gap-1.5">
+
+                            <!-- PERMISO -->
+
+                            {% if fila.estado_permiso == "aprobado" or fila.estado_permiso == "no_requiere" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-emerald-200
+                                  bg-emerald-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-bold
+                                  text-emerald-700
+                                "
+                              >
+                                {{ fila.estado_permiso_display }}
+                              </span>
+
+                            {% else %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-amber-200
+                                  bg-amber-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-bold
+                                  text-amber-700
+                                "
+                              >
+                                {{ fila.estado_permiso_display }}
+                              </span>
+
+                            {% endif %}
+
+
+                            <!-- OPERACIONES -->
+
+                            {% if fila.estado_operativo_codigo == "listo_asignar" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-amber-200
+                                  bg-amber-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-black
+                                  text-amber-700
+                                "
+                              >
+                                Pendiente por asignar
+                              </span>
+
+
+                            {% elif fila.estado_operativo_codigo == "asignado" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-blue-200
+                                  bg-blue-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-black
+                                  text-blue-700
+                                "
+                              >
+                                Asignado
+                              </span>
+
+
+                            {% elif fila.estado_operativo_codigo == "en_ejecucion" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-violet-200
+                                  bg-violet-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-black
+                                  text-violet-700
+                                "
+                              >
+                                En ejecución
+                              </span>
+
+
+                            {% elif fila.grupo_operativo == "revision" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-orange-200
+                                  bg-orange-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-black
+                                  text-orange-700
+                                "
+                              >
+                                Revisión supervisor
+                              </span>
+
+
+                            {% elif fila.estado_operativo_codigo == "rechazado_supervisor" %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-red-200
+                                  bg-red-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-black
+                                  text-red-700
+                                "
+                              >
+                                Rechazado supervisor
+                              </span>
+
+
+                            {% elif not fila.servicio %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-red-200
+                                  bg-red-50
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-bold
+                                  text-red-700
+                                "
+                              >
+                                Sin servicio operativo
+                              </span>
+
+
+                            {% else %}
+
+                              <span
+                                class="
+                                  rounded-full
+                                  border border-slate-200
+                                  bg-slate-100
+                                  px-2.5
+                                  py-1
+                                  text-[10px]
+                                  font-bold
+                                  text-slate-600
+                                "
+                              >
+                                {{ fila.estado_operativo_texto }}
+                              </span>
+
+                            {% endif %}
+
+                          </div>
+
+
+                          <!-- SERVICIO / TÉCNICOS -->
+
+                          {% if fila.servicio %}
+
+                            <div
+                              class="
+                                mt-3
+                                rounded-xl
+                                border border-slate-100
+                                bg-slate-50
+                                px-3
+                                py-2.5
+                                text-[11px]
+                                text-slate-500
+                              "
+                            >
+
+                              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+
+                                <span class="font-black text-slate-700">
+                                  DU{{ fila.du }}
+                                </span>
+
+                                {% if fila.tecnicos %}
+
+                                  <span class="text-slate-300">
+                                    ·
+                                  </span>
+
+                                  <span>
+                                    Técnicos:
+                                  </span>
+
+                                  <span class="font-semibold text-slate-700">
+
+                                    {% for tecnico in fila.tecnicos %}
+                                      {{ tecnico }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+
+                                  </span>
+
+                                {% endif %}
+
+                              </div>
+
+                            </div>
+
+                          {% endif %}
+
+
+                          <!-- ====================================== -->
+                          <!-- ACCIONES DEL SITIO                     -->
+                          <!-- ====================================== -->
+
+                          <div class="mt-3 space-y-2">
+
+                            <!-- ==================================== -->
+                            <!-- ACCIÓN OPERACIONAL PRINCIPAL         -->
+                            <!-- ==================================== -->
+
+                            {% if fila.puede_asignar %}
+
+                              <a
+                                href="{% url 'planificacion:asignar_sitio_desde_planificacion' fila.sitio_salida.id %}"
+                                class="
+                                  inline-flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  bg-emerald-600
+                                  px-4
+                                  py-2.5
+                                  text-sm
+                                  font-black
+                                  text-white
+                                  shadow-sm
+                                  transition
+                                  hover:bg-emerald-700
+                                "
+                              >
+                                Asignar técnicos
+                              </a>
+
+
+                            {% elif not fila.servicio %}
+
+                              <div
+                                class="
+                                  flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  border border-slate-200
+                                  bg-slate-100
+                                  px-3
+                                  py-2
+                                  text-xs
+                                  font-bold
+                                  text-slate-500
+                                "
+                              >
+                                Esperando servicio operativo
+                              </div>
+
+
+                            {% elif fila.estado_operativo_codigo == "asignado" %}
+
+                              <div
+                                class="
+                                  flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  border border-blue-200
+                                  bg-blue-50
+                                  px-3
+                                  py-2
+                                  text-xs
+                                  font-bold
+                                  text-blue-700
+                                "
+                              >
+                                Esperando aceptación
+                              </div>
+
+
+                            {% elif fila.grupo_operativo == "revision" %}
+
+                              <div
+                                class="
+                                  flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  border border-orange-200
+                                  bg-orange-50
+                                  px-3
+                                  py-2
+                                  text-xs
+                                  font-bold
+                                  text-orange-700
+                                "
+                              >
+                                Pendiente revisión supervisor
+                              </div>
+
+
+                            {% elif fila.estado_operativo_codigo == "en_ejecucion" %}
+
+                              <div
+                                class="
+                                  flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  border border-violet-200
+                                  bg-violet-50
+                                  px-3
+                                  py-2
+                                  text-xs
+                                  font-bold
+                                  text-violet-700
+                                "
+                              >
+                                Trabajo en ejecución
+                              </div>
+
+                            {% endif %}
+                            
+                              <!-- ==================================== -->
+                              <!-- MOVER A OTRA SEMANA                  -->
+                              <!-- ==================================== -->
+
+                              {% if fila.estado_operativo_codigo != "en_revision_supervisor" and fila.estado_operativo_codigo != "rechazado_supervisor" and fila.estado_operativo_codigo != "aprobado_supervisor" %}
+
+                                <a
+                                  href="{% url 'planificacion:seleccionar_semana_destino' fila.sitio_batch.id %}"
+                                  class="
+                                    inline-flex
+                                    w-full
+                                    items-center
+                                    justify-center
+                                    gap-2
+                                    rounded-xl
+                                    border border-violet-200
+                                    bg-violet-50
+                                    px-3
+                                    py-2
+                                    text-xs
+                                    font-black
+                                    text-violet-700
+                                    transition
+                                    hover:border-violet-300
+                                    hover:bg-violet-100
+                                  "
+                                >
+
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    class="h-4 w-4"
+                                    aria-hidden="true"
+                                  >
+                                    <path
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      d="M5 12h14M13 6l6 6-6 6"
+                                    />
+                                  </svg>
+
+                                  Mover de semana
+
+                                </a>
+
+                              {% endif %}
+
+                            <!-- ==================================== -->
+                            <!-- QUITAR DE LA PLANIFICACIÓN           -->
+                            <!-- ==================================== -->
+
+                            {% if fila.puede_quitar_planificacion %}
+
+                            <form
+                              method="post"
+                              action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
+                            >
+                              {% csrf_token %}
+
+                              <button
+                                type="submit"
+                                class="
+                                  inline-flex
+                                  w-full
+                                  items-center
+                                  justify-center
+                                  gap-2
+                                  rounded-xl
+                                  border border-red-200
+                                  bg-white
+                                  px-3
+                                  py-2
+                                  text-xs
+                                  font-black
+                                  text-red-600
+                                  transition
+                                  hover:border-red-300
+                                  hover:bg-red-50
+                                  hover:text-red-700
+                                "
+                              >
+
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  class="h-4 w-4"
+                                  aria-hidden="true"
+                                >
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M6 18 18 6M6 6l12 12"
+                                  />
+                                </svg>
+
+                                Quitar de esta jornada
+
+                              </button>
+
+                            </form>
+
+                          {% endif %}
+                          </div>
+
+                        </div>
+
+                      {% endif %}
+
+                    {% endfor %}
+
+                  </div>
+
+
+                  <!-- ====================================== -->
+                  <!-- FINALIZADOS AL FINAL                   -->
+                  <!-- ====================================== -->
+                
+
+{% if salida_ui.cantidad_finalizados %}
+
+  <div
+    class="
+      border-t border-emerald-100
+      bg-emerald-50/40
+    "
+  >
+
+    <div
+      class="
+        flex
+        items-center
+        justify-between
+        border-b border-emerald-100
+        px-4
+        py-2.5
+      "
+    >
+
+      <span
+        class="
+          text-[10px]
+          font-black
+          uppercase
+          tracking-[0.12em]
+          text-emerald-700
+        "
+      >
+        Finalizados
+      </span>
+
+      <span
+        class="
+          rounded-full
+          bg-emerald-100
+          px-2
+          py-0.5
+          text-[10px]
+          font-black
+          text-emerald-700
+        "
+      >
+        {{ salida_ui.cantidad_finalizados }}
+      </span>
+
+    </div>
+
+
+    <div class="divide-y divide-emerald-100">
+
+      {% for fila in salida_ui.sitios %}
+
+        {% if fila.finalizado %}
+
+          <div
+            class="
+              px-4
+              py-3
+              opacity-70
+              transition
+              hover:opacity-100
+            "
+          >
+
+            <div
+              class="
+                flex
+                items-start
+                justify-between
+                gap-3
+              "
+            >
+
+              <div class="min-w-0 flex-1">
+
+                <div class="flex items-center gap-2">
+
+                  <span
+                    class="
+                      flex
+                      h-6
+                      w-6
+                      shrink-0
+                      items-center
+                      justify-center
+                      rounded-full
+                      bg-emerald-600
+                      text-[10px]
+                      font-black
+                      text-white
+                    "
+                  >
+                    ✓
+                  </span>
+
+                  <span
+                    class="
+                      text-xs
+                      font-black
+                      text-slate-700
+                    "
+                  >
+                    {{ fila.id_claro }}
+                  </span>
+
+                  {% if fila.es_prioridad %}
+
+                  <form
+                    method="post"
+                    action="{% url 'planificacion:quitar_prioridad_planificacion_diaria' fila.prioridad_id %}"
+                    class="inline-flex"
+                  >
+                    {% csrf_token %}
+
+                    <button
+                      type="submit"
+                      title="Quitar prioridad"
+                      aria-label="Quitar prioridad de {{ fila.id_claro }}"
+                      class="
+                        inline-flex
+                        h-6
+                        w-6
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        border border-yellow-300
+                        bg-yellow-50
+                        text-sm
+                        text-yellow-400
+                        shadow-sm
+                        transition
+                        hover:border-yellow-400
+                        hover:bg-yellow-100
+                        hover:text-yellow-500
+                      "
+                    >
+                      ★
+                    </button>
+
+                  </form>
+
+                {% endif %}
+
+                </div>
+
+
+                <div
+                  class="
+                    mt-1
+                    truncate
+                    text-xs
+                    font-semibold
+                    text-slate-500
+                  "
+                >
+                  {{ fila.nombre|default:"Sin nombre" }}
+                </div>
+
+
+                <div class="mt-2">
+
+                  <span
+                    class="
+                      inline-flex
+                      rounded-full
+                      border border-emerald-200
+                      bg-white
+                      px-2.5
+                      py-1
+                      text-[9px]
+                      font-black
+                      uppercase
+                      text-emerald-700
+                    "
+                  >
+                    Finalizado
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- ============================================ -->
+<!-- QUITAR TAMBIÉN SI ESTÁ FINALIZADO           -->
+<!-- ============================================ -->
+
+{% if fila.puede_quitar_planificacion %}
+
+  <div class="mt-3">
+
+    <form
+      method="post"
+      action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
+    >
+      {% csrf_token %}
+
+      <button
+        type="submit"
+        class="
+          inline-flex
+          w-full
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          border border-red-200
+          bg-white
+          px-3
+          py-2
+          text-xs
+          font-black
+          text-red-600
+          transition
+          hover:border-red-300
+          hover:bg-red-50
+          hover:text-red-700
+        "
+      >
+
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 18 18 6M6 6l12 12"
+          />
+        </svg>
+
+        Quitar de esta jornada
+
+      </button>
+
+    </form>
+
+  </div>
+
+{% endif %}
+
+          </div>
+
+        {% endif %}
+
+      {% endfor %}
+
+    </div>
+
+  </div>
+
+{% endif %}
+
+                </article>
+
+              {% endfor %}
+
+            </div>
+
+          </section>
+
+        {% endfor %}
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+<!-- ======================================================== -->
+<!-- MODAL TRASLADAR AL MES SIGUIENTE                        -->
+<!-- ======================================================== -->
+
+<div
+  id="modal-traslado-mes-siguiente"
+  class="
+    hidden
+    fixed
+    inset-0
+    z-[9999]
+    flex
+    items-center
+    justify-center
+    bg-slate-950/60
+    px-4
+    py-6
+    backdrop-blur-[2px]
+  "
+  aria-hidden="true"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="modal-traslado-titulo"
+  onclick="
+    if (event.target === this) {
+      cerrarModalTrasladoMesSiguiente();
+    }
+  "
+>
+
+  <div
+    id="modal-traslado-card"
+    class="
+      w-full
+      max-w-lg
+      scale-95
+      overflow-hidden
+      rounded-3xl
+      border
+      border-slate-200
+      bg-white
+      opacity-0
+      shadow-2xl
+      transition
+      duration-200
+    "
+  >
+
+    <!-- ==================================================== -->
+    <!-- CONTENIDO                                            -->
+    <!-- ==================================================== -->
+
+    <div class="p-6 sm:p-7">
+
+      <div class="flex items-start gap-4">
+
+        <!-- ICONO -->
+
+        <div
+          id="modal-traslado-icono"
+          class="
+            flex
+            h-12
+            w-12
+            shrink-0
+            items-center
+            justify-center
+            rounded-2xl
+            bg-blue-50
+            text-blue-600
+          "
+        >
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M5 12h14M13 6l6 6-6 6"
+            />
+          </svg>
+
+        </div>
+
+
+        <!-- TEXTO -->
+
+        <div class="min-w-0 flex-1">
+
+          <div
+            class="
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-blue-600
+            "
+          >
+            Planificación diaria
+          </div>
+
+          <h3
+            id="modal-traslado-titulo"
+            class="
+              mt-1
+              text-xl
+              font-black
+              text-slate-900
+            "
+          >
+            Pasar al mes siguiente
+          </h3>
+
+          <p
+            id="modal-traslado-texto"
+            class="
+              mt-3
+              text-sm
+              leading-relaxed
+              text-slate-600
+            "
+          >
+          </p>
+
+
+          <!-- RESUMEN DE SELECCIÓN -->
+
+          <div
+            id="modal-traslado-resumen"
+            class="
+              mt-4
+              hidden
+              rounded-2xl
+              border
+              border-blue-100
+              bg-blue-50
+              px-4
+              py-3
+            "
+          >
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-blue-600
+              "
+            >
+              Sitios seleccionados
+            </div>
+
+            <div
+              id="modal-traslado-cantidad"
+              class="
+                mt-1
+                text-2xl
+                font-black
+                text-blue-900
+              "
+            >
+              0
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- ACCIONES                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        flex
+        flex-col-reverse
+        gap-2
+        border-t
+        border-slate-100
+        bg-slate-50
+        px-6
+        py-4
+        sm:flex-row
+        sm:justify-end
+      "
+    >
+
+      <button
+        id="modal-traslado-cancelar"
+        type="button"
+        onclick="cerrarModalTrasladoMesSiguiente();"
+        class="
+          inline-flex
+          w-full
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-5
+          py-2.5
+          text-sm
+          font-black
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-100
+          sm:w-auto
+        "
+      >
+        Cancelar
+      </button>
+
+
+      <button
+        id="modal-traslado-confirmar"
+        type="button"
+        onclick="ejecutarTrasladoMesSiguiente();"
+        class="
+          inline-flex
+          w-full
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          bg-blue-600
+          px-5
+          py-2.5
+          text-sm
+          font-black
+          text-white
+          shadow-sm
+          transition
+          hover:bg-blue-700
+          sm:w-auto
+        "
+      >
+
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          class="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M5 12h14M13 6l6 6-6 6"
+          />
+        </svg>
+
+        <span id="modal-traslado-confirmar-texto">
+          Pasar seleccionados
+        </span>
+
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+  // =========================================================
+  // MODAL TRASLADAR AL MES SIGUIENTE
+  // =========================================================
+
+
+  // =========================================================
+  // PREPARAR TRASLADO
+  // =========================================================
+
+  function prepararTrasladoMesSiguiente() {
+
+    const seleccionados =
+      document.querySelectorAll(
+        'input[name="sitios_trasladar"]' +
+        '[form="form-traslado-mes-siguiente"]' +
+        ':checked'
+      );
+
+
+    // =======================================================
+    // SIN SELECCIÓN
+    // =======================================================
+
+    if (!seleccionados.length) {
+
+      abrirModalTrasladoMesSiguiente({
+        modo:
+          "advertencia",
+
+        cantidad:
+          0
+      });
+
+      return;
+    }
+
+
+    // =======================================================
+    // CONFIRMACIÓN
+    // =======================================================
+
+    abrirModalTrasladoMesSiguiente({
+      modo:
+        "confirmacion",
+
+      cantidad:
+        seleccionados.length
+    });
+
+  }
+
+
+  // =========================================================
+  // ABRIR MODAL
+  // =========================================================
+
+  function abrirModalTrasladoMesSiguiente(
+    opciones
+  ) {
+
+    const modal =
+      document.getElementById(
+        "modal-traslado-mes-siguiente"
+      );
+
+    const card =
+      document.getElementById(
+        "modal-traslado-card"
+      );
+
+    const titulo =
+      document.getElementById(
+        "modal-traslado-titulo"
+      );
+
+    const texto =
+      document.getElementById(
+        "modal-traslado-texto"
+      );
+
+    const resumen =
+      document.getElementById(
+        "modal-traslado-resumen"
+      );
+
+    const cantidad =
+      document.getElementById(
+        "modal-traslado-cantidad"
+      );
+
+    const cancelar =
+      document.getElementById(
+        "modal-traslado-cancelar"
+      );
+
+    const confirmar =
+      document.getElementById(
+        "modal-traslado-confirmar"
+      );
+
+    const confirmarTexto =
+      document.getElementById(
+        "modal-traslado-confirmar-texto"
+      );
+
+    const icono =
+      document.getElementById(
+        "modal-traslado-icono"
+      );
+
+
+    if (
+      !modal ||
+      !card ||
+      !titulo ||
+      !texto ||
+      !resumen ||
+      !cantidad ||
+      !cancelar ||
+      !confirmar ||
+      !confirmarTexto ||
+      !icono
+    ) {
+
+      console.error(
+        "No se pudo inicializar el modal de traslado."
+      );
+
+      return;
+    }
+
+
+    const modo =
+      opciones?.modo ||
+      "confirmacion";
+
+    const total =
+      Number(
+        opciones?.cantidad ||
+        0
+      );
+
+
+    // =======================================================
+    // REINICIAR ESTADO DEL BOTÓN
+    // =======================================================
+
+    confirmar.disabled =
+      false;
+
+    confirmar.classList.remove(
+      "cursor-not-allowed",
+      "opacity-60"
+    );
+
+
+    // =======================================================
+    // ADVERTENCIA
+    // =======================================================
+
+    if (
+      modo ===
+      "advertencia"
+    ) {
+
+      titulo.textContent =
+        "Selecciona al menos un sitio";
+
+      texto.textContent =
+        "Marca el checkbox de uno o más sitios antes de utilizar la opción Pasar seleccionados.";
+
+
+      resumen.classList.add(
+        "hidden"
+      );
+
+
+      cancelar.classList.add(
+        "hidden"
+      );
+
+
+      confirmarTexto.textContent =
+        "Entendido";
+
+
+      confirmar.onclick =
+        cerrarModalTrasladoMesSiguiente;
+
+
+      confirmar.className =
+        "inline-flex w-full items-center justify-center gap-2 " +
+        "rounded-xl bg-amber-500 px-5 py-2.5 text-sm " +
+        "font-black text-white shadow-sm transition " +
+        "hover:bg-amber-600 sm:w-auto";
+
+
+      icono.className =
+        "flex h-12 w-12 shrink-0 items-center justify-center " +
+        "rounded-2xl bg-amber-50 text-amber-600";
+
+    }
+
+
+    // =======================================================
+    // CONFIRMACIÓN
+    // =======================================================
+
+    else {
+
+      titulo.textContent =
+        "Pasar al mes siguiente";
+
+
+      texto.textContent =
+        "Los sitios seleccionados serán retirados de esta semana y pasarán al mes siguiente para ser reevaluados desde cero dentro de la nueva planificación.";
+
+
+      resumen.classList.remove(
+        "hidden"
+      );
+
+
+      cantidad.textContent =
+        String(
+          total
+        );
+
+
+      cancelar.classList.remove(
+        "hidden"
+      );
+
+
+      confirmarTexto.textContent =
+        "Pasar " +
+        total +
+        (
+          total === 1
+            ?
+            " sitio"
+            :
+            " sitios"
+        );
+
+
+      confirmar.onclick =
+        ejecutarTrasladoMesSiguiente;
+
+
+      confirmar.className =
+        "inline-flex w-full items-center justify-center gap-2 " +
+        "rounded-xl bg-blue-600 px-5 py-2.5 text-sm " +
+        "font-black text-white shadow-sm transition " +
+        "hover:bg-blue-700 sm:w-auto";
+
+
+      icono.className =
+        "flex h-12 w-12 shrink-0 items-center justify-center " +
+        "rounded-2xl bg-blue-50 text-blue-600";
+
+    }
+
+
+    // =======================================================
+    // MOSTRAR MODAL
+    // =======================================================
+
+    modal.hidden =
+      false;
+
+    modal.classList.remove(
+      "hidden"
+    );
+
+    modal.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+
+    document.documentElement.classList.add(
+      "overflow-hidden"
+    );
+
+    document.body.classList.add(
+      "overflow-hidden"
+    );
+
+
+    // =======================================================
+    // REINICIAR TARJETA
+    // =======================================================
+
+    card.classList.remove(
+      "scale-100",
+      "opacity-100"
+    );
+
+    card.classList.add(
+      "scale-95",
+      "opacity-0"
+    );
+
+
+    // =======================================================
+    // ANIMAR ENTRADA
+    // =======================================================
+
+    requestAnimationFrame(
+      function () {
+
+        card.classList.remove(
+          "scale-95",
+          "opacity-0"
+        );
+
+        card.classList.add(
+          "scale-100",
+          "opacity-100"
+        );
+
+      }
+    );
+
+  }
+
+
+  // =========================================================
+  // CERRAR MODAL
+  // =========================================================
+
+  function cerrarModalTrasladoMesSiguiente() {
+
+    const modal =
+      document.getElementById(
+        "modal-traslado-mes-siguiente"
+      );
+
+    const card =
+      document.getElementById(
+        "modal-traslado-card"
+      );
+
+
+    if (
+      !modal ||
+      !card
+    ) {
+      return;
+    }
+
+
+    // =======================================================
+    // OCULTAR INMEDIATAMENTE EL CONTENEDOR
+    // =======================================================
+    /*
+     * No dejamos timeouts pendientes.
+     *
+     * Esto es importante porque el mismo modal puede abrirse
+     * y cerrarse todas las veces que sea necesario.
+     */
+
+    modal.classList.add(
+      "hidden"
+    );
+
+    modal.hidden =
+      true;
+
+    modal.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+
+    // =======================================================
+    // REINICIAR TARJETA
+    // =======================================================
+
+    card.classList.remove(
+      "scale-100",
+      "opacity-100"
+    );
+
+    card.classList.add(
+      "scale-95",
+      "opacity-0"
+    );
+
+
+    // =======================================================
+    // LIBERAR SCROLL
+    // =======================================================
+
+    document.documentElement.classList.remove(
+      "overflow-hidden"
+    );
+
+    document.body.classList.remove(
+      "overflow-hidden"
+    );
+
+  }
+
+
+  // =========================================================
+  // CONFIRMAR Y ENVIAR
+  // =========================================================
+
+  function ejecutarTrasladoMesSiguiente() {
+
+    const form =
+      document.getElementById(
+        "form-traslado-mes-siguiente"
+      );
+
+    const confirmar =
+      document.getElementById(
+        "modal-traslado-confirmar"
+      );
+
+    const confirmarTexto =
+      document.getElementById(
+        "modal-traslado-confirmar-texto"
+      );
+
+
+    if (!form) {
+      return;
+    }
+
+
+    // =======================================================
+    // VALIDAR SELECCIÓN NUEVAMENTE
+    // =======================================================
+
+    const seleccionados =
+      document.querySelectorAll(
+        'input[name="sitios_trasladar"]' +
+        '[form="form-traslado-mes-siguiente"]' +
+        ':checked'
+      );
+
+
+    if (!seleccionados.length) {
+
+      cerrarModalTrasladoMesSiguiente();
+
+      return;
+    }
+
+
+    // =======================================================
+    // EVITAR DOBLE ENVÍO
+    // =======================================================
+
+    if (confirmar) {
+
+      confirmar.disabled =
+        true;
+
+      confirmar.classList.add(
+        "cursor-not-allowed",
+        "opacity-60"
+      );
+
+    }
+
+
+    if (confirmarTexto) {
+
+      confirmarTexto.textContent =
+        "Procesando...";
+
+    }
+
+
+    // =======================================================
+    // ENVÍO REAL
+    // =======================================================
+
+    form.submit();
+
+  }
+
+
+  // =========================================================
+  // ESC
+  // =========================================================
+
+  document.addEventListener(
+    "keydown",
+    function (
+      event
+    ) {
+
+      if (
+        event.key !==
+        "Escape"
+      ) {
+        return;
+      }
+
+
+      const modal =
+        document.getElementById(
+          "modal-traslado-mes-siguiente"
+        );
+
+
+      if (
+        !modal ||
+        modal.classList.contains(
+          "hidden"
+        )
+      ) {
+        return;
+      }
+
+
+      cerrarModalTrasladoMesSiguiente();
+
+    }
+  );
+
+</script>
+<script>
+(function () {
+
+  const STORAGE_KEY =
+    "planificacion-diaria-scroll:" +
+    window.location.pathname;
+
+  const RESTORING_CLASS =
+    "planificacion-restaurando-scroll";
+
+
+  // =========================================================
+  // LEER POSICIÓN
+  // =========================================================
+
+  function obtenerPosicionGuardada() {
+
+    try {
+
+      const raw =
+        sessionStorage.getItem(
+          STORAGE_KEY
+        );
+
+      if (!raw) {
+        return null;
+      }
+
+      const posicion =
+        JSON.parse(
+          raw
+        );
+
+      if (
+        !posicion ||
+        typeof posicion.y !==
+        "number"
+      ) {
+        return null;
+      }
+
+      return posicion;
+
+    } catch (error) {
+
+      return null;
+
+    }
+  }
+
+
+  // =========================================================
+  // OCULTAR MOMENTÁNEAMENTE DURANTE RESTAURACIÓN
+  // =========================================================
+
+  const posicionInicial =
+    obtenerPosicionGuardada();
+
+  if (
+    posicionInicial &&
+    posicionInicial.y > 0
+  ) {
+
+    document.documentElement.classList.add(
+      RESTORING_CLASS
+    );
+
+  }
+
+
+  // =========================================================
+  // ESTILO TEMPORAL
+  // =========================================================
+
+  const style =
+    document.createElement(
+      "style"
+    );
+
+  style.textContent = `
+    html.${RESTORING_CLASS} body {
+      visibility: hidden !important;
+    }
+  `;
+
+  document.head.appendChild(
+    style
+  );
+
+
+  // =========================================================
+  // GUARDAR POSICIÓN
+  // =========================================================
+
+  function guardarPosicionScroll() {
+
+    try {
+
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          x:
+            window.scrollX ||
+            window.pageXOffset ||
+            0,
+
+          y:
+            window.scrollY ||
+            window.pageYOffset ||
+            0
+        })
+      );
+
+    } catch (error) {}
+
+  }
+
+
+  // =========================================================
+  // MOSTRAR PÁGINA
+  // =========================================================
+
+  function mostrarPagina() {
+
+    document.documentElement.classList.remove(
+      RESTORING_CLASS
+    );
+
+  }
+
+
+  // =========================================================
+  // RESTAURAR POSICIÓN
+  // =========================================================
+
+  function restaurarPosicionScroll() {
+
+    const posicion =
+      obtenerPosicionGuardada();
+
+    if (!posicion) {
+
+      mostrarPagina();
+
+      return;
+    }
+
+
+    /*
+     * Desactivamos temporalmente cualquier restauración
+     * automática del navegador para evitar doble movimiento.
+     */
+    if (
+      "scrollRestoration" in history
+    ) {
+      history.scrollRestoration =
+        "manual";
+    }
+
+
+    requestAnimationFrame(
+      function () {
+
+        window.scrollTo({
+          left:
+            posicion.x || 0,
+
+          top:
+            posicion.y || 0,
+
+          behavior:
+            "instant"
+        });
+
+
+        /*
+         * Un frame adicional permite asegurar que
+         * el navegador ya quedó en la posición correcta
+         * antes de mostrar la página.
+         */
+        requestAnimationFrame(
+          function () {
+
+            window.scrollTo({
+              left:
+                posicion.x || 0,
+
+              top:
+                posicion.y || 0,
+
+              behavior:
+                "instant"
+            });
+
+            mostrarPagina();
+
+          }
+        );
+
+      }
+    );
+
+  }
+
+
+  // =========================================================
+  // FORMULARIOS
+  // =========================================================
+
+  document.addEventListener(
+    "submit",
+    function (event) {
+
+      const form =
+        event.target;
+
+      if (
+        !form ||
+        !(form instanceof HTMLFormElement)
+      ) {
+        return;
+      }
+
+      guardarPosicionScroll();
+
+    }
+  );
+
+
+  // =========================================================
+  // ENLACES
+  // =========================================================
+
+  document.addEventListener(
+    "click",
+    function (event) {
+
+      const enlace =
+        event.target.closest(
+          "a[href]"
+        );
+
+      if (!enlace) {
+        return;
+      }
+
+      guardarPosicionScroll();
+
+    }
+  );
+
+
+  // =========================================================
+  // ANTES DE SALIR
+  // =========================================================
+
+  window.addEventListener(
+    "beforeunload",
+    guardarPosicionScroll
+  );
+
+
+  // =========================================================
+  // CARGA NORMAL
+  // =========================================================
+
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      restaurarPosicionScroll,
+      {
+        once: true
+      }
+    );
+
+  } else {
+
+    restaurarPosicionScroll();
+
+  }
+
+
+  // =========================================================
+  // VOLVER DESDE HISTORIAL
+  // =========================================================
+
+  window.addEventListener(
+    "pageshow",
+    function () {
+
+      restaurarPosicionScroll();
+
+    }
+  );
+
+
+  // =========================================================
+  // SEGURIDAD
+  // =========================================================
+  /*
+   * Si por cualquier motivo algo falla, nunca dejamos
+   * la interfaz oculta permanentemente.
+   */
+
+  window.setTimeout(
+    mostrarPagina,
+    500
+  );
+
+})();
+</script>
+{% endblock %}

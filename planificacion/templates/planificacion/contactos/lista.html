@@ -1,0 +1,2161 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Base de Contactos
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+<style>
+  /* ======================================================== */
+  /* ÁREA SUPERIOR                                            */
+  /* ======================================================== */
+
+  .contactos-top {
+    width: 100%;
+    max-width: 1080px;
+  }
+
+  /* ======================================================== */
+  /* BUSCADOR                                                 */
+  /* ======================================================== */
+
+  .contactos-search {
+    min-height: 2.5rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 0.875rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    outline: none;
+    transition:
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  .contactos-search:focus {
+    border-color: #22d3ee;
+    box-shadow:
+      0 0 0 3px
+      rgba(34, 211, 238, 0.15);
+  }
+
+  /* ======================================================== */
+  /* TABLA                                                    */
+  /* ======================================================== */
+
+  .contactos-table-wrap {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+
+  .contactos-table-wrap::-webkit-scrollbar {
+    height: 9px;
+  }
+
+  .contactos-table-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+  }
+
+  .contactos-table-wrap::-webkit-scrollbar-thumb {
+    border: 2px solid #f1f5f9;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  /*
+   * Eliminamos la antigua columna EDITAR,
+   * por lo que podemos repartir mejor el ancho.
+   */
+  #contactos-table {
+    min-width: 1720px;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  #contactos-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+
+    border-bottom: 1px solid #cbd5e1;
+
+    background:
+      linear-gradient(
+        180deg,
+        #f8fafc 0%,
+        #f1f5f9 100%
+      );
+
+    color: #334155;
+
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.025em;
+    text-transform: uppercase;
+
+    white-space: nowrap;
+  }
+
+  #contactos-table tbody td {
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+    vertical-align: top;
+  }
+
+  #contactos-table tbody tr {
+    transition:
+      background-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  #contactos-table tbody tr:hover {
+    background:
+      rgba(
+        236,
+        254,
+        255,
+        0.55
+      );
+  }
+
+  .contacto-texto-largo {
+    min-width: 310px;
+    max-width: 440px;
+
+    white-space: normal;
+    overflow-wrap: anywhere;
+
+    line-height: 1.45;
+  }
+
+  .contacto-email {
+    min-width: 230px;
+    max-width: 320px;
+
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* ======================================================== */
+  /* CAMPO EDITABLE                                           */
+  /* ======================================================== */
+
+  .editable-cell {
+    position: relative;
+  }
+
+  .editable-view {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .editable-value {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .editable-pencil {
+    display: inline-flex;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
+
+    align-items: center;
+    justify-content: center;
+
+    margin-top: -0.2rem;
+
+    border: 1px solid transparent;
+    border-radius: 0.55rem;
+
+    background: transparent;
+    color: #94a3b8;
+
+    font-size: 0.72rem;
+
+    opacity: 0.45;
+
+    cursor: pointer;
+
+    transition:
+      opacity 0.18s ease,
+      color 0.18s ease,
+      background-color 0.18s ease,
+      border-color 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  .editable-cell:hover .editable-pencil {
+    opacity: 1;
+  }
+
+  .editable-pencil:hover {
+    border-color: #bae6fd;
+    background: #f0f9ff;
+    color: #0284c7;
+
+    transform: translateY(-1px);
+  }
+
+  /* ======================================================== */
+  /* EDITOR DE CELDA                                          */
+  /* ======================================================== */
+
+  .cell-editor-wrap {
+    display: none;
+    width: 100%;
+  }
+
+  .editable-cell.is-editing .editable-view {
+    display: none;
+  }
+
+  .editable-cell.is-editing .cell-editor-wrap {
+    display: block;
+  }
+
+  .cell-editor {
+    width: 100%;
+    min-width: 160px;
+    min-height: 2.6rem;
+
+    padding: 0.55rem 0.7rem;
+
+    border: 1px solid #2dd4bf;
+    border-radius: 0.75rem;
+
+    background: #ffffff;
+    color: #334155;
+
+    font-size: 0.78rem;
+    line-height: 1.4;
+
+    outline: none;
+    resize: vertical;
+
+    box-shadow:
+      0 0 0 3px
+      rgba(20, 184, 166, 0.10);
+  }
+
+  .cell-editor.long {
+    min-height: 5.5rem;
+  }
+
+  .cell-editor.multiple {
+    min-height: 4rem;
+  }
+
+  .cell-editor-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+
+    margin-top: 0.35rem;
+  }
+
+  .cell-editor-help {
+    color: #94a3b8;
+    font-size: 0.62rem;
+    line-height: 1.25;
+  }
+
+  .cell-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .cell-mini-btn {
+    display: inline-flex;
+    height: 1.8rem;
+
+    align-items: center;
+    justify-content: center;
+
+    padding: 0 0.55rem;
+
+    border-radius: 0.55rem;
+
+    font-size: 0.67rem;
+    font-weight: 800;
+
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease;
+  }
+
+  .cell-mini-save {
+    border: 1px solid #a7f3d0;
+    background: #ecfdf5;
+    color: #047857;
+  }
+
+  .cell-mini-save:hover {
+    background: #d1fae5;
+  }
+
+  .cell-mini-cancel {
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    color: #64748b;
+  }
+
+  .cell-mini-cancel:hover {
+    background: #f8fafc;
+  }
+
+  .editable-cell.is-saving {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .editable-cell.is-saved {
+    animation:
+      cellSavedFlash
+      0.85s ease;
+  }
+
+  @keyframes cellSavedFlash {
+    0% {
+      background: #d1fae5;
+    }
+
+    100% {
+      background: transparent;
+    }
+  }
+</style>
+
+
+<!-- ====================================================== -->
+<!-- CABECERA                                               -->
+<!-- ====================================================== -->
+
+<div class="contactos-top">
+
+  <div
+    class="
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-sm
+      sm:rounded-3xl
+    "
+  >
+
+    <div
+      class="
+        border-b border-slate-100
+        bg-gradient-to-r
+        from-slate-50
+        via-white
+        to-cyan-50/40
+        px-4 py-5
+        sm:px-6
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <div
+            class="
+              flex
+              h-12 w-12
+              shrink-0
+              items-center
+              justify-center
+              rounded-2xl
+              border border-cyan-100
+              bg-gradient-to-br
+              from-cyan-50
+              to-blue-100
+              text-2xl
+              shadow-sm
+            "
+          >
+            📇
+          </div>
+
+          <div>
+
+            <p
+              class="
+                mb-0.5
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-cyan-700
+              "
+            >
+              Planificación
+            </p>
+
+            <h1
+              class="
+                text-2xl
+                font-black
+                tracking-tight
+                text-slate-900
+                sm:text-3xl
+              "
+            >
+              Base de Contactos
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-500">
+              Información de contacto y condiciones de acceso de los sitios.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <a
+          href="{% url 'planificacion:importar_contactos' %}"
+          class="
+            inline-flex
+            w-fit
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border border-emerald-200
+            bg-gradient-to-r
+            from-emerald-600
+            to-teal-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          📥 Importar contactos
+        </a>
+
+      </div>
+
+
+      {% if ultima_importacion %}
+
+        <div
+          class="
+            mt-4
+            inline-flex
+            flex-wrap
+            items-center
+            gap-x-2
+            gap-y-1
+            rounded-xl
+            border border-slate-200
+            bg-white/80
+            px-3 py-2
+            text-xs
+            text-slate-600
+            shadow-sm
+          "
+        >
+
+          <span>
+            🕒
+            <strong class="font-bold text-slate-700">
+              Última importación:
+            </strong>
+
+            {{ ultima_importacion.aplicado_en|date:"d/m/Y H:i" }}
+          </span>
+
+
+          {% if ultima_importacion.creado_por %}
+
+            <span class="text-slate-300">
+              |
+            </span>
+
+            <span>
+              👤
+              <strong class="font-bold text-slate-700">
+                Actualizado por:
+              </strong>
+
+              {{ ultima_importacion.creado_por.get_full_name|default:ultima_importacion.creado_por.username }}
+            </span>
+
+          {% endif %}
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <!-- ================================================== -->
+    <!-- BUSCADOR                                           -->
+    <!-- ================================================== -->
+
+    <div
+      class="
+        bg-gradient-to-br
+        from-slate-50
+        via-white
+        to-slate-100
+        px-4 py-4
+        sm:px-6
+      "
+    >
+
+      <form
+        method="get"
+        class="
+          flex
+          flex-col
+          gap-2
+          sm:flex-row
+          sm:items-center
+        "
+      >
+
+        <div class="relative flex-1">
+
+          <div
+            class="
+              pointer-events-none
+              absolute
+              inset-y-0
+              left-0
+              flex
+              items-center
+              pl-3.5
+              text-slate-400
+            "
+          >
+            🔎
+          </div>
+
+          <input
+            type="text"
+            name="q"
+            value="{{ buscar }}"
+            placeholder="Buscar ID, sitio, propietario, teléfono, correo..."
+            autocomplete="off"
+            class="
+              contactos-search
+              w-full
+              py-2
+              pl-10
+              pr-3
+            "
+          >
+
+        </div>
+
+
+        <button
+          type="submit"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            bg-cyan-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-sm
+            transition
+            hover:bg-cyan-700
+          "
+        >
+          Buscar
+        </button>
+
+
+        {% if buscar %}
+
+          <a
+            href="{% url 'planificacion:listar_contactos' %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4 py-2.5
+              text-sm
+              font-bold
+              text-red-600
+              shadow-sm
+              hover:border-red-200
+              hover:bg-red-50
+            "
+          >
+            ✕ Limpiar
+          </a>
+
+        {% endif %}
+
+
+        <input
+          type="hidden"
+          name="cantidad"
+          value="{{ cantidad }}"
+        >
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- TABLA                                                  -->
+<!-- ====================================================== -->
+
+<div
+  class="
+    mt-5
+    overflow-hidden
+    rounded-2xl
+    border border-slate-200
+    bg-white
+    shadow-sm
+    sm:rounded-3xl
+  "
+>
+
+  <div class="contactos-table-wrap">
+
+    <table
+      id="contactos-table"
+      class="w-full text-sm"
+    >
+
+      <thead>
+
+        <tr>
+          <th class="px-4 py-3 text-left">REGIÓN</th>
+          <th class="px-4 py-3 text-left">ID</th>
+          <th class="px-4 py-3 text-left">NOMBRE SITIO</th>
+          <th class="px-4 py-3 text-left">PROPIETARIO</th>
+          <th class="px-4 py-3 text-left">TELÉFONO</th>
+          <th class="px-4 py-3 text-left">CORREO</th>
+          <th class="px-4 py-3 text-left">FECHA</th>
+          <th class="px-4 py-3 text-left">RESPONSABLE</th>
+          <th class="px-4 py-3 text-left">OBSERVACIONES</th>
+          <th class="px-4 py-3 text-left">ACCIÓN</th>
+        </tr>
+
+      </thead>
+
+
+      <tbody>
+
+        {% for contacto in contactos %}
+
+          <tr
+            id="contacto-row-{{ contacto.pk }}"
+            data-contacto-row
+            data-contacto-id="{{ contacto.pk }}"
+            data-update-url="{% url 'planificacion:editar_contacto_inline' contacto.pk %}"
+          >
+
+            <!-- REGION -->
+            <td class="px-4 py-3 font-semibold text-slate-600 whitespace-nowrap">
+              {{ contacto.region|default:"—" }}
+            </td>
+
+
+            <!-- ID -->
+            <td class="px-4 py-3 font-black text-slate-900 whitespace-nowrap">
+
+              {{ contacto.id_origen }}
+
+              {% if not contacto.sitio %}
+
+                <span
+                  title="No existe vínculo con la tabla maestra de sitios"
+                  class="
+                    ml-1
+                    inline-flex
+                    rounded-full
+                    bg-amber-50
+                    px-1.5 py-0.5
+                    text-[10px]
+                    font-black
+                    text-amber-700
+                  "
+                >
+                  ⚠
+                </span>
+
+              {% endif %}
+
+            </td>
+
+
+            <!-- NOMBRE -->
+            <td class="px-4 py-3 min-w-[220px]">
+
+              <div class="font-bold text-slate-800">
+
+                {% if contacto.sitio and contacto.sitio.nombre %}
+                  {{ contacto.sitio.nombre }}
+                {% else %}
+                  {{ contacto.nombre_sitio|default:"—" }}
+                {% endif %}
+
+              </div>
+
+
+              {% if contacto.sitio and contacto.sitio.id_sites_new %}
+
+                <div class="mt-0.5 text-[11px] text-slate-400">
+                  {{ contacto.sitio.id_sites_new }}
+                </div>
+
+              {% endif %}
+
+            </td>
+
+
+            <!-- PROPIETARIO -->
+            <td class="editable-cell min-w-[220px] px-4 py-3"
+                data-field-cell="propietario">
+
+              <div class="editable-view">
+
+                <div class="editable-value"
+                     data-value-display="propietario">
+
+                  {{ contacto.propietario|default:"—" }}
+
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar propietario"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'propietario')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor"
+                  rows="2"
+                  data-field-input="propietario"
+                >{{ contacto.propietario }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Esc cancela
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'propietario')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'propietario')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+
+            <!-- TELEFONO -->
+            <td class="editable-cell min-w-[220px] px-4 py-3"
+                data-field-cell="telefono">
+
+              <div class="editable-view">
+
+                <div
+                  class="
+                    editable-value
+                    whitespace-pre-line
+                    font-semibold
+                    text-slate-800
+                  "
+                  data-value-display="telefono"
+                >
+                  {% if contacto.telefono %}
+                    {{ contacto.telefono }}
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar teléfono"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'telefono')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor multiple"
+                  rows="3"
+                  data-field-input="telefono"
+                >{{ contacto.telefono }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Shift+Enter agrega línea
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'telefono')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'telefono')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+
+            <!-- CORREO -->
+            <td class="editable-cell contacto-email px-4 py-3"
+                data-field-cell="correo">
+
+              <div class="editable-view">
+
+                <div
+                  class="
+                    editable-value
+                    whitespace-pre-line
+                    font-medium
+                    text-cyan-700
+                  "
+                  data-value-display="correo"
+                >
+                  {% if contacto.correo %}
+                    {{ contacto.correo }}
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar correo"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'correo')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor multiple"
+                  rows="3"
+                  data-field-input="correo"
+                >{{ contacto.correo }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Shift+Enter agrega línea
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'correo')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'correo')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+
+            <!-- FECHA -->
+            <td
+              class="px-4 py-3 whitespace-nowrap text-slate-600"
+              data-fecha
+            >
+              {% if contacto.fecha_informacion %}
+                {{ contacto.fecha_informacion|date:"d/m/Y" }}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
+
+            <!-- RESPONSABLE -->
+            <td class="editable-cell min-w-[165px] px-4 py-3"
+                data-field-cell="responsable">
+
+              <div class="editable-view">
+
+                <div class="editable-value"
+                     data-value-display="responsable">
+
+                  {{ contacto.responsable|default:"—" }}
+
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar responsable"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'responsable')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor"
+                  rows="2"
+                  data-field-input="responsable"
+                >{{ contacto.responsable }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Esc cancela
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'responsable')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'responsable')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+
+            <!-- OBSERVACIONES -->
+            <td class="editable-cell contacto-texto-largo px-4 py-3"
+                data-field-cell="observaciones">
+
+              <div class="editable-view">
+
+                <div
+                  class="
+                    editable-value
+                    whitespace-pre-line
+                    text-xs
+                    text-slate-700
+                  "
+                  data-value-display="observaciones"
+                >
+                  {% if contacto.observaciones %}
+                    {{ contacto.observaciones }}
+                  {% else %}
+                    <span class="text-slate-400">—</span>
+                  {% endif %}
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar observaciones"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'observaciones')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor long"
+                  rows="5"
+                  data-field-input="observaciones"
+                >{{ contacto.observaciones }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Shift+Enter agrega línea
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'observaciones')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'observaciones')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+
+            <!-- ACCION -->
+            <td class="editable-cell contacto-texto-largo px-4 py-3"
+                data-field-cell="accion">
+
+              <div class="editable-view">
+
+                <div
+                  class="editable-value"
+                  data-value-display="accion"
+                >
+
+                  {% if contacto.accion %}
+
+                    <div
+                      class="
+                        whitespace-pre-line
+                        rounded-xl
+                        border border-cyan-100
+                        bg-cyan-50/50
+                        px-3 py-2
+                        text-xs
+                        font-medium
+                        text-slate-700
+                      "
+                    >
+                      {{ contacto.accion }}
+                    </div>
+
+                  {% else %}
+
+                    <span class="text-slate-400">
+                      —
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+                <button
+                  type="button"
+                  class="editable-pencil"
+                  title="Editar acción"
+                  onclick="editarCampoContacto('{{ contacto.pk }}', 'accion')"
+                >
+                  ✏️
+                </button>
+
+              </div>
+
+
+              <div class="cell-editor-wrap">
+
+                <textarea
+                  class="cell-editor long"
+                  rows="5"
+                  data-field-input="accion"
+                >{{ contacto.accion }}</textarea>
+
+                <div class="cell-editor-footer">
+
+                  <span class="cell-editor-help">
+                    Enter guarda · Shift+Enter agrega línea
+                  </span>
+
+                  <div class="cell-editor-actions">
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-save"
+                      onclick="guardarCampoContacto('{{ contacto.pk }}', 'accion')"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      class="cell-mini-btn cell-mini-cancel"
+                      onclick="cancelarCampoContacto('{{ contacto.pk }}', 'accion')"
+                    >
+                      ✕
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </td>
+
+          </tr>
+
+
+        {% empty %}
+
+          <tr>
+
+            <td
+              colspan="10"
+              class="px-4 py-14 text-center"
+            >
+
+              <div
+                class="
+                  mx-auto
+                  flex
+                  h-12 w-12
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-slate-100
+                  text-2xl
+                "
+              >
+                📭
+              </div>
+
+              <p class="mt-3 font-bold text-slate-700">
+                No hay contactos para mostrar
+              </p>
+
+              <p class="mt-1 text-xs text-slate-500">
+                Importa la base de contactos o cambia los criterios de búsqueda.
+              </p>
+
+            </td>
+
+          </tr>
+
+        {% endfor %}
+
+      </tbody>
+
+    </table>
+
+  </div>
+
+
+  <!-- ==================================================== -->
+  <!-- CANTIDAD                                             -->
+  <!-- ==================================================== -->
+
+  <form
+    method="get"
+    class="
+      flex
+      flex-wrap
+      items-center
+      gap-2
+      border-t border-slate-200
+      bg-slate-50
+      px-4 py-4
+      sm:px-6
+    "
+  >
+
+    <label
+      for="cantidad"
+      class="text-sm font-semibold text-slate-600"
+    >
+      Mostrar:
+    </label>
+
+    <select
+      name="cantidad"
+      id="cantidad"
+      onchange="this.form.submit()"
+      class="
+        rounded-xl
+        border border-slate-300
+        bg-white
+        px-3 py-2
+        text-sm
+        font-bold
+        text-slate-700
+        shadow-sm
+        outline-none
+        focus:border-cyan-400
+        focus:ring-2
+        focus:ring-cyan-100
+      "
+    >
+      <option value="10" {% if cantidad == "10" %}selected{% endif %}>10</option>
+      <option value="20" {% if cantidad == "20" %}selected{% endif %}>20</option>
+      <option value="50" {% if cantidad == "50" %}selected{% endif %}>50</option>
+      <option value="100" {% if cantidad == "100" %}selected{% endif %}>100</option>
+    </select>
+
+    <input
+      type="hidden"
+      name="q"
+      value="{{ buscar }}"
+    >
+
+  </form>
+
+
+  <!-- ==================================================== -->
+  <!-- PAGINACION                                           -->
+  <!-- ==================================================== -->
+
+  {% if pagina.paginator.num_pages > 1 %}
+
+    <div
+      class="
+        flex
+        flex-wrap
+        items-center
+        justify-center
+        gap-2
+        border-t border-slate-200
+        bg-slate-50
+        px-4 py-4
+        text-sm
+        sm:px-6
+      "
+    >
+
+      {% if pagina.has_previous %}
+
+        <a
+          href="?page=1&cantidad={{ cantidad }}&q={{ buscar|urlencode }}"
+          class="
+            inline-flex
+            h-9
+            items-center
+            justify-center
+            rounded-lg
+            border border-slate-300
+            bg-white
+            px-3
+            font-bold
+            text-slate-600
+            shadow-sm
+            hover:bg-slate-100
+          "
+        >
+          « Primero
+        </a>
+
+        <a
+          href="?page={{ pagina.previous_page_number }}&cantidad={{ cantidad }}&q={{ buscar|urlencode }}"
+          class="
+            inline-flex
+            h-9
+            items-center
+            justify-center
+            rounded-lg
+            border border-slate-300
+            bg-white
+            px-3
+            font-bold
+            text-slate-600
+            shadow-sm
+            hover:bg-slate-100
+          "
+        >
+          ‹ Anterior
+        </a>
+
+      {% endif %}
+
+
+      <span
+        class="
+          inline-flex
+          h-9
+          items-center
+          justify-center
+          rounded-lg
+          border border-cyan-200
+          bg-cyan-50
+          px-4
+          font-black
+          text-cyan-800
+        "
+      >
+        Página {{ pagina.number }}
+        de {{ pagina.paginator.num_pages }}
+      </span>
+
+
+      {% if pagina.has_next %}
+
+        <a
+          href="?page={{ pagina.next_page_number }}&cantidad={{ cantidad }}&q={{ buscar|urlencode }}"
+          class="
+            inline-flex
+            h-9
+            items-center
+            justify-center
+            rounded-lg
+            border border-slate-300
+            bg-white
+            px-3
+            font-bold
+            text-slate-600
+            shadow-sm
+            hover:bg-slate-100
+          "
+        >
+          Siguiente ›
+        </a>
+
+        <a
+          href="?page={{ pagina.paginator.num_pages }}&cantidad={{ cantidad }}&q={{ buscar|urlencode }}"
+          class="
+            inline-flex
+            h-9
+            items-center
+            justify-center
+            rounded-lg
+            border border-slate-300
+            bg-white
+            px-3
+            font-bold
+            text-slate-600
+            shadow-sm
+            hover:bg-slate-100
+          "
+        >
+          Último »
+        </a>
+
+      {% endif %}
+
+    </div>
+
+  {% endif %}
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- EDICIÓN INLINE                                         -->
+<!-- ====================================================== -->
+
+<script>
+(function () {
+  const CSRF_TOKEN =
+    document.querySelector(
+      'meta[name="csrf-token"]'
+    )?.getAttribute('content') || '';
+
+
+  function getRow(id) {
+    return document.getElementById(
+      'contacto-row-' + id
+    );
+  }
+
+
+  function getCell(
+    id,
+    field
+  ) {
+    const row = getRow(id);
+
+    if (!row) {
+      return null;
+    }
+
+    return row.querySelector(
+      `[data-field-cell="${field}"]`
+    );
+  }
+
+
+  function getInput(
+    cell,
+    field
+  ) {
+    if (!cell) {
+      return null;
+    }
+
+    return cell.querySelector(
+      `[data-field-input="${field}"]`
+    );
+  }
+
+
+  function escapeHtml(value) {
+    return String(
+      value || ''
+    )
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+
+  function renderNormal(
+    field,
+    value
+  ) {
+    const text = String(
+      value || ''
+    ).trim();
+
+    if (!text) {
+      return (
+        '<span class="text-slate-400">—</span>'
+      );
+    }
+
+    const escaped =
+      escapeHtml(
+        text
+      ).replace(
+        /\n/g,
+        '<br>'
+      );
+
+    if (field === 'accion') {
+      return `
+        <div
+          class="
+            whitespace-pre-line
+            rounded-xl
+            border border-cyan-100
+            bg-cyan-50/50
+            px-3 py-2
+            text-xs
+            font-medium
+            text-slate-700
+          "
+        >${escaped}</div>
+      `;
+    }
+
+    return escaped;
+  }
+
+
+  function cerrarOtrosEditores(
+    keepCell
+  ) {
+    document
+      .querySelectorAll(
+        '.editable-cell.is-editing'
+      )
+      .forEach(
+        (cell) => {
+
+          if (
+            cell === keepCell
+          ) {
+            return;
+          }
+
+          const input =
+            cell.querySelector(
+              '[data-field-input]'
+            );
+
+          if (
+            input &&
+            input.dataset.original !== undefined
+          ) {
+            input.value =
+              input.dataset.original;
+          }
+
+          cell.classList.remove(
+            'is-editing'
+          );
+        }
+      );
+  }
+
+
+  window.editarCampoContacto = function (
+    id,
+    field
+  ) {
+    const cell =
+      getCell(
+        id,
+        field
+      );
+
+    if (!cell) {
+      return;
+    }
+
+    cerrarOtrosEditores(
+      cell
+    );
+
+    const input =
+      getInput(
+        cell,
+        field
+      );
+
+    if (!input) {
+      return;
+    }
+
+    input.dataset.original =
+      input.value;
+
+    cell.classList.add(
+      'is-editing'
+    );
+
+    setTimeout(
+      () => {
+        input.focus();
+
+        const len =
+          input.value.length;
+
+        input.setSelectionRange(
+          len,
+          len
+        );
+      },
+      20
+    );
+  };
+
+
+  window.cancelarCampoContacto = function (
+    id,
+    field
+  ) {
+    const cell =
+      getCell(
+        id,
+        field
+      );
+
+    if (!cell) {
+      return;
+    }
+
+    const input =
+      getInput(
+        cell,
+        field
+      );
+
+    if (
+      input &&
+      input.dataset.original !== undefined
+    ) {
+      input.value =
+        input.dataset.original;
+    }
+
+    cell.classList.remove(
+      'is-editing'
+    );
+  };
+
+
+  window.guardarCampoContacto = async function (
+    id,
+    field
+  ) {
+    const row =
+      getRow(
+        id
+      );
+
+    const cell =
+      getCell(
+        id,
+        field
+      );
+
+    if (
+      !row ||
+      !cell
+    ) {
+      return;
+    }
+
+    const input =
+      getInput(
+        cell,
+        field
+      );
+
+    if (!input) {
+      return;
+    }
+
+    const valor =
+      input.value;
+
+    const url =
+      row.dataset.updateUrl;
+
+    const formData =
+      new FormData();
+
+    formData.append(
+      'campo',
+      field
+    );
+
+    formData.append(
+      'valor',
+      valor
+    );
+
+    cell.classList.add(
+      'is-saving'
+    );
+
+    try {
+
+      const response =
+        await fetch(
+          url,
+          {
+            method:
+              'POST',
+
+            headers: {
+              'X-CSRFToken':
+                CSRF_TOKEN,
+
+              'X-Requested-With':
+                'XMLHttpRequest'
+            },
+
+            body:
+              formData
+          }
+        );
+
+
+      let data = null;
+
+      try {
+        data =
+          await response.json();
+      } catch (_) {
+
+        alert(
+          'El servidor devolvió una respuesta inválida.'
+        );
+
+        return;
+      }
+
+
+      if (
+        !response.ok ||
+        !data.ok
+      ) {
+
+        const errores =
+          data.errores || {};
+
+        const mensajes =
+          [];
+
+        Object.entries(
+          errores
+        ).forEach(
+          ([campo, lista]) => {
+
+            mensajes.push(
+              campo +
+              ': ' +
+              lista.join(', ')
+            );
+          }
+        );
+
+        alert(
+          mensajes.join('\n') ||
+          data.mensaje ||
+          'No fue posible guardar.'
+        );
+
+        return;
+      }
+
+
+      const contacto =
+        data.contacto || {};
+
+      const nuevoValor =
+        contacto.valor ?? '';
+
+      input.value =
+        nuevoValor;
+
+      input.dataset.original =
+        nuevoValor;
+
+
+      const display =
+        cell.querySelector(
+          `[data-value-display="${field}"]`
+        );
+
+      if (display) {
+        display.innerHTML =
+          renderNormal(
+            field,
+            nuevoValor
+          );
+      }
+
+
+      const fechaCell =
+        row.querySelector(
+          '[data-fecha]'
+        );
+
+      if (
+        fechaCell &&
+        contacto.fecha
+      ) {
+        fechaCell.textContent =
+          contacto.fecha;
+      }
+
+
+      cell.classList.remove(
+        'is-editing'
+      );
+
+
+      if (!data.sin_cambios) {
+
+        cell.classList.add(
+          'is-saved'
+        );
+
+        setTimeout(
+          () => {
+            cell.classList.remove(
+              'is-saved'
+            );
+          },
+          900
+        );
+      }
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+      alert(
+        'Ocurrió un error al guardar el contacto.'
+      );
+
+    } finally {
+
+      cell.classList.remove(
+        'is-saving'
+      );
+    }
+  };
+
+
+  /* ====================================================== */
+  /* ENTER / ESC                                            */
+  /* ====================================================== */
+
+  document.addEventListener(
+    'keydown',
+    function (e) {
+
+      const input =
+        e.target.closest(
+          '[data-field-input]'
+        );
+
+      if (!input) {
+        return;
+      }
+
+      const cell =
+        input.closest(
+          '[data-field-cell]'
+        );
+
+      const row =
+        input.closest(
+          '[data-contacto-row]'
+        );
+
+      if (
+        !cell ||
+        !row
+      ) {
+        return;
+      }
+
+      const id =
+        row.dataset.contactoId;
+
+      const field =
+        input.dataset.fieldInput;
+
+
+      /*
+       * ESC = cancelar.
+       */
+      if (
+        e.key ===
+        'Escape'
+      ) {
+
+        e.preventDefault();
+
+        window.cancelarCampoContacto(
+          id,
+          field
+        );
+
+        return;
+      }
+
+
+      /*
+       * ENTER = guardar.
+       *
+       * SHIFT + ENTER mantiene la funcionalidad
+       * de salto de línea para teléfonos,
+       * correos, observaciones y acciones.
+       */
+      if (
+        e.key ===
+        'Enter'
+      ) {
+
+        if (
+          e.shiftKey
+        ) {
+          return;
+        }
+
+        e.preventDefault();
+
+        window.guardarCampoContacto(
+          id,
+          field
+        );
+      }
+    }
+  );
+
+
+  /* ====================================================== */
+  /* DOBLE CLICK SOBRE VALOR                                */
+  /* ====================================================== */
+
+  document.addEventListener(
+    'dblclick',
+    function (e) {
+
+      const value =
+        e.target.closest(
+          '[data-value-display]'
+        );
+
+      if (!value) {
+        return;
+      }
+
+      const cell =
+        value.closest(
+          '[data-field-cell]'
+        );
+
+      const row =
+        value.closest(
+          '[data-contacto-row]'
+        );
+
+      if (
+        !cell ||
+        !row
+      ) {
+        return;
+      }
+
+      const field =
+        cell.dataset.fieldCell;
+
+      const id =
+        row.dataset.contactoId;
+
+      window.editarCampoContacto(
+        id,
+        field
+      );
+    }
+  );
+
+})();
+</script>
+
+
+<!-- ====================================================== -->
+<!-- CONSERVAR SCROLL                                       -->
+<!-- ====================================================== -->
+
+<script>
+(function () {
+  const KEY =
+    'planificacion-contactos-scroll:' +
+    location.pathname;
+
+
+  function zone() {
+    return document.querySelector(
+      '.contactos-table-wrap'
+    );
+  }
+
+
+  function saveScroll() {
+    try {
+
+      const z =
+        zone();
+
+      sessionStorage.setItem(
+        KEY,
+        JSON.stringify({
+          winX:
+            window.scrollX || 0,
+
+          winY:
+            window.scrollY || 0,
+
+          zoneX:
+            z
+              ? z.scrollLeft
+              : 0,
+
+          zoneY:
+            z
+              ? z.scrollTop
+              : 0
+        })
+      );
+
+    } catch (_) {}
+  }
+
+
+  function restoreScroll() {
+    try {
+
+      const data =
+        JSON.parse(
+          sessionStorage.getItem(
+            KEY
+          ) || 'null'
+        );
+
+      if (!data) {
+        return;
+      }
+
+
+      requestAnimationFrame(
+        () => {
+
+          window.scrollTo(
+            data.winX || 0,
+            data.winY || 0
+          );
+
+        }
+      );
+
+
+      const z =
+        zone();
+
+      if (z) {
+
+        z.scrollLeft =
+          data.zoneX || 0;
+
+        z.scrollTop =
+          data.zoneY || 0;
+      }
+
+    } catch (_) {}
+  }
+
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    restoreScroll
+  );
+
+
+  window.addEventListener(
+    'pageshow',
+    (e) => {
+
+      if (
+        e.persisted
+      ) {
+        restoreScroll();
+      }
+
+    }
+  );
+
+
+  window.addEventListener(
+    'beforeunload',
+    saveScroll
+  );
+
+
+  document.addEventListener(
+    'submit',
+    saveScroll
+  );
+
+})();
+</script>
+
+{% endblock %}

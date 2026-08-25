@@ -1,0 +1,1012 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Planificación Semanal
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1500px]">
+
+    <!-- ==================================================== -->
+    <!-- ENCABEZADO                                           -->
+    <!-- ==================================================== -->
+
+    <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+      <div>
+
+        <div class="mb-1 text-sm font-medium text-slate-500">
+          Planificación Mensual
+        </div>
+
+        <h1 class="text-2xl font-bold text-slate-900">
+          Planificación Semanal
+        </h1>
+
+        <p class="mt-1 text-sm text-slate-600">
+          {{ mensual }}
+        </p>
+
+      </div>
+
+
+      <div class="flex flex-wrap gap-2">
+
+        <a
+          href="{% url 'planificacion:lista_asignacion_mensual' mensual.id %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4 py-2.5
+            text-sm
+            font-semibold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Volver a asignación mensual
+        </a>
+
+
+        <!-- ================================================ -->
+        <!-- MAPA DEL MES                                     -->
+        <!-- ================================================ -->
+
+        {% if filas %}
+
+          <a
+            href="{% url 'planificacion:mapa_batches_mensuales' mensual.id %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              gap-2
+              rounded-xl
+              border border-blue-200
+              bg-blue-50
+              px-4 py-2.5
+              text-sm
+              font-semibold
+              text-blue-700
+              shadow-sm
+              transition
+              hover:bg-blue-100
+            "
+          >
+
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="h-4 w-4"
+            >
+              <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+
+            Ver mapa del mes
+
+          </a>
+
+        {% endif %}
+
+
+        <a
+          href="{% url 'planificacion:crear_planificacion_semanal' mensual.id %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            bg-blue-600
+            px-4 py-2.5
+            text-sm
+            font-semibold
+            text-white
+            shadow-sm
+            transition
+            hover:bg-blue-700
+          "
+        >
+          Nuevo batch semanal
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- RESUMEN DEL MES                                      -->
+    <!-- ==================================================== -->
+
+    <div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Sitios del mes
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-slate-900">
+          {{ resumen_mensual.total_mes }}
+        </div>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Disponibles batch
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-blue-700">
+          {{ resumen_mensual.disponibles_nuevo_batch }}
+        </div>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          En batches
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-slate-900">
+          {{ resumen_mensual.comprometidos_batches }}
+        </div>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          En gestión
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-amber-600">
+          {{ resumen_mensual.en_gestion }}
+        </div>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Aprobados
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-emerald-600">
+          {{ resumen_mensual.aprobados }}
+        </div>
+
+      </div>
+
+
+      <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Completados
+        </div>
+
+        <div class="mt-2 text-2xl font-bold text-slate-900">
+          {{ resumen_mensual.completados }}
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- BATCHES                                              -->
+    <!-- ==================================================== -->
+
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+      <div class="border-b border-slate-200 px-5 py-4">
+
+        <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <h2 class="text-base font-bold text-slate-900">
+              Batches semanales
+            </h2>
+
+            <p class="text-sm text-slate-500">
+              Cada batch representa el grupo de sitios que se prepara
+              para gestionar permisos con el cliente.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      {% if filas %}
+
+        <div class="overflow-x-auto">
+
+          <table class="min-w-[1450px] w-full divide-y divide-slate-200 text-sm">
+
+            <thead class="bg-slate-50">
+
+              <tr class="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+
+                <th class="px-4 py-3">
+                  Semana
+                </th>
+
+                <th class="px-4 py-3">
+                  Batch
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Objetivo
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Principales
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Reserva
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Disponibles
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Rechazados
+                </th>
+
+                <th class="px-4 py-3 text-center">
+                  Capacidad
+                </th>
+
+                <th class="px-4 py-3">
+                  Estado
+                </th>
+
+                <th class="px-4 py-3 text-right">
+                  Acciones
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody class="divide-y divide-slate-100 bg-white">
+
+              {% for fila in filas %}
+
+                <tr class="hover:bg-slate-50">
+
+                  <!-- SEMANA -->
+
+                  <td class="whitespace-nowrap px-4 py-4 font-semibold text-slate-800">
+                    {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+                  </td>
+
+
+                  <!-- BATCH -->
+
+                  <td class="px-4 py-4">
+
+                    <div class="font-semibold text-slate-900">
+
+                      {% if fila.batch.nombre %}
+
+                        {{ fila.batch.nombre }}
+
+                      {% else %}
+
+                        Semana {{ fila.batch.fecha_inicio|date:"d/m/Y" }}
+
+                      {% endif %}
+
+                    </div>
+
+                    <div class="mt-1 text-xs text-slate-500">
+                      {{ fila.resumen.urbanos }} urbanos /
+                      {{ fila.resumen.rurales }} rurales
+                    </div>
+
+                  </td>
+
+
+                  <!-- OBJETIVO -->
+
+                  <td class="px-4 py-4 text-center font-semibold">
+                    {{ fila.resumen.objetivo }}
+                  </td>
+
+
+                  <!-- PRINCIPALES -->
+
+                  <td class="px-4 py-4 text-center">
+                    {{ fila.resumen.principales }}
+                  </td>
+
+
+                  <!-- RESERVA -->
+
+                  <td class="px-4 py-4 text-center">
+                    {{ fila.resumen.reservas }}
+                  </td>
+
+
+                  <!-- DISPONIBLES -->
+
+                  <td class="px-4 py-4 text-center">
+
+                    <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      {{ fila.resumen.disponibles }}
+                    </span>
+
+                  </td>
+
+
+                  <!-- RECHAZADOS -->
+
+                  <td class="px-4 py-4 text-center">
+
+                    <span class="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+                      {{ fila.resumen.rechazados }}
+                    </span>
+
+                  </td>
+
+
+                  <!-- CAPACIDAD -->
+
+                  <td class="px-4 py-4 text-center">
+
+                    <div class="font-semibold text-slate-800">
+                      {{ fila.resumen.capacidad.total }}
+                    </div>
+
+                    {% if fila.resumen.capacidad.sabado %}
+
+                      <div class="text-xs text-slate-500">
+                        +{{ fila.resumen.capacidad.sabado }} sábado
+                      </div>
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ESTADO -->
+
+                  <td class="px-4 py-4">
+
+                    {% if fila.batch.estado == "borrador" %}
+
+                      <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        Borrador
+                      </span>
+
+                    {% elif fila.batch.estado == "propuesto" %}
+
+                      <span class="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
+                        Propuesto
+                      </span>
+
+                    {% elif fila.batch.estado == "gestion_permisos" %}
+
+                      <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                        Gestión de permisos
+                      </span>
+
+                    {% elif fila.batch.estado == "listo_planificar" %}
+
+                      <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                        Listo para planificar
+                      </span>
+
+                    {% else %}
+
+                      <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                        {{ fila.batch.get_estado_display }}
+                      </span>
+
+                    {% endif %}
+
+                  </td>
+
+
+                  <!-- ACCIONES -->
+
+                  <td class="px-4 py-4">
+
+                    <div class="flex flex-wrap justify-end gap-2">
+
+                      <!-- ABRIR -->
+
+                      <a
+                        href="{% url 'planificacion:detalle_planificacion_semanal' fila.batch.id %}"
+                        class="
+                          inline-flex
+                          rounded-lg
+                          border border-slate-300
+                          bg-white
+                          px-3 py-2
+                          text-xs
+                          font-semibold
+                          text-slate-700
+                          transition
+                          hover:bg-slate-50
+                        "
+                      >
+                        Abrir
+                      </a>
+
+
+                      <!-- EXCEL -->
+
+                      {% if fila.resumen.principales or fila.resumen.reservas %}
+
+                        <a
+                          href="{% url 'planificacion:descargar_excel_batch' fila.batch.id %}"
+                          class="
+                            inline-flex
+                            items-center
+                            gap-1.5
+                            rounded-lg
+                            border border-emerald-200
+                            bg-emerald-50
+                            px-3 py-2
+                            text-xs
+                            font-semibold
+                            text-emerald-700
+                            transition
+                            hover:bg-emerald-100
+                          "
+                        >
+
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-3.5 w-3.5"
+                          >
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+                            <path d="M14 2v6h6"></path>
+                            <path d="m9 15 2 2 4-4"></path>
+                          </svg>
+
+                          Excel
+
+                        </a>
+
+                      {% endif %}
+
+
+                      <!-- ================================================ -->
+                      <!-- ELIMINAR - SOLO ADMIN                            -->
+                      <!-- ================================================ -->
+
+                      {% if request.user.es_admin_general %}
+
+                        <button
+                          type="button"
+                          onclick="abrirModalEliminarBatch(
+                            '{{ fila.batch.id }}',
+                            '{{ fila.batch.nombre|default:"Semana"|escapejs }}',
+                            '{{ fila.batch.fecha_inicio|date:"d/m/Y" }}',
+                            '{{ fila.resumen.principales }}',
+                            '{{ fila.resumen.reservas }}'
+                          )"
+                          class="
+                            inline-flex
+                            rounded-lg
+                            border border-red-200
+                            bg-red-50
+                            px-3 py-2
+                            text-xs
+                            font-semibold
+                            text-red-700
+                            transition
+                            hover:bg-red-100
+                          "
+                        >
+                          Eliminar
+                        </button>
+
+                      {% endif %}
+                    </div>
+
+                  </td>
+
+                </tr>
+
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+
+      {% else %}
+
+        <div class="px-6 py-14 text-center">
+
+          <h3 class="text-base font-semibold text-slate-800">
+            Todavía no existen batches semanales
+          </h3>
+
+          <p class="mx-auto mt-2 max-w-xl text-sm text-slate-500">
+            Crea el primer batch y define cuántos sitios quieres proponer
+            y la disponibilidad de cada cuadrilla para esa semana.
+          </p>
+
+          <a
+            href="{% url 'planificacion:crear_planificacion_semanal' mensual.id %}"
+            class="
+              mt-5
+              inline-flex
+              rounded-xl
+              bg-blue-600
+              px-4 py-2.5
+              text-sm
+              font-semibold
+              text-white
+              hover:bg-blue-700
+            "
+          >
+            Crear primer batch
+          </a>
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<!-- ====================================================== -->
+<!-- MODAL ELIMINAR BATCH                                   -->
+<!-- ====================================================== -->
+
+<div
+  id="modal-eliminar-batch"
+  class="
+    fixed
+    inset-0
+    z-[9999]
+    hidden
+    items-center
+    justify-center
+    bg-slate-950/50
+    px-4
+    py-6
+    backdrop-blur-sm
+  "
+  aria-hidden="true"
+>
+
+  <div
+    class="
+      w-full
+      max-w-lg
+      overflow-hidden
+      rounded-2xl
+      border border-slate-200
+      bg-white
+      shadow-2xl
+    "
+  >
+
+    <!-- CABECERA -->
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+      <div class="flex items-start gap-3">
+
+        <div
+          class="
+            flex
+            h-10
+            w-10
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-red-100
+            text-red-700
+          "
+        >
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-5 w-5"
+          >
+            <path d="M3 6h18"></path>
+            <path d="M8 6V4h8v2"></path>
+            <path d="M19 6l-1 14H6L5 6"></path>
+            <path d="M10 11v5"></path>
+            <path d="M14 11v5"></path>
+          </svg>
+
+        </div>
+
+
+        <div>
+
+          <h3 class="text-lg font-black text-slate-900">
+            Eliminar batch semanal
+          </h3>
+
+          <p class="mt-1 text-sm text-slate-500">
+            Acción administrativa para eliminar completamente
+            la planificación de esta semana.
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- CONTENIDO -->
+
+    <div class="px-5 py-5">
+
+      <div class="rounded-xl border border-red-100 bg-red-50 p-4">
+
+        <p class="text-sm text-red-800">
+          Vas a eliminar
+          <strong id="modal-batch-nombre"></strong>
+          correspondiente a la semana
+          <strong id="modal-batch-fecha"></strong>.
+        </p>
+
+      </div>
+
+
+      <div class="mt-4 grid grid-cols-2 gap-3">
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+
+          <div class="text-xs font-bold uppercase text-slate-400">
+            Principales
+          </div>
+
+          <div
+            id="modal-batch-principales"
+            class="mt-1 text-xl font-black text-slate-900"
+          >
+            0
+          </div>
+
+        </div>
+
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+
+          <div class="text-xs font-bold uppercase text-slate-400">
+            Reservas
+          </div>
+
+          <div
+            id="modal-batch-reservas"
+            class="mt-1 text-xl font-black text-slate-900"
+          >
+            0
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="
+          mt-4
+          rounded-xl
+          border border-amber-200
+          bg-amber-50
+          px-4
+          py-3
+        "
+      >
+
+        <p
+          class="
+            text-xs
+            font-black
+            uppercase
+            tracking-wide
+            text-amber-700
+          "
+        >
+          Importante
+        </p>
+
+        <p
+          class="
+            mt-1
+            text-sm
+            leading-relaxed
+            text-amber-800
+          "
+        >
+          Se eliminarán el batch, sus rutas diarias y sus
+          asociaciones de planificación.
+        </p>
+
+      </div>
+
+
+      <p class="mt-4 text-sm leading-relaxed text-slate-600">
+
+        Los sitios
+        <strong>no serán eliminados del mes</strong>
+        y tampoco se modificará la información real de
+        <strong>Operaciones</strong>.
+
+      </p>
+
+
+      <p class="mt-2 text-sm leading-relaxed text-slate-600">
+
+        Los sitios que todavía no tengan compromiso operacional
+        volverán a quedar disponibles para planificación.
+        Los sitios asignados, en ejecución, revisión o finalizados
+        conservarán su situación operacional.
+
+      </p>
+
+    </div>
+
+
+    <!-- ACCIONES -->
+
+    <div
+      class="
+        flex
+        justify-end
+        gap-3
+        border-t
+        border-slate-200
+        bg-slate-50
+        px-5
+        py-4
+      "
+    >
+
+      <button
+        type="button"
+        onclick="cerrarModalEliminarBatch()"
+        class="
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4 py-2.5
+          text-sm
+          font-semibold
+          text-slate-700
+          transition
+          hover:bg-slate-100
+        "
+      >
+        Cancelar
+      </button>
+
+
+      <form
+        id="form-eliminar-batch"
+        method="post"
+        action=""
+      >
+
+        {% csrf_token %}
+
+        <button
+          type="submit"
+          class="
+            rounded-xl
+            bg-red-600
+            px-4 py-2.5
+            text-sm
+            font-black
+            text-white
+            transition
+            hover:bg-red-700
+          "
+        >
+          Sí, eliminar planificación
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+<script>
+(function () {
+
+  const modal =
+    document.getElementById(
+      'modal-eliminar-batch'
+    );
+
+
+  window.abrirModalEliminarBatch =
+    function (
+      batchId,
+      nombre,
+      fecha,
+      principales,
+      reservas
+    ) {
+
+      document
+        .getElementById(
+          'modal-batch-nombre'
+        )
+        .textContent =
+          nombre || 'Batch semanal';
+
+
+      document
+        .getElementById(
+          'modal-batch-fecha'
+        )
+        .textContent =
+          fecha || '';
+
+
+      document
+        .getElementById(
+          'modal-batch-principales'
+        )
+        .textContent =
+          principales || '0';
+
+
+      document
+        .getElementById(
+          'modal-batch-reservas'
+        )
+        .textContent =
+          reservas || '0';
+
+
+      const form =
+        document.getElementById(
+          'form-eliminar-batch'
+        );
+
+
+      const plantillaUrl =
+        "{% url 'planificacion:eliminar_planificacion_semanal' 999999 %}";
+
+
+      form.action =
+        plantillaUrl.replace(
+          '999999',
+          batchId
+        );
+
+
+      modal.classList.remove(
+        'hidden'
+      );
+
+      modal.classList.add(
+        'flex'
+      );
+
+      modal.setAttribute(
+        'aria-hidden',
+        'false'
+      );
+
+      document.body.classList.add(
+        'overflow-hidden'
+      );
+
+    };
+
+
+  window.cerrarModalEliminarBatch =
+    function () {
+
+      modal.classList.add(
+        'hidden'
+      );
+
+      modal.classList.remove(
+        'flex'
+      );
+
+      modal.setAttribute(
+        'aria-hidden',
+        'true'
+      );
+
+      document.body.classList.remove(
+        'overflow-hidden'
+      );
+
+    };
+
+
+  modal.addEventListener(
+    'click',
+    function (event) {
+
+      if (event.target === modal) {
+        cerrarModalEliminarBatch();
+      }
+
+    }
+  );
+
+
+  document.addEventListener(
+    'keydown',
+    function (event) {
+
+      if (
+        event.key === 'Escape'
+        &&
+        !modal.classList.contains(
+          'hidden'
+        )
+      ) {
+        cerrarModalEliminarBatch();
+      }
+
+    }
+  );
+
+})();
+</script>
+
+{% endblock %}

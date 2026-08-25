@@ -46,6 +46,7 @@ from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
 from facturacion.models import CartolaMovimiento
 from notificaciones.services import notificar_asignacion_servicio_tecnicos
 from operaciones.forms import AsignarTrabajadoresForm
+from operaciones.models import SitioMovil, SitiosTablaMetadata
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
 from usuarios.utils import \
@@ -363,96 +364,187 @@ def buscar_mi_sitio(request):
         'buscado': buscado
     })
 
+def _registrar_actualizacion_tabla_sitios(user):
+    """
+    Guarda la fecha y usuario de la última modificación
+    realizada sobre la tabla maestra de sitios.
+
+    Utilizamos siempre el registro PK=1 como metadata global.
+    """
+    SitiosTablaMetadata.objects.update_or_create(
+        pk=1,
+        defaults={
+            "ultima_actualizacion": timezone.now(),
+            "actualizado_por": user,
+        },
+    )
+
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion', 'supervisor')
+@rol_requerido("pm", "admin", "facturacion", "supervisor")
 def listar_sitios(request):
     id_claro = request.GET.get("id_claro", "")
     id_new = request.GET.get("id_new", "")
 
-    # --- Manejo de cantidad con tope 100 ---
+    # ==========================
+    # CANTIDAD POR PÁGINA
+    # ==========================
     raw_cantidad = request.GET.get("cantidad", "10")
 
     if raw_cantidad == "todos":
         per_page = 100
         cantidad = "100"
+
     else:
         try:
             per_page = int(raw_cantidad)
+
         except (TypeError, ValueError):
             per_page = 10
             cantidad = "10"
+
         else:
             if per_page < 1:
                 per_page = 10
                 cantidad = "10"
+
             elif per_page > 100:
                 per_page = 100
                 cantidad = "100"
+
             else:
                 cantidad = raw_cantidad
 
     page_number = request.GET.get("page", 1)
 
-    sitios = SitioMovil.objects.all()
+    # ==========================
+    # QUERY
+    # ==========================
+    sitios = SitioMovil.objects.all().order_by("id_sites")
 
     if id_claro:
         sitios = sitios.filter(id_claro__icontains=id_claro)
+
     if id_new:
         sitios = sitios.filter(id_sites_new__icontains=id_new)
 
-    paginator = Paginator(sitios, per_page)
+    # ==========================
+    # PAGINACIÓN
+    # ==========================
+    paginator = Paginator(
+        sitios,
+        per_page,
+    )
+
     pagina = paginator.get_page(page_number)
 
-    return render(request, 'operaciones/listar_sitios.html', {
-        'sitios': pagina,
-        'id_claro': id_claro,
-        'id_new': id_new,
-        'cantidad': cantidad,  # <- ya normalizado (máx 100)
-        'pagina': pagina,
-    })
+    # ==========================
+    # ÚLTIMA ACTUALIZACIÓN
+    # ==========================
+    metadata_sitios = (
+        SitiosTablaMetadata.objects.select_related("actualizado_por")
+        .filter(pk=1)
+        .first()
+    )
+
+    return render(
+        request,
+        "operaciones/listar_sitios.html",
+        {
+            "sitios": pagina,
+            "id_claro": id_claro,
+            "id_new": id_new,
+            "cantidad": cantidad,
+            "pagina": pagina,
+            "metadata_sitios": metadata_sitios,
+        },
+    )
+
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion', 'supervisor')
+@rol_requerido("pm", "admin", "facturacion", "supervisor")
 def editar_sitio(request, pk: int):
     """
-    Edita un Sitio Móvil. Soporta `next` en query para volver a la lista con filtros.
+    Edita un Sitio Móvil.
+
+    Soporta `next` en query para volver exactamente
+    a la lista/filtros/página desde donde se editó.
     """
-    sitio = get_object_or_404(SitioMovil, pk=pk)
-    # ej: ?next=/operaciones/sitios/?page=2&id_new=ABC
+
+    sitio = get_object_or_404(
+        SitioMovil,
+        pk=pk,
+    )
+
     next_url = request.GET.get("next")
 
     if request.method == "POST":
-        form = SitioMovilForm(request.POST, instance=sitio)
+        form = SitioMovilForm(
+            request.POST,
+            instance=sitio,
+        )
+
         if form.is_valid():
             form.save()
-            messages.success(request, "Sitio actualizado correctamente.")
-            return redirect(next_url or reverse('operaciones:listar_sitios'))
-        else:
-            messages.error(request, "Revisa los campos del formulario.")
+
+            _registrar_actualizacion_tabla_sitios(request.user)
+
+            messages.success(
+                request,
+                "Sitio actualizado correctamente.",
+            )
+
+            return redirect(next_url or reverse("operaciones:listar_sitios"))
+
+        messages.error(
+            request,
+            "Revisa los campos del formulario.",
+        )
+
     else:
         form = SitioMovilForm(instance=sitio)
 
-    return render(request, "operaciones/editar_sitio.html", {
-        "form": form,
-        "sitio": sitio,
-        "next": next_url,
-    })
-
-
-# (Opcional) Eliminar
+    return render(
+        request,
+        "operaciones/editar_sitio.html",
+        {
+            "form": form,
+            "sitio": sitio,
+            "next": next_url,
+        },
+    )
 
 
 @login_required
-@rol_requerido('admin')
+@rol_requerido("admin")
 def eliminar_sitio(request, pk: int):
-    sitio = get_object_or_404(SitioMovil, pk=pk)
+    sitio = get_object_or_404(
+        SitioMovil,
+        pk=pk,
+    )
+
     next_url = request.GET.get("next")
+
     if request.method == "POST":
         sitio.delete()
-        messages.success(request, "Sitio eliminado correctamente.")
-        return redirect(next_url or reverse('operaciones:listar_sitios'))
-    return render(request, "operaciones/eliminar_sitio.html", {"sitio": sitio, "next": next_url})
+
+        _registrar_actualizacion_tabla_sitios(request.user)
+
+        messages.success(
+            request,
+            "Sitio eliminado correctamente.",
+        )
+
+        return redirect(next_url or reverse("operaciones:listar_sitios"))
+
+    return render(
+        request,
+        "operaciones/eliminar_sitio.html",
+        {
+            "sitio": sitio,
+            "next": next_url,
+        },
+    )
 
 
 def _sitios_import_cache_key(user_id, token):
@@ -460,6 +552,17 @@ def _sitios_import_cache_key(user_id, token):
 
 
 def _sitios_clean_value(value):
+    """
+    Limpia valores provenientes del Excel.
+
+    IMPORTANTE:
+    Los valores que representan ausencia de información
+    se convierten a None.
+
+    En una actualización, None significa:
+    "no modificar lo que ya existe".
+    """
+
     try:
         if pd.isna(value):
             return None
@@ -471,7 +574,20 @@ def _sitios_clean_value(value):
 
     value = str(value).strip()
 
-    if value.lower() in {"nan", "none", "null"}:
+    if not value:
+        return None
+
+    value_lower = value.lower().strip()
+
+    valores_vacios = {
+        "nan",
+        "none",
+        "null",
+        "-",
+        "--",
+    }
+
+    if value_lower in valores_vacios:
         return None
 
     return value
@@ -484,8 +600,9 @@ def _sitios_clean_decimal(value):
         return None
 
     try:
-        return float(str(value).replace(",", "."))
-    except Exception:
+        return float(str(value).strip().replace(",", "."))
+
+    except (TypeError, ValueError):
         return None
 
 
@@ -496,10 +613,12 @@ def _sitios_clean_int_or_text(value):
         return None
 
     try:
-        f = float(str(value).replace(",", "."))
-        if f.is_integer():
-            return str(int(f))
-    except Exception:
+        numero = float(str(value).strip().replace(",", "."))
+
+        if numero.is_integer():
+            return str(int(numero))
+
+    except (TypeError, ValueError):
         pass
 
     return str(value).strip()
@@ -507,52 +626,234 @@ def _sitios_clean_int_or_text(value):
 
 def _sitios_get_col(row, *names):
     """
-    Busca una columna de forma flexible.
-    Ej:
+    Busca una columna del Excel de forma flexible.
+
+    Ejemplos:
     - Dirección / Direccion
-    - Candado BT / Candado
     - ID Sites NEW / ID NEW
+    - Tipo de Zona / Tipo Zona
+    - Condición de acceso / Condiciones de acceso
     """
+
+    # ==========================
+    # COINCIDENCIA EXACTA
+    # ==========================
     for name in names:
         if name in row:
             return row.get(name)
 
-    # fallback normalizado
+    # ==========================
+    # COINCIDENCIA NORMALIZADA
+    # ==========================
     norm_map = {}
+
     for col in row.index:
         norm_map[_norm_col_sitios(col)] = col
 
     for name in names:
         key = _norm_col_sitios(name)
+
         real_col = norm_map.get(key)
-        if real_col:
+
+        if real_col is not None:
             return row.get(real_col)
 
     return None
 
+CONDICIONES_ACCESO_MAP = {
+    "0": "Sin Información",
+    "1": "Libre Acceso",
+    "2": "Correos - Confirmación",
+    "3": "Correos-Sin Confirmación",
+    "4": "Llamadas",
+    "5": "Formularios",
+    "6": "Certificación",
+}
+
+def _normalizar_condicion_acceso(value):
+    """
+    Convierte tanto códigos numéricos como descripciones
+    al nombre oficial utilizado internamente.
+
+    Ejemplos:
+
+    1
+    1.0
+    "Libre Acceso"
+    "LIBRE ACCESO"
+
+    -> "Libre Acceso"
+
+    Si llega un texto desconocido, lo conserva.
+    """
+
+    value = _sitios_clean_value(
+        value
+    )
+
+    if value in (None, ""):
+        return None
+
+    texto = str(
+        value
+    ).strip()
+
+    # ==========================
+    # INTENTAR COMO CÓDIGO
+    # ==========================
+    try:
+        numero = float(
+            texto.replace(",", ".")
+        )
+
+        if numero.is_integer():
+            codigo = str(
+                int(numero)
+            )
+
+            descripcion = CONDICIONES_ACCESO_MAP.get(
+                codigo
+            )
+
+            if descripcion:
+                return descripcion
+
+    except (TypeError, ValueError):
+        pass
+
+    # ==========================
+    # INTENTAR COMO TEXTO
+    # ==========================
+    normalizado = _norm_col_sitios(
+        texto
+    )
+
+    equivalencias = {
+        # 0
+        "sin informacion": "Sin Información",
+        "sin info": "Sin Información",
+
+        # 1
+        "libre acceso": "Libre Acceso",
+
+        # 2
+        "correos confirmacion": "Correos - Confirmación",
+        "correo confirmacion": "Correos - Confirmación",
+        "correos con confirmacion": "Correos - Confirmación",
+        "correo con confirmacion": "Correos - Confirmación",
+
+        # 3
+        "correos sin confirmacion": "Correos-Sin Confirmación",
+        "correo sin confirmacion": "Correos-Sin Confirmación",
+
+        # 4
+        "llamadas": "Llamadas",
+        "llamada": "Llamadas",
+
+        # 5
+        "formularios": "Formularios",
+        "formulario": "Formularios",
+
+        # 6
+        "certificacion": "Certificación",
+    }
+
+    descripcion = equivalencias.get(
+        normalizado
+    )
+
+    if descripcion:
+        return descripcion
+
+    # Si en el futuro aparece otra condición,
+    # no destruimos el valor.
+    return texto
+
+
+def _normalizar_tipo_zona(value):
+    """
+    Normaliza Tipo de Zona.
+
+    U       -> Urbano
+    Urbano  -> Urbano
+
+    R       -> Rural
+    Rural   -> Rural
+
+    #N/D / No identificado -> No_Identificado
+    """
+
+    value = _sitios_clean_value(
+        value
+    )
+
+    if value in (None, ""):
+        return None
+
+    texto = str(
+        value
+    ).strip()
+
+    normalizado = _norm_col_sitios(
+        texto
+    )
+
+    equivalencias = {
+        "u": "Urbano",
+        "urbano": "Urbano",
+
+        "r": "Rural",
+        "rural": "Rural",
+
+        "#n/d": "No_Identificado",
+        "n/d": "No_Identificado",
+        "nd": "No_Identificado",
+        "no identificado": "No_Identificado",
+        "no identificada": "No_Identificado",
+        "no identificado": "No_Identificado",
+    }
+
+    resultado = equivalencias.get(
+        normalizado
+    )
+
+    if resultado:
+        return resultado
+
+    return texto
+
 
 def _norm_col_sitios(value):
     value = str(value or "").strip().lower()
+
     value = value.replace("á", "a")
     value = value.replace("é", "e")
     value = value.replace("í", "i")
     value = value.replace("ó", "o")
     value = value.replace("ú", "u")
     value = value.replace("ñ", "n")
+
     value = value.replace(".", "")
     value = value.replace("_", " ")
     value = value.replace("-", " ")
+
     value = " ".join(value.split())
+
     return value
 
 
 def _leer_excel_sitios(archivo):
     """
     Lee el Excel de sitios.
-    Si existe hoja Colocalizados, usa esa.
-    Si no existe, usa la primera hoja.
+
+    Prioridad:
+    1. Hoja llamada Colocalizados.
+    2. Primera hoja disponible.
     """
-    xls = pd.ExcelFile(archivo)
+
+    xls = pd.ExcelFile(
+        archivo
+    )
 
     sheet_name = None
 
@@ -564,10 +865,16 @@ def _leer_excel_sitios(archivo):
     if not sheet_name:
         sheet_name = xls.sheet_names[0]
 
-    df = pd.read_excel(archivo, sheet_name=sheet_name)
+    df = pd.read_excel(
+        archivo,
+        sheet_name=sheet_name,
+    )
 
-    # Quitar filas completamente vacías
-    df = df.dropna(how="all")
+    # Eliminar únicamente filas
+    # completamente vacías.
+    df = df.dropna(
+        how="all"
+    )
 
     return df, sheet_name
 
@@ -575,62 +882,187 @@ def _leer_excel_sitios(archivo):
 def _row_sitio_to_data(row):
     """
     Convierte una fila del Excel al formato del modelo SitioMovil.
-    Soporta el formato actual de Colocalizados.
+
+    Reglas principales:
+
+    - ID Sites identifica el sitio.
+    - Condiciones de acceso acepta código o descripción.
+    - Tipo de Zona acepta U/R o descripción.
+    - Valores vacíos quedan como None.
+    - None NO significa borrar durante una actualización.
     """
-    id_sites = _sitios_clean_value(_sitios_get_col(row, "ID Sites", "ID Site", "ID"))
+
+    id_sites = _sitios_clean_value(
+        _sitios_get_col(
+            row,
+            "ID Sites",
+            "ID Site",
+            "ID",
+        )
+    )
 
     if not id_sites:
         return None
 
+    # ==========================
+    # CANDADO BT
+    # ==========================
     candado_bt = _sitios_clean_value(
-        _sitios_get_col(row, "Candado BT", "Candado", "Tipo de candado")
+        _sitios_get_col(
+            row,
+            "Candado BT",
+            "Candado",
+            "Tipo de candado",
+        )
     )
 
-    if not candado_bt:
-        candado_bt = _sitios_clean_value(_sitios_get_col(row, "Tipo de candado"))
+    # ==========================
+    # CONDICIONES DE ACCESO
+    # ==========================
+    condiciones_acceso = _normalizar_condicion_acceso(
+        _sitios_get_col(
+            row,
+            "Condiciones de acceso",
+            "Condición de acceso",
+            "Condicion de acceso",
+            "Acceso",
+        )
+    )
+
+    # ==========================
+    # TIPO DE ZONA
+    # ==========================
+    tipo_zona = _normalizar_tipo_zona(
+        _sitios_get_col(
+            row,
+            "Tipo de Zona",
+            "Tipo Zona",
+            "Tipo de zona",
+            "Zona",
+        )
+    )
 
     data = {
         "id_sites": id_sites,
         "id_claro": _sitios_clean_value(
-            _sitios_get_col(row, "ID Claro", "Id Claro", "ID CLARO")
-        ),
-        "id_sites_new": _sitios_clean_value(
-            _sitios_get_col(row, "ID Sites NEW", "ID NEW", "ID Sites New")
-        ),
-        "region": _sitios_clean_int_or_text(_sitios_get_col(row, "Región", "Region")),
-        "nombre": _sitios_clean_value(_sitios_get_col(row, "Nombre")),
-        "direccion": _sitios_clean_value(
-            _sitios_get_col(row, "Direccion", "Dirección")
-        ),
-        "latitud": _sitios_clean_decimal(_sitios_get_col(row, "Latitud")),
-        "longitud": _sitios_clean_decimal(_sitios_get_col(row, "Longitud")),
-        "comuna": _sitios_clean_value(_sitios_get_col(row, "Comuna")),
-        "tipo_construccion": _sitios_clean_value(
             _sitios_get_col(
-                row, "Tipo de contruccion", "Tipo de construcción", "Tipo construccion"
+                row,
+                "ID Claro",
+                "Id Claro",
+                "ID CLARO",
             )
         ),
-        "altura": _sitios_clean_int_or_text(_sitios_get_col(row, "Altura")),
-        "candado_bt": candado_bt,
-        "condiciones_acceso": _sitios_clean_value(
-            _sitios_get_col(row, "Condiciones de acceso", "Acceso")
+        "id_sites_new": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "ID Sites NEW",
+                "ID NEW",
+                "ID Sites New",
+            )
         ),
-        "claves": _sitios_clean_value(_sitios_get_col(row, "Claves")),
-        "llaves": _sitios_clean_value(_sitios_get_col(row, "Llaves")),
+        "region": _sitios_clean_int_or_text(
+            _sitios_get_col(
+                row,
+                "Región",
+                "Region",
+            )
+        ),
+        "nombre": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Nombre",
+            )
+        ),
+        "direccion": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Direccion",
+                "Dirección",
+            )
+        ),
+        "latitud": _sitios_clean_decimal(
+            _sitios_get_col(
+                row,
+                "Latitud",
+            )
+        ),
+        "longitud": _sitios_clean_decimal(
+            _sitios_get_col(
+                row,
+                "Longitud",
+            )
+        ),
+        "comuna": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Comuna",
+            )
+        ),
+        "tipo_construccion": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Tipo de contruccion",
+                "Tipo de construccion",
+                "Tipo de construcción",
+                "Tipo construccion",
+                "Construcción",
+                "Construccion",
+            )
+        ),
+        "altura": _sitios_clean_int_or_text(
+            _sitios_get_col(
+                row,
+                "Altura",
+            )
+        ),
+        "tipo_zona": tipo_zona,
+        "candado_bt": candado_bt,
+        "condiciones_acceso": condiciones_acceso,
+        "claves": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Claves",
+            )
+        ),
+        "llaves": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Llaves",
+            )
+        ),
         "cantidad_llaves": _sitios_clean_int_or_text(
-            _sitios_get_col(row, "Cantidad de Llaves", "Cantidad Llaves")
+            _sitios_get_col(
+                row,
+                "Cantidad de Llaves",
+                "Cantidad Llaves",
+            )
         ),
         "observaciones_generales": _sitios_clean_value(
-            _sitios_get_col(row, "Observaciones Generales", "Observaciones")
+            _sitios_get_col(
+                row,
+                "Observaciones Generales",
+                "Observaciones",
+            )
         ),
         "zonas_conflictivas": _sitios_clean_value(
-            _sitios_get_col(row, "Sitios zonas conflictivas", "Zonas Conflictivas")
+            _sitios_get_col(
+                row,
+                "Sitios zonas conflictivas",
+                "Zonas Conflictivas",
+                "Zonas conflictivas",
+            )
         ),
-        "alarmas": _sitios_clean_value(_sitios_get_col(row, "Alarmas")),
-        "guardias": _sitios_clean_value(_sitios_get_col(row, "Guardias")),
-        "nivel": _sitios_clean_int_or_text(_sitios_get_col(row, "Nivel")),
-        "descripcion": _sitios_clean_value(
-            _sitios_get_col(row, "Descripción", "Descripcion")
+        "alarmas": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Alarmas",
+            )
+        ),
+        "guardias": _sitios_clean_value(
+            _sitios_get_col(
+                row,
+                "Guardias",
+            )
         ),
     }
 
@@ -639,9 +1071,18 @@ def _row_sitio_to_data(row):
 
 def _campos_import_sitios_por_modo(modo):
     """
-    modo=acceso: actualiza solo datos sensibles de acceso.
-    modo=completo: actualiza todo.
+    modo=acceso:
+        Actualiza únicamente información relacionada
+        con acceso al sitio.
+
+    modo=completo:
+        Actualiza toda la ficha del sitio.
+
+    IMPORTANTE:
+        Los valores vacíos nunca reemplazan
+        información existente.
     """
+
     campos_acceso = [
         "candado_bt",
         "condiciones_acceso",
@@ -652,8 +1093,6 @@ def _campos_import_sitios_por_modo(modo):
         "zonas_conflictivas",
         "alarmas",
         "guardias",
-        "nivel",
-        "descripcion",
     ]
 
     campos_completo = [
@@ -667,6 +1106,7 @@ def _campos_import_sitios_por_modo(modo):
         "comuna",
         "tipo_construccion",
         "altura",
+        "tipo_zona",
         "candado_bt",
         "condiciones_acceso",
         "claves",
@@ -676,8 +1116,6 @@ def _campos_import_sitios_por_modo(modo):
         "zonas_conflictivas",
         "alarmas",
         "guardias",
-        "nivel",
-        "descripcion",
     ]
 
     if modo == "completo":
@@ -687,19 +1125,49 @@ def _campos_import_sitios_por_modo(modo):
 
 
 def _normalizar_para_comparar(value):
+    """
+    Convierte valores a una representación uniforme
+    para evitar detectar falsos cambios.
+    """
+
     if value is None:
         return ""
 
     value = str(value).strip()
 
-    if value.lower() in {"none", "nan", "null"}:
+    if value.lower() in {
+        "none",
+        "nan",
+        "null",
+    }:
         return ""
 
     return value
 
 
 def _generar_preview_import_sitios(df, modo):
-    campos = _campos_import_sitios_por_modo(modo)
+    """
+    Genera el preview SIN modificar la base de datos.
+
+    REGLA NO DESTRUCTIVA:
+    Si un valor nuevo viene vacío, NO se considera cambio.
+
+    Ejemplo:
+
+    BD:
+        claves = "1309 - 7394"
+
+    Excel nuevo:
+        claves = vacío
+
+    Resultado:
+        no aparece ningún cambio y se mantiene
+        "1309 - 7394".
+    """
+
+    campos = _campos_import_sitios_por_modo(
+        modo
+    )
 
     preview = []
     errores = []
@@ -710,73 +1178,166 @@ def _generar_preview_import_sitios(df, modo):
     total_errores = 0
 
     for index, row in df.iterrows():
-        fila_excel = int(index) + 2
+        fila_excel = int(
+            index
+        ) + 2
 
-        data = _row_sitio_to_data(row)
+        data = _row_sitio_to_data(
+            row
+        )
 
         if not data:
             total_errores += 1
+
             errores.append(
                 {
                     "fila": fila_excel,
                     "error": "Fila sin ID Sites válido.",
                 }
             )
+
             continue
 
-        id_sites = data.get("id_sites")
+        id_sites = data.get(
+            "id_sites"
+        )
 
-        sitio = SitioMovil.objects.filter(id_sites__iexact=id_sites).first()
+        sitio = (
+            SitioMovil.objects
+            .filter(
+                id_sites__iexact=id_sites
+            )
+            .first()
+        )
 
+        # ==================================================
+        # SITIO NUEVO
+        # ==================================================
         if not sitio:
             total_nuevos += 1
+
+            cambios = []
+
+            # Para preview de un sitio nuevo mostramos
+            # todos los valores disponibles.
+            campos_nuevo = [
+                "id_claro",
+                "id_sites_new",
+                "region",
+                "nombre",
+                "direccion",
+                "latitud",
+                "longitud",
+                "comuna",
+                "tipo_construccion",
+                "altura",
+                "tipo_zona",
+                "candado_bt",
+                "condiciones_acceso",
+                "claves",
+                "llaves",
+                "cantidad_llaves",
+                "observaciones_generales",
+                "zonas_conflictivas",
+                "alarmas",
+                "guardias",
+            ]
+
+            for campo in campos_nuevo:
+                nuevo = data.get(
+                    campo
+                )
+
+                if nuevo in (None, ""):
+                    continue
+
+                cambios.append(
+                    {
+                        "campo": campo,
+                        "antes": "—",
+                        "despues": nuevo,
+                    }
+                )
 
             preview.append(
                 {
                     "fila": fila_excel,
                     "id_sites": id_sites,
-                    "id_claro": data.get("id_claro") or "—",
-                    "nombre": data.get("nombre") or "—",
+                    "id_claro": (
+                        data.get("id_claro")
+                        or "—"
+                    ),
+                    "nombre": (
+                        data.get("nombre")
+                        or "—"
+                    ),
                     "estado": "nuevo",
-                    "cambios": [
-                        {
-                            "campo": campo,
-                            "antes": "—",
-                            "despues": (
-                                data.get(campo)
-                                if data.get(campo) not in (None, "")
-                                else "—"
-                            ),
-                        }
-                        for campo in campos
-                        if data.get(campo) not in (None, "")
-                    ],
+                    "cambios": cambios,
                     "data": data,
                 }
             )
+
             continue
 
+        # ==================================================
+        # SITIO EXISTENTE
+        # ==================================================
         cambios = []
 
         for campo in campos:
-            nuevo = data.get(campo)
-            anterior = getattr(sitio, campo, None)
+            nuevo = data.get(
+                campo
+            )
 
-            anterior_cmp = _normalizar_para_comparar(anterior)
-            nuevo_cmp = _normalizar_para_comparar(nuevo)
+            # ==============================================
+            # REGLA FUNDAMENTAL
+            # ==============================================
+            #
+            # VACÍO = NO MODIFICAR
+            #
+            # No importa si:
+            # - la celda está vacía;
+            # - la columna no existe;
+            # - llegó NaN;
+            # - llegó None;
+            # - llegó null;
+            # - llegó "-".
+            #
+            # ==============================================
+            if nuevo in (None, ""):
+                continue
+
+            anterior = getattr(
+                sitio,
+                campo,
+                None,
+            )
+
+            anterior_cmp = _normalizar_para_comparar(
+                anterior
+            )
+
+            nuevo_cmp = _normalizar_para_comparar(
+                nuevo
+            )
 
             if anterior_cmp != nuevo_cmp:
                 cambios.append(
                     {
                         "campo": campo,
-                        "antes": anterior if anterior not in (None, "") else "—",
-                        "despues": nuevo if nuevo not in (None, "") else "—",
+                        "antes": (
+                            anterior
+                            if anterior not in (None, "")
+                            else "—"
+                        ),
+                        "despues": nuevo,
                     }
                 )
 
         if cambios:
             total_actualizados += 1
             estado = "actualizar"
+
         else:
             total_sin_cambios += 1
             estado = "sin_cambios"
@@ -785,10 +1346,19 @@ def _generar_preview_import_sitios(df, modo):
             {
                 "fila": fila_excel,
                 "id_sites": id_sites,
-                "id_claro": data.get("id_claro")
-                or getattr(sitio, "id_claro", "")
-                or "—",
-                "nombre": data.get("nombre") or getattr(sitio, "nombre", "") or "—",
+
+                "id_claro": (
+                    data.get("id_claro")
+                    or sitio.id_claro
+                    or "—"
+                ),
+
+                "nombre": (
+                    data.get("nombre")
+                    or sitio.nombre
+                    or "—"
+                ),
+
                 "estado": estado,
                 "cambios": cambios,
                 "data": data,
@@ -803,59 +1373,140 @@ def _generar_preview_import_sitios(df, modo):
         "errores": total_errores,
     }
 
-    return preview, resumen, errores
+    return (
+        preview,
+        resumen,
+        errores,
+    )
 
 
 def _aplicar_import_sitios(preview, modo):
+    """
+    Aplica la importación definitivamente.
+
+    REGLA PRINCIPAL:
+    Un valor vacío NUNCA reemplaza un valor existente.
+    """
+
     campos = _campos_import_sitios_por_modo(modo)
 
     creados = 0
     actualizados = 0
     sin_cambios = 0
 
-    for item in preview:
-        estado = item.get("estado")
-        data = item.get("data") or {}
+    # Campos que podemos utilizar cuando
+    # necesitamos crear un sitio completamente nuevo.
+    campos_sitio_nuevo = [
+        "id_claro",
+        "id_sites_new",
+        "region",
+        "nombre",
+        "direccion",
+        "latitud",
+        "longitud",
+        "comuna",
+        "tipo_construccion",
+        "altura",
+        "tipo_zona",
+        "candado_bt",
+        "condiciones_acceso",
+        "claves",
+        "llaves",
+        "cantidad_llaves",
+        "observaciones_generales",
+        "zonas_conflictivas",
+        "alarmas",
+        "guardias",
+    ]
 
-        if estado == "sin_cambios":
-            sin_cambios += 1
-            continue
+    with transaction.atomic():
 
-        id_sites = data.get("id_sites")
+        for item in preview:
+            estado = item.get("estado")
 
-        if not id_sites:
-            continue
+            data = item.get("data") or {}
 
-        defaults = {}
+            if estado == "sin_cambios":
+                sin_cambios += 1
+                continue
 
-        for campo in campos:
-            defaults[campo] = data.get(campo)
+            id_sites = data.get("id_sites")
 
-        # Para sitios nuevos, aunque el modo sea acceso, debemos crear lo básico también.
-        if estado == "nuevo":
-            for campo in [
-                "id_claro",
-                "id_sites_new",
-                "region",
-                "nombre",
-                "direccion",
-                "latitud",
-                "longitud",
-                "comuna",
-                "tipo_construccion",
-                "altura",
-            ]:
-                defaults[campo] = data.get(campo)
+            if not id_sites:
+                continue
 
-        sitio, created = SitioMovil.objects.update_or_create(
-            id_sites=id_sites,
-            defaults=defaults,
-        )
+            sitio = SitioMovil.objects.filter(id_sites__iexact=id_sites).first()
 
-        if created:
-            creados += 1
-        else:
-            actualizados += 1
+            # =============================================
+            # CREAR SITIO NUEVO
+            # =============================================
+            if not sitio:
+                sitio = SitioMovil(id_sites=id_sites)
+
+                for campo in campos_sitio_nuevo:
+                    nuevo = data.get(campo)
+
+                    # Para un sitio nuevo tampoco necesitamos
+                    # meter None explícitamente.
+                    if nuevo in (None, ""):
+                        continue
+
+                    setattr(
+                        sitio,
+                        campo,
+                        nuevo,
+                    )
+
+                sitio.save()
+
+                creados += 1
+                continue
+
+            # =============================================
+            # ACTUALIZAR SITIO EXISTENTE
+            # =============================================
+            hubo_cambio = False
+            campos_update = []
+
+            for campo in campos:
+                nuevo = data.get(campo)
+
+                # =========================================
+                # PROTECCIÓN NO DESTRUCTIVA
+                # =========================================
+                if nuevo in (None, ""):
+                    continue
+
+                anterior = getattr(
+                    sitio,
+                    campo,
+                    None,
+                )
+
+                anterior_cmp = _normalizar_para_comparar(anterior)
+
+                nuevo_cmp = _normalizar_para_comparar(nuevo)
+
+                if anterior_cmp == nuevo_cmp:
+                    continue
+
+                setattr(
+                    sitio,
+                    campo,
+                    nuevo,
+                )
+
+                campos_update.append(campo)
+
+                hubo_cambio = True
+
+            if hubo_cambio:
+                sitio.save(update_fields=campos_update)
+
+                actualizados += 1
+
+            else:
+                sin_cambios += 1
 
     return {
         "creados": creados,
@@ -870,34 +1521,58 @@ def importar_sitios_excel(request):
     import uuid
 
     token = request.POST.get("token") or ""
+
     accion = request.POST.get("accion") or ""
+
     modo = request.POST.get("modo") or "acceso"
 
-    if modo not in {"acceso", "completo"}:
+    if modo not in {
+        "acceso",
+        "completo",
+    }:
         modo = "acceso"
 
-    # ==========================
+    # =====================================================
     # CONFIRMAR IMPORTACIÓN
-    # ==========================
+    # =====================================================
     if request.method == "POST" and accion == "confirmar":
         if not token:
-            messages.error(request, "No se encontró el preview de importación.")
+            messages.error(
+                request,
+                "No se encontró el preview de importación.",
+            )
+
             return redirect("operaciones:importar_sitios")
 
-        cache_key = _sitios_import_cache_key(request.user.id, token)
+        cache_key = _sitios_import_cache_key(
+            request.user.id,
+            token,
+        )
+
         payload = cache.get(cache_key)
 
         if not payload:
             messages.error(
-                request, "El preview expiró o no existe. Vuelve a subir el archivo."
+                request,
+                ("El preview expiró o no existe. " "Vuelve a subir el archivo."),
             )
+
             return redirect("operaciones:importar_sitios")
 
         preview = payload.get("preview") or []
+
         modo = payload.get("modo") or modo
 
         try:
-            resultado = _aplicar_import_sitios(preview, modo)
+            resultado = _aplicar_import_sitios(
+                preview,
+                modo,
+            )
+
+            # Registrar usuario/fecha solamente
+            # después de aplicar correctamente.
+            if resultado["creados"] > 0 or resultado["actualizados"] > 0:
+                _registrar_actualizacion_tabla_sitios(request.user)
 
             cache.delete(cache_key)
 
@@ -914,32 +1589,56 @@ def importar_sitios_excel(request):
             return redirect("operaciones:listar_sitios")
 
         except Exception as e:
-            messages.error(request, f"Ocurrió un error aplicando la importación: {e}")
+            messages.error(
+                request,
+                f"Ocurrió un error aplicando la importación: {e}",
+            )
+
             return redirect("operaciones:importar_sitios")
 
-    # ==========================
+    # =====================================================
     # CANCELAR PREVIEW
-    # ==========================
+    # =====================================================
     if request.method == "POST" and accion == "cancelar":
         if token:
-            cache.delete(_sitios_import_cache_key(request.user.id, token))
+            cache.delete(
+                _sitios_import_cache_key(
+                    request.user.id,
+                    token,
+                )
+            )
 
-        messages.info(request, "Importación cancelada.")
+        messages.info(
+            request,
+            "Importación cancelada.",
+        )
+
         return redirect("operaciones:importar_sitios")
 
-    # ==========================
+    # =====================================================
     # GENERAR PREVIEW
-    # ==========================
+    # =====================================================
     if request.method == "POST" and request.FILES.get("archivo"):
         archivo = request.FILES["archivo"]
 
         try:
             df, sheet_name = _leer_excel_sitios(archivo)
 
-            preview, resumen, errores = _generar_preview_import_sitios(df, modo)
+            (
+                preview,
+                resumen,
+                errores,
+            ) = _generar_preview_import_sitios(
+                df,
+                modo,
+            )
 
             token = uuid.uuid4().hex
-            cache_key = _sitios_import_cache_key(request.user.id, token)
+
+            cache_key = _sitios_import_cache_key(
+                request.user.id,
+                token,
+            )
 
             cache.set(
                 cache_key,
@@ -971,7 +1670,11 @@ def importar_sitios_excel(request):
             )
 
         except Exception as e:
-            messages.error(request, f"Ocurrió un error al leer el archivo: {e}")
+            messages.error(
+                request,
+                f"Ocurrió un error al leer el archivo: {e}",
+            )
+
             return redirect("operaciones:importar_sitios")
 
     return render(
@@ -982,12 +1685,15 @@ def importar_sitios_excel(request):
         },
     )
 
+
 @login_required
-@rol_requerido('admin')
+@rol_requerido("admin")
 def descargar_formato_sitios_excel(request):
     """
-    Descarga formato oficial para importar/actualizar sitios.
+    Descarga el formato oficial para importar
+    o actualizar la tabla maestra de sitios.
     """
+
     columnas = [
         "ID Sites",
         "ID Claro",
@@ -1000,6 +1706,7 @@ def descargar_formato_sitios_excel(request):
         "Comuna",
         "Tipo de contruccion",
         "Altura",
+        "Tipo de Zona",
         "Candado BT",
         "Condiciones de acceso",
         "Claves",
@@ -1009,8 +1716,6 @@ def descargar_formato_sitios_excel(request):
         "Sitios zonas conflictivas",
         "Alarmas",
         "Guardias",
-        "Nivel",
-        "Descripción",
     ]
 
     ejemplo = [
@@ -1025,8 +1730,9 @@ def descargar_formato_sitios_excel(request):
         "SAN JOAQUÍN",
         "MP",
         "36",
+        "Urbano",
         "NA",
-        "Acceso con autorización previa",
+        "Libre Acceso",
         "1309 - 7394 - 1394",
         "Sin Llaves",
         "0",
@@ -1034,24 +1740,40 @@ def descargar_formato_sitios_excel(request):
         "No Aplica",
         "No Aplica",
         "No Aplica",
-        "4",
-        "Llamadas",
     ]
 
-    df = pd.DataFrame([ejemplo], columns=columnas)
+    df = pd.DataFrame(
+        [ejemplo],
+        columns=columnas,
+    )
 
     output = io.BytesIO()
 
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Colocalizados")
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl",
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False,
+            sheet_name="Colocalizados",
+        )
 
         workbook = writer.book
         worksheet = writer.sheets["Colocalizados"]
 
         worksheet.freeze_panes = "A2"
 
-        for col_idx, column_name in enumerate(columnas, start=1):
-            cell = worksheet.cell(row=1, column=col_idx)
+        for col_idx, column_name in enumerate(
+            columnas,
+            start=1,
+        ):
+            cell = worksheet.cell(
+                row=1,
+                column=col_idx,
+            )
+
             cell.value = column_name
 
             try:
@@ -1059,252 +1781,274 @@ def descargar_formato_sitios_excel(request):
             except Exception:
                 pass
 
-            width = max(len(str(column_name)) + 4, 14)
-            worksheet.column_dimensions[cell.column_letter].width = min(width, 35)
+            width = max(
+                len(str(column_name)) + 4,
+                14,
+            )
+
+            worksheet.column_dimensions[cell.column_letter].width = min(
+                width,
+                35,
+            )
 
     output.seek(0)
 
     response = HttpResponse(
         output.getvalue(),
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        content_type=(
+            "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+        ),
     )
-    response["Content-Disposition"] = 'attachment; filename="formato_importacion_sitios.xlsx"'
+
+    response["Content-Disposition"] = (
+        "attachment; " 'filename="formato_importacion_sitios.xlsx"'
+    )
 
     return response
+
 
 @login_required
 @rol_requerido("pm", "admin", "facturacion")
 def listar_servicios_pm(request):
-
     """
+    Bandeja de cotizaciones pendientes de aprobación.
 
-    Vista PM con filtros tipo Excel globales por columna.
+    REGLA PRINCIPAL
+    ==========================================================
 
-    Importante:
+    Esta pantalla muestra EXCLUSIVAMENTE:
 
-    - Los filtros Excel se aplican antes de paginar.
+        estado = "cotizado"
 
-    - excel_global_json se construye sobre todo el queryset filtrado, no solo sobre la página.
+    Es decir:
 
-    - La tabla se recarga por AJAX reemplazando solo #zonaTabla.
+        Cotizado (pendiente aprobación)
 
+    Una vez aprobada una cotización y pase a:
+
+        aprobado_pendiente
+
+    desaparece automáticamente de esta bandeja.
+
+    Los filtros Excel se aplican antes de paginar.
+
+    excel_global_json se construye sobre todo el queryset
+    filtrado, no solamente sobre la página actual.
+
+    La tabla continúa recargándose por AJAX reemplazando
+    únicamente #zonaTabla.
     """
 
     import json
     from urllib.parse import urlencode
 
     from django.core.paginator import Paginator
-    from django.db.models import Case, IntegerField, Value, When
 
-    # prioridad para PM
+    # ========================================================
+    # QUERYSET BASE
+    # ========================================================
+    #
+    # Esta pantalla es ahora exclusivamente una bandeja
+    # de aprobación.
+    # ========================================================
 
-    estado_prioridad = Case(
-
-        When(estado="cotizado", then=Value(1)),
-
-        When(estado="en_ejecucion", then=Value(2)),
-
-        When(estado="aprobado_pendiente", then=Value(3)),
-
-        default=Value(4),
-
-        output_field=IntegerField(),
-
+    servicios = ServicioCotizado.objects.filter(
+        estado="cotizado",
+    ).order_by(
+        "-fecha_creacion",
+        "-id",
     )
 
-    # queryset base (excluye bonos/adelantos/descuentos)
+    # ========================================================
+    # FILTROS RÁPIDOS NORMALES POR URL
+    # ========================================================
 
-    servicios = (
+    du_raw = (
+        request.GET.get(
+            "du",
+        )
+        or ""
+    ).strip()
 
-        ServicioCotizado.objects
+    id_claro = (
+        request.GET.get(
+            "id_claro",
+        )
+        or ""
+    ).strip()
 
-        .exclude(estado__in=["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"])
+    id_new = (
+        request.GET.get(
+            "id_new",
+        )
+        or ""
+    ).strip()
 
-        .annotate(prioridad=estado_prioridad)
-
-        .order_by("prioridad", "-fecha_creacion")
-
-    )
-
-    # ---------------- Filtros rápidos normales por URL ----------------
-
-    # Se mantienen para compatibilidad con links existentes.
-
-    du_raw = (request.GET.get("du") or "").strip()
-
-    id_claro = (request.GET.get("id_claro") or "").strip()
-
-    id_new = (request.GET.get("id_new") or "").strip()
-
-    mes_produccion = (request.GET.get("mes_produccion") or "").strip()
-
-    estado = (request.GET.get("estado") or "").strip()
+    mes_produccion = (
+        request.GET.get(
+            "mes_produccion",
+        )
+        or ""
+    ).strip()
 
     du = du_raw
 
     if du:
+        du = (
+            du.strip()
+            .upper()
+            .replace(
+                "DU",
+                "",
+            )
+        )
 
-        du = du.strip().upper().replace("DU", "")
-
-        servicios = servicios.filter(du__iexact=du)
+        servicios = servicios.filter(
+            du__iexact=du,
+        )
 
     if id_claro:
-
-        servicios = servicios.filter(id_claro__icontains=id_claro)
+        servicios = servicios.filter(
+            id_claro__icontains=id_claro,
+        )
 
     if id_new:
-
-        servicios = servicios.filter(id_new__icontains=id_new)
+        servicios = servicios.filter(
+            id_new__icontains=id_new,
+        )
 
     if mes_produccion:
-
-        servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
-
-    if estado:
-
-        servicios = servicios.filter(estado=estado)
+        servicios = servicios.filter(
+            mes_produccion__icontains=mes_produccion,
+        )
 
     servicios = servicios.distinct()
 
-    # ---------------- Helpers Excel ----------------
+    # ========================================================
+    # HELPERS EXCEL
+    # ========================================================
 
-    def money_clp_label(n):
-
+    def money_clp_label(
+        n,
+    ):
         try:
-
-            return f"$ {int(n or 0):,} CLP".replace(",", ".")
+            return f"$ {int(n or 0):,} CLP".replace(
+                ",",
+                ".",
+            )
 
         except Exception:
-
             return "$ 0 CLP"
 
-    def uf_label(n):
-
+    def uf_label(
+        n,
+    ):
         try:
-
-            val = float(n or 0)
+            val = float(
+                n or 0,
+            )
 
             if val.is_integer():
+                return f"UF {int(val):,}".replace(
+                    ",",
+                    ".",
+                )
 
-                return f"UF {int(val):,}".replace(",", ".")
-
-            return f"UF {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            return (
+                f"UF {val:,.2f}".replace(
+                    ",",
+                    "X",
+                )
+                .replace(
+                    ".",
+                    ",",
+                )
+                .replace(
+                    "X",
+                    ".",
+                )
+            )
 
         except Exception:
-
             return "UF 0"
 
-    def status_label(servicio):
+    def status_label(
+        servicio,
+    ):
+        return "Cotizado (pendiente aprobación)"
 
-        if servicio.estado == "cotizado":
-
-            return "Cotizado (pendiente aprobación)"
-
-        if servicio.estado == "aprobado_pendiente":
-
-            return "Aprobado por PM"
-
-        if servicio.estado == "asignado":
-
-            return "Asignado por Supervisor"
-
-        if servicio.estado == "en_progreso":
-
-            return "En ejecución"
-
-        if servicio.estado in ["finalizado_trabajador", "en_revision_supervisor"]:
-
-            return "Pendiente revisión supervisor"
-
-        if servicio.estado == "rechazado_supervisor":
-
-            return "Rechazado por Supervisor"
-
-        if servicio.estado == "aprobado_supervisor":
-
-            return "Aprobado por Supervisor"
-
-        if servicio.estado == "informe_subido":
-
-            return "Informe cargado"
-
-        if servicio.estado == "finalizado":
-
-            return "Finalizado"
-
-        if servicio.estado == "ajuste_bono":
-
-            return "Bono"
-
-        if servicio.estado == "ajuste_adelanto":
-
-            return "Adelanto"
-
-        if servicio.estado == "ajuste_descuento":
-
-            return "Descuento"
-
-        return str(servicio.estado or "—")
-
-    def excel_value_for_servicio(servicio, col):
-
-        col = str(col)
+    def excel_value_for_servicio(
+        servicio,
+        col,
+    ):
+        col = str(
+            col,
+        )
 
         if col == "0":
-
             return f"DU{servicio.du}" if servicio.du is not None else "—"
 
         if col == "1":
-
             return str(servicio.id_claro or "—")
 
         if col == "2":
-
             return str(servicio.region or "—")
 
         if col == "3":
-
             return str(servicio.mes_produccion or "—")
 
         if col == "4":
-
             return str(servicio.id_new or "—")
 
         if col == "5":
-
             return str(servicio.detalle_tarea or "—")
 
         if col == "6":
-
-            return uf_label(servicio.monto_cotizado)
+            return uf_label(
+                servicio.monto_cotizado,
+            )
 
         if col == "7":
-
-            return money_clp_label(servicio.monto_mmoo)
+            return money_clp_label(
+                servicio.monto_mmoo,
+            )
 
         if col == "8":
-
-            return status_label(servicio)
+            return status_label(
+                servicio,
+            )
 
         if col == "9":
-
             return "Acciones"
 
         return ""
 
-    # ---------------- Filtros Excel globales ----------------
+    # ========================================================
+    # FILTROS EXCEL GLOBALES
+    # ========================================================
 
-    excel_filters_raw = (request.GET.get("excel_filters") or "").strip()
+    excel_filters_raw = (
+        request.GET.get(
+            "excel_filters",
+        )
+        or ""
+    ).strip()
 
     try:
-
-        excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
+        excel_filters = (
+            json.loads(
+                excel_filters_raw,
+            )
+            if excel_filters_raw
+            else {}
+        )
 
     except json.JSONDecodeError:
-
         excel_filters = {}
 
-    servicios_list = list(servicios)
+    servicios_list = list(
+        servicios,
+    )
 
     if excel_filters:
 
@@ -1316,141 +2060,384 @@ def listar_servicios_pm(request):
 
             for col, values in excel_filters.items():
 
-                values_set = set(values or [])
+                values_set = set(
+                    values or [],
+                )
 
                 if not values_set:
-
                     continue
 
-                label = excel_value_for_servicio(servicio, col)
+                label = excel_value_for_servicio(
+                    servicio,
+                    col,
+                )
 
                 if label not in values_set:
-
                     ok = False
-
                     break
 
             if ok:
-
-                filtered_list.append(servicio)
+                filtered_list.append(
+                    servicio,
+                )
 
         servicios_list = filtered_list
 
-    # ---------------- Globales para panel Excel ----------------
+    # ========================================================
+    # GLOBALES PARA PANEL EXCEL
+    # ========================================================
 
     excel_global = {}
 
-    for col in range(10):
+    for col in range(
+        10,
+    ):
 
         vals = set()
 
         for servicio in servicios_list:
 
-            vals.add(excel_value_for_servicio(servicio, str(col)) or "(Vacías)")
+            vals.add(
+                excel_value_for_servicio(
+                    servicio,
+                    str(col),
+                )
+                or "(Vacías)"
+            )
 
-        excel_global[col] = sorted(vals)
+        excel_global[col] = sorted(
+            vals,
+        )
 
-    excel_global_json = json.dumps(excel_global)
+    excel_global_json = json.dumps(
+        excel_global,
+    )
 
-    # ---------------- Paginación ----------------
+    # ========================================================
+    # PAGINACIÓN
+    # ========================================================
 
-    cantidad_param = request.GET.get("cantidad", "10")
+    cantidad_param = request.GET.get(
+        "cantidad",
+        "10",
+    )
 
     if cantidad_param == "todos":
 
         per_page = 100
-
         cantidad = "100"
 
     else:
 
         try:
+            per_page = max(
+                5,
+                min(
+                    int(cantidad_param),
+                    100,
+                ),
+            )
 
-            per_page = max(5, min(int(cantidad_param), 100))
-
-            cantidad = str(per_page)
+            cantidad = str(
+                per_page,
+            )
 
         except ValueError:
-
             per_page = 10
-
             cantidad = "10"
 
-    paginator = Paginator(servicios_list, per_page)
+    paginator = Paginator(
+        servicios_list,
+        per_page,
+    )
 
-    page_number = request.GET.get("page") or 1
+    page_number = (
+        request.GET.get(
+            "page",
+        )
+        or 1
+    )
 
-    pagina = paginator.get_page(page_number)
+    pagina = paginator.get_page(
+        page_number,
+    )
 
-    # ---------------- Mantener parámetros ----------------
+    # ========================================================
+    # MANTENER PARÁMETROS
+    # ========================================================
 
     keep_params = {}
 
     if cantidad:
-
         keep_params["cantidad"] = cantidad
 
     if du_raw:
-
         keep_params["du"] = du_raw
 
     if id_claro:
-
         keep_params["id_claro"] = id_claro
 
     if id_new:
-
         keep_params["id_new"] = id_new
 
     if mes_produccion:
-
         keep_params["mes_produccion"] = mes_produccion
 
-    if estado:
-
-        keep_params["estado"] = estado
-
     if excel_filters_raw:
-
         keep_params["excel_filters"] = excel_filters_raw
 
-    qs_keep = urlencode(keep_params)
+    qs_keep = urlencode(
+        keep_params,
+    )
 
     return render(
-
         request,
-
         "operaciones/listar_servicios_pm.html",
-
         {
-
             "pagina": pagina,
-
             "cantidad": cantidad,
-
             "filtros": {
-
                 "du": du_raw,
-
                 "id_claro": id_claro,
-
                 "mes_produccion": mes_produccion,
-
                 "id_new": id_new,
-
-                "estado": estado,
-
+                "estado": "cotizado",
             },
-
-            "estado_choices": ServicioCotizado.ESTADOS,
-
-            "excel_global_json": excel_global_json,
-
+            "estado_choices": (ServicioCotizado.ESTADOS),
+            "excel_global_json": (excel_global_json),
             "qs_keep": qs_keep,
-
         },
-
     )
+
+@login_required
+@rol_requerido("pm", "admin")
+@require_POST
+@transaction.atomic
+def accion_masiva_cotizaciones_pm(
+    request,
+):
+    """
+    Acción masiva de cotizaciones pendientes.
+
+    PERMISOS
+    ==========================================================
+
+    PM:
+        puede aprobar masivamente.
+
+    ADMIN:
+        puede aprobar masivamente;
+        puede eliminar masivamente.
+
+    Solamente se procesan cotizaciones que todavía estén:
+
+        estado = "cotizado"
+    """
+
+    accion = (
+        request.POST.get(
+            "accion",
+            "",
+        )
+        .strip()
+        .lower()
+    )
+
+    servicio_ids = request.POST.getlist(
+        "servicio_ids",
+    )
+
+    # ========================================================
+    # VALIDACIÓN DE SELECCIÓN
+    # ========================================================
+
+    if not servicio_ids:
+
+        messages.warning(
+            request,
+            "Debes seleccionar al menos una cotización.",
+        )
+
+        return redirect(
+            "operaciones:listar_servicios_pm",
+        )
+
+    # ========================================================
+    # SEGURIDAD DE ACCIONES
+    # ========================================================
+
+    es_admin = bool(
+        request.user.is_superuser
+        or request.user.es_admin_general
+    )
+
+    es_pm = bool(
+        getattr(
+            request.user,
+            "es_pm",
+            False,
+        )
+    )
+
+    # --------------------------------------------------------
+    # APROBAR:
+    # PM + ADMIN
+    # --------------------------------------------------------
+
+    if accion == "aprobar":
+
+        if not (
+            es_admin
+            or es_pm
+        ):
+
+            messages.error(
+                request,
+                (
+                    "No tienes permisos para aprobar "
+                    "cotizaciones masivamente."
+                ),
+            )
+
+            return redirect(
+                "operaciones:listar_servicios_pm",
+            )
+
+    # --------------------------------------------------------
+    # ELIMINAR:
+    # SOLO ADMIN
+    # --------------------------------------------------------
+
+    elif accion == "eliminar":
+
+        if not es_admin:
+
+            messages.error(
+                request,
+                (
+                    "Solo un administrador puede eliminar "
+                    "cotizaciones masivamente."
+                ),
+            )
+
+            return redirect(
+                "operaciones:listar_servicios_pm",
+            )
+
+    else:
+
+        messages.error(
+            request,
+            "La acción masiva seleccionada no es válida.",
+        )
+
+        return redirect(
+            "operaciones:listar_servicios_pm",
+        )
+
+    # ========================================================
+    # BLOQUEAR Y OBTENER REGISTROS
+    # ========================================================
+
+    servicios = list(
+        ServicioCotizado.objects
+        .select_for_update()
+        .filter(
+            pk__in=servicio_ids,
+            estado="cotizado",
+        )
+        .order_by(
+            "id",
+        )
+    )
+
+    if not servicios:
+
+        messages.warning(
+            request,
+            (
+                "Las cotizaciones seleccionadas ya no están "
+                "disponibles para esta acción."
+            ),
+        )
+
+        return redirect(
+            "operaciones:listar_servicios_pm",
+        )
+
+    # ========================================================
+    # APROBAR
+    # ========================================================
+
+    if accion == "aprobar":
+
+        cantidad = 0
+
+        for servicio in servicios:
+
+            servicio.estado = "aprobado_pendiente"
+
+            servicio.pm_aprueba = request.user
+
+            servicio.save(
+                update_fields=[
+                    "estado",
+                    "pm_aprueba",
+                ]
+            )
+
+            cantidad += 1
+
+        messages.success(
+            request,
+            (
+                f"{cantidad} cotización(es) "
+                "fueron aprobadas correctamente."
+            ),
+        )
+
+    # ========================================================
+    # ELIMINAR
+    # ========================================================
+
+    elif accion == "eliminar":
+
+        cantidad = len(
+            servicios,
+        )
+
+        for servicio in servicios:
+            servicio.delete()
+
+        messages.success(
+            request,
+            (
+                f"{cantidad} cotización(es) "
+                "fueron eliminadas correctamente."
+            ),
+        )
+
+    # ========================================================
+    # RETORNO
+    # ========================================================
+
+    next_url = (
+        request.POST.get(
+            "next",
+            "",
+        )
+        .strip()
+    )
+
+    if next_url:
+        return redirect(
+            next_url,
+        )
+
+    return redirect(
+        "operaciones:listar_servicios_pm",
+    )
+
 
 
 @login_required

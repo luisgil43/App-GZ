@@ -461,7 +461,10 @@
           </a>
         </li>
 
-        <!-- Operaciones -->
+        <!-- ====================================================== -->
+        <!-- OPERACIONES                                            -->
+        <!-- ====================================================== -->
+
         {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
 
           <li class="group">
@@ -480,7 +483,12 @@
               </span>
             </div>
 
+
             <ul class="submenu hidden space-y-1">
+
+              <!-- ================================================== -->
+              <!-- HORAS EXTRAS                                      -->
+              <!-- ================================================== -->
 
               <li>
                 <a href="#">
@@ -488,11 +496,73 @@
                 </a>
               </li>
 
+
+              <!-- ================================================== -->
+              <!-- LISTA SITIOS MÓVILES                              -->
+              <!-- ================================================== -->
+
               <li>
                 <a href="{% url 'operaciones:listar_sitios' %}">
                   Lista Sitios Móviles
                 </a>
               </li>
+
+
+              <!-- ================================================== -->
+              <!-- PLANIFICACIÓN                                     -->
+              <!-- ================================================== -->
+
+              <li class="group">
+
+                <a
+                  href="#"
+                  onclick="
+                    event.preventDefault();
+                    toggleMenu(this);
+                  "
+                  class="flex items-center justify-between"
+                >
+                  <span>
+                    Planificación
+                  </span>
+
+                  <span class="flecha transition-transform duration-200">
+                    ▶
+                  </span>
+                </a>
+
+                <ul class="submenu hidden space-y-1">
+
+                  <li>
+                    <a href="{% url 'planificacion:listar_contactos' %}">
+                      Base de Contactos
+                    </a>
+                  </li>
+
+                  <li>
+                    <a href="{% url 'planificacion:planificaciones_mensuales' %}">
+                      Planificación Mensual
+                    </a>
+                  </li>
+
+                  <li>
+                    <a href="{% url 'planificacion:planificacion_diaria' %}">
+                      Planificación Diaria
+                    </a>
+                  </li>
+
+                  <li>
+                    <a href="{% url 'planificacion:listar_cuadrillas' %}">
+                      Cuadrillas
+                    </a>
+                  </li>
+
+                </ul>
+
+              </li>
+              <!-- ================================================== -->
+              <!-- PRODUCCIONES                                      -->
+              <!-- ================================================== -->
 
               <li>
                 <a href="{% url 'operaciones:produccion_admin' %}">
@@ -500,11 +570,21 @@
                 </a>
               </li>
 
+
+              <!-- ================================================== -->
+              <!-- RENDICIONES                                       -->
+              <!-- ================================================== -->
+
               <li>
                 <a href="{% url 'operaciones:vista_rendiciones' %}">
                   Rendiciones
                 </a>
               </li>
+
+
+              <!-- ================================================== -->
+              <!-- CREAR SERVICIOS                                   -->
+              <!-- ================================================== -->
 
               <li>
                 <a href="{% url 'operaciones:listar_servicios_pm' %}">
@@ -512,11 +592,21 @@
                 </a>
               </li>
 
+
+              <!-- ================================================== -->
+              <!-- REALIZAR ASIGNACIÓN                               -->
+              <!-- ================================================== -->
+
               <li>
                 <a href="{% url 'operaciones:listar_servicios_supervisor' %}">
                   Realizar Asignación
                 </a>
               </li>
+
+
+              <!-- ================================================== -->
+              <!-- RESUMEN OPERATIVO                                 -->
+              <!-- ================================================== -->
 
               <li>
                 <a href="{% url 'operaciones:resumen_operativo' %}">
@@ -525,6 +615,7 @@
               </li>
 
             </ul>
+
           </li>
 
         {% endif %}
