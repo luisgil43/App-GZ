@@ -21,10 +21,13 @@ from planificacion.services.motor_batch_semanal.tipos import SitioMotor
 
 OBJETIVO_SITIOS_POR_DIA = 3
 
+HORA_LIMITE_INCORPORAR_DIA_ACTUAL = 12
+
 ESTADOS_BATCH_NO_COMPLETABLES = {
     "cerrado",
     "cancelado",
 }
+
 
 ESTADOS_SITIO_NO_DISPONIBLES = {
     "completado",
@@ -113,15 +116,16 @@ def obtener_batches_completables(
     *,
     planificacion_nueva,
     fecha_referencia=None,
+    fecha_hora_referencia=None,
 ):
     """
-    Devuelve batches operacionales que todavía pueden recibir
-    sitios desde una planificación mensual nueva.
+    Devuelve las semanas operacionales que todavía pueden
+    recibir sitios desde una planificación mensual nueva.
 
     REGLA OPERACIONAL
     ==========================================================
 
-    Se pueden considerar únicamente:
+    Solamente pueden proponerse:
 
         1. la semana REAL actualmente vigente;
         2. la semana INMEDIATAMENTE SIGUIENTE.
@@ -129,38 +133,67 @@ def obtener_batches_completables(
     Nunca se muestran:
 
         - semanas vencidas;
-        - semanas posteriores a la próxima semana;
+        - semanas anteriores aunque hayan quedado incompletas;
+        - semanas posteriores a la inmediatamente siguiente;
         - batches cerrados;
         - batches cancelados;
         - batches que ya alcanzaron su objetivo;
+        - batches que ya no tienen capacidad operacional real;
         - batches sin candidatos disponibles en el nuevo mes.
 
-    EJEMPLO
+    MUY IMPORTANTE
     ==========================================================
 
-    Si hoy es viernes 21/08/2026:
+    Cuando ya se incorporaron sitios desde la planificación
+    nueva, esos sitios deben descontarse de la recomendación
+    operacional calculada.
 
-        W34 -> 17/08 al 23/08
-        W35 -> 24/08 al 30/08
+    Ejemplo:
 
-    El sistema puede evaluar ambas.
+        objetivo batch = 45
+        sitios originales = 40
+        déficit original = 5
 
-    W32 y W33 ya quedan automáticamente fuera.
+        quedan 4 de 5 días operativos
 
-    Esto permite que una asignación de septiembre pueda
-    utilizarse anticipadamente para completar W35 antes de que
-    comience la semana operacional.
+        recomendación temporal = 4
+
+        si ya se incorporaron 4 sitios desde septiembre:
+
+            pendiente = 4 - 4 = 0
+
+        La semana deja de mostrarse como oportunidad aunque
+        su cantidad física actual sea 44 de 45.
+
+    De esta manera no volvemos a recomendar repetidamente
+    después de que el usuario ya cumplió la recomendación
+    correspondiente al momento operacional actual.
     """
 
     # ========================================================
-    # FECHA DE REFERENCIA
+    # FECHA / HORA DE REFERENCIA
     # ========================================================
+
+    if fecha_hora_referencia is None:
+
+        fecha_hora_referencia = timezone.localtime()
+
+    else:
+
+        if timezone.is_aware(
+            fecha_hora_referencia,
+        ):
+
+            fecha_hora_referencia = timezone.localtime(
+                fecha_hora_referencia,
+            )
 
     if fecha_referencia is None:
-        fecha_referencia = timezone.localdate()
+
+        fecha_referencia = fecha_hora_referencia.date()
 
     # ========================================================
-    # SEMANA ACTUAL
+    # SEMANA REAL ACTUAL
     # ========================================================
 
     inicio_actual = _inicio_semana(
@@ -175,24 +208,13 @@ def obtener_batches_completables(
         days=7,
     )
 
-    # ========================================================
-    # FECHAS DE SEMANAS ADMITIDAS
-    # ========================================================
-
-    fechas_inicio_admitidas = [
+    fechas_inicio_admitidas = {
         inicio_actual,
         inicio_siguiente,
-    ]
+    }
 
     # ========================================================
-    # BATCHES CANDIDATOS
-    # ========================================================
-    #
-    # IMPORTANTE:
-    #
-    # fecha_fin NO es campo ORM.
-    #
-    # Por eso filtramos solamente utilizando fecha_inicio.
+    # BATCHES POSIBLES
     # ========================================================
 
     batches = (
@@ -219,13 +241,13 @@ def obtener_batches_completables(
     resultado = []
 
     # ========================================================
-    # EVALUAR
+    # EVALUAR CADA SEMANA
     # ========================================================
 
     for batch in batches:
 
         # ====================================================
-        # FECHA FINAL REAL DEL BATCH
+        # FECHA FINAL REAL
         # ====================================================
 
         fecha_fin_batch = getattr(
@@ -236,8 +258,8 @@ def obtener_batches_completables(
 
         if fecha_fin_batch is None:
 
-            fecha_fin_batch = batch.fecha_inicio + timedelta(
-                days=6,
+            fecha_fin_batch = _fin_semana(
+                batch.fecha_inicio,
             )
 
         # ====================================================
@@ -245,28 +267,20 @@ def obtener_batches_completables(
         # ====================================================
 
         if fecha_fin_batch < fecha_referencia:
+
             continue
 
         # ====================================================
-        # SOLO ACTUAL O SIGUIENTE
+        # SEGURIDAD:
+        # SOLO SEMANA ACTUAL O SIGUIENTE
         # ====================================================
 
         if batch.fecha_inicio not in fechas_inicio_admitidas:
+
             continue
 
         # ====================================================
-        # EL BATCH DEBE VENIR DE OTRO CONTEXTO MENSUAL
-        # ====================================================
-        #
-        # Ejemplo:
-        #
-        # W35 nació desde agosto.
-        #
-        # Septiembre puede aportar sitios a W35.
-        #
-        # Pero no queremos utilizar este mecanismo para
-        # completar un batch que pertenece únicamente al mismo
-        # mes que acabamos de importar.
+        # DEBE PERTENECER ORIGINALMENTE A OTRO MES
         # ====================================================
 
         tiene_otro_mes = batch.planificaciones_origen.exclude(
@@ -278,65 +292,192 @@ def obtener_batches_completables(
         )
 
         if not tiene_otro_mes and not pertenece_legacy_a_otro_mes:
+
             continue
 
         # ====================================================
-        # DIAGNÓSTICO
+        # SITIOS YA INCORPORADOS DESDE EL MES NUEVO
+        # ====================================================
+        #
+        # Estos NO deben provocar que recalculamos una nueva
+        # recomendación desde cero.
+        #
+        # Necesitamos conocer cuánto tenía realmente el batch
+        # antes de recibir aportes desde planificacion_nueva.
+        # ====================================================
+
+        cantidad_incorporada_desde_nuevo_mes = (
+            SitioBatchSemanal.objects.filter(
+                batch=batch,
+                sitio_planificado__planificacion=(planificacion_nueva),
+            )
+            .exclude(
+                estado__in=[
+                    "excluido",
+                    "reemplazado",
+                    "rechazado",
+                ],
+            )
+            .count()
+        )
+
+        # ====================================================
+        # DIAGNÓSTICO ACTUAL
         # ====================================================
 
         diagnostico = diagnosticar_batch_completable(
             batch=batch,
             fecha_referencia=fecha_referencia,
+            fecha_hora_referencia=(fecha_hora_referencia),
         )
 
         # ====================================================
-        # OBJETIVO YA COMPLETO
+        # RECONSTRUIR CANTIDAD ORIGINAL DEL BATCH
         # ====================================================
-
-        if (
-            diagnostico.get(
-                "faltantes_objetivo",
-                0,
-            )
-            <= 0
-        ):
-            continue
-
-        # ====================================================
-        # NO NECESITA INCORPORAR SITIOS
-        # ====================================================
-        #
-        # Esto puede ocurrir en la semana actual.
         #
         # Ejemplo:
         #
-        # quedan suficientes sitios residuales para cubrir los
-        # pocos días operacionales restantes.
+        # actual = 44
+        # septiembre aportó = 4
+        #
+        # original = 40
         # ====================================================
 
-        if (
-            diagnostico.get(
-                "sitios_a_incorporar",
-                0,
-            )
-            <= 0
-        ):
+        cantidad_original_batch = max(
+            (
+                diagnostico["cantidad_actual_batch"]
+                - cantidad_incorporada_desde_nuevo_mes
+            ),
+            0,
+        )
+
+        objetivo_batch = max(
+            int(diagnostico["objetivo_batch"] or 0),
+            0,
+        )
+
+        # ====================================================
+        # DÉFICIT ORIGINAL
+        # ====================================================
+
+        faltantes_originales = max(
+            (objetivo_batch - cantidad_original_batch),
+            0,
+        )
+
+        # ====================================================
+        # SEMANA FUTURA
+        # ====================================================
+        #
+        # Todavía no comenzó.
+        #
+        # La necesidad original es completar todo el déficit.
+        # ====================================================
+
+        if diagnostico["semana_futura"]:
+
+            recomendacion_original = faltantes_originales
+
+        # ====================================================
+        # SEMANA ACTUAL
+        # ====================================================
+        #
+        # Se reduce el déficit original según los días que
+        # realmente permanecen disponibles.
+        # ====================================================
+
+        else:
+
+            cantidad_dias_semana = int(diagnostico["cantidad_dias_semana"] or 0)
+
+            cantidad_dias_restantes = int(diagnostico["cantidad_dias_restantes"] or 0)
+
+            if (
+                cantidad_dias_semana <= 0
+                or cantidad_dias_restantes <= 0
+                or faltantes_originales <= 0
+            ):
+
+                recomendacion_original = 0
+
+            else:
+
+                proporcion_restante = cantidad_dias_restantes / cantidad_dias_semana
+
+                recomendacion_original = int(
+                    round(faltantes_originales * proporcion_restante)
+                )
+
+                # ============================================
+                # MÍNIMO DE 1 SI TODAVÍA EXISTE DÉFICIT
+                # Y QUEDA AL MENOS UNA JORNADA.
+                # ============================================
+
+                if faltantes_originales > 0 and recomendacion_original <= 0:
+
+                    recomendacion_original = 1
+
+                recomendacion_original = min(
+                    recomendacion_original,
+                    faltantes_originales,
+                )
+
+        # ====================================================
+        # RESTAR LO QUE YA APORTÓ EL NUEVO MES
+        # ====================================================
+        #
+        # Este es el punto fundamental.
+        #
+        # objetivo original temporal = 4
+        # ya incorporados = 4
+        #
+        # pendiente = 0
+        # ====================================================
+
+        sitios_a_incorporar = max(
+            (recomendacion_original - cantidad_incorporada_desde_nuevo_mes),
+            0,
+        )
+
+        # ====================================================
+        # ACTUALIZAR DIAGNÓSTICO PARA LA INTERFAZ
+        # ====================================================
+
+        diagnostico["cantidad_original_batch"] = cantidad_original_batch
+
+        diagnostico["faltantes_originales"] = faltantes_originales
+
+        diagnostico["cantidad_incorporada_desde_nuevo_mes"] = (
+            cantidad_incorporada_desde_nuevo_mes
+        )
+
+        diagnostico["recomendacion_original"] = recomendacion_original
+
+        diagnostico["sitios_a_incorporar"] = sitios_a_incorporar
+
+        # ====================================================
+        # YA SE CUMPLIÓ LA RECOMENDACIÓN
+        # ====================================================
+
+        if sitios_a_incorporar <= 0:
+
             continue
 
         # ====================================================
-        # DEBE HABER SITIOS DISPONIBLES EN EL NUEVO MES
+        # DEBEN EXISTIR CANDIDATOS DEL NUEVO MES
         # ====================================================
 
         existen_candidatos = obtener_candidatos_planificacion_nueva(
-            planificacion_nueva=planificacion_nueva,
+            planificacion_nueva=(planificacion_nueva),
             batch_destino=batch,
         ).exists()
 
         if not existen_candidatos:
+
             continue
 
         # ====================================================
-        # RESULTADO
+        # OPCIÓN VÁLIDA
         # ====================================================
 
         resultado.append(
@@ -350,6 +491,75 @@ def obtener_batches_completables(
 
 
 # ============================================================
+# DÍAS OPERATIVOS SEMANA
+# ============================================================
+
+
+def obtener_dias_operativos_semana(
+    *,
+    batch,
+):
+    """
+    Devuelve todos los días operativos definidos para el batch.
+
+    Domingo nunca se considera operativo.
+
+    El sábado solamente se considera cuando la configuración
+    semanal indica que la operación trabaja sábado.
+    """
+
+    dias = []
+
+    fecha = batch.fecha_inicio
+
+    fin = batch.fecha_fin
+
+    while fecha <= fin:
+
+        # ====================================================
+        # DOMINGO
+        # ====================================================
+
+        if fecha.weekday() == 6:
+
+            fecha += timedelta(
+                days=1,
+            )
+
+            continue
+
+        # ====================================================
+        # SÁBADO
+        # ====================================================
+
+        if fecha.weekday() == 5:
+
+            trabaja_sabado = False
+
+            if batch.configuracion_semana_id:
+
+                trabaja_sabado = bool(batch.configuracion_semana.trabaja_sabado)
+
+            if not trabaja_sabado:
+
+                fecha += timedelta(
+                    days=1,
+                )
+
+                continue
+
+        dias.append(
+            fecha,
+        )
+
+        fecha += timedelta(
+            days=1,
+        )
+
+    return dias
+
+
+# ============================================================
 # DÍAS OPERATIVOS RESTANTES
 # ============================================================
 
@@ -358,55 +568,86 @@ def obtener_dias_operativos_restantes(
     *,
     batch,
     fecha_referencia=None,
+    fecha_hora_referencia=None,
 ):
     """
-    Calcula días potencialmente operativos restantes
-    considerando la fecha real.
+    Devuelve solamente los días operativos que todavía pueden
+    utilizarse desde el momento actual hacia adelante.
 
-    No retrocede a días anteriores.
+    REGLA DE HORA
+    ==========================================================
+
+    Para una semana actualmente en curso:
+
+    - antes de las 12:00, el día actual todavía se considera;
+    - desde las 12:00, el día actual ya no se utiliza para
+      incorporar nuevos sitios;
+    - la capacidad comienza desde el siguiente día operativo.
+
+    Esto evita que el sistema recomiende sitios a última hora
+    del día como si todavía quedara disponible toda la jornada.
+
+    Si la semana todavía no comienza, devuelve todos sus días
+    operativos.
     """
 
+    # ========================================================
+    # FECHA / HORA DE REFERENCIA
+    # ========================================================
+
+    if fecha_hora_referencia is None:
+
+        ahora = timezone.localtime()
+
+    else:
+
+        ahora = fecha_hora_referencia
+
+        if timezone.is_aware(ahora):
+            ahora = timezone.localtime(ahora)
+
     if fecha_referencia is None:
-        fecha_referencia = timezone.localdate()
 
-    dias = []
+        fecha_referencia = ahora.date()
 
-    inicio = max(
-        batch.fecha_inicio,
-        fecha_referencia,
+    # ========================================================
+    # TODOS LOS DÍAS OPERATIVOS DE LA SEMANA
+    # ========================================================
+
+    dias_semana = obtener_dias_operativos_semana(
+        batch=batch,
     )
 
-    fin = batch.fecha_fin
+    # ========================================================
+    # SEMANA TODAVÍA FUTURA
+    # ========================================================
 
-    fecha = inicio
+    if batch.fecha_inicio > fecha_referencia:
 
-    while fecha <= fin:
+        return dias_semana
 
-        # domingo nunca.
-        if fecha.weekday() == 6:
-            fecha += timedelta(days=1)
-            continue
+    # ========================================================
+    # DETERMINAR DESDE QUÉ FECHA SE PUEDE PLANIFICAR
+    # ========================================================
 
-        # sábado depende de la configuración.
-        if fecha.weekday() == 5:
+    fecha_minima = fecha_referencia
 
-            trabaja_sabado = False
+    # ========================================================
+    # SI YA PASÓ LA HORA LÍMITE DEL DÍA ACTUAL,
+    # NO CONTAMOS HOY
+    # ========================================================
 
-            if batch.configuracion_semana_id:
+    if ahora.hour >= HORA_LIMITE_INCORPORAR_DIA_ACTUAL:
 
-                configuracion = batch.configuracion_semana
+        fecha_minima = fecha_referencia + timedelta(
+            days=1,
+        )
 
-                trabaja_sabado = bool(configuracion.trabaja_sabado)
+    # ========================================================
+    # FILTRAR DÍAS REALMENTE DISPONIBLES
+    # ========================================================
 
-            if not trabaja_sabado:
-                fecha += timedelta(days=1)
-                continue
-
-        dias.append(fecha)
-
-        fecha += timedelta(days=1)
-
-    return dias
+    return [fecha for fecha in dias_semana if fecha >= fecha_minima]
 
 
 # ============================================================
@@ -468,62 +709,129 @@ def diagnosticar_batch_completable(
     *,
     batch,
     fecha_referencia=None,
+    fecha_hora_referencia=None,
 ):
     """
-    Diagnostica cuánto le falta realmente a un batch semanal.
+    Determina cuánto puede recibir realmente una semana.
 
-    EXISTEN DOS ESCENARIOS DISTINTOS
+    REGLAS
     ==========================================================
 
-    1. SEMANA ACTUAL
+    SEMANA FUTURA
     ----------------------------------------------------------
 
-    La semana ya está ejecutándose.
+    Si todavía no comenzó:
 
-    En ese caso debemos considerar:
+        sitios_a_incorporar =
+            objetivo semanal - cantidad actual
 
-        - días operacionales que todavía quedan;
-        - sitios residuales que ya posee;
-        - capacidad real restante.
+    porque todavía se dispone de toda la semana.
 
-    No tiene sentido incorporar sitios nuevos si los sitios que
-    ya existen alcanzan para cubrir las jornadas restantes.
-
-    2. SEMANA FUTURA INMEDIATA
+    SEMANA ACTUAL
     ----------------------------------------------------------
 
-    La semana todavía no comenzó.
+    Si ya comenzó:
 
-    En este caso lo importante es completar el universo del
-    batch hasta su OBJETIVO ORIGINAL.
+    1. se determina cuántos días operativos tenía la semana;
+    2. se determina cuántos días realmente quedan;
+    3. el día actual deja de contar desde la hora límite;
+    4. se calcula el déficit semanal original;
+    5. ese déficit se reduce proporcionalmente según la parte
+       de la semana operacional que todavía queda;
+    6. jamás se supera el déficit original del batch.
 
-    Ejemplo:
+    EJEMPLO
+    ==========================================================
 
-        objetivo = 40
-        actuales = 15
+    Objetivo semanal:
 
-        faltantes = 25
+        45
 
-    La recomendación podrá buscar hasta 25 sitios del nuevo mes.
+    Sitios actuales:
 
-    El motor territorial decidirá posteriormente cuáles son los
-    mejores candidatos para acompañar los existentes.
+        40
+
+    Déficit:
+
+        5
+
+    Semana lunes-viernes:
+
+        5 días
+
+    Lunes antes de las 12:00:
+
+        quedan 5 / 5 días
+        recomendación = 5
+
+    Lunes después de las 12:00:
+
+        quedan 4 / 5 días
+        recomendación = 4
+
+    Jueves antes de las 12:00:
+
+        quedan 2 / 5 días
+        recomendación = 2
+
+    Jueves después de las 12:00:
+
+        queda 1 / 5 día
+        recomendación = 1
     """
 
+    # ========================================================
+    # FECHA / HORA DE REFERENCIA
+    # ========================================================
+
+    if fecha_hora_referencia is None:
+
+        ahora = timezone.localtime()
+
+    else:
+
+        ahora = fecha_hora_referencia
+
+        if timezone.is_aware(
+            ahora,
+        ):
+
+            ahora = timezone.localtime(
+                ahora,
+            )
+
     if fecha_referencia is None:
-        fecha_referencia = timezone.localdate()
+
+        fecha_referencia = ahora.date()
 
     # ========================================================
-    # DÍAS OPERACIONALES DISPONIBLES
+    # TODOS LOS DÍAS OPERATIVOS DE LA SEMANA
+    # ========================================================
+
+    dias_operativos_semana = obtener_dias_operativos_semana(
+        batch=batch,
+    )
+
+    cantidad_dias_semana = len(
+        dias_operativos_semana,
+    )
+
+    # ========================================================
+    # DÍAS OPERATIVOS QUE TODAVÍA QUEDAN
     # ========================================================
 
     dias_restantes = obtener_dias_operativos_restantes(
         batch=batch,
         fecha_referencia=fecha_referencia,
+        fecha_hora_referencia=ahora,
+    )
+
+    cantidad_dias_restantes = len(
+        dias_restantes,
     )
 
     # ========================================================
-    # SITIOS RESIDUALES ÚTILES
+    # SITIOS RESIDUALES DEL BATCH
     # ========================================================
 
     sitios_residuales = obtener_sitios_residuales_batch(
@@ -547,13 +855,13 @@ def diagnosticar_batch_completable(
                 "excluido",
                 "reemplazado",
                 "rechazado",
-            ]
+            ],
         )
         .count()
     )
 
     # ========================================================
-    # OBJETIVO ORIGINAL DEL BATCH
+    # OBJETIVO SEMANAL ORIGINAL
     # ========================================================
 
     objetivo_batch = max(
@@ -562,7 +870,7 @@ def diagnosticar_batch_completable(
     )
 
     # ========================================================
-    # DÉFICIT DEL BATCH
+    # DÉFICIT ABSOLUTO DEL BATCH
     # ========================================================
 
     faltantes_objetivo = max(
@@ -571,7 +879,7 @@ def diagnosticar_batch_completable(
     )
 
     # ========================================================
-    # ESTADO TEMPORAL DE LA SEMANA
+    # ESTADO TEMPORAL
     # ========================================================
 
     semana_futura = batch.fecha_inicio > fecha_referencia
@@ -579,33 +887,37 @@ def diagnosticar_batch_completable(
     semana_iniciada = not semana_futura
 
     # ========================================================
-    # CAPACIDAD OPERACIONAL RESTANTE
+    # CAPACIDAD PROMEDIO POR DÍA
     # ========================================================
 
-    capacidad_operacional_restante = (
-        len(
-            dias_restantes,
-        )
-        * OBJETIVO_SITIOS_POR_DIA
+    if objetivo_batch > 0 and cantidad_dias_semana > 0:
+
+        capacidad_promedio_dia = objetivo_batch / cantidad_dias_semana
+
+    else:
+
+        capacidad_promedio_dia = 0.0
+
+    # ========================================================
+    # CAPACIDAD TEÓRICA DE LOS DÍAS RESTANTES
+    # ========================================================
+
+    capacidad_operacional_restante = int(
+        round(capacidad_promedio_dia * cantidad_dias_restantes)
+    )
+
+    capacidad_operacional_restante = max(
+        capacidad_operacional_restante,
+        0,
     )
 
     # ========================================================
     # SEMANA FUTURA
     # ========================================================
     #
-    # La semana todavía no comenzó.
+    # Todavía no comenzó.
     #
-    # Aquí NO limitamos los sitios por:
-    #
-    #     días * 3
-    #
-    # porque el batch representa el universo que se enviará a
-    # permisos y sobre el cual posteriormente trabajará el
-    # motor diario.
-    #
-    # Si objetivo=40 y existen 15:
-    #
-    #     se necesitan 25.
+    # Se puede intentar completar todo el déficit original.
     # ========================================================
 
     if semana_futura:
@@ -616,47 +928,82 @@ def diagnosticar_batch_completable(
     # SEMANA ACTUAL
     # ========================================================
     #
-    # La semana ya está ocurriendo.
+    # Ya comenzó.
     #
-    # Aquí sí miramos las jornadas que todavía pueden
-    # ejecutarse.
+    # No utilizamos los sitios residuales para cancelar
+    # automáticamente el déficit.
     #
-    # Si ya existen suficientes residuales para cubrirlas, no
-    # necesitamos traer más sitios del nuevo mes.
+    # Lo correcto es reducir el déficit proporcionalmente
+    # según la cantidad de jornadas que todavía quedan.
     # ========================================================
 
     else:
 
-        necesidad_operacional = max(
-            capacidad_operacional_restante - cantidad_residuales,
-            0,
-        )
+        # ====================================================
+        # NO QUEDA NINGÚN DÍA OPERATIVO
+        # ====================================================
 
-        sitios_a_incorporar = min(
-            faltantes_objetivo,
-            necesidad_operacional,
-        )
+        if cantidad_dias_restantes <= 0 or cantidad_dias_semana <= 0:
+
+            sitios_a_incorporar = 0
+
+        # ====================================================
+        # TODAVÍA QUEDAN JORNADAS
+        # ====================================================
+
+        else:
+
+            proporcion_semana_restante = cantidad_dias_restantes / cantidad_dias_semana
+
+            # ================================================
+            # REDUCIR EL DÉFICIT SEGÚN LA PARTE DE SEMANA
+            # QUE TODAVÍA ES OPERACIONALMENTE UTILIZABLE
+            # ================================================
+
+            faltantes_ajustados = int(
+                round(faltantes_objetivo * proporcion_semana_restante)
+            )
+
+            # ================================================
+            # SI EXISTE DÉFICIT Y TODAVÍA QUEDA AL MENOS
+            # UN DÍA, CONSERVAMOS COMO MÍNIMO 1 OPCIÓN
+            # ================================================
+            #
+            # Esto evita que un déficit pequeño desaparezca
+            # únicamente por efecto del redondeo.
+            # ================================================
+
+            if faltantes_objetivo > 0 and faltantes_ajustados <= 0:
+
+                faltantes_ajustados = 1
+
+            # ================================================
+            # NUNCA SUPERAR EL DÉFICIT ORIGINAL
+            # ================================================
+
+            sitios_a_incorporar = min(
+                faltantes_objetivo,
+                faltantes_ajustados,
+            )
 
     # ========================================================
     # RESULTADO
     # ========================================================
 
     return {
-        "batch_id": batch.pk,
+        "batch_id": (batch.pk),
         "codigo_semana": (batch.codigo_semana),
         "fecha_inicio": (batch.fecha_inicio),
         "fecha_fin": (batch.fecha_fin),
         "objetivo_batch": (objetivo_batch),
         "cantidad_actual_batch": (cantidad_actual_batch),
         "faltantes_objetivo": (faltantes_objetivo),
+        "dias_operativos_semana": (dias_operativos_semana),
+        "cantidad_dias_semana": (cantidad_dias_semana),
         "dias_restantes": (dias_restantes),
-        "cantidad_dias_restantes": (
-            len(
-                dias_restantes,
-            )
-        ),
+        "cantidad_dias_restantes": (cantidad_dias_restantes),
+        "capacidad_promedio_dia": (capacidad_promedio_dia),
         "capacidad_operacional_restante": (capacidad_operacional_restante),
-        # Compatibilidad con templates/código previo.
         "capacidad_restante": (capacidad_operacional_restante),
         "sitios_residuales": (sitios_residuales),
         "cantidad_sitios_residuales": (cantidad_residuales),
@@ -664,6 +1011,8 @@ def diagnosticar_batch_completable(
         "objetivo_diario": (OBJETIVO_SITIOS_POR_DIA),
         "semana_iniciada": (semana_iniciada),
         "semana_futura": (semana_futura),
+        "hora_referencia": (ahora.time()),
+        "hora_limite_dia_actual": (HORA_LIMITE_INCORPORAR_DIA_ACTUAL),
     }
 
 
@@ -815,6 +1164,7 @@ def generar_recomendacion_completar_semana(
     batch_destino,
     cantidad=None,
     fecha_referencia=None,
+    excluir_sitio_planificado_ids=None,
 ):
     """
     Genera una recomendación SIN guardar.
@@ -824,7 +1174,25 @@ def generar_recomendacion_completar_semana(
 
     La recomendación se basa en compatibilidad territorial
     y operativa.
+
+    Cuando se analizan varias semanas simultáneamente,
+    excluir_sitio_planificado_ids evita recomendar el mismo
+    SitioPlanificado en más de una semana.
     """
+
+    # ========================================================
+    # EXCLUSIONES ENTRE SEMANAS
+    # ========================================================
+
+    excluir_ids = {
+        int(valor)
+        for valor in (excluir_sitio_planificado_ids or [])
+        if str(valor).isdigit()
+    }
+
+    # ========================================================
+    # DIAGNÓSTICO
+    # ========================================================
 
     diagnostico = diagnosticar_batch_completable(
         batch=batch_destino,
@@ -851,12 +1219,22 @@ def generar_recomendacion_completar_semana(
             "advertencias": [],
         }
 
-    candidatos = list(
-        obtener_candidatos_planificacion_nueva(
-            planificacion_nueva=(planificacion_nueva),
-            batch_destino=batch_destino,
-        )
+    # ========================================================
+    # CANDIDATOS
+    # ========================================================
+
+    candidatos_queryset = obtener_candidatos_planificacion_nueva(
+        planificacion_nueva=planificacion_nueva,
+        batch_destino=batch_destino,
     )
+
+    if excluir_ids:
+
+        candidatos_queryset = candidatos_queryset.exclude(
+            pk__in=excluir_ids,
+        )
+
+    candidatos = list(candidatos_queryset)
 
     if not candidatos:
 
@@ -870,10 +1248,14 @@ def generar_recomendacion_completar_semana(
                 (
                     "La planificación nueva no posee "
                     "sitios disponibles para completar "
-                    "la semana."
+                    "esta semana."
                 )
             ],
         }
+
+    # ========================================================
+    # CUADRILLAS DISPONIBLES
+    # ========================================================
 
     disponibilidades = []
 
@@ -900,7 +1282,15 @@ def generar_recomendacion_completar_semana(
             ],
         }
 
+    # ========================================================
+    # SITIOS RESIDUALES
+    # ========================================================
+
     residuales = diagnostico["sitios_residuales"]
+
+    # ========================================================
+    # PREPARAR CANDIDATOS
+    # ========================================================
 
     motores_candidatos = {}
 
@@ -908,7 +1298,9 @@ def generar_recomendacion_completar_semana(
 
     for candidato in candidatos:
 
-        motor = _sitio_planificado_a_motor(candidato)
+        motor = _sitio_planificado_a_motor(
+            candidato,
+        )
 
         if motor.latitud is None or motor.longitud is None:
             continue
@@ -918,13 +1310,14 @@ def generar_recomendacion_completar_semana(
         candidatos_validos.append(candidato)
 
     seleccionados = []
+
     seleccionados_ids = set()
 
     grupos = []
 
     # ========================================================
-    # PRIMERA PASADA:
-    # COMPLETAR RESIDUALES
+    # PRIMERA PASADA
+    # COMPLETAR SITIOS RESIDUALES
     # ========================================================
 
     for item_residual in residuales:
@@ -932,14 +1325,16 @@ def generar_recomendacion_completar_semana(
         if len(seleccionados) >= cantidad_objetivo:
             break
 
-        motor_ancla = _sitio_planificado_a_motor(item_residual.sitio_planificado)
+        motor_ancla = _sitio_planificado_a_motor(
+            item_residual.sitio_planificado,
+        )
 
         if motor_ancla.latitud is None or motor_ancla.longitud is None:
             continue
 
         restantes_necesarios = min(
             2,
-            cantidad_objetivo - len(seleccionados),
+            (cantidad_objetivo - len(seleccionados)),
         )
 
         if restantes_necesarios <= 0:
@@ -950,16 +1345,19 @@ def generar_recomendacion_completar_semana(
         candidatos_disponibles = [
             candidato
             for candidato in candidatos_validos
-            if candidato.pk not in (seleccionados_ids)
+            if candidato.pk not in seleccionados_ids
         ]
 
-        # ================================================
+        # ====================================================
         # BUSCAR PARES DE ACOMPAÑANTES
-        # ================================================
+        # ====================================================
 
         if restantes_necesarios >= 2:
 
-            for indice, candidato_a in enumerate(candidatos_disponibles):
+            for (
+                indice,
+                candidato_a,
+            ) in enumerate(candidatos_disponibles):
 
                 motor_a = motores_candidatos[candidato_a.pk]
 
@@ -989,9 +1387,9 @@ def generar_recomendacion_completar_semana(
                         }
                     )
 
-        # ================================================
-        # SI NO HUBO PAR, PROBAR INDIVIDUAL
-        # ================================================
+        # ====================================================
+        # SI NO EXISTE PAR, PROBAR INDIVIDUAL
+        # ====================================================
 
         if not mejores:
 
@@ -1023,7 +1421,7 @@ def generar_recomendacion_completar_semana(
             continue
 
         mejores.sort(
-            key=lambda dato: dato["evaluacion"]["clave"],
+            key=lambda dato: (dato["evaluacion"]["clave"]),
             reverse=True,
         )
 
@@ -1057,8 +1455,8 @@ def generar_recomendacion_completar_semana(
             )
 
     # ========================================================
-    # SEGUNDA PASADA:
-    # SI TODAVÍA FALTAN, ELEGIR BUENOS CLUSTERS DEL MES NUEVO
+    # SEGUNDA PASADA
+    # CLUSTERS DEL MES NUEVO
     # ========================================================
 
     faltantes = cantidad_objetivo - len(seleccionados)
@@ -1101,12 +1499,14 @@ def generar_recomendacion_completar_semana(
                         cluster,
                         dict,
                     ):
+
                         sitios_cluster = cluster.get(
                             "sitios",
                             [],
                         )
 
                     else:
+
                         sitios_cluster = []
 
                 for motor in sitios_cluster:
@@ -1127,7 +1527,7 @@ def generar_recomendacion_completar_semana(
                     seleccionados_ids.add(candidato.pk)
 
     # ========================================================
-    # SERIALIZAR
+    # SERIALIZAR RESULTADOS
     # ========================================================
 
     recomendados = []
@@ -1158,6 +1558,10 @@ def generar_recomendacion_completar_semana(
             }
         )
 
+    # ========================================================
+    # ADVERTENCIAS
+    # ========================================================
+
     advertencias = []
 
     if len(recomendados) < cantidad_objetivo:
@@ -1165,18 +1569,22 @@ def generar_recomendacion_completar_semana(
         advertencias.append(
             (
                 f"Se necesitaban aproximadamente "
-                f"{cantidad_objetivo} sitio(s), pero "
-                f"solo fue posible recomendar "
+                f"{cantidad_objetivo} sitio(s), "
+                f"pero solo fue posible recomendar "
                 f"{len(recomendados)} con información "
                 "territorial utilizable."
             )
         )
 
+    # ========================================================
+    # RESULTADO
+    # ========================================================
+
     return {
         "ok": True,
         "diagnostico": diagnostico,
         "recomendados": recomendados,
-        "cantidad_recomendada": len(recomendados),
+        "cantidad_recomendada": (len(recomendados)),
         "grupos": grupos,
         "advertencias": advertencias,
     }

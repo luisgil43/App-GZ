@@ -1,7 +1,7 @@
 {% extends "dashboard_admin/base.html" %}
 
 {% block title %}
-Completar semana operacional
+Completar semanas operacionales
 {% endblock %}
 
 {% block dashboard_content %}
@@ -11,23 +11,30 @@ Completar semana operacional
   <div
     class="
       mx-auto
-      max-w-5xl
+      max-w-6xl
       overflow-hidden
       rounded-3xl
-      border border-slate-200
+      border
+      border-slate-200
       bg-white
       shadow-sm
     "
   >
 
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
     <div
       class="
-        border-b border-slate-100
+        border-b
+        border-slate-100
         bg-gradient-to-r
         from-slate-50
         via-white
         to-cyan-50
-        px-6 py-6
+        px-6
+        py-6
       "
     >
 
@@ -43,250 +50,841 @@ Completar semana operacional
         Continuidad operacional
       </p>
 
+
       <h1
         class="
           mt-1
           text-2xl
           font-black
           text-slate-900
+          sm:text-3xl
         "
       >
-        Completar semana anterior
+        Revisar semanas pendientes
       </h1>
 
-      <p class="mt-2 text-sm text-slate-500">
-        La planificación {{ mensual }} ya está disponible.
-        Puedes utilizar algunos de sus sitios para completar
-        la semana operacional actualmente vigente.
+
+      <p
+        class="
+          mt-2
+          max-w-4xl
+          text-sm
+          leading-relaxed
+          text-slate-500
+        "
+      >
+        La planificación
+        <strong class="text-slate-700">
+          {{ mensual }}
+        </strong>
+        ya está disponible.
+
+        El sistema detectó semanas operacionales que todavía
+        pueden recibir sitios desde esta nueva asignación.
+
+        Puedes seleccionar una, varias o ninguna.
       </p>
 
     </div>
 
 
-    <div class="p-6">
+    <!-- ==================================================== -->
+    <!-- CONTENIDO                                            -->
+    <!-- ==================================================== -->
 
-      {% if opciones %}
+    <form
+      method="post"
+      action="{% url 'planificacion:analizar_completar_semana' mensual.pk %}"
+    >
 
-        <div class="space-y-4">
+      {% csrf_token %}
 
-          {% for opcion in opciones %}
 
-            {% with batch=opcion.batch diag=opcion.diagnostico %}
+      <div class="p-6">
 
-              <form
-                method="post"
-                action="{% url 'planificacion:analizar_completar_semana' mensual.pk %}"
+        {% if opciones %}
+
+          <!-- ================================================= -->
+          <!-- EXPLICACIÓN                                       -->
+          <!-- ================================================= -->
+
+          <div
+            class="
+              mb-5
+              rounded-2xl
+              border
+              border-blue-200
+              bg-blue-50
+              px-5
+              py-4
+            "
+          >
+
+            <div class="flex items-start gap-3">
+
+              <div
                 class="
-                  rounded-2xl
-                  border border-slate-200
-                  bg-white
-                  p-5
-                  shadow-sm
+                  flex
+                  h-9
+                  w-9
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-blue-100
+                  text-blue-700
                 "
               >
+                i
+              </div>
 
-                {% csrf_token %}
 
-                <input
-                  type="hidden"
-                  name="batch_id"
-                  value="{{ batch.pk }}"
-                >
+              <div>
 
-                <div
+                <p class="text-sm font-black text-blue-900">
+                  Selección opcional
+                </p>
+
+                <p
                   class="
-                    flex
-                    flex-col
-                    gap-4
-                    lg:flex-row
-                    lg:items-center
-                    lg:justify-between
+                    mt-1
+                    text-sm
+                    leading-relaxed
+                    text-blue-800
+                  "
+                >
+                  Marca solamente las semanas que quieras
+                  complementar.
+
+                  Si no deseas utilizar sitios de
+                  {{ mensual }} en ninguna de estas semanas,
+                  puedes continuar sin seleccionar nada.
+                </p>
+
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- ================================================= -->
+          <!-- OPCIONES                                          -->
+          <!-- ================================================= -->
+
+          <div class="space-y-4">
+
+            {% for opcion in opciones %}
+
+              {% with batch=opcion.batch diag=opcion.diagnostico %}
+
+                <label
+                  class="
+                    block
+                    cursor-pointer
+                    overflow-hidden
+                    rounded-2xl
+                    border
+                    border-slate-200
+                    bg-white
+                    shadow-sm
+                    transition
+                    hover:border-cyan-300
+                    hover:shadow-md
+                    has-[:checked]:border-cyan-500
+                    has-[:checked]:ring-2
+                    has-[:checked]:ring-cyan-100
                   "
                 >
 
-                  <div>
+                  <div
+                    class="
+                      flex
+                      flex-col
+                      gap-5
+                      p-5
+                      lg:flex-row
+                      lg:items-center
+                      lg:justify-between
+                    "
+                  >
 
-                    <div class="flex flex-wrap items-center gap-2">
+                    <!-- ======================================= -->
+                    <!-- INFORMACIÓN                             -->
+                    <!-- ======================================= -->
 
-                      <span
+                    <div class="min-w-0 flex-1">
+
+                      <div
                         class="
-                          rounded-full
-                          border border-cyan-200
-                          bg-cyan-50
-                          px-3 py-1
-                          text-xs
-                          font-black
-                          text-cyan-700
+                          flex
+                          flex-wrap
+                          items-center
+                          gap-2
                         "
                       >
-                        {{ batch.codigo_semana }}
-                      </span>
 
-                      <span class="text-sm font-black text-slate-900">
-                        {{ batch.fecha_inicio|date:"d/m/Y" }}
-                        –
-                        {{ batch.fecha_fin|date:"d/m/Y" }}
-                      </span>
+                        <span
+                          class="
+                            rounded-full
+                            border
+                            border-cyan-200
+                            bg-cyan-50
+                            px-3
+                            py-1
+                            text-xs
+                            font-black
+                            text-cyan-700
+                          "
+                        >
+                          {{ batch.codigo_semana }}
+                        </span>
+
+
+                        <span
+                          class="
+                            text-sm
+                            font-black
+                            text-slate-900
+                          "
+                        >
+                          {{ batch.fecha_inicio|date:"d/m/Y" }}
+                          –
+                          {{ batch.fecha_fin|date:"d/m/Y" }}
+                        </span>
+
+
+                        {% if diag.semana_iniciada %}
+
+                          <span
+                            class="
+                              rounded-full
+                              border
+                              border-violet-200
+                              bg-violet-50
+                              px-2.5
+                              py-1
+                              text-[10px]
+                              font-black
+                              uppercase
+                              text-violet-700
+                            "
+                          >
+                            Semana en curso
+                          </span>
+
+                        {% elif diag.semana_futura %}
+
+                          <span
+                            class="
+                              rounded-full
+                              border
+                              border-blue-200
+                              bg-blue-50
+                              px-2.5
+                              py-1
+                              text-[10px]
+                              font-black
+                              uppercase
+                              text-blue-700
+                            "
+                          >
+                            Próxima semana
+                          </span>
+
+                        {% endif %}
+
+                      </div>
+
+
+                      <!-- ===================================== -->
+                      <!-- OBJETIVO                              -->
+                      <!-- ===================================== -->
+
+                      <div
+                        class="
+                          mt-4
+                          grid
+                          grid-cols-2
+                          gap-3
+                          md:grid-cols-3
+                          xl:grid-cols-6
+                        "
+                      >
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-slate-200
+                            bg-slate-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-slate-400
+                            "
+                          >
+                            Objetivo
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-slate-800
+                            "
+                          >
+                            {{ diag.objetivo_batch }}
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-cyan-200
+                            bg-cyan-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-cyan-600
+                            "
+                          >
+                            En batch
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-cyan-800
+                            "
+                          >
+                            {{ diag.cantidad_actual_batch }}
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-amber-200
+                            bg-amber-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-amber-600
+                            "
+                          >
+                            Faltan objetivo
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-amber-800
+                            "
+                          >
+                            {{ diag.faltantes_objetivo }}
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-violet-200
+                            bg-violet-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-violet-600
+                            "
+                          >
+                            Días restantes
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-violet-800
+                            "
+                          >
+                            {{ diag.cantidad_dias_restantes }}
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-blue-200
+                            bg-blue-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-blue-600
+                            "
+                          >
+                            Capacidad restante
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-blue-800
+                            "
+                          >
+                            {{ diag.capacidad_restante }}
+                          </p>
+
+                        </div>
+
+
+                        <div
+                          class="
+                            rounded-xl
+                            border
+                            border-emerald-200
+                            bg-emerald-50
+                            p-3
+                          "
+                        >
+
+                          <p
+                            class="
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-emerald-600
+                            "
+                          >
+                            Recomendación
+                          </p>
+
+                          <p
+                            class="
+                              mt-1
+                              text-xl
+                              font-black
+                              text-emerald-800
+                            "
+                          >
+                            +{{ diag.sitios_a_incorporar }}
+                          </p>
+
+                        </div>
+
+                      </div>
+
+
+                      <!-- ===================================== -->
+                      <!-- EXPLICACIÓN CONTEXTUAL                -->
+                      <!-- ===================================== -->
+
+                      <div class="mt-4">
+
+                        {% if diag.semana_iniciada %}
+
+                          <p
+                            class="
+                              text-sm
+                              leading-relaxed
+                              text-slate-600
+                            "
+                          >
+                            Esta semana ya está en ejecución.
+
+                            El cálculo considera solamente los
+                            días operacionales que quedan y los
+                            sitios residuales que todavía posee.
+
+                            Por eso el sistema recomienda
+                            incorporar
+                            <strong class="text-slate-900">
+                              {{ diag.sitios_a_incorporar }}
+                              sitio(s)
+                            </strong>
+                            y no necesariamente todos los
+                            {{ diag.faltantes_objetivo }}
+                            faltantes del objetivo original.
+                          </p>
+
+                        {% else %}
+
+                          <p
+                            class="
+                              text-sm
+                              leading-relaxed
+                              text-slate-600
+                            "
+                          >
+                            Esta semana todavía no ha comenzado.
+
+                            El objetivo original es
+                            <strong class="text-slate-900">
+                              {{ diag.objetivo_batch }}
+                            </strong>
+                            sitio(s) y actualmente posee
+                            <strong class="text-slate-900">
+                              {{ diag.cantidad_actual_batch }}
+                            </strong>.
+
+                            El sistema puede buscar hasta
+                            <strong class="text-slate-900">
+                              {{ diag.sitios_a_incorporar }}
+                            </strong>
+                            sitio(s) de {{ mensual }}.
+                          </p>
+
+                        {% endif %}
+
+                      </div>
 
                     </div>
+
+
+                    <!-- ======================================= -->
+                    <!-- CHECK                                  -->
+                    <!-- ======================================= -->
 
                     <div
                       class="
-                        mt-4
-                        grid
-                        grid-cols-2
+                        flex
+                        shrink-0
+                        items-center
                         gap-3
-                        md:grid-cols-4
+                        rounded-2xl
+                        border
+                        border-slate-200
+                        bg-slate-50
+                        px-4
+                        py-3
                       "
                     >
 
-                      <div class="rounded-xl bg-slate-50 p-3">
-                        <p class="text-[10px] font-black uppercase text-slate-400">
-                          Días restantes
-                        </p>
+                      <input
+                        type="checkbox"
+                        name="batch_ids"
+                        value="{{ batch.pk }}"
+                        class="
+                          h-5
+                          w-5
+                          cursor-pointer
+                          accent-cyan-600
+                        "
+                      >
 
-                        <p class="mt-1 text-xl font-black text-slate-800">
-                          {{ diag.cantidad_dias_restantes }}
-                        </p>
-                      </div>
+                      <div>
 
-                      <div class="rounded-xl bg-blue-50 p-3">
-                        <p class="text-[10px] font-black uppercase text-blue-500">
-                          Capacidad
-                        </p>
+                        <div
+                          class="
+                            text-xs
+                            font-black
+                            uppercase
+                            tracking-wide
+                            text-slate-500
+                          "
+                        >
+                          Incluir
+                        </div>
 
-                        <p class="mt-1 text-xl font-black text-blue-800">
-                          {{ diag.capacidad_restante }}
-                        </p>
-                      </div>
+                        <div
+                          class="
+                            mt-0.5
+                            text-sm
+                            font-black
+                            text-slate-900
+                          "
+                        >
+                          {{ batch.codigo_semana }}
+                        </div>
 
-                      <div class="rounded-xl bg-amber-50 p-3">
-                        <p class="text-[10px] font-black uppercase text-amber-600">
-                          Sitios actuales
-                        </p>
-
-                        <p class="mt-1 text-xl font-black text-amber-800">
-                          {{ diag.cantidad_sitios_residuales }}
-                        </p>
-                      </div>
-
-                      <div class="rounded-xl bg-emerald-50 p-3">
-                        <p class="text-[10px] font-black uppercase text-emerald-600">
-                          Recomendación
-                        </p>
-
-                        <p class="mt-1 text-xl font-black text-emerald-800">
-                          +{{ diag.sitios_a_incorporar }}
-                        </p>
                       </div>
 
                     </div>
 
-                    <p class="mt-4 text-sm text-slate-600">
-                      Para mantener aproximadamente
-                      <strong>3 sitios por jornada</strong>,
-                      el sistema recomienda incorporar
-                      <strong>
-                        {{ diag.sitios_a_incorporar }}
-                      </strong>
-                      sitio(s) desde {{ mensual }}.
-                    </p>
-
                   </div>
 
+                </label>
 
-                  <button
-                    type="submit"
-                    class="
-                      inline-flex
-                      shrink-0
-                      items-center
-                      justify-center
-                      rounded-xl
-                      bg-gradient-to-r
-                      from-cyan-600
-                      to-blue-600
-                      px-5 py-3
-                      text-sm
-                      font-black
-                      text-white
-                      shadow-md
-                      transition
-                      hover:-translate-y-0.5
-                      hover:shadow-lg
-                    "
-                  >
-                    Procesar recomendación
-                  </button>
+              {% endwith %}
 
-                </div>
+            {% endfor %}
 
-              </form>
+          </div>
 
-            {% endwith %}
 
-          {% endfor %}
+        {% else %}
 
-        </div>
+          <!-- ================================================= -->
+          <!-- SIN OPCIONES                                      -->
+          <!-- ================================================= -->
 
-      {% else %}
+          <div
+            class="
+              rounded-2xl
+              border
+              border-emerald-200
+              bg-emerald-50
+              px-5
+              py-10
+              text-center
+            "
+          >
+
+            <div
+              class="
+                mx-auto
+                flex
+                h-12
+                w-12
+                items-center
+                justify-center
+                rounded-2xl
+                bg-emerald-100
+                text-xl
+              "
+            >
+              ✓
+            </div>
+
+
+            <p
+              class="
+                mt-4
+                font-black
+                text-emerald-900
+              "
+            >
+              No existen semanas que necesiten completarse
+            </p>
+
+
+            <p
+              class="
+                mx-auto
+                mt-2
+                max-w-2xl
+                text-sm
+                leading-relaxed
+                text-emerald-700
+              "
+            >
+              No es necesario utilizar sitios de
+              {{ mensual }} en una semana operacional anterior
+              o próxima.
+            </p>
+
+          </div>
+
+        {% endif %}
+
+      </div>
+
+
+      <!-- ==================================================== -->
+      <!-- ACCIONES                                             -->
+      <!-- ==================================================== -->
+
+      <div
+        class="
+          flex
+          flex-col-reverse
+          gap-3
+          border-t
+          border-slate-200
+          bg-slate-50
+          px-6
+          py-4
+          sm:flex-row
+          sm:items-center
+          sm:justify-between
+        "
+      >
+
+        <a
+          href="{% url 'planificacion:lista_asignacion_mensual' mensual.pk %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-slate-300
+            bg-white
+            px-4
+            py-2.5
+            text-sm
+            font-bold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-100
+          "
+        >
+          ← Volver al mes
+        </a>
+
 
         <div
           class="
-            rounded-2xl
-            border border-emerald-200
-            bg-emerald-50
-            px-5 py-8
-            text-center
+            flex
+            flex-col
+            gap-2
+            sm:flex-row
           "
         >
 
-          <div class="text-3xl">
-            ✅
-          </div>
+          {% if opciones %}
 
-          <p class="mt-3 font-black text-emerald-800">
-            No existe una semana vigente que necesite completarse
-          </p>
+            <!-- ============================================= -->
+            <!-- CONTINUAR SIN COMPLETAR                       -->
+            <!-- ============================================= -->
 
-          <p class="mt-1 text-sm text-emerald-700">
-            No es necesario mover sitios de {{ mensual }}
-            hacia una semana operacional anterior.
-          </p>
+            <button
+              type="submit"
+              name="accion"
+              value="continuar"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                border
+                border-slate-300
+                bg-white
+                px-5
+                py-2.5
+                text-sm
+                font-black
+                text-slate-700
+                shadow-sm
+                transition
+                hover:bg-slate-100
+              "
+            >
+              Continuar sin completar
+            </button>
+
+
+            <!-- ============================================= -->
+            <!-- ANALIZAR                                      -->
+            <!-- ============================================= -->
+
+            <button
+              type="submit"
+              name="accion"
+              value="analizar"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-gradient-to-r
+                from-cyan-600
+                to-blue-600
+                px-5
+                py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              Revisar selección
+            </button>
+
+
+          {% else %}
+
+            <a
+              href="{% url 'planificacion:lista_asignacion_mensual' mensual.pk %}"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                rounded-xl
+                bg-gradient-to-r
+                from-cyan-600
+                to-blue-600
+                px-5
+                py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              Continuar con {{ mensual }}
+            </a>
+
+          {% endif %}
 
         </div>
 
-      {% endif %}
+      </div>
 
-    </div>
-
-
-    <div
-      class="
-        flex
-        justify-between
-        border-t border-slate-200
-        bg-slate-50
-        px-6 py-4
-      "
-    >
-
-      <a
-        href="{% url 'planificacion:lista_asignacion_mensual' mensual.pk %}"
-        class="
-          rounded-xl
-          border border-slate-300
-          bg-white
-          px-4 py-2.5
-          text-sm
-          font-bold
-          text-slate-700
-        "
-      >
-        ← Volver al mes
-      </a>
-
-    </div>
+    </form>
 
   </div>
 

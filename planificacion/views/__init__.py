@@ -2,7 +2,7 @@ from .asignacion_mensual import (importar_asignacion_mensual,
                                  lista_asignacion_mensual)
 from .completar_semana_anterior import (analizar_completar_semana,
                                         completar_semana_anterior,
-                                        confirmar_completar_semana)
+                                        confirmar_completar_semanas)
 from .contactos import listar_contactos
 from .cuadrillas import (cambiar_estado_cuadrilla, crear_cuadrilla,
                          editar_cuadrilla, listar_cuadrillas,
@@ -43,11 +43,11 @@ __all__ = [
     "importar_asignacion_mensual",
     "actualizar_permiso_inline",
     # ========================================================
-    # COMPLETAR SEMANA OPERACIONAL ANTERIOR
+    # COMPLETAR SEMANAS OPERACIONALES
     # ========================================================
     "completar_semana_anterior",
     "analizar_completar_semana",
-    "confirmar_completar_semana",
+    "confirmar_completar_semanas",
     # ========================================================
     # CUADRILLAS
     # ========================================================

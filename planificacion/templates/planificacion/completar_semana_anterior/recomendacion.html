@@ -1,7 +1,7 @@
 {% extends "dashboard_admin/base.html" %}
 
 {% block title %}
-Recomendación para {{ batch.codigo_semana }}
+Recomendaciones operacionales
 {% endblock %}
 
 {% block dashboard_content %}
@@ -11,23 +11,30 @@ Recomendación para {{ batch.codigo_semana }}
   <div
     class="
       mx-auto
-      max-w-6xl
+      max-w-7xl
       overflow-hidden
       rounded-3xl
-      border border-slate-200
+      border
+      border-slate-200
       bg-white
       shadow-sm
     "
   >
 
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
     <div
       class="
-        border-b border-slate-100
+        border-b
+        border-slate-100
         bg-gradient-to-r
         from-slate-50
         via-white
         to-cyan-50
-        px-6 py-6
+        px-6
+        py-6
       "
     >
 
@@ -43,268 +50,1009 @@ Recomendación para {{ batch.codigo_semana }}
         Recomendación operacional
       </p>
 
-      <h1 class="mt-1 text-2xl font-black text-slate-900">
-        Completar {{ batch.codigo_semana }}
+
+      <h1
+        class="
+          mt-1
+          text-2xl
+          font-black
+          text-slate-900
+          sm:text-3xl
+        "
+      >
+        Revisar sitios recomendados
       </h1>
 
-      <p class="mt-2 text-sm text-slate-500">
-        El sistema analizó los sitios actuales de la semana
-        junto con los disponibles en {{ mensual }}.
+
+      <p
+        class="
+          mt-2
+          max-w-4xl
+          text-sm
+          leading-relaxed
+          text-slate-500
+        "
+      >
+        El sistema analizó las semanas seleccionadas junto con
+        los sitios disponibles en
+        <strong class="text-slate-700">
+          {{ mensual }}
+        </strong>.
+
+        Puedes quitar cualquier sitio antes de confirmar.
+
+        Un mismo sitio no puede ser incorporado a más de una
+        semana.
       </p>
 
     </div>
 
 
-    <div
-      class="
-        grid
-        gap-3
-        border-b border-slate-100
-        bg-slate-50
-        px-6 py-4
-        sm:grid-cols-4
-      "
+    <!-- ==================================================== -->
+    <!-- FORMULARIO GENERAL                                   -->
+    <!-- ==================================================== -->
+
+    <form
+      method="post"
+      action="{% url 'planificacion:confirmar_completar_semanas' mensual.pk %}"
     >
 
-      <div class="rounded-xl bg-white p-3">
-        <p class="text-[10px] font-black uppercase text-slate-400">
-          Sitios anteriores
-        </p>
-
-        <p class="mt-1 text-xl font-black">
-          {{ diagnostico.cantidad_sitios_residuales }}
-        </p>
-      </div>
-
-      <div class="rounded-xl bg-white p-3">
-        <p class="text-[10px] font-black uppercase text-slate-400">
-          Días restantes
-        </p>
-
-        <p class="mt-1 text-xl font-black">
-          {{ diagnostico.cantidad_dias_restantes }}
-        </p>
-      </div>
-
-      <div class="rounded-xl bg-white p-3">
-        <p class="text-[10px] font-black uppercase text-slate-400">
-          Capacidad restante
-        </p>
-
-        <p class="mt-1 text-xl font-black">
-          {{ diagnostico.capacidad_restante }}
-        </p>
-      </div>
-
-      <div class="rounded-xl bg-emerald-50 p-3">
-        <p class="text-[10px] font-black uppercase text-emerald-600">
-          Nuevos recomendados
-        </p>
-
-        <p class="mt-1 text-xl font-black text-emerald-800">
-          {{ resultado.cantidad_recomendada }}
-        </p>
-      </div>
-
-    </div>
+      {% csrf_token %}
 
 
-    {% if resultado.advertencias %}
+      <div class="space-y-6 p-6">
 
-      <div class="px-6 pt-5">
+        {% for item in resultados %}
 
-        {% for mensaje in resultado.advertencias %}
+          {% with batch=item.batch resultado=item.resultado diagnostico=item.diagnostico recomendados=item.recomendados %}
+
+            <!-- ================================================= -->
+            <!-- SEMANA                                            -->
+            <!-- ================================================= -->
+
+            <section
+              class="
+                overflow-hidden
+                rounded-3xl
+                border
+                border-slate-200
+                bg-white
+                shadow-sm
+              "
+            >
+
+              <!-- =============================================== -->
+              <!-- ENCABEZADO SEMANA                               -->
+              <!-- =============================================== -->
+
+              <div
+                class="
+                  border-b
+                  border-slate-200
+                  bg-slate-50
+                  px-5
+                  py-5
+                "
+              >
+
+                <input
+                  type="hidden"
+                  name="batch_ids"
+                  value="{{ batch.pk }}"
+                >
+
+
+                <div
+                  class="
+                    flex
+                    flex-col
+                    gap-4
+                    lg:flex-row
+                    lg:items-start
+                    lg:justify-between
+                  "
+                >
+
+                  <div>
+
+                    <div
+                      class="
+                        flex
+                        flex-wrap
+                        items-center
+                        gap-2
+                      "
+                    >
+
+                      <span
+                        class="
+                          rounded-full
+                          border
+                          border-cyan-200
+                          bg-cyan-50
+                          px-3
+                          py-1
+                          text-xs
+                          font-black
+                          text-cyan-700
+                        "
+                      >
+                        {{ batch.codigo_semana }}
+                      </span>
+
+
+                      <span
+                        class="
+                          text-sm
+                          font-black
+                          text-slate-900
+                        "
+                      >
+                        {{ batch.fecha_inicio|date:"d/m/Y" }}
+                        –
+                        {{ batch.fecha_fin|date:"d/m/Y" }}
+                      </span>
+
+
+                      {% if diagnostico.semana_iniciada %}
+
+                        <span
+                          class="
+                            rounded-full
+                            border
+                            border-violet-200
+                            bg-violet-50
+                            px-2.5
+                            py-1
+                            text-[10px]
+                            font-black
+                            uppercase
+                            text-violet-700
+                          "
+                        >
+                          Semana en curso
+                        </span>
+
+                      {% else %}
+
+                        <span
+                          class="
+                            rounded-full
+                            border
+                            border-blue-200
+                            bg-blue-50
+                            px-2.5
+                            py-1
+                            text-[10px]
+                            font-black
+                            uppercase
+                            text-blue-700
+                          "
+                        >
+                          Semana futura
+                        </span>
+
+                      {% endif %}
+
+                    </div>
+
+
+                    <h2
+                      class="
+                        mt-3
+                        text-xl
+                        font-black
+                        text-slate-900
+                      "
+                    >
+                      Completar {{ batch.codigo_semana }}
+                    </h2>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-2xl
+                      border
+                      border-emerald-200
+                      bg-emerald-50
+                      px-4
+                      py-3
+                      text-right
+                    "
+                  >
+
+                    <div
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-emerald-600
+                      "
+                    >
+                      Recomendados
+                    </div>
+
+                    <div
+                      class="
+                        mt-1
+                        text-2xl
+                        font-black
+                        text-emerald-800
+                      "
+                    >
+                      {{ resultado.cantidad_recomendada }}
+                    </div>
+
+                  </div>
+
+                </div>
+
+
+                <!-- =============================================== -->
+                <!-- MÉTRICAS                                        -->
+                <!-- =============================================== -->
+
+                <div
+                  class="
+                    mt-5
+                    grid
+                    grid-cols-2
+                    gap-3
+                    md:grid-cols-3
+                    xl:grid-cols-6
+                  "
+                >
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-slate-200
+                      bg-white
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-slate-400
+                      "
+                    >
+                      Objetivo
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-slate-900
+                      "
+                    >
+                      {{ diagnostico.objetivo_batch }}
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-cyan-200
+                      bg-cyan-50
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-cyan-600
+                      "
+                    >
+                      En batch
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-cyan-800
+                      "
+                    >
+                      {{ diagnostico.cantidad_actual_batch }}
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-amber-200
+                      bg-amber-50
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-amber-600
+                      "
+                    >
+                      Faltante objetivo
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-amber-800
+                      "
+                    >
+                      {{ diagnostico.faltantes_objetivo }}
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-violet-200
+                      bg-violet-50
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-violet-600
+                      "
+                    >
+                      Días restantes
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-violet-800
+                      "
+                    >
+                      {{ diagnostico.cantidad_dias_restantes }}
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-blue-200
+                      bg-blue-50
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-blue-600
+                      "
+                    >
+                      Capacidad
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-blue-800
+                      "
+                    >
+                      {{ diagnostico.capacidad_restante }}
+                    </p>
+
+                  </div>
+
+
+                  <div
+                    class="
+                      rounded-xl
+                      border
+                      border-emerald-200
+                      bg-emerald-50
+                      p-3
+                    "
+                  >
+
+                    <p
+                      class="
+                        text-[10px]
+                        font-black
+                        uppercase
+                        text-emerald-600
+                      "
+                    >
+                      A incorporar
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xl
+                        font-black
+                        text-emerald-800
+                      "
+                    >
+                      {{ diagnostico.sitios_a_incorporar }}
+                    </p>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <!-- =============================================== -->
+              <!-- ADVERTENCIAS                                    -->
+              <!-- =============================================== -->
+
+              {% if resultado.advertencias %}
+
+                <div class="px-5 pt-5">
+
+                  {% for mensaje in resultado.advertencias %}
+
+                    <div
+                      class="
+                        mb-2
+                        rounded-xl
+                        border
+                        border-amber-200
+                        bg-amber-50
+                        px-4
+                        py-3
+                        text-sm
+                        font-semibold
+                        text-amber-800
+                      "
+                    >
+                      {{ mensaje }}
+                    </div>
+
+                  {% endfor %}
+
+                </div>
+
+              {% endif %}
+
+
+              <!-- =============================================== -->
+              <!-- SITIOS RECOMENDADOS                             -->
+              <!-- =============================================== -->
+
+              <div class="p-5">
+
+                <div
+                  class="
+                    mb-4
+                    flex
+                    flex-col
+                    gap-3
+                    sm:flex-row
+                    sm:items-center
+                    sm:justify-between
+                  "
+                >
+
+                  <div>
+
+                    <h3
+                      class="
+                        text-sm
+                        font-black
+                        uppercase
+                        tracking-wide
+                        text-slate-800
+                      "
+                    >
+                      Sitios recomendados
+                    </h3>
+
+                    <p
+                      class="
+                        mt-1
+                        text-xs
+                        text-slate-500
+                      "
+                    >
+                      Desmarca cualquier sitio que no quieras
+                      incorporar a {{ batch.codigo_semana }}.
+                    </p>
+
+                  </div>
+
+
+                  {% if recomendados %}
+
+                    <label
+                      class="
+                        inline-flex
+                        cursor-pointer
+                        items-center
+                        gap-2
+                        rounded-xl
+                        border
+                        border-slate-200
+                        bg-slate-50
+                        px-3
+                        py-2
+                        text-sm
+                        font-bold
+                        text-slate-600
+                      "
+                    >
+
+                      <input
+                        type="checkbox"
+                        class="
+                          seleccionar-todos-semana
+                          h-4
+                          w-4
+                          accent-cyan-600
+                        "
+                        data-batch-id="{{ batch.pk }}"
+                        checked
+                      >
+
+                      Seleccionar todos
+
+                    </label>
+
+                  {% endif %}
+
+                </div>
+
+
+                {% if recomendados %}
+
+                  <div
+                    class="
+                      overflow-x-auto
+                      rounded-2xl
+                      border
+                      border-slate-200
+                    "
+                  >
+
+                    <table
+                      class="
+                        min-w-full
+                        text-sm
+                      "
+                    >
+
+                      <thead class="bg-slate-50">
+
+                        <tr>
+
+                          <th
+                            class="
+                              w-12
+                              px-4
+                              py-3
+                            "
+                          ></th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            ID Claro
+                          </th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            Nombre
+                          </th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            Región
+                          </th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            Comuna
+                          </th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            Zona
+                          </th>
+
+
+                          <th
+                            class="
+                              px-4
+                              py-3
+                              text-left
+                              text-xs
+                              font-black
+                              text-slate-600
+                            "
+                          >
+                            Condición acceso
+                          </th>
+
+                        </tr>
+
+                      </thead>
+
+
+                      <tbody>
+
+                        {% for sitio in recomendados %}
+
+                          <tr
+                            class="
+                              border-t
+                              border-slate-100
+                              transition
+                              hover:bg-slate-50
+                            "
+                          >
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-center
+                              "
+                            >
+
+                              <input
+                                type="checkbox"
+                                name="sitio_ids_{{ batch.pk }}"
+                                value="{{ sitio.sitio_planificado_id }}"
+                                checked
+                                class="
+                                  recomendacion-checkbox
+                                  h-4
+                                  w-4
+                                  accent-cyan-600
+                                "
+                                data-batch-id="{{ batch.pk }}"
+                              >
+
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                font-black
+                                text-slate-900
+                              "
+                            >
+                              {{ sitio.id_claro|default:"—" }}
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-slate-700
+                              "
+                            >
+                              {{ sitio.nombre|default:"—" }}
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-slate-600
+                              "
+                            >
+                              {{ sitio.region|default:"—" }}
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-slate-600
+                              "
+                            >
+                              {{ sitio.comuna|default:"—" }}
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-slate-600
+                              "
+                            >
+
+                              {% if "rural" in sitio.tipo_zona|lower %}
+
+                                <span
+                                  class="
+                                    rounded-full
+                                    border
+                                    border-amber-200
+                                    bg-amber-50
+                                    px-2.5
+                                    py-1
+                                    text-[10px]
+                                    font-black
+                                    uppercase
+                                    text-amber-700
+                                  "
+                                >
+                                  Rural
+                                </span>
+
+                              {% elif sitio.tipo_zona %}
+
+                                <span
+                                  class="
+                                    rounded-full
+                                    border
+                                    border-blue-200
+                                    bg-blue-50
+                                    px-2.5
+                                    py-1
+                                    text-[10px]
+                                    font-black
+                                    uppercase
+                                    text-blue-700
+                                  "
+                                >
+                                  {{ sitio.tipo_zona }}
+                                </span>
+
+                              {% else %}
+
+                                —
+
+                              {% endif %}
+
+                            </td>
+
+
+                            <td
+                              class="
+                                px-4
+                                py-3
+                                text-slate-600
+                              "
+                            >
+
+                              {% if sitio.condicion_acceso %}
+
+                                {% if sitio.condicion_acceso|lower == "libre acceso" %}
+
+                                  <span
+                                    class="
+                                      rounded-full
+                                      border
+                                      border-emerald-200
+                                      bg-emerald-50
+                                      px-2.5
+                                      py-1
+                                      text-[10px]
+                                      font-bold
+                                      text-emerald-700
+                                    "
+                                  >
+                                    {{ sitio.condicion_acceso }}
+                                  </span>
+
+                                {% else %}
+
+                                  <span
+                                    class="
+                                      rounded-full
+                                      border
+                                      border-amber-200
+                                      bg-amber-50
+                                      px-2.5
+                                      py-1
+                                      text-[10px]
+                                      font-bold
+                                      text-amber-700
+                                    "
+                                  >
+                                    {{ sitio.condicion_acceso }}
+                                  </span>
+
+                                {% endif %}
+
+                              {% else %}
+
+                                —
+
+                              {% endif %}
+
+                            </td>
+
+                          </tr>
+
+                        {% endfor %}
+
+                      </tbody>
+
+                    </table>
+
+                  </div>
+
+
+                {% else %}
+
+                  <div
+                    class="
+                      rounded-2xl
+                      border
+                      border-slate-200
+                      bg-slate-50
+                      px-5
+                      py-8
+                      text-center
+                    "
+                  >
+
+                    <p
+                      class="
+                        font-black
+                        text-slate-700
+                      "
+                    >
+                      No se encontraron sitios recomendables
+                    </p>
+
+                    <p
+                      class="
+                        mt-1
+                        text-sm
+                        text-slate-500
+                      "
+                    >
+                      Esta semana puede quedar sin
+                      incorporación desde {{ mensual }}.
+                    </p>
+
+                  </div>
+
+                {% endif %}
+
+              </div>
+
+            </section>
+
+          {% endwith %}
+
+        {% empty %}
 
           <div
             class="
-              mb-2
-              rounded-xl
-              border border-amber-200
-              bg-amber-50
-              px-4 py-3
-              text-sm
-              font-semibold
-              text-amber-800
+              rounded-2xl
+              border
+              border-slate-200
+              bg-slate-50
+              px-5
+              py-10
+              text-center
             "
           >
-            {{ mensaje }}
+
+            <p
+              class="
+                font-black
+                text-slate-700
+              "
+            >
+              No existen recomendaciones disponibles.
+            </p>
+
           </div>
 
         {% endfor %}
 
       </div>
 
-    {% endif %}
 
-
-    <form
-      method="post"
-      action="{% url 'planificacion:confirmar_completar_semana' mensual.pk batch.pk %}"
-    >
-
-      {% csrf_token %}
-
-      <div class="p-6">
-
-        <div
-          class="
-            mb-4
-            flex
-            flex-col
-            gap-2
-            sm:flex-row
-            sm:items-center
-            sm:justify-between
-          "
-        >
-
-          <div>
-
-            <h2 class="text-sm font-black uppercase text-slate-800">
-              Sitios recomendados
-            </h2>
-
-            <p class="mt-1 text-xs text-slate-500">
-              Puedes quitar cualquiera o modificar manualmente la selección.
-            </p>
-
-          </div>
-
-          <label class="flex items-center gap-2 text-sm font-bold text-slate-600">
-
-            <input
-              type="checkbox"
-              id="seleccionar-todos-recomendados"
-              checked
-              class="h-4 w-4 accent-cyan-600"
-            >
-
-            Seleccionar todos
-
-          </label>
-
-        </div>
-
-
-        <div class="overflow-x-auto rounded-2xl border border-slate-200">
-
-          <table class="min-w-full text-sm">
-
-            <thead class="bg-slate-50">
-
-              <tr>
-
-                <th class="w-12 px-4 py-3"></th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  ID Claro
-                </th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  Nombre
-                </th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  Región
-                </th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  Comuna
-                </th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  Zona
-                </th>
-
-                <th class="px-4 py-3 text-left text-xs font-black text-slate-600">
-                  Condición acceso
-                </th>
-
-              </tr>
-
-            </thead>
-
-
-            <tbody>
-
-              {% for sitio in recomendados %}
-
-                <tr class="border-t border-slate-100">
-
-                  <td class="px-4 py-3 text-center">
-
-                    <input
-                      type="checkbox"
-                      name="sitio_ids"
-                      value="{{ sitio.sitio_planificado_id }}"
-                      checked
-                      class="
-                        recomendacion-checkbox
-                        h-4 w-4
-                        accent-cyan-600
-                      "
-                    >
-
-                  </td>
-
-                  <td class="px-4 py-3 font-black text-slate-900">
-                    {{ sitio.id_claro|default:"—" }}
-                  </td>
-
-                  <td class="px-4 py-3 text-slate-700">
-                    {{ sitio.nombre|default:"—" }}
-                  </td>
-
-                  <td class="px-4 py-3 text-slate-600">
-                    {{ sitio.region|default:"—" }}
-                  </td>
-
-                  <td class="px-4 py-3 text-slate-600">
-                    {{ sitio.comuna|default:"—" }}
-                  </td>
-
-                  <td class="px-4 py-3 text-slate-600">
-                    {{ sitio.tipo_zona|default:"—" }}
-                  </td>
-
-                  <td class="px-4 py-3 text-slate-600">
-                    {{ sitio.condicion_acceso|default:"—" }}
-                  </td>
-
-                </tr>
-
-              {% empty %}
-
-                <tr>
-
-                  <td
-                    colspan="7"
-                    class="px-4 py-10 text-center text-slate-500"
-                  >
-                    No se encontraron sitios recomendables.
-                  </td>
-
-                </tr>
-
-              {% endfor %}
-
-            </tbody>
-
-          </table>
-
-        </div>
-
-      </div>
-
+      <!-- ==================================================== -->
+      <!-- ACCIONES                                             -->
+      <!-- ==================================================== -->
 
       <div
         class="
           flex
           flex-col-reverse
           gap-3
-          border-t border-slate-200
+          border-t
+          border-slate-200
           bg-slate-50
-          px-6 py-4
+          px-6
+          py-4
           sm:flex-row
           sm:items-center
           sm:justify-between
@@ -314,36 +1062,90 @@ Recomendación para {{ batch.codigo_semana }}
         <a
           href="{% url 'planificacion:completar_semana_anterior' mensual.pk %}"
           class="
+            inline-flex
+            items-center
+            justify-center
             rounded-xl
-            border border-slate-300
+            border
+            border-slate-300
             bg-white
-            px-4 py-2.5
-            text-center
+            px-4
+            py-2.5
             text-sm
             font-bold
             text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-100
           "
         >
-          ← Volver
+          ← Volver a semanas
         </a>
 
 
-        <button
-          type="submit"
+        <div
           class="
-            rounded-xl
-            bg-gradient-to-r
-            from-emerald-600
-            to-teal-600
-            px-5 py-2.5
-            text-sm
-            font-black
-            text-white
-            shadow-md
+            flex
+            flex-col
+            gap-2
+            sm:flex-row
           "
         >
-          Confirmar e incorporar a {{ batch.codigo_semana }}
-        </button>
+
+          <a
+            href="{% url 'planificacion:lista_asignacion_mensual' mensual.pk %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border
+              border-slate-300
+              bg-white
+              px-5
+              py-2.5
+              text-sm
+              font-black
+              text-slate-700
+              shadow-sm
+              transition
+              hover:bg-slate-100
+            "
+          >
+            No incorporar sitios
+          </a>
+
+
+          {% if resultados %}
+
+            <button
+              type="submit"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                bg-gradient-to-r
+                from-emerald-600
+                to-teal-600
+                px-5
+                py-2.5
+                text-sm
+                font-black
+                text-white
+                shadow-md
+                transition
+                hover:-translate-y-0.5
+                hover:shadow-lg
+              "
+            >
+              Confirmar sitios seleccionados
+            </button>
+
+          {% endif %}
+
+        </div>
 
       </div>
 
@@ -354,74 +1156,184 @@ Recomendación para {{ batch.codigo_semana }}
 </div>
 
 
+<!-- ======================================================== -->
+<!-- JAVASCRIPT                                              -->
+<!-- ======================================================== -->
+
 <script>
 (function () {
 
-  const master =
-    document.getElementById(
-      'seleccionar-todos-recomendados'
-    );
+  // =========================================================
+  // OBTENER CHECKS DE UNA SEMANA
+  // =========================================================
 
-  if (!master) {
-    return;
-  }
+  function obtenerChecksSemana(
+    batchId
+  ) {
 
-  function checks() {
     return Array.from(
       document.querySelectorAll(
-        '.recomendacion-checkbox'
+        '.recomendacion-checkbox' +
+        '[data-batch-id="' +
+        batchId +
+        '"]'
       )
     );
+
   }
 
-  master.addEventListener(
-    'change',
-    function () {
 
-      checks().forEach(
-        function (checkbox) {
+  // =========================================================
+  // SINCRONIZAR MASTER
+  // =========================================================
 
-          checkbox.checked =
-            master.checked;
+  function sincronizarMaster(
+    batchId
+  ) {
+
+    const master =
+      document.querySelector(
+        '.seleccionar-todos-semana' +
+        '[data-batch-id="' +
+        batchId +
+        '"]'
+      );
+
+
+    if (!master) {
+      return;
+    }
+
+
+    const checks =
+      obtenerChecksSemana(
+        batchId
+      );
+
+
+    if (!checks.length) {
+
+      master.checked =
+        false;
+
+      master.indeterminate =
+        false;
+
+      return;
+    }
+
+
+    const marcados =
+      checks.filter(
+        function (
+          checkbox
+        ) {
+
+          return checkbox.checked;
 
         }
       );
 
-    }
-  );
+
+    master.checked =
+      marcados.length ===
+      checks.length;
+
+
+    master.indeterminate =
+      marcados.length > 0
+      &&
+      marcados.length <
+      checks.length;
+
+  }
+
+
+  // =========================================================
+  // MASTER POR SEMANA
+  // =========================================================
 
   document.addEventListener(
-    'change',
-    function (event) {
+    "change",
+    function (
+      event
+    ) {
+
+      const target =
+        event.target;
+
 
       if (
-        !event.target.matches(
-          '.recomendacion-checkbox'
+        target.matches(
+          ".seleccionar-todos-semana"
         )
       ) {
-        return;
-      }
 
-      const todos = checks();
+        const batchId =
+          target.dataset.batchId;
 
-      const marcados =
-        todos.filter(
-          checkbox =>
-            checkbox.checked
+
+        obtenerChecksSemana(
+          batchId
+        ).forEach(
+          function (
+            checkbox
+          ) {
+
+            checkbox.checked =
+              target.checked;
+
+          }
         );
 
-      master.checked =
-        todos.length > 0
-        &&
-        marcados.length === todos.length;
 
-      master.indeterminate =
-        marcados.length > 0
-        &&
-        marcados.length < todos.length;
+        target.indeterminate =
+          false;
+
+        return;
+
+      }
+
+
+      if (
+        target.matches(
+          ".recomendacion-checkbox"
+        )
+      ) {
+
+        const batchId =
+          target.dataset.batchId;
+
+
+        sincronizarMaster(
+          batchId
+        );
+
+      }
 
     }
   );
+
+
+  // =========================================================
+  // ESTADO INICIAL
+  // =========================================================
+
+  document
+    .querySelectorAll(
+      ".seleccionar-todos-semana"
+    )
+    .forEach(
+      function (
+        master
+      ) {
+
+        sincronizarMaster(
+          master.dataset.batchId
+        );
+
+      }
+    );
 
 })();
 </script>

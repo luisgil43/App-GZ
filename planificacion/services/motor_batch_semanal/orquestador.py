@@ -4824,33 +4824,59 @@ def _clave_calidad_plan(
     plan,
 ):
     """
-    Regla definitiva para comparar el plan original contra
-    la recomposición inteligente.
+    Compara dos planes semanales completos.
 
-    PRIORIDAD
+    JERARQUÍA DEFINITIVA
     ==========================================================
 
-    1. MÁS SITIOS PLANIFICADOS.
-    2. MÁS SALIDAS DE 3.
-    3. MENOS SALIDAS DE 1.
-    4. MENOS JORNADAS EXTENDIDAS.
-    5. MENOS SALIDAS TOTALES.
-    6. MENOS VIAJE.
-    7. MENOR TIEMPO TOTAL.
+    1. Más sitios planificados.
+    2. Más salidas completas de 3 sitios.
+    3. Menos salidas individuales.
+    4. Menos jornadas extendidas.
+    5. Menos salidas totales.
+    6. Mejor equilibrio porcentual entre cuadrillas.
+    7. Menos minutos de viaje.
+    8. Menor tiempo total.
 
-    Por lo tanto:
+    REGLA FUNDAMENTAL
+    ==========================================================
 
-        34 sitios
+    El equilibrio entre cuadrillas NUNCA puede provocar:
 
-    SIEMPRE gana a:
+        - perder sitios;
+        - romper una terna;
+        - crear más unitarios;
+        - crear más jornadas;
+        - generar más jornadas extendidas.
 
-        32 sitios
+    Solamente entra a decidir cuando la estructura
+    operacional principal de ambos planes ya es equivalente.
 
-    sin importar que el plan de 32 tenga rutas aparentemente
-    más bonitas.
+    De esta forma:
+
+        24 sitios
+        8 ternas
+        8 jornadas
+
+    distribuido:
+
+        C1 = 3
+        C2 = 3
+        C3 = 2
+
+    será preferible frente a:
+
+        C1 = 5
+        C2 = 2
+        C3 = 1
+
+    incluso si el segundo ahorra algunos minutos de viaje.
     """
 
     return (
+        # ====================================================
+        # 1. COBERTURA
+        # ====================================================
         int(
             plan.get(
                 "cantidad_sitios",
@@ -4858,6 +4884,9 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 2. JORNADAS COMPLETAS
+        # ====================================================
         int(
             plan.get(
                 "salidas_3_sitios",
@@ -4865,6 +4894,9 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 3. EVITAR UNITARIOS
+        # ====================================================
         -int(
             plan.get(
                 "salidas_1_sitio",
@@ -4872,6 +4904,9 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 4. EVITAR EXTENSIONES
+        # ====================================================
         -int(
             plan.get(
                 "salidas_jornada_extendida",
@@ -4879,6 +4914,9 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 5. MENOR CANTIDAD DE JORNADAS
+        # ====================================================
         -int(
             plan.get(
                 "total_salidas",
@@ -4886,6 +4924,19 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 6. EQUILIBRIO ENTRE CUADRILLAS
+        # ====================================================
+        float(
+            plan.get(
+                "score_equidad_cuadrillas",
+                0,
+            )
+            or 0
+        ),
+        # ====================================================
+        # 7. MENOR VIAJE
+        # ====================================================
         -int(
             plan.get(
                 "minutos_viaje",
@@ -4893,6 +4944,9 @@ def _clave_calidad_plan(
             )
             or 0
         ),
+        # ====================================================
+        # 8. MENOR DURACIÓN TOTAL
+        # ====================================================
         -int(
             plan.get(
                 "minutos_total",

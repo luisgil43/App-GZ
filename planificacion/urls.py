@@ -20,7 +20,7 @@ from planificacion.views.asignacion_operativa import (
     preview_asignacion_dia, preview_asignacion_salida)
 from planificacion.views.completar_semana_anterior import (
     analizar_completar_semana, completar_semana_anterior,
-    confirmar_completar_semana)
+    confirmar_completar_semanas)
 from planificacion.views.mapa_planificacion import mapa_batch_semanal
 from planificacion.views.mapa_planificacion_diaria import (
     mapa_dia_planificacion_diaria, mapa_pendientes_planificacion_diaria,
@@ -385,9 +385,9 @@ urlpatterns = [
         name="analizar_completar_semana",
     ),
     path(
-        "mensual/<int:mensual_id>/completar-semana/<int:batch_id>/confirmar/",
-        confirmar_completar_semana,
-        name="confirmar_completar_semana",
+        "mensual/<int:mensual_id>/completar-semana/confirmar/",
+        confirmar_completar_semanas,
+        name="confirmar_completar_semanas",
     ),
     # ========================================================
     # ESTADO MASIVO
