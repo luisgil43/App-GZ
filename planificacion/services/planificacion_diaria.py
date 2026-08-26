@@ -2829,15 +2829,49 @@ def guardar_plan_diario_batch(
         jornada extendida
 
     El ancla siempre queda como orden 1.
+
+    BLOQUEOS SQL
+    ==========================================================
+
+    Las filas principales se bloquean con select_for_update()
+    SIN combinarlas con select_related() sobre relaciones que
+    puedan ser nullable.
+
+    Esto evita el error PostgreSQL:
+
+        FOR UPDATE cannot be applied to the nullable side
+        of an outer join
     """
 
-    batch = (
-        BatchPlanificacionSemanal.objects.select_for_update()
-        .select_related(
-            "configuracion_semana",
-        )
-        .get(pk=batch.pk)
+    # ========================================================
+    # BLOQUEAR EXCLUSIVAMENTE EL BATCH
+    # ========================================================
+    #
+    # configuracion_semana puede ser NULL.
+    #
+    # Por eso NO usamos:
+    #
+    #     select_for_update()
+    #     .select_related("configuracion_semana")
+    #
+    # porque PostgreSQL puede generar un LEFT OUTER JOIN y
+    # rechazar el FOR UPDATE.
+    # ========================================================
+
+    batch = BatchPlanificacionSemanal.objects.select_for_update().get(
+        pk=batch.pk,
     )
+
+    # ========================================================
+    # CARGAR CONFIGURACIÓN FUERA DEL BLOQUEO PRINCIPAL
+    # ========================================================
+
+    if batch.configuracion_semana_id:
+        batch.configuracion_semana
+
+    # ========================================================
+    # GENERAR PROPUESTA
+    # ========================================================
 
     resultado = generar_plan_diario_batch(
         batch=batch,
@@ -2897,7 +2931,9 @@ def guardar_plan_diario_batch(
             )
         )
 
-        salida_existente_id = salida_data.get("salida_existente_id")
+        salida_existente_id = salida_data.get(
+            "salida_existente_id",
+        )
 
         # ====================================================
         # COMPLETAR SALIDA PROTEGIDA EXISTENTE
@@ -2905,19 +2941,39 @@ def guardar_plan_diario_batch(
 
         if completar_existente and salida_existente_id:
 
-            salida = (
-                SalidaPlanificacionDiaria.objects.select_for_update()
-                .select_related(
-                    "disponibilidad_cuadrilla",
-                )
-                .get(
-                    pk=salida_existente_id,
-                    batch=batch,
-                )
+            # =================================================
+            # BLOQUEAR SOLAMENTE LA SALIDA
+            # =================================================
+            #
+            # disponibilidad_cuadrilla puede ser nullable.
+            #
+            # Se carga después mediante una consulta normal,
+            # fuera del JOIN bloqueado.
+            # =================================================
+
+            salida = SalidaPlanificacionDiaria.objects.select_for_update().get(
+                pk=salida_existente_id,
+                batch=batch,
             )
 
             # =================================================
+            # CARGAR DISPONIBILIDAD FUERA DEL FOR UPDATE
+            # =================================================
+
+            if salida.disponibilidad_cuadrilla_id:
+                salida.disponibilidad_cuadrilla
+
+            # =================================================
             # MAPA DE PARTICIPACIONES EXISTENTES
+            # =================================================
+            #
+            # Primero bloqueamos exclusivamente las filas de
+            # SitioSalidaPlanificacionDiaria.
+            #
+            # Después accedemos a sus relaciones normalmente.
+            #
+            # De esta forma tampoco extendemos FOR UPDATE
+            # mediante JOIN innecesarios.
             # =================================================
 
             participaciones_existentes = list(
@@ -2929,15 +2985,21 @@ def guardar_plan_diario_batch(
                     ],
                 )
                 .select_for_update()
-                .select_related(
-                    "sitio_batch",
-                    ("sitio_batch__" "sitio_planificado"),
-                )
                 .order_by(
                     "orden",
                     "id",
                 )
             )
+
+            # =================================================
+            # CARGAR RELACIONES DESPUÉS DEL BLOQUEO
+            # =================================================
+
+            for participacion in participaciones_existentes:
+
+                participacion.sitio_batch
+
+                participacion.sitio_batch.sitio_planificado
 
             mapa_participaciones = {
                 participacion.sitio_batch_id: participacion
@@ -2962,10 +3024,15 @@ def guardar_plan_diario_batch(
 
                 item_batch = dato_sitio["sitio_batch"]
 
-                participacion = mapa_participaciones.get(item_batch.pk)
+                participacion = mapa_participaciones.get(
+                    item_batch.pk,
+                )
 
                 es_ancla_prioridad = bool(
-                    salida_data.get("prioridad_ancla_id") == item_batch.pk
+                    salida_data.get(
+                        "prioridad_ancla_id",
+                    )
+                    == item_batch.pk
                 )
 
                 # =============================================
@@ -2980,7 +3047,9 @@ def guardar_plan_diario_batch(
 
                         participacion.orden = indice
 
-                        campos.append("orden")
+                        campos.append(
+                            "orden",
+                        )
 
                     # Una participación todavía puramente
                     # planificada pasa a lista para asignar
@@ -2989,15 +3058,21 @@ def guardar_plan_diario_batch(
 
                         participacion.estado = "listo_asignar"
 
-                        campos.append("estado")
+                        campos.append(
+                            "estado",
+                        )
 
                     participacion.actualizado_por = usuario
 
-                    campos.append("actualizado_por")
+                    campos.append(
+                        "actualizado_por",
+                    )
 
                     participacion.save(
                         update_fields=[
-                            *dict.fromkeys(campos),
+                            *dict.fromkeys(
+                                campos,
+                            ),
                             "actualizado_en",
                         ]
                     )
@@ -3028,7 +3103,11 @@ def guardar_plan_diario_batch(
                         orden=indice,
                         estado="listo_asignar",
                         origen="motor",
-                        puntaje_motor=(salida_data.get("puntaje_motor")),
+                        puntaje_motor=(
+                            salida_data.get(
+                                "puntaje_motor",
+                            )
+                        ),
                         motivo_motor=(motivo_sitio),
                         creado_por=usuario,
                         actualizado_por=usuario,
@@ -3086,7 +3165,9 @@ def guardar_plan_diario_batch(
 
             salida.exceso_jornada_minutos = salida_data["exceso_jornada_minutos"]
 
-            salida.puntaje_motor = salida_data.get("puntaje_motor")
+            salida.puntaje_motor = salida_data.get(
+                "puntaje_motor",
+            )
 
             # =================================================
             # ESTADO
@@ -3121,9 +3202,13 @@ def guardar_plan_diario_batch(
                 ]
             )
 
-            actualizadas.append(salida)
+            actualizadas.append(
+                salida,
+            )
 
-            salidas_resultado_ids.append(salida.pk)
+            salidas_resultado_ids.append(
+                salida.pk,
+            )
 
             continue
 
@@ -3155,7 +3240,11 @@ def guardar_plan_diario_batch(
             distancia_vial_estimada_km=(salida_data["distancia_vial_estimada_km"]),
             jornada_extendida=(salida_data["jornada_extendida"]),
             exceso_jornada_minutos=(salida_data["exceso_jornada_minutos"]),
-            puntaje_motor=(salida_data.get("puntaje_motor")),
+            puntaje_motor=(
+                salida_data.get(
+                    "puntaje_motor",
+                )
+            ),
             motivo_motor=(motivo_motor),
             creado_por=usuario,
             actualizado_por=usuario,
@@ -3173,7 +3262,11 @@ def guardar_plan_diario_batch(
             item_batch = dato_sitio["sitio_batch"]
 
             es_ancla_prioridad = bool(
-                es_prioridad and salida_data.get("prioridad_ancla_id") == item_batch.pk
+                es_prioridad
+                and salida_data.get(
+                    "prioridad_ancla_id",
+                )
+                == item_batch.pk
             )
 
             if es_ancla_prioridad:
@@ -3198,7 +3291,11 @@ def guardar_plan_diario_batch(
                 orden=indice,
                 estado="listo_asignar",
                 origen="motor",
-                puntaje_motor=(salida_data.get("puntaje_motor")),
+                puntaje_motor=(
+                    salida_data.get(
+                        "puntaje_motor",
+                    )
+                ),
                 motivo_motor=(motivo_sitio),
                 creado_por=usuario,
                 actualizado_por=usuario,
@@ -3210,7 +3307,25 @@ def guardar_plan_diario_batch(
 
             sitio_planificado.orden_dia = indice
 
-            sitio_planificado.estado = "planificado"
+            # =================================================
+            # PROTEGER ESTADOS TERMINALES
+            # =================================================
+            #
+            # En condiciones normales un sitio completado,
+            # cancelado o bloqueado no entra al universo del
+            # motor.
+            #
+            # Conservamos igualmente esta protección para que
+            # una inconsistencia previa no pueda reabrirlo.
+            # =================================================
+
+            if sitio_planificado.estado not in {
+                "completado",
+                "cancelado",
+                "bloqueado",
+            }:
+
+                sitio_planificado.estado = "planificado"
 
             sitio_planificado.actualizado_por = usuario
 
@@ -3224,9 +3339,13 @@ def guardar_plan_diario_batch(
                 ]
             )
 
-        creadas.append(salida)
+        creadas.append(
+            salida,
+        )
 
-        salidas_resultado_ids.append(salida.pk)
+        salidas_resultado_ids.append(
+            salida.pk,
+        )
 
     # ========================================================
     # RESULTADO
