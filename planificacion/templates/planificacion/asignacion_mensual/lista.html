@@ -1337,7 +1337,64 @@ Planificación Mensual
         </span>
 
       </button>
+      <div
+        class="
+          flex
+          items-center
+          gap-2
+        "
+      >
 
+        <select
+          id="semana-destino-masivo"
+          class="bulk-permisos-select"
+        >
+
+          <option value="">
+            Mover a semana
+          </option>
+
+          {% for batch_destino in batches_destino_movimiento %}
+
+            <option value="{{ batch_destino.pk }}">
+              {{ batch_destino.codigo_semana }}
+              ·
+              {{ batch_destino.fecha_inicio|date:"d/m/Y" }}
+            </option>
+
+          {% endfor %}
+
+        </select>
+
+
+        <button
+          type="button"
+          id="mover-semana-masivo"
+          disabled
+          class="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border border-blue-200
+            bg-blue-600
+            px-4
+            py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-sm
+            transition
+            hover:bg-blue-700
+            disabled:cursor-not-allowed
+            disabled:opacity-40
+          "
+        >
+          Mover seleccionados
+        </button>
+
+      </div>
 
       <button
         type="button"
@@ -1370,7 +1427,24 @@ Planificación Mensual
 
 </div>
 
+<form
+  id="form-mover-semana-masivo"
+  method="post"
+  action="{% url 'planificacion:mover_sitios_semana_masivo' planificacion.pk %}"
+  class="hidden"
+>
+  {% csrf_token %}
 
+  <input
+    type="hidden"
+    name="batch_destino_id"
+    id="mover-semana-batch-destino"
+    value=""
+  >
+
+  <div id="mover-semana-sitios-inputs"></div>
+
+</form>
 <!-- ====================================================== -->
 <!-- TABLA                                                 -->
 <!-- ====================================================== -->
@@ -3020,6 +3094,30 @@ Planificación Mensual
     document.getElementById(
       'cantidad-sitios-seleccionados'
     );
+  const selectorSemanaDestino =
+  document.getElementById(
+    'semana-destino-masivo'
+  );
+
+  const botonMoverSemana =
+    document.getElementById(
+      'mover-semana-masivo'
+    );
+
+  const formMoverSemana =
+    document.getElementById(
+      'form-mover-semana-masivo'
+    );
+
+  const inputBatchDestino =
+    document.getElementById(
+      'mover-semana-batch-destino'
+    );
+
+  const contenedorSitiosMover =
+    document.getElementById(
+      'mover-semana-sitios-inputs'
+    );
     /* ======================================================== */
     /* ELEMENTOS DE FILTRO                                      */
     /* ======================================================== */
@@ -3413,26 +3511,42 @@ Planificación Mensual
   /* DISPONIBILIDAD DE BOTONES                                */
   /* ======================================================== */
 
-  function actualizarDisponibilidadAccionesMasivas() {
+    function actualizarDisponibilidadAccionesMasivas() {
+
     const cantidad =
       obtenerCheckboxesSeleccionados().length;
 
     const permisoElegido =
       selectorPermisoMasivo?.value || '';
 
+    const semanaElegida =
+      selectorSemanaDestino?.value || '';
+
+
     if (botonAplicarMasivo) {
+
       botonAplicarMasivo.disabled =
         cantidad === 0
         ||
         !permisoElegido;
     }
 
+
+    if (botonMoverSemana) {
+
+      botonMoverSemana.disabled =
+        cantidad === 0
+        ||
+        !semanaElegida;
+    }
+
+
     if (botonLimpiarSeleccion) {
+
       botonLimpiarSeleccion.disabled =
         cantidad === 0;
     }
   }
-
 
   /* ======================================================== */
   /* SELECCIONAR TODOS                                        */
@@ -3503,7 +3617,22 @@ Planificación Mensual
     );
 
   }
+    /* ======================================================== */
+    /* SELECT SEMANA DESTINO                                    */
+    /* ======================================================== */
 
+    if (selectorSemanaDestino) {
+
+      selectorSemanaDestino.addEventListener(
+        'change',
+        function () {
+
+          actualizarDisponibilidadAccionesMasivas();
+
+        }
+      );
+
+    }
 
   /* ======================================================== */
   /* LIMPIAR SELECCIÓN                                        */
@@ -3534,7 +3663,166 @@ Planificación Mensual
 
   }
 
+     /* ======================================================== */
+      /* MOVER SITIOS SELECCIONADOS A OTRA SEMANA                */
+      /* ======================================================== */
 
+      if (
+        botonMoverSemana
+        &&
+        formMoverSemana
+        &&
+        selectorSemanaDestino
+        &&
+        inputBatchDestino
+        &&
+        contenedorSitiosMover
+      ) {
+
+        botonMoverSemana.addEventListener(
+          'click',
+          function () {
+
+            const batchDestinoId =
+              selectorSemanaDestino.value || '';
+
+            const seleccionados =
+              obtenerCheckboxesSeleccionados();
+
+            if (!batchDestinoId) {
+
+              alert(
+                'Debes seleccionar una semana destino.'
+              );
+
+              return;
+            }
+
+            if (seleccionados.length === 0) {
+
+              alert(
+                'Debes seleccionar al menos un sitio.'
+              );
+
+              return;
+            }
+
+            const opcionSeleccionada =
+              selectorSemanaDestino.options[
+                selectorSemanaDestino.selectedIndex
+              ];
+
+            const textoSemana =
+              opcionSeleccionada
+                ? opcionSeleccionada.textContent.trim()
+                : 'la semana seleccionada';
+
+            const confirmado =
+              window.confirm(
+                (
+                  'Vas a mover '
+                  +
+                  seleccionados.length
+                  +
+                  ' sitio(s) hacia '
+                  +
+                  textoSemana
+                  +
+                  '.\n\n'
+                  +
+                  'La planificación semanal y diaria anterior '
+                  +
+                  'de cada sitio será eliminada. '
+                  +
+                  'Si algún sitio ya está asignado o en ejecución, '
+                  +
+                  'Operaciones será reiniciada según las reglas '
+                  +
+                  'actuales del sistema.\n\n'
+                  +
+                  '¿Deseas continuar?'
+                )
+              );
+
+            if (!confirmado) {
+              return;
+            }
+
+            /* ================================================== */
+            /* BATCH DESTINO                                      */
+            /* ================================================== */
+
+            inputBatchDestino.value =
+              batchDestinoId;
+
+            /* ================================================== */
+            /* LIMPIAR IDS DE UNA EJECUCIÓN ANTERIOR              */
+            /* ================================================== */
+
+            contenedorSitiosMover.innerHTML =
+              '';
+
+            /* ================================================== */
+            /* AGREGAR SITIOS SELECCIONADOS AL FORMULARIO         */
+            /* ================================================== */
+
+            seleccionados.forEach(
+              function (checkbox) {
+
+                const input =
+                  document.createElement(
+                    'input'
+                  );
+
+                input.type =
+                  'hidden';
+
+                input.name =
+                  'sitio_ids';
+
+                input.value =
+                  checkbox.value;
+
+                contenedorSitiosMover.appendChild(
+                  input
+                );
+
+              }
+            );
+
+            /* ================================================== */
+            /* BLOQUEAR DOBLE CLICK                               */
+            /* ================================================== */
+
+            botonMoverSemana.disabled =
+              true;
+
+            botonMoverSemana.textContent =
+              'Moviendo...';
+
+            selectorSemanaDestino.disabled =
+              true;
+
+            if (selectorTodos) {
+              selectorTodos.disabled =
+                true;
+            }
+
+            if (botonLimpiarSeleccion) {
+              botonLimpiarSeleccion.disabled =
+                true;
+            }
+
+            /* ================================================== */
+            /* ENVIAR                                             */
+            /* ================================================== */
+
+            formMoverSemana.submit();
+
+          }
+        );
+
+      }
   /* ======================================================== */
   /* CAMBIO MASIVO                                            */
   /* ======================================================== */

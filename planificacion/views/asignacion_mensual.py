@@ -3,18 +3,22 @@ import uuid
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from planificacion.forms.asignacion_mensual import \
     ImportarAsignacionMensualForm
-from planificacion.models import (ContactoSitio, PlanificacionMensual,
+from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
+                                  PlanificacionMensual, SitioBatchSemanal,
                                   SitioPlanificado)
 from planificacion.services.asignacion_mensual_importer import (
     aplicar_importacion_asignacion, generar_preview_asignacion,
     leer_excel_asignacion)
 from planificacion.services.completar_semana_anterior import \
     obtener_batches_completables
+from planificacion.services.mover_semana import mover_sitio_a_semana
 from usuarios.decoradores import rol_requerido
 
 CACHE_TIMEOUT = 60 * 30
@@ -93,42 +97,35 @@ def lista_asignacion_mensual(
     # ========================================================
     # SEMANAS ANTERIORES / OPERACIONALES COMPLETABLES
     # ========================================================
-    #
-    # IMPORTANTE:
-    #
-    # Esto permite que el flujo continúe existiendo DESPUÉS
-    # de la importación.
-    #
-    # Es decir:
-    #
-    # importar septiembre
-    #     ↓
-    # aparece oportunidad
-    #
-    # usuario sale de la pantalla
-    #     ↓
-    # vuelve mañana
-    #     ↓
-    # la oportunidad sigue apareciendo si continúa válida.
-    # ========================================================
 
     opciones_completar = obtener_batches_completables(
         planificacion_nueva=planificacion,
     )
 
+    oportunidad_principal = opciones_completar[0] if opciones_completar else None
+
     # ========================================================
-    # PRIMERA OPORTUNIDAD
+    # SEMANAS DISPONIBLES PARA MOVIMIENTO MASIVO
     # ========================================================
     #
-    # La dejamos disponible directamente porque actualmente
-    # el flujo normalmente tendrá una única semana inmediata
-    # pendiente.
+    # La semana es GLOBAL.
     #
-    # Si existen varias, el flujo completar_semana_anterior
-    # podrá permitir escoger entre ellas.
+    # Por tanto mostramos cualquier batch semanal existente,
+    # independientemente del mes que lo creó originalmente.
+    #
+    # Solo excluimos semanas canceladas.
     # ========================================================
 
-    oportunidad_principal = opciones_completar[0] if opciones_completar else None
+    batches_destino_movimiento = BatchPlanificacionSemanal.objects.exclude(
+        estado="cancelado",
+    ).order_by(
+        "-fecha_inicio",
+        "-id",
+    )
+
+    # ========================================================
+    # RENDER
+    # ========================================================
 
     return render(
         request,
@@ -138,7 +135,344 @@ def lista_asignacion_mensual(
             "sitios": sitios,
             "opciones_completar": opciones_completar,
             "oportunidad_completar": oportunidad_principal,
+            "batches_destino_movimiento": (batches_destino_movimiento),
         },
+    )
+
+# ============================================================
+# MOVER SITIOS SELECCIONADOS A OTRA SEMANA
+# ============================================================
+
+
+@login_required
+@require_POST
+@rol_requerido(
+    "admin",
+    "pm",
+    "supervisor",
+)
+def mover_sitios_semana_masivo(
+    request,
+    pk,
+):
+    """
+    Mueve varios sitios seleccionados desde la pantalla de
+    planificación mensual hacia una semana operacional global.
+
+    IMPORTANTE
+    ==========================================================
+
+    Esta vista NO implementa nuevamente la lógica de movimiento.
+
+    Cada sitio pasa individualmente por:
+
+        mover_sitio_a_semana()
+
+    Por tanto se conservan todas las reglas existentes:
+
+    - eliminación de planificación diaria anterior;
+    - reinicio de Operaciones cuando corresponde;
+    - bloqueo de estados protegidos;
+    - movimiento entre meses;
+    - trazabilidad de planificaciones_origen;
+    - prevención de duplicados;
+    - limpieza de memoria semanal anterior.
+    """
+
+    planificacion = get_object_or_404(
+        PlanificacionMensual,
+        pk=pk,
+    )
+
+    # ========================================================
+    # SITIOS SELECCIONADOS
+    # ========================================================
+
+    sitio_ids = request.POST.getlist(
+        "sitio_ids",
+    )
+
+    if not sitio_ids:
+
+        messages.warning(
+            request,
+            "Debes seleccionar al menos un sitio.",
+        )
+
+        return redirect(
+            "planificacion:lista_asignacion_mensual",
+            pk=planificacion.pk,
+        )
+
+    # ========================================================
+    # SEMANA DESTINO
+    # ========================================================
+
+    batch_destino_id = request.POST.get(
+        "batch_destino_id",
+    )
+
+    try:
+
+        batch_destino_id = int(
+            batch_destino_id,
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        messages.error(
+            request,
+            "Debes seleccionar una semana destino válida.",
+        )
+
+        return redirect(
+            "planificacion:lista_asignacion_mensual",
+            pk=planificacion.pk,
+        )
+
+    batch_destino = get_object_or_404(
+        BatchPlanificacionSemanal.objects.exclude(
+            estado="cancelado",
+        ),
+        pk=batch_destino_id,
+    )
+
+    # ========================================================
+    # SITIOS VÁLIDOS DE ESTA PLANIFICACIÓN MENSUAL
+    # ========================================================
+
+    sitios_planificados = list(
+        SitioPlanificado.objects.filter(
+            pk__in=sitio_ids,
+            planificacion=planificacion,
+            activo_en_mes=True,
+        )
+        .select_related(
+            "sitio",
+        )
+        .order_by(
+            "id",
+        )
+    )
+
+    if not sitios_planificados:
+
+        messages.warning(
+            request,
+            "No se encontraron sitios válidos para mover.",
+        )
+
+        return redirect(
+            "planificacion:lista_asignacion_mensual",
+            pk=planificacion.pk,
+        )
+
+    # ========================================================
+    # CONTADORES
+    # ========================================================
+
+    movidos = 0
+
+    omitidos = 0
+
+    errores = []
+
+    # ========================================================
+    # PROCESAR CADA SITIO
+    # ========================================================
+
+    for sitio_planificado in sitios_planificados:
+
+        identificador = (
+            sitio_planificado.sitio.id_claro
+            or sitio_planificado.sitio.id_sites
+            or f"Sitio {sitio_planificado.sitio_id}"
+        )
+
+        # ====================================================
+        # PARTICIPACIÓN SEMANAL ACTUAL
+        # ====================================================
+        #
+        # Un sitio solamente puede moverse de semana si
+        # actualmente pertenece a un batch.
+        #
+        # Excluimos participaciones históricas retiradas.
+        # ====================================================
+
+        participaciones = list(
+            SitioBatchSemanal.objects.filter(
+                sitio_planificado=sitio_planificado,
+            )
+            .exclude(
+                estado__in=[
+                    "excluido",
+                    "reemplazado",
+                ],
+            )
+            .select_related(
+                "batch",
+            )
+            .order_by(
+                "-batch__fecha_inicio",
+                "-id",
+            )[:2]
+        )
+
+        # ====================================================
+        # NO ESTÁ EN NINGUNA SEMANA
+        # ====================================================
+
+        if not participaciones:
+
+            omitidos += 1
+
+            errores.append(
+                (
+                    f"{identificador}: todavía no pertenece "
+                    "a ninguna semana y por tanto no puede "
+                    "ser movido."
+                )
+            )
+
+            continue
+
+        # ====================================================
+        # SEGURIDAD ANTE INCONSISTENCIA
+        # ====================================================
+        #
+        # La arquitectura normal mantiene una única
+        # participación semanal activa.
+        #
+        # Si encontramos más de una no elegimos arbitrariamente
+        # cuál mover.
+        # ====================================================
+
+        if len(participaciones) > 1:
+
+            omitidos += 1
+
+            errores.append(
+                (
+                    f"{identificador}: posee más de una "
+                    "participación semanal activa. "
+                    "Debe revisarse antes de moverlo."
+                )
+            )
+
+            continue
+
+        sitio_batch = participaciones[0]
+
+        # ====================================================
+        # YA ESTÁ EN LA SEMANA DESTINO
+        # ====================================================
+
+        if sitio_batch.batch_id == batch_destino.pk:
+
+            omitidos += 1
+
+            errores.append(
+                (f"{identificador}: ya pertenece a " f"{batch_destino.codigo_semana}.")
+            )
+
+            continue
+
+        # ====================================================
+        # MOVIMIENTO REAL
+        # ====================================================
+        #
+        # Reutilizamos el servicio oficial.
+        # ====================================================
+
+        try:
+
+            mover_sitio_a_semana(
+                sitio_batch_id=sitio_batch.pk,
+                batch_destino_id=batch_destino.pk,
+                usuario=request.user,
+            )
+
+        except ValidationError as exc:
+
+            omitidos += 1
+
+            for mensaje in exc.messages:
+
+                errores.append(f"{identificador}: {mensaje}")
+
+        except (
+            SitioBatchSemanal.DoesNotExist,
+            BatchPlanificacionSemanal.DoesNotExist,
+        ):
+
+            omitidos += 1
+
+            errores.append(
+                (
+                    f"{identificador}: la planificación "
+                    "cambió mientras se realizaba el "
+                    "movimiento."
+                )
+            )
+
+        except Exception as exc:
+
+            omitidos += 1
+
+            errores.append(
+                (f"{identificador}: no fue posible " f"moverlo. Detalle: {exc}")
+            )
+
+        else:
+
+            movidos += 1
+
+    # ========================================================
+    # MENSAJE PRINCIPAL
+    # ========================================================
+
+    if movidos:
+
+        messages.success(
+            request,
+            (
+                f"{movidos} sitio(s) fueron movidos "
+                f"correctamente hacia "
+                f"{batch_destino.codigo_semana}."
+            ),
+        )
+
+    if omitidos:
+
+        messages.warning(
+            request,
+            (f"{omitidos} sitio(s) no pudieron " "ser movidos."),
+        )
+
+    # ========================================================
+    # DETALLE DE ERRORES
+    # ========================================================
+
+    for error in errores[:10]:
+
+        messages.warning(
+            request,
+            error,
+        )
+
+    if len(errores) > 10:
+
+        messages.warning(
+            request,
+            (f"Existen {len(errores) - 10} " "advertencia(s) adicional(es)."),
+        )
+
+    return redirect(
+        "planificacion:lista_asignacion_mensual",
+        pk=planificacion.pk,
     )
 
 

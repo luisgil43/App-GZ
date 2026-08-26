@@ -15,6 +15,7 @@ from planificacion.views import (actualizar_permiso_inline,
                                  regeocodificar_cuadrilla)
 from planificacion.views.analisis_batch_semanal import (
     analizar_batch_semanal_view, aplicar_propuesta_batch_view)
+from planificacion.views.asignacion_mensual import mover_sitios_semana_masivo
 from planificacion.views.asignacion_operativa import (
     confirmar_asignacion_dia, confirmar_asignacion_salida,
     preview_asignacion_dia, preview_asignacion_salida)
@@ -148,6 +149,11 @@ urlpatterns = [
         "semanal/sitio/<int:item_id>/permiso/",
         actualizar_permiso_sitio_batch,
         name="actualizar_permiso_sitio_batch",
+    ),
+    path(
+        "mensual/<int:pk>/mover-sitios-semana/",
+        mover_sitios_semana_masivo,
+        name="mover_sitios_semana_masivo",
     ),
     # ========================================================
     # FLUJO DEL BATCH SEMANAL
