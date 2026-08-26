@@ -8,6 +8,11 @@ from django.db.models import Q
 
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
+from planificacion.services.motor_batch_semanal.cuadrillas import \
+    construir_configuracion_cuadrilla
+from planificacion.services.motor_batch_semanal.salidas import \
+    encontrar_mejor_salida
+from planificacion.services.planificacion_diaria import _sitio_batch_a_motor
 
 # ============================================================
 # CONSTANTES
@@ -640,7 +645,7 @@ def _reordenar_sitios_salida(
 
 
 # ============================================================
-# ACTUALIZAR MÉTRICAS BÁSICAS DE SALIDA MANUAL
+# ACTUALIZAR MÉTRICAS REALES DE SALIDA MANUAL
 # ============================================================
 
 
@@ -648,35 +653,265 @@ def _actualizar_metricas_basicas_salida(
     salida,
 ):
     """
-    Para una modificación manual no inventamos nuevas
-    distancias o tiempos de viaje.
+    Recalcula las métricas reales de una salida manual.
 
-    Conservamos los datos existentes cuando la salida ya
-    existía.
+    A diferencia de la implementación anterior, una salida
+    manual NO puede conservar viaje=0 simplemente porque fue
+    creada fuera del motor automático.
 
-    Sí recalculamos el tiempo de trabajo según la cantidad
-    actual de sitios y la configuración de la cuadrilla.
+    Si conocemos:
+
+        - los sitios;
+        - sus coordenadas;
+        - la cuadrilla;
+        - la configuración operacional;
+
+    utilizamos exactamente el mismo motor de rutas utilizado
+    por Planificación Diaria.
+
+    Se recalculan:
+
+        - orden operacional;
+        - minutos de viaje;
+        - minutos de trabajo;
+        - minutos totales;
+        - distancia directa;
+        - distancia vial estimada;
+        - jornada extendida;
+        - exceso de jornada.
+
+    Si alguno de los sitios no posee coordenadas válidas y no
+    puede realizarse el cálculo geográfico, se mantiene un
+    fallback seguro basado exclusivamente en tiempo de trabajo.
     """
 
-    cantidad = contar_sitios_activos_salida(
-        salida,
+    # ========================================================
+    # PARTICIPACIONES ACTIVAS
+    # ========================================================
+
+    participaciones = list(
+        salida.sitios.exclude(
+            estado__in=[
+                "retirado",
+                "reprogramado",
+                "cancelado",
+            ],
+        )
+        .select_related(
+            "sitio_batch",
+            "sitio_batch__sitio_planificado",
+            "sitio_batch__sitio_planificado__sitio",
+        )
+        .order_by(
+            "orden",
+            "id",
+        )
     )
+
+    cantidad = len(
+        participaciones,
+    )
+
+    # ========================================================
+    # SALIDA VACÍA
+    # ========================================================
+
+    if cantidad == 0:
+
+        salida.minutos_viaje_estimados = 0
+
+        salida.minutos_trabajo_estimados = 0
+
+        salida.minutos_total_estimados = 0
+
+        salida.distancia_directa_km = None
+
+        salida.distancia_vial_estimada_km = None
+
+        salida.jornada_extendida = False
+
+        salida.exceso_jornada_minutos = 0
+
+        return
+
+    # ========================================================
+    # CONSTRUIR UNIVERSO GEOGRÁFICO REAL
+    # ========================================================
+
+    motores = []
+
+    coordenadas_validas = True
+
+    mapa_participaciones = {}
+
+    for participacion in participaciones:
+
+        item_batch = participacion.sitio_batch
+
+        motor = _sitio_batch_a_motor(
+            item_batch,
+        )
+
+        if motor.latitud is None or motor.longitud is None:
+
+            coordenadas_validas = False
+
+            break
+
+        motores.append(
+            motor,
+        )
+
+        mapa_participaciones[motor.sitio_planificado_id] = participacion
+
+    # ========================================================
+    # CONFIGURACIÓN REAL DE LA CUADRILLA
+    # ========================================================
+
+    disponibilidad = salida.disponibilidad_cuadrilla
+
+    calculo = None
+
+    if coordenadas_validas and motores and disponibilidad is not None:
+
+        configuracion = construir_configuracion_cuadrilla(
+            disponibilidad,
+        )
+
+        calculo = encontrar_mejor_salida(
+            sitios=motores,
+            configuracion_cuadrilla=configuracion,
+        )
+
+    # ========================================================
+    # CÁLCULO GEOGRÁFICO COMPLETO
+    # ========================================================
+
+    if calculo:
+
+        sitios_ordenados = list(
+            calculo.get(
+                "sitios",
+                [],
+            )
+            or []
+        )
+
+        # ====================================================
+        # SINCRONIZAR ORDEN REAL DE LA RUTA
+        # ====================================================
+
+        for nuevo_orden, motor in enumerate(
+            sitios_ordenados,
+            start=1,
+        ):
+
+            participacion = mapa_participaciones.get(
+                motor.sitio_planificado_id,
+            )
+
+            if participacion is None:
+                continue
+
+            if participacion.orden == nuevo_orden:
+                continue
+
+            participacion.orden = nuevo_orden
+
+            participacion.save(
+                update_fields=[
+                    "orden",
+                    "actualizado_en",
+                ]
+            )
+
+        # ====================================================
+        # MÉTRICAS DEL MOTOR
+        # ====================================================
+
+        salida.minutos_viaje_estimados = int(
+            calculo.get(
+                "minutos_viaje",
+                0,
+            )
+            or 0
+        )
+
+        salida.minutos_trabajo_estimados = int(
+            calculo.get(
+                "minutos_trabajo",
+                0,
+            )
+            or 0
+        )
+
+        salida.minutos_total_estimados = int(
+            calculo.get(
+                "minutos_total",
+                0,
+            )
+            or 0
+        )
+
+        salida.distancia_directa_km = calculo.get(
+            "distancia_directa_km",
+        )
+
+        salida.distancia_vial_estimada_km = calculo.get(
+            "distancia_vial_estimada_km",
+        )
+
+        salida.jornada_extendida = bool(
+            calculo.get(
+                "jornada_extendida",
+                False,
+            )
+        )
+
+        salida.exceso_jornada_minutos = int(
+            calculo.get(
+                "exceso_jornada_minutos",
+                0,
+            )
+            or 0
+        )
+
+        return
+
+    # ========================================================
+    # FALLBACK SIN CÁLCULO GEOGRÁFICO
+    # ========================================================
+    #
+    # Solamente ocurre si:
+    #
+    # - falta alguna coordenada;
+    # - no existe disponibilidad;
+    # - o el motor no puede construir una ruta.
+    #
+    # En ese escenario NO inventamos viaje ni distancia.
+    # ========================================================
 
     minutos_por_sitio = (
         getattr(
-            salida.disponibilidad_cuadrilla,
+            disponibilidad,
             "minutos_trabajo_sitio_estimado",
             None,
         )
-        or 180
-    )
+        if disponibilidad is not None
+        else None
+    ) or 180
 
     try:
-        minutos_por_sitio = int(minutos_por_sitio)
+
+        minutos_por_sitio = int(
+            minutos_por_sitio,
+        )
+
     except (
         TypeError,
         ValueError,
     ):
+
         minutos_por_sitio = 180
 
     minutos_trabajo = cantidad * minutos_por_sitio
@@ -689,30 +924,35 @@ def _actualizar_metricas_basicas_salida(
 
     jornada_objetivo = (
         getattr(
-            salida.disponibilidad_cuadrilla,
+            disponibilidad,
             "minutos_jornada_objetivo",
             None,
         )
-        or 600
-    )
+        if disponibilidad is not None
+        else None
+    ) or 600
 
     try:
-        jornada_objetivo = int(jornada_objetivo)
+
+        jornada_objetivo = int(
+            jornada_objetivo,
+        )
+
     except (
         TypeError,
         ValueError,
     ):
+
         jornada_objetivo = 600
 
     exceso = max(
         0,
-        salida.minutos_total_estimados - jornada_objetivo,
+        (salida.minutos_total_estimados - jornada_objetivo),
     )
 
     salida.exceso_jornada_minutos = exceso
 
     salida.jornada_extendida = exceso > 0
-
 
 # ============================================================
 # LIMPIAR SALIDA ORIGEN VACÍA
@@ -726,23 +966,47 @@ def _limpiar_salida_origen_si_corresponde(
     Si después de mover manualmente un sitio una salida editable
     queda completamente vacía, se elimina.
 
+    Si todavía conserva sitios:
+
+    - se reordena;
+    - se recalculan viaje, trabajo y jornada;
+    - se recalculan distancias;
+    - se mantienen intactos sus demás datos.
+
     Nunca elimina una salida comprometida.
     """
 
     if salida is None:
         return False
 
+    # ========================================================
+    # SALIDA COMPROMETIDA
+    # ========================================================
+
     if salida.estado in ESTADOS_SALIDA_COMPROMETIDOS:
         return False
 
+    # ========================================================
+    # SALIDA PROTEGIDA
+    # ========================================================
+
     if salida.bloqueada:
         return False
+
+    # ========================================================
+    # CONTAR SITIOS ACTIVOS
+    # ========================================================
 
     cantidad = contar_sitios_activos_salida(
         salida,
     )
 
+    # ========================================================
+    # TODAVÍA CONSERVA SITIOS
+    # ========================================================
+
     if cantidad > 0:
+
         _reordenar_sitios_salida(
             salida,
         )
@@ -753,8 +1017,11 @@ def _limpiar_salida_origen_si_corresponde(
 
         salida.save(
             update_fields=[
+                "minutos_viaje_estimados",
                 "minutos_trabajo_estimados",
                 "minutos_total_estimados",
+                "distancia_directa_km",
+                "distancia_vial_estimada_km",
                 "jornada_extendida",
                 "exceso_jornada_minutos",
                 "actualizado_en",
@@ -762,6 +1029,10 @@ def _limpiar_salida_origen_si_corresponde(
         )
 
         return False
+
+    # ========================================================
+    # SALIDA VACÍA
+    # ========================================================
 
     salida.delete()
 
@@ -804,10 +1075,25 @@ def programar_sitio_manual(
        que un recálculo automático la elimine.
     10. No modifica Operaciones.
 
-    BLOQUEOS SQL
+    MÉTRICAS
     ==========================================================
 
-    IMPORTANTE:
+    Después de programar o mover manualmente el sitio se
+    recalcula la salida completa utilizando el mismo motor
+    geográfico de Planificación Diaria.
+
+    Se recalculan:
+
+        viaje;
+        trabajo;
+        jornada;
+        distancia directa;
+        distancia vial estimada;
+        orden operacional;
+        jornada extendida.
+
+    BLOQUEOS SQL
+    ==========================================================
 
     Los select_for_update() se ejecutan únicamente sobre
     la tabla concreta que necesitamos bloquear.
@@ -824,16 +1110,6 @@ def programar_sitio_manual(
     # ========================================================
     # BLOQUEAR SITIO BATCH
     # ========================================================
-    #
-    # NO usar:
-    #
-    #   select_for_update().select_related(...)
-    #
-    # porque PostgreSQL puede generar:
-    #
-    #   FOR UPDATE cannot be applied to the nullable side
-    #   of an outer join
-    # ========================================================
 
     sitio_batch = sitio_batch.__class__.objects.select_for_update().get(
         pk=sitio_batch.pk,
@@ -849,22 +1125,14 @@ def programar_sitio_manual(
 
     batch_sitio = sitio_batch.batch
 
-    # Forzamos la carga explícitamente.
     sitio_planificado.pk
+
     sitio.pk
+
     batch_sitio.pk
 
     # ========================================================
     # BLOQUEAR DISPONIBILIDAD
-    # ========================================================
-    #
-    # cuadrilla_operativa puede ser nullable.
-    #
-    # Por eso tampoco hacemos:
-    #
-    #   select_for_update().select_related(
-    #       "cuadrilla_operativa"
-    #   )
     # ========================================================
 
     disponibilidad_cuadrilla = (
@@ -947,10 +1215,6 @@ def programar_sitio_manual(
     salida_creada = False
 
     if salida_destino is not None:
-
-        # ====================================================
-        # BLOQUEAR ÚNICAMENTE SALIDA DESTINO
-        # ====================================================
 
         salida_destino = SalidaPlanificacionDiaria.objects.select_for_update().get(
             pk=salida_destino.pk,
@@ -1049,9 +1313,17 @@ def programar_sitio_manual(
 
         salida_destino.actualizado_por = usuario
 
+        # ====================================================
+        # REORDENAR
+        # ====================================================
+
         _reordenar_sitios_salida(
             salida_destino,
         )
+
+        # ====================================================
+        # RECALCULAR RUTA Y MÉTRICAS
+        # ====================================================
 
         _actualizar_metricas_basicas_salida(
             salida_destino,
@@ -1063,10 +1335,46 @@ def programar_sitio_manual(
                 "bloqueada",
                 "observaciones",
                 "actualizado_por",
+                "minutos_viaje_estimados",
                 "minutos_trabajo_estimados",
                 "minutos_total_estimados",
+                "distancia_directa_km",
+                "distancia_vial_estimada_km",
                 "jornada_extendida",
                 "exceso_jornada_minutos",
+                "actualizado_en",
+            ]
+        )
+
+        # ====================================================
+        # SINCRONIZAR SITIO PLANIFICADO
+        # ====================================================
+
+        sitio_planificado = sitio_batch.sitio_planificado
+
+        sitio_planificado.fecha_planificada = salida_destino.fecha
+
+        sitio_planificado.orden_dia = participacion_actual.orden
+
+        if sitio_planificado.estado not in {
+            "completado",
+            "cancelado",
+            "bloqueado",
+        }:
+
+            sitio_planificado.estado = "planificado"
+
+        sitio_planificado.planificado_manualmente = True
+
+        sitio_planificado.actualizado_por = usuario
+
+        sitio_planificado.save(
+            update_fields=[
+                "fecha_planificada",
+                "orden_dia",
+                "estado",
+                "planificado_manualmente",
+                "actualizado_por",
                 "actualizado_en",
             ]
         )
@@ -1139,16 +1447,6 @@ def programar_sitio_manual(
 
     # ========================================================
     # PARTICIPACIÓN DESTINO EXISTENTE
-    # ========================================================
-    #
-    # La combinación:
-    #
-    #   salida + sitio_batch
-    #
-    # es única.
-    #
-    # Bloqueamos únicamente SitioSalidaPlanificacionDiaria.
-    # No necesitamos joins para encontrarla.
     # ========================================================
 
     participacion_destino_existente = (
@@ -1263,7 +1561,7 @@ def programar_sitio_manual(
     )
 
     # ========================================================
-    # MÉTRICAS
+    # RECALCULAR RUTA Y MÉTRICAS
     # ========================================================
 
     _actualizar_metricas_basicas_salida(
@@ -1276,8 +1574,11 @@ def programar_sitio_manual(
             "bloqueada",
             "observaciones",
             "actualizado_por",
+            "minutos_viaje_estimados",
             "minutos_trabajo_estimados",
             "minutos_total_estimados",
+            "distancia_directa_km",
+            "distancia_vial_estimada_km",
             "jornada_extendida",
             "exceso_jornada_minutos",
             "actualizado_en",
@@ -1286,14 +1587,6 @@ def programar_sitio_manual(
 
     # ========================================================
     # SITIO PLANIFICADO
-    # ========================================================
-    #
-    # La programación manual también debe dejar sincronizada
-    # la posición del SitioPlanificado.
-    #
-    # Esto evita que la pantalla mensual continúe mostrando
-    # el sitio como listo para planificar cuando ya posee
-    # una jornada manual.
     # ========================================================
 
     sitio_planificado = sitio_batch.sitio_planificado
@@ -1326,7 +1619,7 @@ def programar_sitio_manual(
     )
 
     # ========================================================
-    # LIMPIAR SALIDA ANTERIOR
+    # LIMPIAR / RECALCULAR SALIDA ANTERIOR
     # ========================================================
 
     salida_origen_eliminada = False

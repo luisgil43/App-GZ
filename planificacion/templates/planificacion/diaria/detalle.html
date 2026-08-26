@@ -3205,6 +3205,254 @@ Planificación Diaria
 
 </div>
 
+<!-- ======================================================== -->
+<!-- MODAL RECÁLCULO DÍA ACTUAL                               -->
+<!-- ======================================================== -->
+
+<div
+  id="modal-recalculo-dia-actual"
+  class="
+    hidden
+    fixed
+    inset-0
+    z-[10000]
+    flex
+    items-center
+    justify-center
+    bg-slate-950/60
+    px-4
+    py-6
+    backdrop-blur-[2px]
+  "
+  aria-hidden="true"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="modal-recalculo-dia-titulo"
+>
+
+  <div
+    id="modal-recalculo-dia-card"
+    class="
+      w-full
+      max-w-lg
+      overflow-hidden
+      rounded-3xl
+      border
+      border-slate-200
+      bg-white
+      shadow-2xl
+    "
+  >
+
+    <!-- ==================================================== -->
+    <!-- CONTENIDO                                            -->
+    <!-- ==================================================== -->
+
+    <div class="p-6 sm:p-7">
+
+      <div class="flex items-start gap-4">
+
+        <!-- ICONO -->
+
+        <div
+          class="
+            flex
+            h-12
+            w-12
+            shrink-0
+            items-center
+            justify-center
+            rounded-2xl
+            bg-amber-50
+            text-amber-600
+          "
+        >
+
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 9v4m0 4h.01"
+            />
+
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M10.3 3.8 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z"
+            />
+          </svg>
+
+        </div>
+
+
+        <!-- TEXTO -->
+
+        <div class="min-w-0 flex-1">
+
+          <div
+            class="
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-amber-600
+            "
+          >
+            Recálculo de planificación
+          </div>
+
+          <h3
+            id="modal-recalculo-dia-titulo"
+            class="
+              mt-1
+              text-xl
+              font-black
+              text-slate-900
+            "
+          >
+            ¿Incluir también el día de hoy?
+          </h3>
+
+          <p
+            id="modal-recalculo-dia-texto"
+            class="
+              mt-3
+              text-sm
+              leading-relaxed
+              text-slate-600
+            "
+          >
+          </p>
+
+
+          <div
+            class="
+              mt-5
+              rounded-2xl
+              border
+              border-amber-200
+              bg-amber-50
+              px-4
+              py-3
+            "
+          >
+
+            <div
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-wide
+                text-amber-700
+              "
+            >
+              Importante
+            </div>
+
+            <p
+              class="
+                mt-1
+                text-sm
+                leading-relaxed
+                text-amber-900
+              "
+            >
+              Los días anteriores de esta semana no serán
+              utilizados para incorporar nuevos sitios.
+            </p>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- ACCIONES                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        flex
+        flex-col-reverse
+        gap-2
+        border-t
+        border-slate-100
+        bg-slate-50
+        px-6
+        py-4
+        sm:flex-row
+        sm:justify-end
+      "
+    >
+
+      <button
+        id="btn-recalculo-desde-manana"
+        type="button"
+        class="
+          inline-flex
+          w-full
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-5
+          py-2.5
+          text-sm
+          font-black
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-100
+          sm:w-auto
+        "
+      >
+        Comenzar desde mañana
+      </button>
+
+
+      <button
+        id="btn-recalculo-incluir-hoy"
+        type="button"
+        class="
+          inline-flex
+          w-full
+          items-center
+          justify-center
+          rounded-xl
+          bg-amber-600
+          px-5
+          py-2.5
+          text-sm
+          font-black
+          text-white
+          shadow-sm
+          transition
+          hover:bg-amber-700
+          sm:w-auto
+        "
+      >
+        Incluir hoy
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
 
 <script>
   // =========================================================
@@ -4053,7 +4301,15 @@ Planificación Diaria
 (function () {
 
   // =========================================================
-  // RECÁLCULO SEGÚN DÍA OPERACIONAL ACTUAL
+  // ESTADO DEL RECÁLCULO
+  // =========================================================
+
+  let formularioRecalculoPendiente =
+    null;
+
+
+  // =========================================================
+  // FECHA LOCAL ISO
   // =========================================================
 
   function fechaLocalISO() {
@@ -4093,6 +4349,10 @@ Planificación Diaria
     );
   }
 
+
+  // =========================================================
+  // SUMAR DÍAS
+  // =========================================================
 
   function sumarDiasISO(
     fechaISO,
@@ -4162,6 +4422,180 @@ Planificación Diaria
   }
 
 
+  // =========================================================
+  // FECHA HUMANA
+  // =========================================================
+
+  function fechaHoyHumana() {
+
+    return new Date().toLocaleDateString(
+      "es-CL",
+      {
+        weekday:
+          "long",
+
+        day:
+          "2-digit",
+
+        month:
+          "2-digit",
+
+        year:
+          "numeric"
+      }
+    );
+  }
+
+
+  // =========================================================
+  // ABRIR MODAL
+  // =========================================================
+
+  function abrirModalRecalculoDiaActual(
+    form
+  ) {
+
+    const modal =
+      document.getElementById(
+        "modal-recalculo-dia-actual"
+      );
+
+    const texto =
+      document.getElementById(
+        "modal-recalculo-dia-texto"
+      );
+
+    if (
+      !modal
+      ||
+      !texto
+    ) {
+      return;
+    }
+
+    formularioRecalculoPendiente =
+      form;
+
+    texto.textContent =
+      (
+        "Hoy es "
+        +
+        fechaHoyHumana()
+        +
+        ". Elige desde qué día debe comenzar el motor "
+        +
+        "a incorporar nuevos sitios en este recálculo."
+      );
+
+    modal.classList.remove(
+      "hidden"
+    );
+
+    modal.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+    document.documentElement.classList.add(
+      "overflow-hidden"
+    );
+
+    document.body.classList.add(
+      "overflow-hidden"
+    );
+  }
+
+
+  // =========================================================
+  // CERRAR MODAL
+  // =========================================================
+
+  function cerrarModalRecalculoDiaActual() {
+
+    const modal =
+      document.getElementById(
+        "modal-recalculo-dia-actual"
+      );
+
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.add(
+      "hidden"
+    );
+
+    modal.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    document.documentElement.classList.remove(
+      "overflow-hidden"
+    );
+
+    document.body.classList.remove(
+      "overflow-hidden"
+    );
+  }
+
+
+  // =========================================================
+  // ENVIAR FORMULARIO DEFINITIVAMENTE
+  // =========================================================
+  //
+  // MUY IMPORTANTE:
+  //
+  // utilizamos form.submit()
+  //
+  // NO requestSubmit().
+  //
+  // requestSubmit() vuelve a disparar el evento "submit"
+  // y nos haría entrar nuevamente en esta lógica.
+  //
+  // form.submit() realiza directamente el POST definitivo.
+  // =========================================================
+
+  function ejecutarRecalculo(
+    incluirHoy
+  ) {
+
+    const form =
+      formularioRecalculoPendiente;
+
+    if (!form) {
+      return;
+    }
+
+    const input =
+      form.querySelector(
+        "[data-incluir-hoy]"
+      );
+
+    if (!input) {
+      return;
+    }
+
+    input.value =
+      incluirHoy
+        ?
+        "1"
+        :
+        "0";
+
+    cerrarModalRecalculoDiaActual();
+
+    formularioRecalculoPendiente =
+      null;
+
+    form.submit();
+  }
+
+
+  // =========================================================
+  // INTERCEPTAR RECÁLCULO
+  // =========================================================
+
   document.addEventListener(
     "submit",
     function (
@@ -4181,20 +4615,6 @@ Planificación Diaria
         return;
       }
 
-
-      // =====================================================
-      // EVITAR PREGUNTAR DOS VECES
-      // =====================================================
-
-      if (
-        form.dataset.decisionFechaActualTomada
-        ===
-        "1"
-      ) {
-        return;
-      }
-
-
       const inputIncluirHoy =
         form.querySelector(
           "[data-incluir-hoy]"
@@ -4204,7 +4624,6 @@ Planificación Diaria
         return;
       }
 
-
       const fechaInicio =
         form.dataset.fechaInicio
         ||
@@ -4213,7 +4632,6 @@ Planificación Diaria
       if (!fechaInicio) {
         return;
       }
-
 
       const hoy =
         fechaLocalISO();
@@ -4226,7 +4644,15 @@ Planificación Diaria
 
 
       // =====================================================
-      // EL BATCH NO ES LA SEMANA ACTUAL
+      // SEMANA PASADA O FUTURA
+      // =====================================================
+      //
+      // No preguntamos nada.
+      //
+      // El backend recibirá:
+      //
+      // incluir_hoy = 0
+      //
       // =====================================================
 
       if (
@@ -4243,64 +4669,110 @@ Planificación Diaria
 
 
       // =====================================================
-      // DETENER ENVÍO PARA TOMAR DECISIÓN
+      // SEMANA ACTUAL
       // =====================================================
 
       event.preventDefault();
 
+      abrirModalRecalculoDiaActual(
+        form
+      );
 
-      const incluir =
-        window.confirm(
-          (
-            "Hoy es "
-            +
-            new Date().toLocaleDateString(
-              "es-CL",
-              {
-                weekday:
-                  "long",
+    }
+  );
 
-                day:
-                  "2-digit",
 
-                month:
-                  "2-digit",
+  // =========================================================
+  // INCLUIR HOY
+  // =========================================================
 
-                year:
-                  "numeric"
-              }
-            )
-            +
-            ".\n\n"
-            +
-            "Los días anteriores de esta semana ya no serán "
-            +
-            "considerados por el motor.\n\n"
-            +
-            "¿Quieres permitir que el recálculo incorpore "
-            +
-            "nuevos sitios también para HOY?\n\n"
-            +
-            "Aceptar: usar hoy y los días siguientes.\n"
-            +
-            "Cancelar: comenzar desde mañana."
-          )
+  const botonIncluirHoy =
+    document.getElementById(
+      "btn-recalculo-incluir-hoy"
+    );
+
+  if (botonIncluirHoy) {
+
+    botonIncluirHoy.addEventListener(
+      "click",
+      function () {
+
+        ejecutarRecalculo(
+          true
         );
 
+      }
+    );
 
-      inputIncluirHoy.value =
-        incluir
-          ?
-          "1"
-          :
-          "0";
+  }
 
 
-      form.dataset.decisionFechaActualTomada =
-        "1";
+  // =========================================================
+  // COMENZAR DESDE MAÑANA
+  // =========================================================
+
+  const botonDesdeManana =
+    document.getElementById(
+      "btn-recalculo-desde-manana"
+    );
+
+  if (botonDesdeManana) {
+
+    botonDesdeManana.addEventListener(
+      "click",
+      function () {
+
+        ejecutarRecalculo(
+          false
+        );
+
+      }
+    );
+
+  }
 
 
-      form.requestSubmit();
+  // =========================================================
+  // ESC
+  // =========================================================
+  //
+  // ESC solamente cierra el modal.
+  //
+  // NO ejecuta el recálculo.
+  // =========================================================
+
+  document.addEventListener(
+    "keydown",
+    function (
+      event
+    ) {
+
+      if (
+        event.key !==
+        "Escape"
+      ) {
+        return;
+      }
+
+      const modal =
+        document.getElementById(
+          "modal-recalculo-dia-actual"
+        );
+
+      if (
+        !modal
+        ||
+        modal.classList.contains(
+          "hidden"
+        )
+      ) {
+        return;
+      }
+
+      cerrarModalRecalculoDiaActual();
+
+      formularioRecalculoPendiente =
+        null;
 
     }
   );
