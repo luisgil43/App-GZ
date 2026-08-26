@@ -1031,7 +1031,22 @@ def aplicar_importacion_contactos(
     - ImportacionContactosSitios
 
     Nunca modifica operaciones.SitioMovil.
+
+    OPTIMIZACIÓN
+    ==========================================================
+
+    Para evitar miles de consultas individuales:
+
+    - todos los SitioMovil necesarios se cargan previamente;
+    - todos los ContactoSitio existentes que serán actualizados
+      se cargan previamente con select_for_update();
+    - dentro del loop principal ya no se realizan búsquedas
+      individuales de esos objetos.
     """
+
+    # ========================================================
+    # CREAR AUDITORÍA DE IMPORTACIÓN
+    # ========================================================
 
     importacion = ImportacionContactosSitios.objects.create(
         nombre_archivo=nombre_archivo,
@@ -1048,7 +1063,96 @@ def aplicar_importacion_contactos(
     }
 
     try:
+
+        # ====================================================
+        # NORMALIZAR IDS NECESARIOS
+        # ====================================================
+
+        sitio_ids = set()
+
+        contacto_ids = set()
+
         for item in preview:
+
+            sitio_id = item.get(
+                "sitio_id",
+            )
+
+            if sitio_id:
+
+                try:
+                    sitio_ids.add(int(sitio_id))
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    pass
+
+            contacto_id = item.get(
+                "contacto_id",
+            )
+
+            if contacto_id:
+
+                try:
+                    contacto_ids.add(int(contacto_id))
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    pass
+
+        # ====================================================
+        # CARGAR SITIOS EN UNA SOLA CONSULTA
+        # ====================================================
+        #
+        # SitioMovil continúa siendo estrictamente
+        # SOLO DE LECTURA.
+        # ====================================================
+
+        if sitio_ids:
+
+            sitios_por_id = SitioMovil.objects.in_bulk(
+                sitio_ids,
+            )
+
+        else:
+
+            sitios_por_id = {}
+
+        # ====================================================
+        # CARGAR CONTACTOS EXISTENTES EN UNA SOLA CONSULTA
+        # ====================================================
+        #
+        # Conservamos select_for_update porque seguimos dentro
+        # de transaction.atomic.
+        #
+        # Así protegemos contra modificaciones concurrentes,
+        # pero evitamos hacer un SELECT por cada fila.
+        # ====================================================
+
+        if contacto_ids:
+
+            contactos_existentes = ContactoSitio.objects.select_for_update().filter(
+                pk__in=contacto_ids,
+            )
+
+            contactos_por_id = {
+                contacto.pk: contacto for contacto in contactos_existentes
+            }
+
+        else:
+
+            contactos_por_id = {}
+
+        # ====================================================
+        # PROCESAR PREVIEW
+        # ====================================================
+
+        for item in preview:
+
             data = item.get("data") or {}
 
             estado = item.get("estado")
@@ -1058,13 +1162,24 @@ def aplicar_importacion_contactos(
             sitio = None
 
             # =================================================
-            # SITIO MOVIL: SOLO SELECT
+            # SITIO MOVIL: SOLO LECTURA DESDE MEMORIA
             # =================================================
 
             if sitio_id:
-                sitio = SitioMovil.objects.filter(pk=sitio_id).first()
+
+                try:
+
+                    sitio = sitios_por_id.get(int(sitio_id))
+
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+
+                    sitio = None
 
             if sitio is None:
+
                 resultado["no_vinculados"] += 1
 
             # =================================================
@@ -1072,6 +1187,7 @@ def aplicar_importacion_contactos(
             # =================================================
 
             if estado == "nuevo":
+
                 contacto = ContactoSitio(
                     sitio=sitio,
                     id_origen=data["id_origen"],
@@ -1080,9 +1196,15 @@ def aplicar_importacion_contactos(
                 )
 
                 for campo in CAMPOS_CONTACTO:
-                    valor = data.get(campo)
 
-                    # Vacío permanece vacío al crear.
+                    valor = data.get(
+                        campo,
+                    )
+
+                    # =========================================
+                    # VACÍO PERMANECE VACÍO AL CREAR
+                    # =========================================
+
                     if valor in (
                         None,
                         "",
@@ -1101,7 +1223,10 @@ def aplicar_importacion_contactos(
 
                 contacto.save()
 
-                # Snapshot inicial.
+                # =============================================
+                # SNAPSHOT INICIAL
+                # =============================================
+
                 crear_version_contacto(
                     contacto,
                     importacion,
@@ -1116,6 +1241,7 @@ def aplicar_importacion_contactos(
             # =================================================
 
             if estado == "sin_cambios":
+
                 resultado["sin_cambios"] += 1
 
                 continue
@@ -1124,20 +1250,42 @@ def aplicar_importacion_contactos(
             # ACTUALIZAR CONTACTO
             # =================================================
 
-            contacto_id = item.get("contacto_id")
+            contacto_id = item.get(
+                "contacto_id",
+            )
 
             if not contacto_id:
+
                 continue
 
-            contacto = ContactoSitio.objects.select_for_update().get(pk=contacto_id)
+            try:
 
-            # Guardamos estado anterior antes de modificar.
+                contacto_id = int(contacto_id)
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                continue
+
+            contacto = contactos_por_id.get(contacto_id)
+
+            if contacto is None:
+
+                continue
+
+            # =================================================
+            # SNAPSHOT DEL ESTADO ANTERIOR
+            # =================================================
+
             crear_version_contacto(
                 contacto,
                 importacion,
             )
 
             hubo_cambio = False
+
             hubo_cambio_reanalizable = False
 
             # =================================================
@@ -1148,7 +1296,9 @@ def aplicar_importacion_contactos(
             # =================================================
 
             if sitio and contacto.sitio_id != sitio.pk:
+
                 contacto.sitio = sitio
+
                 hubo_cambio = True
 
             # =================================================
@@ -1156,11 +1306,14 @@ def aplicar_importacion_contactos(
             # =================================================
 
             for campo in CAMPOS_CONTACTO:
-                nuevo = data.get(campo)
 
-                # ---------------------------------------------
+                nuevo = data.get(
+                    campo,
+                )
+
+                # =============================================
                 # IMPORTACIÓN NO DESTRUCTIVA
-                # ---------------------------------------------
+                # =============================================
 
                 if nuevo in (
                     None,
@@ -1175,12 +1328,15 @@ def aplicar_importacion_contactos(
                 )
 
                 if campo == "fecha_informacion":
+
                     iguales = anterior == nuevo
 
                 else:
+
                     iguales = normalizar_clave(anterior) == normalizar_clave(nuevo)
 
                 if iguales:
+
                     continue
 
                 setattr(
@@ -1192,6 +1348,7 @@ def aplicar_importacion_contactos(
                 hubo_cambio = True
 
                 if campo in CAMPOS_REANALISIS:
+
                     hubo_cambio_reanalizable = True
 
             # =================================================
@@ -1199,9 +1356,11 @@ def aplicar_importacion_contactos(
             # =================================================
 
             if hubo_cambio:
+
                 contacto.actualizado_por = user
 
                 if hubo_cambio_reanalizable:
+
                     contacto.requiere_reanalisis = True
 
                 contacto.firma_contenido = generar_firma_contacto(
@@ -1213,6 +1372,7 @@ def aplicar_importacion_contactos(
                 resultado["actualizados"] += 1
 
             else:
+
                 resultado["sin_cambios"] += 1
 
         # =====================================================
@@ -1244,12 +1404,19 @@ def aplicar_importacion_contactos(
 
         return {
             **resultado,
-            "importacion_id": (importacion.pk),
+            "importacion_id": importacion.pk,
         }
 
     except Exception as exc:
+
+        # =====================================================
+        # IMPORTANTE
+        # =====================================================
+        #
         # Como estamos dentro de transaction.atomic,
-        # cualquier error hace rollback de los cambios.
+        # cualquier error provoca rollback de toda la
+        # importación.
+        # =====================================================
 
         importacion.estado = "error"
 
