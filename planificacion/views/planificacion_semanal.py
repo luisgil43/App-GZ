@@ -320,16 +320,33 @@ def eliminar_planificacion_semanal(
     # ========================================================
     # OBTENER BATCH BLOQUEADO
     # ========================================================
+    #
+    # IMPORTANTE:
+    #
+    # Bloqueamos exclusivamente BatchPlanificacionSemanal.
+    #
+    # planificacion y configuracion_semana son relaciones
+    # opcionales y pueden ser NULL.
+    #
+    # PostgreSQL no permite aplicar FOR UPDATE sobre el lado
+    # nullable de un OUTER JOIN, por lo que NO debemos usar:
+    #
+    # select_for_update().select_related(
+    #     "planificacion",
+    #     "configuracion_semana",
+    # )
+    # ========================================================
 
     batch = get_object_or_404(
-        BatchPlanificacionSemanal.objects.select_for_update().select_related(
-            "planificacion",
-            "configuracion_semana",
-        ),
+        BatchPlanificacionSemanal.objects.select_for_update(),
         pk=batch_id,
     )
 
-    mensual = batch.planificacion
+    # ========================================================
+    # RELACIONES OPCIONALES
+    # ========================================================
+
+    mensual = batch.planificacion if batch.planificacion_id else None
 
     configuracion = (
         batch.configuracion_semana if batch.configuracion_semana_id else None
@@ -614,7 +631,6 @@ def eliminar_planificacion_semanal(
 
         sitio_planificado.estado = nuevo_estado
 
-        # La fecha anterior pertenecía al batch eliminado.
         sitio_planificado.fecha_planificada = None
 
         sitio_planificado.orden_dia = 0
@@ -1137,15 +1153,16 @@ def crear_planificacion_semanal(
 
                 with transaction.atomic():
 
-                    batch = (
-                        BatchPlanificacionSemanal.objects.select_for_update()
-                        .select_related(
-                            "planificacion",
-                            "configuracion_semana",
-                        )
-                        .get(
-                            pk=batch_existente.pk,
-                        )
+                    # =========================================
+                    # BLOQUEAR EXCLUSIVAMENTE EL BATCH
+                    # =========================================
+                    #
+                    # No incluimos relaciones opcionales dentro
+                    # del SELECT FOR UPDATE.
+                    # =========================================
+
+                    batch = BatchPlanificacionSemanal.objects.select_for_update().get(
+                        pk=batch_existente.pk,
                     )
 
                     ya_vinculado = batch.planificaciones_origen.filter(
@@ -1315,8 +1332,6 @@ def crear_planificacion_semanal(
                                 usuario=request.user,
                             )
 
-                            # crear_batch_semanal ya agrega
-                            # planificaciones_origen.
                             creada = True
 
                 except ValueError as exc:
