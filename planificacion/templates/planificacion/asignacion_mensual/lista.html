@@ -785,16 +785,26 @@ Planificación Mensual
 
 
         <!-- ================================================ -->
-        <!-- ACCIÓN                                          -->
+        <!-- ACCIONES                                         -->
         <!-- ================================================ -->
 
-        <div class="shrink-0">
+        <div
+          class="
+            flex
+            shrink-0
+            items-center
+            gap-2
+          "
+        >
+
+          <!-- ============================================== -->
+          <!-- COMPLETAR SEMANA                               -->
+          <!-- ============================================== -->
 
           <a
             href="{% url 'planificacion:completar_semana_anterior' planificacion.pk %}"
             class="
               inline-flex
-              w-full
               items-center
               justify-center
               gap-2
@@ -812,14 +822,58 @@ Planificación Mensual
               transition
               hover:-translate-y-0.5
               hover:shadow-lg
-              lg:w-auto
+            "
+          >
+            Completar
+            {{ diagnostico.codigo_semana }}
+          </a>
+
+
+          <!-- ============================================== -->
+          <!-- DESCARTAR CONTINUIDAD                          -->
+          <!-- ============================================== -->
+
+          <form
+            method="post"
+            action="{% url 'planificacion:descartar_continuidad_semanal' planificacion.pk batch.pk %}"
+            onsubmit="
+              return confirm(
+                '¿Deseas dejar de mostrar la recomendación de completar {{ diagnostico.codigo_semana }}? La semana y sus sitios no serán modificados.'
+              );
             "
           >
 
-            Completar
-            {{ diagnostico.codigo_semana }}
+            {% csrf_token %}
 
-          </a>
+            <button
+              type="submit"
+              title="No volver a mostrar esta recomendación"
+              aria-label="Descartar recomendación para {{ diagnostico.codigo_semana }}"
+              class="
+                inline-flex
+                h-10
+                w-10
+                items-center
+                justify-center
+                rounded-xl
+                border
+                border-slate-200
+                bg-white
+                text-xl
+                font-black
+                leading-none
+                text-slate-400
+                shadow-sm
+                transition
+                hover:border-red-200
+                hover:bg-red-50
+                hover:text-red-600
+              "
+            >
+              &times;
+            </button>
+
+          </form>
 
         </div>
 

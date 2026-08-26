@@ -102,6 +102,39 @@ def lista_asignacion_mensual(
         planificacion_nueva=planificacion,
     )
 
+    # ========================================================
+    # SEMANAS DESCARTADAS MANUALMENTE
+    # ========================================================
+    #
+    # La X de continuidad solamente oculta la recomendación
+    # para ESTA planificación mensual.
+    #
+    # No elimina:
+    #
+    # - el batch;
+    # - sus sitios;
+    # - la planificación diaria;
+    # - Operaciones.
+    #
+    # Guardamos los PK de los batches como strings para que
+    # funcione igual aunque existan datos antiguos guardados
+    # como enteros.
+    # ========================================================
+
+    semanas_descartadas = {
+        str(valor) for valor in (planificacion.continuidad_semanal_descartada or [])
+    }
+
+    opciones_completar = [
+        opcion
+        for opcion in opciones_completar
+        if str(opcion["batch"].pk) not in semanas_descartadas
+    ]
+
+    # ========================================================
+    # OPORTUNIDAD PRINCIPAL
+    # ========================================================
+
     oportunidad_principal = opciones_completar[0] if opciones_completar else None
 
     # ========================================================
@@ -138,6 +171,122 @@ def lista_asignacion_mensual(
             "batches_destino_movimiento": (batches_destino_movimiento),
         },
     )
+
+# ============================================================
+# DESCARTAR RECOMENDACIÓN DE CONTINUIDAD SEMANAL
+# ============================================================
+
+
+@login_required
+@require_POST
+@rol_requerido(
+    "admin",
+    "pm",
+    "supervisor",
+)
+def descartar_continuidad_semanal(
+    request,
+    pk,
+    batch_id,
+):
+    """
+    Descarta de forma persistente una recomendación de
+    continuidad operacional para una planificación mensual.
+
+    IMPORTANTE
+    ==========================================================
+
+    Esta acción NO modifica:
+
+    - BatchPlanificacionSemanal;
+    - SitioBatchSemanal;
+    - SitioPlanificado;
+    - planificación diaria;
+    - Operaciones;
+    - permisos;
+    - rutas;
+    - sesiones;
+    - evidencias.
+
+    Únicamente registra que esta planificación mensual ya no
+    desea volver a mostrar la recomendación de completar ese
+    batch.
+    """
+
+    # ========================================================
+    # PLANIFICACIÓN MENSUAL
+    # ========================================================
+
+    planificacion = get_object_or_404(
+        PlanificacionMensual,
+        pk=pk,
+    )
+
+    # ========================================================
+    # BATCH
+    # ========================================================
+
+    batch = get_object_or_404(
+        BatchPlanificacionSemanal,
+        pk=batch_id,
+    )
+
+    # ========================================================
+    # LISTA ACTUAL DE DESCARTADAS
+    # ========================================================
+
+    descartadas = list(planificacion.continuidad_semanal_descartada or [])
+
+    batch_id_normalizado = str(
+        batch.pk,
+    )
+
+    descartadas_normalizadas = {str(valor) for valor in descartadas}
+
+    # ========================================================
+    # AGREGAR SOLO SI TODAVÍA NO ESTÁ DESCARTADA
+    # ========================================================
+
+    if batch_id_normalizado not in descartadas_normalizadas:
+
+        descartadas.append(
+            batch_id_normalizado,
+        )
+
+        planificacion.continuidad_semanal_descartada = descartadas
+
+        planificacion.actualizado_por = request.user
+
+        planificacion.save(
+            update_fields=[
+                "continuidad_semanal_descartada",
+                "actualizado_por",
+                "actualizado_en",
+            ]
+        )
+
+    # ========================================================
+    # MENSAJE
+    # ========================================================
+
+    messages.success(
+        request,
+        (
+            f"La recomendación para completar "
+            f"{batch.codigo_semana} fue descartada. "
+            "La semana y sus sitios no fueron modificados."
+        ),
+    )
+
+    # ========================================================
+    # VOLVER AL MES
+    # ========================================================
+
+    return redirect(
+        "planificacion:lista_asignacion_mensual",
+        pk=planificacion.pk,
+    )
+
 
 # ============================================================
 # MOVER SITIOS SELECCIONADOS A OTRA SEMANA

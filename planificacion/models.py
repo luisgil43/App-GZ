@@ -1089,7 +1089,14 @@ class PlanificacionMensual(models.Model):
     actualizado_en = models.DateTimeField(
         auto_now=True,
     )
-
+    continuidad_semanal_descartada = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Semanas operacionales cuya recomendación de continuidad "
+            "fue descartada manualmente para esta planificación mensual."
+        ),
+    )
     class Meta:
         ordering = [
             "-anio",

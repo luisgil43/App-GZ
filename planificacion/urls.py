@@ -15,7 +15,8 @@ from planificacion.views import (actualizar_permiso_inline,
                                  regeocodificar_cuadrilla)
 from planificacion.views.analisis_batch_semanal import (
     analizar_batch_semanal_view, aplicar_propuesta_batch_view)
-from planificacion.views.asignacion_mensual import mover_sitios_semana_masivo
+from planificacion.views.asignacion_mensual import (
+    descartar_continuidad_semanal, mover_sitios_semana_masivo)
 from planificacion.views.asignacion_operativa import (
     confirmar_asignacion_dia, confirmar_asignacion_salida,
     preview_asignacion_dia, preview_asignacion_salida)
@@ -402,5 +403,10 @@ urlpatterns = [
         "semanal/<int:batch_id>/estado-masivo/",
         planificacion_semanal.actualizar_estado_masivo_sitios_batch,
         name="actualizar_estado_masivo_sitios_batch",
+    ),
+    path(
+        "mensual/<int:pk>/continuidad/<int:batch_id>/descartar/",
+        descartar_continuidad_semanal,
+        name="descartar_continuidad_semanal",
     ),
 ]
