@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.db import transaction
+from django.utils import timezone
 
 from operaciones.models import ServicioCotizado
 from planificacion.modelos import (SalidaPlanificacionDiaria,
@@ -489,9 +490,63 @@ def construir_universo_diario(
 def obtener_fechas_operacionales_batch(
     batch,
 ):
+    """
+    Devuelve únicamente las fechas operacionales del batch
+    que todavía pueden utilizarse para NUEVA planificación.
+
+    REGLA TEMPORAL
+    ==========================================================
+
+    El motor nunca puede crear nuevas salidas en días que
+    ya quedaron en el pasado.
+
+    Ejemplo:
+
+        batch W35
+        lunes     24/08/2026
+        martes    25/08/2026
+        miércoles 26/08/2026
+        jueves    27/08/2026
+        viernes   28/08/2026
+        sábado    29/08/2026
+
+    Si hoy es miércoles 26/08/2026:
+
+        lunes      -> excluido
+        martes     -> excluido
+        miércoles  -> disponible
+        jueves     -> disponible
+        viernes    -> disponible
+        sábado     -> disponible según configuración
+                     de la cuadrilla
+
+    IMPORTANTE
+    ==========================================================
+
+    Esto solamente limita las fechas disponibles para CREAR
+    o recalcular nuevas propuestas.
+
+    No elimina ni modifica:
+
+    - salidas anteriores;
+    - sitios ya ejecutados;
+    - salidas protegidas;
+    - Operaciones;
+    - asignaciones existentes.
+
+    Para batches futuros se conserva la semana completa.
+
+    Para batches completamente pasados no se devuelve ninguna
+    fecha disponible para nuevas programaciones.
+    """
+
     inicio = batch.fecha_inicio
 
-    return [inicio + timedelta(days=indice) for indice in range(6)]
+    hoy = timezone.localdate()
+
+    fechas = [inicio + timedelta(days=indice) for indice in range(6)]
+
+    return [fecha for fecha in fechas if fecha >= hoy]
 
 
 # ============================================================
