@@ -2687,7 +2687,7 @@ def _limpiar_salidas_editables_batch(
 # ============================================================
 
 
-@transaction.atomic
+
 @transaction.atomic
 def guardar_plan_diario_batch(
     *,
@@ -3184,16 +3184,64 @@ def guardar_plan_diario_batch(
 def obtener_servicio_operacional_sitio(
     sitio_planificado,
 ):
-    id_claro = (sitio_planificado.sitio.id_claro or "").strip()
+    """
+    Obtiene exclusivamente el ServicioCotizado perteneciente
+    a esta ejecución mensual de SitioPlanificado.
 
-    if not id_claro:
+    REGLA CRÍTICA
+    ==========================================================
+
+    Un mismo SitioMovil puede ejecutarse múltiples veces:
+
+        05_750 - Octubre 2025
+        05_750 - Agosto 2026
+        05_750 - Diciembre 2026
+
+    Por lo tanto NO podemos buscar Operaciones solamente por:
+
+        id_claro
+
+    ni utilizar:
+
+        order_by("-id").first()
+
+    porque eso podría devolver una ejecución correspondiente
+    a otro mes o incluso a otro año.
+
+    La relación correcta es:
+
+        SitioPlanificado
+            ->
+        ServicioCotizado.sitio_planificado
+
+    De esta manera cada planificación mensual consulta
+    exclusivamente su propia ejecución operacional.
+
+    IMPORTANTE
+    ==========================================================
+
+    No se utiliza fallback por ID Claro.
+
+    Si esta ejecución de SitioPlanificado todavía no posee
+    ServicioCotizado vinculado, se devuelve None.
+
+    Esto evita que un servicio histórico de ese mismo sitio
+    contamine el estado de la planificación actual.
+    """
+
+    if sitio_planificado is None:
+        return None
+
+    if not sitio_planificado.pk:
         return None
 
     return (
         ServicioCotizado.objects.filter(
-            id_claro=id_claro,
+            sitio_planificado=sitio_planificado,
         )
-        .order_by("-id")
+        .order_by(
+            "-id",
+        )
         .first()
     )
 
