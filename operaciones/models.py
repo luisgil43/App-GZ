@@ -240,6 +240,19 @@ class ServicioCotizado(models.Model):
 
     du = models.CharField(max_length=20, blank=True, unique=True)
     id_claro = models.CharField(max_length=100, blank=True, null=True)
+    sitio_planificado = models.ForeignKey(
+        "planificacion.SitioPlanificado",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="servicios_operacionales",
+        db_index=True,
+        help_text=(
+            "Asignación mensual concreta a la que pertenece "
+            "este servicio operacional. Permite distinguir "
+            "ejecuciones históricas repetidas del mismo sitio."
+        ),
+    )
     region = models.CharField(max_length=100, blank=True, null=True)
     mes_produccion = models.CharField(max_length=20)
     id_new = models.CharField(max_length=100, blank=True, null=True)
