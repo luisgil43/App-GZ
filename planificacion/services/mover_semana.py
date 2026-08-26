@@ -89,15 +89,44 @@ def _obtener_servicio(
 # ============================================================
 # VALIDAR ESTADO OPERACIONAL
 # ============================================================
+# ============================================================
+# VALIDAR ESTADO OPERACIONAL
+# ============================================================
 
 
 def _validar_servicio_movible(
     servicio,
 ):
     """
-    Impide mover un servicio que ya entró al proceso de
-    revisión del supervisor o superó esa etapa.
+    VALIDACIÓN TEMPORAL DESACTIVADA.
+
+    Permite mover servicios aunque ya se encuentren en:
+
+        en_revision_supervisor
+        rechazado_supervisor
+        aprobado_supervisor
+
+    IMPORTANTE:
+
+    Esta modificación es únicamente para realizar una
+    reorganización manual de semanas.
+
+    NO modifica el estado de Operaciones.
+    NO reinicia servicios aprobados/rechazados/en revisión.
+    NO elimina evidencias de esos estados.
+
+    Cuando termine la reorganización debe restaurarse
+    inmediatamente la validación original.
     """
+
+    return
+
+
+"""
+def _validar_servicio_movible(
+    servicio,
+):
+   
 
     if servicio is None:
         return
@@ -120,7 +149,7 @@ def _validar_servicio_movible(
             f"de Operaciones: {estado_display}."
         )
     )
-
+"""
 
 # ============================================================
 # BORRAR ARCHIVOS FÍSICOS DE EVIDENCIAS
