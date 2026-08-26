@@ -281,6 +281,222 @@ class ImportacionContactosSitios(models.Model):
     def __str__(self):
         return f"Importación contactos #{self.pk or '-'} " f"- {self.estado}"
 
+# ============================================================
+# FILAS TEMPORALES DE IMPORTACIÓN DE CONTACTOS
+# ============================================================
+
+
+class FilaImportacionContacto(models.Model):
+    """
+    Fila analizada de una importación de contactos.
+
+    OBJETIVO
+    ==========================================================
+
+    Evitar mantener miles de registros del preview dentro de:
+
+        - memoria RAM;
+        - sesión;
+        - caché;
+        - contexto del template.
+
+    Cada fila analizada se persiste temporalmente en PostgreSQL.
+
+    La pantalla carga únicamente la página que el usuario
+    está visualizando.
+
+    La confirmación procesa estas filas por lotes.
+
+    IMPORTANTE
+    ==========================================================
+
+    Este modelo NO modifica SitioMovil.
+
+    Solamente conserva el resultado temporal del análisis.
+    """
+
+    ESTADOS = [
+        ("nuevo", "Nuevo"),
+        ("actualizar", "Actualizar"),
+        ("sin_cambios", "Sin cambios"),
+        ("error", "Error"),
+    ]
+
+    importacion = models.ForeignKey(
+        ImportacionContactosSitios,
+        on_delete=models.CASCADE,
+        related_name="filas_preview",
+    )
+
+    numero_fila = models.PositiveIntegerField(
+        db_index=True,
+    )
+
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADOS,
+        db_index=True,
+    )
+
+    # ========================================================
+    # VINCULACIÓN
+    # ========================================================
+
+    sitio = models.ForeignKey(
+        SitioMovil,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    contacto = models.ForeignKey(
+        ContactoSitio,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    vinculado = models.BooleanField(
+        default=False,
+        db_index=True,
+    )
+
+    vinculo_por = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+    )
+
+    # ========================================================
+    # DATOS DEL ARCHIVO
+    # ========================================================
+
+    id_origen = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+
+    region = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+    )
+
+    nombre_sitio = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    propietario = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    telefono = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    correo = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    fecha_informacion = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    responsable = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+    )
+
+    observaciones = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    accion = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    # ========================================================
+    # CAMBIOS DETECTADOS
+    # ========================================================
+
+    cambios = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    # ========================================================
+    # ERROR DE FILA
+    # ========================================================
+
+    error = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = [
+            "numero_fila",
+            "id",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "importacion",
+                    "numero_fila",
+                ],
+                name="uq_fila_importacion_contacto",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "importacion",
+                    "estado",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "importacion",
+                    "vinculado",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "importacion",
+                    "numero_fila",
+                ]
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"Importación #{self.importacion_id} "
+            f"- fila {self.numero_fila} "
+            f"- {self.id_origen or 'Sin ID'}"
+        )
+
 
 # ============================================================
 # HISTORIAL / VERSIONES DE CONTACTOS

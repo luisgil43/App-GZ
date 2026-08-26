@@ -1,13 +1,15 @@
-import uuid
 from collections import OrderedDict
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.cache import cache
+from django.core import signing
+from django.core.paginator import Paginator
+from django.db import transaction
 from django.shortcuts import redirect, render
 
 from planificacion.forms.contactos import ImportarContactosForm
-from planificacion.models import ImportacionContactosSitios
+from planificacion.models import (FilaImportacionContacto,
+                                  ImportacionContactosSitios)
 from planificacion.services.contactos_importer import (
     aplicar_importacion_contactos, generar_preview_contactos,
     leer_excel_contactos)
@@ -18,26 +20,124 @@ from usuarios.decoradores import rol_requerido
 # ============================================================
 
 
-CACHE_TIMEOUT_PREVIEW = 60 * 30
 PREVIEW_FILAS_POR_PAGINA = 100
 
+TOKEN_PREVIEW_MAX_AGE = 60 * 30
+
+TOKEN_PREVIEW_SALT = "gz-planificacion-contactos-preview"
+
+
 # ============================================================
-# CACHE
+# TOKEN FIRMADO
 # ============================================================
 
 
-def _contactos_preview_cache_key(
-    user_id,
-    token,
+def _crear_token_preview(
+    *,
+    importacion,
+    user,
+    sheet_name,
 ):
-    """
-    Clave única del preview de importación por usuario.
+    return signing.dumps(
+        {
+            "importacion_id": (importacion.pk),
+            "user_id": (user.pk),
+            "sheet_name": (sheet_name or ""),
+        },
+        salt=TOKEN_PREVIEW_SALT,
+        compress=True,
+    )
 
-    Evita que un usuario pueda confirmar accidentalmente
-    el preview generado por otro.
-    """
 
-    return f"gz:planificacion:" f"contactos_preview:" f"{user_id}:{token}"
+def _leer_token_preview(
+    *,
+    token,
+    user,
+):
+    if not token:
+
+        return None
+
+    try:
+
+        payload = signing.loads(
+            token,
+            salt=TOKEN_PREVIEW_SALT,
+            max_age=TOKEN_PREVIEW_MAX_AGE,
+        )
+
+    except (
+        signing.BadSignature,
+        signing.SignatureExpired,
+    ):
+
+        return None
+
+    if int(
+        payload.get(
+            "user_id",
+            0,
+        )
+        or 0
+    ) != int(
+        user.pk,
+    ):
+
+        return None
+
+    return payload
+
+
+# ============================================================
+# IMPORTACIÓN DESDE TOKEN
+# ============================================================
+
+
+def _obtener_importacion_preview(
+    *,
+    token,
+    user,
+):
+    payload = _leer_token_preview(
+        token=token,
+        user=user,
+    )
+
+    if not payload:
+
+        return (
+            None,
+            None,
+        )
+
+    importacion_id = payload.get(
+        "importacion_id",
+    )
+
+    if not importacion_id:
+
+        return (
+            None,
+            None,
+        )
+
+    importacion = ImportacionContactosSitios.objects.filter(
+        pk=importacion_id,
+        creado_por=user,
+        estado="preview",
+    ).first()
+
+    if not importacion:
+
+        return (
+            None,
+            None,
+        )
+
+    return (
+        importacion,
+        payload,
+    )
 
 
 # ============================================================
@@ -46,10 +146,6 @@ def _contactos_preview_cache_key(
 
 
 def _ultima_importacion_contactos():
-    """
-    Retorna la última importación que fue efectivamente aplicada.
-    """
-
     return (
         ImportacionContactosSitios.objects.filter(
             estado="aplicada",
@@ -66,214 +162,182 @@ def _ultima_importacion_contactos():
 
 
 # ============================================================
-# RESUMEN DE IDS NO VINCULADOS
+# CONVERTIR FILA BD -> FILA VISUAL
 # ============================================================
 
 
-def _obtener_ids_no_vinculados(preview):
-    """
-    Analiza TODO el preview y devuelve los IDs que no encontraron
-    coincidencia en SitioMovil.
+def _fila_preview_visual(
+    fila,
+):
+    return {
+        "fila": (fila.numero_fila),
+        "estado": (fila.estado),
+        "contacto_id": (fila.contacto_id),
+        "sitio_id": (fila.sitio_id),
+        "vinculado": (fila.vinculado),
+        "vinculo_por": (fila.vinculo_por),
+        "region": (fila.region),
+        "id_origen": (fila.id_origen),
+        "nombre_sitio": (fila.nombre_sitio),
+        "propietario": (fila.propietario),
+        "telefono": (fila.telefono),
+        "correo": (fila.correo),
+        "fecha_informacion": (fila.fecha_informacion),
+        "responsable": (fila.responsable),
+        "observaciones": (fila.observaciones),
+        "accion": (fila.accion),
+        "cambios": (fila.cambios or []),
+    }
 
-    IMPORTANTE:
-    Un ID puede aparecer varias veces en la planilla porque un sitio
-    puede tener varios contactos.
 
-    Ejemplo:
+# ============================================================
+# IDS SIN VINCULAR
+# ============================================================
 
-        08_899 -> fila 100
-        08_899 -> fila 101
-        08_899 -> fila 102
-        07_024 -> fila 150
 
-    Resultado:
-
-        filas_no_vinculadas = 4
-        ids_unicos_no_vinculados = 2
-
-        [
-            {
-                "id_origen": "08_899",
-                "cantidad": 3,
-                "filas": [100, 101, 102],
-            },
-            {
-                "id_origen": "07_024",
-                "cantidad": 1,
-                "filas": [150],
-            },
-        ]
-
-    No modifica SitioMovil.
-    Solo trabaja con el preview ya generado.
-    """
-
+def _obtener_ids_no_vinculados(
+    importacion,
+):
     agrupados = OrderedDict()
 
-    for item in preview:
-        if item.get("vinculado"):
-            continue
+    queryset = (
+        FilaImportacionContacto.objects.filter(
+            importacion=importacion,
+            vinculado=False,
+        )
+        .exclude(
+            estado="error",
+        )
+        .order_by(
+            "id_origen",
+            "numero_fila",
+        )
+        .values_list(
+            "id_origen",
+            "numero_fila",
+        )
+    )
 
-        id_origen = str(item.get("id_origen") or "").strip()
+    for (
+        id_origen,
+        numero_fila,
+    ) in queryset.iterator(
+        chunk_size=500,
+    ):
+
+        id_origen = str(id_origen or "").strip()
 
         if not id_origen:
+
             id_origen = "ID vacío"
 
-        fila = item.get("fila")
-
         if id_origen not in agrupados:
+
             agrupados[id_origen] = {
-                "id_origen": id_origen,
+                "id_origen": (id_origen),
                 "cantidad": 0,
                 "filas": [],
             }
 
         agrupados[id_origen]["cantidad"] += 1
 
-        if fila is not None:
-            agrupados[id_origen]["filas"].append(fila)
+        agrupados[id_origen]["filas"].append(
+            numero_fila,
+        )
 
     ids = list(agrupados.values())
 
-    # Ordenamos alfabéticamente por ID para facilitar revisión.
-    ids.sort(key=lambda item: item["id_origen"].lower())
-
-    filas_no_vinculadas = sum(item["cantidad"] for item in ids)
-
-    ids_unicos_no_vinculados = len(ids)
-
     return {
         "ids": ids,
-        "filas_no_vinculadas": (filas_no_vinculadas),
-        "ids_unicos_no_vinculados": (ids_unicos_no_vinculados),
+        "filas_no_vinculadas": sum(item["cantidad"] for item in ids),
+        "ids_unicos_no_vinculados": len(
+            ids,
+        ),
     }
 
 
 # ============================================================
-# CONTEXTO COMÚN DE PREVIEW
+# RESUMEN
+# ============================================================
+
+
+def _resumen_importacion(
+    importacion,
+):
+    return {
+        "total_filas": (importacion.total_filas),
+        "nuevos": (importacion.nuevos),
+        "actualizados": (importacion.actualizados),
+        "sin_cambios": (importacion.sin_cambios),
+        "no_vinculados": (importacion.no_vinculados),
+        "errores": (importacion.errores),
+    }
+
+
+# ============================================================
+# CONTEXTO DEL PREVIEW
 # ============================================================
 
 
 def _construir_contexto_preview(
     *,
     form,
-    preview,
-    resumen,
-    errores,
-    sheet_name,
+    importacion,
     token,
-    nombre_archivo,
-    pagina=1,
+    sheet_name,
+    pagina,
 ):
-    """
-    Construye el contexto visual del preview.
-
-    IMPORTANTE
-    ==========================================================
-
-    El archivo completo se analiza y permanece disponible
-    para confirmar la importación.
-
-    Sin embargo, para evitar consumir memoria innecesaria
-    renderizando miles de filas HTML simultáneamente,
-    solamente mostramos una página del preview.
-
-    Esto NO limita:
-
-        - el análisis;
-        - los totales;
-        - la detección de cambios;
-        - los IDs sin vincular;
-        - la confirmación final.
-
-    Solamente limita las filas visibles simultáneamente.
-    """
-
-    preview = list(preview or [])
-
-    total_registros = len(
-        preview,
+    filas_validas_queryset = (
+        FilaImportacionContacto.objects.filter(
+            importacion=importacion,
+        )
+        .exclude(
+            estado="error",
+        )
+        .order_by(
+            "numero_fila",
+            "id",
+        )
     )
 
-    # ========================================================
-    # IDS SIN VINCULAR
-    # ========================================================
-
-    no_vinculados = _obtener_ids_no_vinculados(
-        preview,
+    paginator = Paginator(
+        filas_validas_queryset,
+        PREVIEW_FILAS_POR_PAGINA,
     )
-
-    # ========================================================
-    # PAGINACIÓN
-    # ========================================================
 
     try:
-        pagina = int(
+
+        pagina_obj = paginator.page(
             pagina,
         )
 
-    except (
-        TypeError,
-        ValueError,
-    ):
-        pagina = 1
+    except Exception:
 
-    pagina = max(
-        pagina,
+        pagina_obj = paginator.page(
+            1,
+        )
+
+    preview = [
+        _fila_preview_visual(
+            fila,
+        )
+        for fila in pagina_obj.object_list
+    ]
+
+    pagina_actual = pagina_obj.number
+
+    total_paginas = max(
+        paginator.num_pages,
         1,
     )
 
-    if total_registros > 0:
-
-        total_paginas = (
-            total_registros + PREVIEW_FILAS_POR_PAGINA - 1
-        ) // PREVIEW_FILAS_POR_PAGINA
-
-    else:
-
-        total_paginas = 1
-
-    pagina = min(
-        pagina,
-        total_paginas,
-    )
-
-    indice_inicio = (pagina - 1) * PREVIEW_FILAS_POR_PAGINA
-
-    indice_fin = min(
-        indice_inicio + PREVIEW_FILAS_POR_PAGINA,
-        total_registros,
-    )
-
-    preview_pagina = preview[indice_inicio:indice_fin]
-
-    # ========================================================
-    # NAVEGACIÓN
-    # ========================================================
-
-    pagina_anterior = pagina - 1 if pagina > 1 else None
-
-    pagina_siguiente = pagina + 1 if pagina < total_paginas else None
-
-    # Ventana de páginas.
-    #
-    # Ejemplo:
-    #
-    #   1 2 3 4 5
-    #
-    # o:
-    #
-    #   24 25 26 27 28
-    #
-    radio_paginas = 2
-
     pagina_desde = max(
-        pagina - radio_paginas,
+        pagina_actual - 2,
         1,
     )
 
     pagina_hasta = min(
-        pagina + radio_paginas,
+        pagina_actual + 2,
         total_paginas,
     )
 
@@ -284,65 +348,67 @@ def _construir_contexto_preview(
         )
     )
 
-    # ========================================================
-    # FILAS VISIBLES
-    # ========================================================
+    if paginator.count:
 
-    mostrando_desde = indice_inicio + 1 if total_registros else 0
+        mostrando_desde = pagina_obj.start_index()
 
-    mostrando_hasta = indice_fin
+        mostrando_hasta = pagina_obj.end_index()
 
-    # ========================================================
-    # CONTEXTO
-    # ========================================================
+    else:
+
+        mostrando_desde = 0
+
+        mostrando_hasta = 0
+
+    no_vinculados = _obtener_ids_no_vinculados(
+        importacion,
+    )
+
+    errores_queryset = FilaImportacionContacto.objects.filter(
+        importacion=importacion,
+        estado="error",
+    ).order_by("numero_fila",)[:100]
+
+    errores = [
+        {
+            "fila": (fila.numero_fila),
+            "error": (fila.error),
+        }
+        for fila in errores_queryset
+    ]
 
     return {
         "form": form,
-        # ----------------------------------------------------
-        # PREVIEW VISUAL PAGINADO
-        # ----------------------------------------------------
-        "preview": preview_pagina,
-        "preview_total": total_registros,
+        "preview": preview,
+        "preview_total": (paginator.count),
         "preview_mostrados": len(
-            preview_pagina,
+            preview,
         ),
-        "preview_limitado": (total_registros > PREVIEW_FILAS_POR_PAGINA),
-        # ----------------------------------------------------
-        # PAGINACIÓN
-        # ----------------------------------------------------
-        "pagina_actual": pagina,
-        "total_paginas": total_paginas,
-        "pagina_anterior": pagina_anterior,
-        "pagina_siguiente": pagina_siguiente,
-        "paginas_visibles": paginas_visibles,
-        "mostrando_desde": mostrando_desde,
-        "mostrando_hasta": mostrando_hasta,
-        # ----------------------------------------------------
-        # RESUMEN
-        # ----------------------------------------------------
-        "resumen": resumen,
-        # ----------------------------------------------------
-        # IDS QUE NO VINCULARON
-        # ----------------------------------------------------
+        "preview_limitado": (paginator.count > PREVIEW_FILAS_POR_PAGINA),
+        "pagina_actual": (pagina_actual),
+        "total_paginas": (total_paginas),
+        "pagina_anterior": (
+            pagina_obj.previous_page_number() if pagina_obj.has_previous() else None
+        ),
+        "pagina_siguiente": (
+            pagina_obj.next_page_number() if pagina_obj.has_next() else None
+        ),
+        "paginas_visibles": (paginas_visibles),
+        "mostrando_desde": (mostrando_desde),
+        "mostrando_hasta": (mostrando_hasta),
+        "resumen": (
+            _resumen_importacion(
+                importacion,
+            )
+        ),
         "ids_no_vinculados": (no_vinculados["ids"]),
         "filas_no_vinculadas": (no_vinculados["filas_no_vinculadas"]),
         "ids_unicos_no_vinculados": (no_vinculados["ids_unicos_no_vinculados"]),
-        # ----------------------------------------------------
-        # ERRORES
-        # ----------------------------------------------------
-        "errores": errores[:100],
-        "errores_total": len(
-            errores,
-        ),
-        # ----------------------------------------------------
-        # ARCHIVO
-        # ----------------------------------------------------
-        "sheet_name": sheet_name,
+        "errores": errores,
+        "errores_total": (importacion.errores),
+        "sheet_name": (sheet_name or ""),
         "token": token,
-        "nombre_archivo": nombre_archivo,
-        # ----------------------------------------------------
-        # AUDITORÍA
-        # ----------------------------------------------------
+        "nombre_archivo": (importacion.nombre_archivo),
         "ultima_importacion": (_ultima_importacion_contactos()),
     }
 
@@ -356,34 +422,11 @@ def _construir_contexto_preview(
 @rol_requerido(
     "admin",
     "pm",
-    "supervisor")
-def importar_contactos(request):
-    """
-    Flujo completo:
-
-    1. Subir Excel.
-    2. Analizar todas las filas.
-    3. Buscar coincidencias contra SitioMovil.
-    4. Guardar el preview completo temporalmente.
-    5. Mostrar el preview paginado.
-    6. Informar IDs no vinculados.
-    7. Confirmar o cancelar.
-    8. Aplicar todos los registros del preview.
-
-    IMPORTANTE
-    ==========================================================
-
-    SitioMovil se utiliza únicamente como tabla maestra
-    de consulta/vinculación.
-
-    Esta vista NO modifica SitioMovil.
-
-    La paginación afecta solamente la visualización.
-
-    Aunque solamente mostremos 100 registros simultáneamente,
-    la confirmación procesa TODO el preview.
-    """
-
+    "supervisor",
+)
+def importar_contactos(
+    request,
+):
     accion = (
         request.POST.get(
             "accion",
@@ -402,60 +445,37 @@ def importar_contactos(request):
     )
 
     # ========================================================
-    # CONFIRMAR IMPORTACIÓN
+    # CONFIRMAR
     # ========================================================
 
     if request.method == "POST" and accion == "confirmar":
 
-        if not token:
+        (
+            importacion,
+            payload,
+        ) = _obtener_importacion_preview(
+            token=token,
+            user=request.user,
+        )
+
+        if not importacion:
 
             messages.error(
                 request,
-                ("No se encontró el preview " "de importación."),
+                (
+                    "El preview expiró, "
+                    "no existe o ya fue procesado. "
+                    "Vuelve a subir el archivo."
+                ),
             )
 
             return redirect("planificacion:importar_contactos")
-
-        cache_key = _contactos_preview_cache_key(
-            request.user.id,
-            token,
-        )
-
-        payload = cache.get(
-            cache_key,
-        )
-
-        if not payload:
-
-            messages.error(
-                request,
-                ("El preview expiró o ya no existe. " "Vuelve a subir el archivo."),
-            )
-
-            return redirect("planificacion:importar_contactos")
-
-        preview_completo = (
-            payload.get(
-                "preview",
-            )
-            or []
-        )
 
         try:
 
             resultado = aplicar_importacion_contactos(
-                preview=preview_completo,
+                importacion=importacion,
                 user=request.user,
-                nombre_archivo=(
-                    payload.get(
-                        "nombre_archivo",
-                        "",
-                    )
-                ),
-            )
-
-            cache.delete(
-                cache_key,
             )
 
             messages.success(
@@ -482,19 +502,34 @@ def importar_contactos(request):
             return redirect("planificacion:importar_contactos")
 
     # ========================================================
-    # CANCELAR PREVIEW
+    # CANCELAR
     # ========================================================
 
     if request.method == "POST" and accion == "cancelar":
 
-        if token:
+        (
+            importacion,
+            payload,
+        ) = _obtener_importacion_preview(
+            token=token,
+            user=request.user,
+        )
 
-            cache.delete(
-                _contactos_preview_cache_key(
-                    request.user.id,
-                    token,
+        if importacion:
+
+            with transaction.atomic():
+
+                importacion.estado = "cancelada"
+
+                importacion.save(
+                    update_fields=[
+                        "estado",
+                    ]
                 )
-            )
+
+                FilaImportacionContacto.objects.filter(
+                    importacion=importacion,
+                ).delete()
 
         messages.info(
             request,
@@ -504,21 +539,20 @@ def importar_contactos(request):
         return redirect("planificacion:listar_contactos")
 
     # ========================================================
-    # NAVEGAR ENTRE PÁGINAS DEL PREVIEW
+    # PAGINACIÓN DE PREVIEW EXISTENTE
     # ========================================================
 
     if request.method == "GET" and token:
 
-        cache_key = _contactos_preview_cache_key(
-            request.user.id,
-            token,
+        (
+            importacion,
+            payload,
+        ) = _obtener_importacion_preview(
+            token=token,
+            user=request.user,
         )
 
-        payload = cache.get(
-            cache_key,
-        )
-
-        if not payload:
+        if not importacion:
 
             messages.error(
                 request,
@@ -534,6 +568,7 @@ def importar_contactos(request):
                     "pagina",
                     1,
                 )
+                or 1
             )
 
         except (
@@ -550,34 +585,11 @@ def importar_contactos(request):
             ("planificacion/" "contactos/" "importar.html"),
             _construir_contexto_preview(
                 form=form,
-                preview=(
-                    payload.get(
-                        "preview",
-                    )
-                    or []
-                ),
-                resumen=(
-                    payload.get(
-                        "resumen",
-                    )
-                    or {}
-                ),
-                errores=(
-                    payload.get(
-                        "errores",
-                    )
-                    or []
-                ),
+                importacion=importacion,
+                token=token,
                 sheet_name=(
                     payload.get(
                         "sheet_name",
-                        "",
-                    )
-                ),
-                token=token,
-                nombre_archivo=(
-                    payload.get(
-                        "nombre_archivo",
                         "",
                     )
                 ),
@@ -586,7 +598,7 @@ def importar_contactos(request):
         )
 
     # ========================================================
-    # SUBIR ARCHIVO / GENERAR PREVIEW
+    # SUBIR ARCHIVO
     # ========================================================
 
     if request.method == "POST":
@@ -600,90 +612,86 @@ def importar_contactos(request):
 
             archivo = form.cleaned_data["archivo"]
 
+            importacion = None
+
             try:
+
+                # =============================================
+                # CREAR CABECERA DE PREVIEW
+                # =============================================
+
+                importacion = ImportacionContactosSitios.objects.create(
+                    nombre_archivo=(archivo.name),
+                    estado="preview",
+                    creado_por=(request.user),
+                )
 
                 # =============================================
                 # LEER EXCEL
                 # =============================================
 
-                df, sheet_name = leer_excel_contactos(
+                (
+                    df,
+                    sheet_name,
+                ) = leer_excel_contactos(
                     archivo,
                 )
 
                 # =============================================
-                # ANALIZAR TODO EL ARCHIVO
+                # GENERAR PREVIEW DIRECTAMENTE EN POSTGRESQL
                 # =============================================
 
-                (
-                    preview,
-                    resumen,
-                    errores,
-                ) = generar_preview_contactos(
+                generar_preview_contactos(
                     df,
+                    importacion,
                 )
 
-                # El DataFrame ya no es necesario.
-                #
-                # Permitimos que Python pueda liberar esa
-                # memoria antes de renderizar el template.
+                # DataFrame ya no participa en ningún render.
                 del df
 
                 # =============================================
-                # GENERAR TOKEN
+                # TOKEN SEGURO
                 # =============================================
 
-                token = uuid.uuid4().hex
-
-                cache_key = _contactos_preview_cache_key(
-                    request.user.id,
-                    token,
+                token = _crear_token_preview(
+                    importacion=importacion,
+                    user=request.user,
+                    sheet_name=sheet_name,
                 )
 
                 # =============================================
-                # GUARDAR PREVIEW COMPLETO
+                # REDIRECT
                 # =============================================
                 #
-                # Guardamos todos los registros porque
-                # Confirmar importación debe procesarlos todos.
+                # MUY IMPORTANTE:
                 #
-                # El template, en cambio, recibirá únicamente
-                # una página.
+                # NO renderizamos directamente después del
+                # análisis.
+                #
+                # Terminamos la request pesada y hacemos otra
+                # request GET que solamente traerá 100 filas.
                 # =============================================
 
-                payload = {
-                    "preview": preview,
-                    "resumen": resumen,
-                    "errores": errores,
-                    "sheet_name": sheet_name,
-                    "nombre_archivo": (archivo.name),
-                }
-
-                cache.set(
-                    cache_key,
-                    payload,
-                    timeout=(CACHE_TIMEOUT_PREVIEW),
-                )
-
-                # =============================================
-                # RENDER PRIMERA PÁGINA
-                # =============================================
-
-                return render(
-                    request,
-                    ("planificacion/" "contactos/" "importar.html"),
-                    _construir_contexto_preview(
-                        form=form,
-                        preview=preview,
-                        resumen=resumen,
-                        errores=errores,
-                        sheet_name=sheet_name,
-                        token=token,
-                        nombre_archivo=(archivo.name),
-                        pagina=1,
-                    ),
+                return redirect(
+                    (f"/planificacion/contactos/importar/" f"?token={token}&pagina=1")
                 )
 
             except Exception as exc:
+
+                if importacion:
+
+                    ImportacionContactosSitios.objects.filter(
+                        pk=importacion.pk,
+                    ).update(
+                        estado="error",
+                        observaciones=str(
+                            exc,
+                        ),
+                    )
+
+                    FilaImportacionContacto.objects.filter(
+                        importacion_id=(importacion.pk),
+                    ).delete()
 
                 messages.error(
                     request,
