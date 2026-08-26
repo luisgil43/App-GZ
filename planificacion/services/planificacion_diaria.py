@@ -489,64 +489,97 @@ def construir_universo_diario(
 
 def obtener_fechas_operacionales_batch(
     batch,
+    *,
+    incluir_hoy=False,
 ):
     """
-    Devuelve únicamente las fechas operacionales del batch
-    que todavía pueden utilizarse para NUEVA planificación.
+    Devuelve los días operacionales utilizables por el motor.
 
-    REGLA TEMPORAL
+    REGLA NORMAL
     ==========================================================
 
-    El motor nunca puede crear nuevas salidas en días que
-    ya quedaron en el pasado.
+    Un batch dispone originalmente de:
 
-    Ejemplo:
+        lunes
+        martes
+        miércoles
+        jueves
+        viernes
+        sábado
 
-        batch W35
-        lunes     24/08/2026
-        martes    25/08/2026
-        miércoles 26/08/2026
-        jueves    27/08/2026
-        viernes   28/08/2026
-        sábado    29/08/2026
-
-    Si hoy es miércoles 26/08/2026:
-
-        lunes      -> excluido
-        martes     -> excluido
-        miércoles  -> disponible
-        jueves     -> disponible
-        viernes    -> disponible
-        sábado     -> disponible según configuración
-                     de la cuadrilla
-
-    IMPORTANTE
+    REGLA DURANTE LA SEMANA ACTUAL
     ==========================================================
 
-    Esto solamente limita las fechas disponibles para CREAR
-    o recalcular nuevas propuestas.
+    Si hoy pertenece al rango operacional del batch:
 
-    No elimina ni modifica:
+        días anteriores a hoy
+            -> nunca disponibles
 
-    - salidas anteriores;
-    - sitios ya ejecutados;
-    - salidas protegidas;
-    - Operaciones;
-    - asignaciones existentes.
+        hoy
+            -> disponible solamente cuando incluir_hoy=True
 
-    Para batches futuros se conserva la semana completa.
+        días posteriores
+            -> disponibles normalmente
 
-    Para batches completamente pasados no se devuelve ninguna
-    fecha disponible para nuevas programaciones.
+    SEMANAS FUTURAS
+    ==========================================================
+
+    Se devuelven completas.
+
+    SEMANAS HISTÓRICAS
+    ==========================================================
+
+    Se conserva el comportamiento existente para no modificar
+    retrospectivamente herramientas administrativas que puedan
+    trabajar sobre semanas anteriores.
     """
 
     inicio = batch.fecha_inicio
 
+    fechas = [
+        inicio
+        + timedelta(
+            days=indice,
+        )
+        for indice in range(6)
+    ]
+
     hoy = timezone.localdate()
 
-    fechas = [inicio + timedelta(days=indice) for indice in range(6)]
+    fecha_fin = inicio + timedelta(
+        days=5,
+    )
 
-    return [fecha for fecha in fechas if fecha >= hoy]
+    # ========================================================
+    # SOLO APLICAR RESTRICCIÓN EN LA SEMANA VIGENTE
+    # ========================================================
+
+    if not (inicio <= hoy <= fecha_fin):
+        return fechas
+
+    resultado = []
+
+    for fecha in fechas:
+
+        # ====================================================
+        # PASADO
+        # ====================================================
+
+        if fecha < hoy:
+            continue
+
+        # ====================================================
+        # HOY
+        # ====================================================
+
+        if fecha == hoy and not incluir_hoy:
+            continue
+
+        resultado.append(
+            fecha,
+        )
+
+    return resultado
 
 
 # ============================================================
@@ -558,8 +591,12 @@ def _fechas_validas_disponibilidad(
     *,
     batch,
     disponibilidad,
+    incluir_hoy=False,
 ):
-    fechas = obtener_fechas_operacionales_batch(batch)
+    fechas = obtener_fechas_operacionales_batch(
+        batch,
+        incluir_hoy=incluir_hoy,
+    )
 
     resultado = []
 
@@ -571,7 +608,9 @@ def _fechas_validas_disponibilidad(
         if fecha.weekday() == 5 and not disponibilidad.trabaja_sabado:
             continue
 
-        resultado.append(fecha)
+        resultado.append(
+            fecha,
+        )
 
     return resultado
 
@@ -606,10 +645,12 @@ def _obtener_siguiente_fecha_libre(
     batch,
     disponibilidad,
     fechas_ocupadas,
+    incluir_hoy=False,
 ):
     fechas_validas = _fechas_validas_disponibilidad(
         batch=batch,
         disponibilidad=disponibilidad,
+        incluir_hoy=incluir_hoy,
     )
 
     ocupadas = fechas_ocupadas.get(
@@ -638,23 +679,22 @@ def _obtener_fecha_prioridad(
     disponibilidad,
     prioridad,
     fechas_ocupadas,
+    incluir_hoy=False,
 ):
     """
     Selecciona fecha para una prioridad.
 
-    Si la fecha es obligatoria:
-        solamente puede utilizarse esa fecha.
+    Respeta además la ventana temporal real del recálculo:
 
-    Si la fecha es preferida:
-        se intenta primero.
-
-    Luego se ordenan las demás fechas utilizando el score
-    definido por el servicio de prioridades.
+    - pasado de la semana actual: nunca;
+    - hoy: solamente si incluir_hoy=True;
+    - futuro: normalmente.
     """
 
     fechas_validas = _fechas_validas_disponibilidad(
         batch=batch,
         disponibilidad=disponibilidad,
+        incluir_hoy=incluir_hoy,
     )
 
     ocupadas = fechas_ocupadas.get(
@@ -675,7 +715,9 @@ def _obtener_fecha_prioridad(
         ):
             continue
 
-        candidatas.append(fecha)
+        candidatas.append(
+            fecha,
+        )
 
     if not candidatas:
         return None
@@ -802,31 +844,23 @@ def _seleccionar_mejor_opcion_prioridad(
     batch,
     propuesta,
     fechas_ocupadas,
+    incluir_hoy=False,
 ):
     """
     Selecciona fecha, cuadrilla y cálculo para una prioridad.
 
-    CASO NORMAL
-    ==========================================================
+    Una salida protegida existente conserva exactamente su
+    fecha y cuadrilla.
 
-    El motor puede elegir fecha/cuadrilla compatible.
-
-    CASO SALIDA PROTEGIDA EXISTENTE
-    ==========================================================
-
-    NO elegimos otra fecha ni otra cuadrilla.
-
-    Utilizamos exactamente:
-
-        salida_existente.fecha
-        salida_existente.disponibilidad_cuadrilla
-
-    y solamente recalculamos la ruta del grupo completo.
+    Una prioridad que todavía debe programarse solamente puede
+    utilizar fechas permitidas por la ventana temporal real.
     """
 
     prioridad = propuesta["prioridad"]
 
-    grupo = _construir_grupo_motor_prioridad(propuesta)
+    grupo = _construir_grupo_motor_prioridad(
+        propuesta,
+    )
 
     if not grupo["valido"]:
 
@@ -849,7 +883,9 @@ def _seleccionar_mejor_opcion_prioridad(
         False,
     ):
 
-        salida_existente = propuesta.get("salida_existente")
+        salida_existente = propuesta.get(
+            "salida_existente",
+        )
 
         if salida_existente is None:
 
@@ -867,11 +903,13 @@ def _seleccionar_mejor_opcion_prioridad(
 
         fecha = salida_existente.fecha
 
-        configuracion = construir_configuracion_cuadrilla(disponibilidad)
+        configuracion = construir_configuracion_cuadrilla(
+            disponibilidad,
+        )
 
         calculo = encontrar_mejor_salida(
             sitios=grupo["motores"],
-            configuracion_cuadrilla=(configuracion),
+            configuracion_cuadrilla=configuracion,
         )
 
         if not calculo:
@@ -889,12 +927,12 @@ def _seleccionar_mejor_opcion_prioridad(
             "opcion": {
                 "prioridad": prioridad,
                 "propuesta": propuesta,
-                "disponibilidad": (disponibilidad),
+                "disponibilidad": disponibilidad,
                 "fecha": fecha,
                 "calculo": calculo,
                 "items": grupo["items"],
                 "motores": grupo["motores"],
-                "salida_existente": (salida_existente),
+                "salida_existente": salida_existente,
                 "completar_salida_existente": True,
             },
             "motivo": "",
@@ -920,19 +958,22 @@ def _seleccionar_mejor_opcion_prioridad(
 
         fecha = _obtener_fecha_prioridad(
             batch=batch,
-            disponibilidad=(disponibilidad),
+            disponibilidad=disponibilidad,
             prioridad=prioridad,
-            fechas_ocupadas=(fechas_ocupadas),
+            fechas_ocupadas=fechas_ocupadas,
+            incluir_hoy=incluir_hoy,
         )
 
         if fecha is None:
             continue
 
-        configuracion = construir_configuracion_cuadrilla(disponibilidad)
+        configuracion = construir_configuracion_cuadrilla(
+            disponibilidad,
+        )
 
         calculo = encontrar_mejor_salida(
             sitios=grupo["motores"],
-            configuracion_cuadrilla=(configuracion),
+            configuracion_cuadrilla=configuracion,
         )
 
         if not calculo:
@@ -977,7 +1018,7 @@ def _seleccionar_mejor_opcion_prioridad(
             mejor = {
                 "prioridad": prioridad,
                 "propuesta": propuesta,
-                "disponibilidad": (disponibilidad),
+                "disponibilidad": disponibilidad,
                 "fecha": fecha,
                 "calculo": calculo,
                 "items": grupo["items"],
@@ -1201,28 +1242,8 @@ def _generar_salidas_prioritarias(
     batch,
     resolucion_prioridades,
     fechas_ocupadas,
+    incluir_hoy=False,
 ):
-    """
-    Procesa prioridades antes del motor regular.
-
-    Puede:
-
-        crear una nueva salida prioritaria
-
-    o:
-
-        completar una salida prioritaria protegida existente.
-
-    Una salida protegida existente conserva:
-
-        fecha
-        cuadrilla
-        bloqueo
-        origen
-
-    y solamente recibe acompañantes cuando existan.
-    """
-
     salidas = []
 
     ids_planificados = set()
@@ -1237,10 +1258,6 @@ def _generar_salidas_prioritarias(
     ):
 
         prioridad = propuesta["prioridad"]
-
-        # ====================================================
-        # SIN CUADRILLA
-        # ====================================================
 
         if propuesta.get(
             "sin_cuadrilla_compatible",
@@ -1258,16 +1275,14 @@ def _generar_salidas_prioritarias(
 
             continue
 
-        # ====================================================
-        # REQUIERE CONFIRMACIÓN
-        # ====================================================
-
         if propuesta.get(
             "requiere_confirmacion",
             False,
         ):
 
-            prioridades_pendientes_confirmacion.append(propuesta)
+            prioridades_pendientes_confirmacion.append(
+                propuesta,
+            )
 
             advertencias.append(
                 (
@@ -1280,44 +1295,36 @@ def _generar_salidas_prioritarias(
 
             continue
 
-        # ====================================================
-        # SELECCIONAR
-        # ====================================================
-
         seleccion = _seleccionar_mejor_opcion_prioridad(
             batch=batch,
             propuesta=propuesta,
-            fechas_ocupadas=(fechas_ocupadas),
+            fechas_ocupadas=fechas_ocupadas,
+            incluir_hoy=incluir_hoy,
         )
 
         opcion = seleccion["opcion"]
 
         if opcion is None:
 
-            if seleccion.get("motivo"):
-
-                advertencias.append(seleccion["motivo"])
+            if seleccion.get(
+                "motivo",
+            ):
+                advertencias.append(
+                    seleccion["motivo"],
+                )
 
             continue
 
         calculo = opcion["calculo"]
-
-        # ====================================================
-        # RUTA NO VIABLE
-        # ========================================================
-        #
-        # Para grupos de tres salidas.py ya considera la
-        # jornada extendida como viable.
-        #
-        # Seguimos respetando la regla oficial de viabilidad.
-        # ========================================================
 
         if not calculo.get(
             "viable",
             False,
         ):
 
-            prioridades_pendientes_confirmacion.append(propuesta)
+            prioridades_pendientes_confirmacion.append(
+                propuesta,
+            )
 
             advertencias.append(
                 (
@@ -1330,46 +1337,34 @@ def _generar_salidas_prioritarias(
 
             continue
 
-        # ====================================================
-        # RESULTADO
-        # ====================================================
-
-        salida_resultado = _construir_salida_resultado_prioridad(opcion)
+        salida_resultado = _construir_salida_resultado_prioridad(
+            opcion,
+        )
 
         if not salida_resultado["sitios"]:
             continue
 
-        salidas.append(salida_resultado)
-
-        # ====================================================
-        # MARCAR SOLAMENTE SITIOS NUEVOS
-        # ====================================================
+        salidas.append(
+            salida_resultado,
+        )
 
         for sitio_batch_id in salida_resultado.get(
             "sitios_nuevos_ids",
             set(),
         ):
 
-            ids_planificados.add(sitio_batch_id)
+            ids_planificados.add(
+                sitio_batch_id,
+            )
 
-        # ====================================================
-        # OCUPACIÓN DE CALENDARIO
-        # ====================================================
-        #
-        # Si estamos completando una salida existente, esa
-        # fecha ya estaba ocupada y no necesitamos modificar
-        # nada conceptualmente.
-        #
-        # set.add() es idempotente, así que podemos mantener
-        # una única ruta segura.
-        # ====================================================
-
-        fechas_ocupadas[opcion["disponibilidad"].pk].add(opcion["fecha"])
+        fechas_ocupadas[opcion["disponibilidad"].pk].add(
+            opcion["fecha"],
+        )
 
     return {
         "salidas": salidas,
-        "ids_planificados": (ids_planificados),
-        "advertencias": (advertencias),
+        "ids_planificados": ids_planificados,
+        "advertencias": advertencias,
         "prioridades_pendientes_confirmacion": (prioridades_pendientes_confirmacion),
     }
 
@@ -1529,65 +1524,17 @@ def _seleccionar_asignacion_regular_mas_temprana(
     salida_motor,
     disponibilidades,
     fechas_ocupadas,
+    incluir_hoy=False,
 ):
     """
     Recibe una salida/grupo ya construido por el orquestador
-    y decide DÓNDE colocarla realmente en el calendario.
+    y decide dónde colocarla realmente en el calendario.
 
-    REGLA OPERACIONAL
-    ==========================================================
+    La fecha más temprana disponible sigue siendo la regla
+    principal, pero durante la semana vigente:
 
-    El orquestador decide:
-
-        qué sitios conviene agrupar.
-
-    Esta función decide:
-
-        qué cuadrilla compatible debe ejecutarlos;
-        y cuál es el día más temprano disponible.
-
-    MUY IMPORTANTE
-    ==========================================================
-
-    NO conservamos obligatoriamente la cuadrilla que venía
-    elegida por el orquestador.
-
-    Ejemplo:
-
-        grupo:
-            sitio A
-            sitio B
-            sitio C
-
-        originalmente evaluado:
-            C3
-
-        disponibilidad real:
-            C1 -> jueves libre
-            C2 -> incompatible
-            C3 -> viernes libre
-
-    Resultado:
-
-        C1 -> jueves
-
-    NO:
-
-        C3 -> viernes
-
-    porque operacionalmente debemos consumir primero los días
-    anteriores disponibles.
-
-    Para una misma fecha:
-
-    1. favorecemos una cuadrilla especializada cuando aplica;
-    2. preferimos jornada normal;
-    3. después menor tiempo total;
-    4. después menor viaje;
-    5. finalmente orden maestro de cuadrilla.
-
-    Una salida de 3 sitios puede continuar siendo válida con
-    jornada extendida según las reglas de salidas.py.
+    - nunca se utilizan días anteriores;
+    - hoy solamente puede utilizarse cuando incluir_hoy=True.
     """
 
     motores_originales = list(
@@ -1602,12 +1549,11 @@ def _seleccionar_asignacion_regular_mas_temprana(
 
         return {
             "opcion": None,
-            "motivo": "La salida no contiene sitios para distribuir.",
+            "motivo": (
+                "La salida no contiene sitios "
+                "para distribuir."
+            ),
         }
-
-    # ========================================================
-    # TIPO GENERAL DEL GRUPO
-    # ========================================================
 
     todos_urbanos = all(
         bool(
@@ -1642,40 +1588,27 @@ def _seleccionar_asignacion_regular_mas_temprana(
 
     mejor_clave = None
 
-    # ========================================================
-    # PROBAR TODAS LAS CUADRILLAS
-    # ========================================================
-
     for disponibilidad in disponibilidades:
-
-        # ====================================================
-        # PRÓXIMO DÍA LIBRE DE ESTA CUADRILLA
-        # ====================================================
 
         fecha = _obtener_siguiente_fecha_libre(
             batch=batch,
             disponibilidad=disponibilidad,
             fechas_ocupadas=fechas_ocupadas,
+            incluir_hoy=incluir_hoy,
         )
 
         if fecha is None:
             continue
 
-        # ====================================================
-        # CONFIGURACIÓN REAL
-        # ====================================================
-
-        configuracion = construir_configuracion_cuadrilla(disponibilidad)
+        configuracion = construir_configuracion_cuadrilla(
+            disponibilidad,
+        )
 
         if not configuracion.get(
             "activa",
             False,
         ):
             continue
-
-        # ====================================================
-        # RECALCULAR LA MISMA AGRUPACIÓN CON ESTA CUADRILLA
-        # ====================================================
 
         calculo = encontrar_mejor_salida(
             sitios=motores_originales,
@@ -1691,21 +1624,6 @@ def _seleccionar_asignacion_regular_mas_temprana(
         ):
             continue
 
-        # ====================================================
-        # ESPECIALIZACIÓN TERRITORIAL
-        # ====================================================
-        #
-        # Para un grupo completamente urbano:
-        #
-        # C2 urbano-only es una excelente candidata porque
-        # preserva C1/C3 para trabajo rural.
-        #
-        # Esto SOLAMENTE desempata dentro del MISMO DÍA.
-        #
-        # Nunca mandaremos algo al viernes solamente porque
-        # C2 sea más especializada si C1 puede hacerlo jueves.
-        # ====================================================
-
         permite_urbano = bool(
             configuracion.get(
                 "permite_urbano",
@@ -1720,21 +1638,24 @@ def _seleccionar_asignacion_regular_mas_temprana(
             )
         )
 
-        if todos_urbanos and permite_urbano and not permite_rural:
+        if (
+            todos_urbanos
+            and permite_urbano
+            and not permite_rural
+        ):
 
             prioridad_especializacion = 0
 
-        elif contiene_rural and permite_rural:
+        elif (
+            contiene_rural
+            and permite_rural
+        ):
 
             prioridad_especializacion = 0
 
         else:
 
             prioridad_especializacion = 1
-
-        # ====================================================
-        # ORDEN MAESTRO
-        # ====================================================
 
         orden_cuadrilla = (
             getattr(
@@ -1769,25 +1690,6 @@ def _seleccionar_asignacion_regular_mas_temprana(
             )
         )
 
-        # ====================================================
-        # CLAVE
-        # ====================================================
-        #
-        # MENOR ES MEJOR.
-        #
-        # FECHA ES ABSOLUTAMENTE PRIMERO.
-        #
-        # Por eso:
-        #
-        # jueves C1
-        #
-        # siempre gana a:
-        #
-        # viernes C3
-        #
-        # si ambas pueden ejecutar la salida.
-        # ====================================================
-
         clave = (
             fecha,
             prioridad_especializacion,
@@ -1798,7 +1700,10 @@ def _seleccionar_asignacion_regular_mas_temprana(
             disponibilidad.pk,
         )
 
-        if mejor is None or clave < mejor_clave:
+        if (
+            mejor is None
+            or clave < mejor_clave
+        ):
 
             mejor = {
                 "fecha": fecha,
@@ -1808,10 +1713,6 @@ def _seleccionar_asignacion_regular_mas_temprana(
             }
 
             mejor_clave = clave
-
-    # ========================================================
-    # SIN OPCIÓN
-    # ========================================================
 
     if mejor is None:
 
@@ -1834,7 +1735,9 @@ def _seleccionar_asignacion_regular_mas_temprana(
         ]
 
         texto = ", ".join(
-            identificador for identificador in identificadores if identificador
+            identificador
+            for identificador in identificadores
+            if identificador
         )
 
         return {
@@ -1842,7 +1745,11 @@ def _seleccionar_asignacion_regular_mas_temprana(
             "motivo": (
                 "No existe una cuadrilla compatible con un día "
                 "operacional libre para la salida"
-                + (f" formada por: {texto}." if texto else ".")
+                + (
+                    f" formada por: {texto}."
+                    if texto
+                    else "."
+                )
             ),
         }
 
@@ -1850,7 +1757,6 @@ def _seleccionar_asignacion_regular_mas_temprana(
         "opcion": mejor,
         "motivo": "",
     }
-
 
 # ============================================================
 # ACTUALIZAR DISTRIBUCIÓN REAL DEL PLAN OPERATIVO
@@ -2033,6 +1939,7 @@ def generar_plan_diario_batch(
     *,
     batch,
     estrategia=ESTRATEGIA_OPERATIVA,
+    incluir_hoy=False,
 ):
     """
     Genera la propuesta diaria SIN guardar.
@@ -2291,6 +2198,7 @@ def generar_plan_diario_batch(
         batch=batch,
         resolucion_prioridades=(resolucion_prioridades),
         fechas_ocupadas=(fechas_ocupadas),
+        incluir_hoy=incluir_hoy,
     )
 
     salidas_resultado = list(resultado_prioridades["salidas"])
@@ -2382,19 +2290,6 @@ def generar_plan_diario_batch(
     # ========================================================
     # ORDENAR GRUPOS PARA CALENDARIO
     # ========================================================
-    #
-    # MUY IMPORTANTE:
-    #
-    # Primero procesamos las ternas.
-    #
-    # Después pares.
-    #
-    # Finalmente unitarios.
-    #
-    # Esto evita consumir días tempranos con una salida de
-    # un sitio mientras todavía tenemos una salida completa
-    # de tres pendiente.
-    # ========================================================
 
     salidas_motor = list(
         plan_operativo.get(
@@ -2443,10 +2338,6 @@ def generar_plan_diario_batch(
 
     for salida_motor in salidas_motor:
 
-        # ====================================================
-        # QUITAR SITIOS QUE YA HUBIERAN SIDO ABSORBIDOS
-        # ====================================================
-
         motores_disponibles = []
 
         for sitio_motor in salida_motor.get(
@@ -2470,18 +2361,6 @@ def generar_plan_diario_batch(
         if not motores_disponibles:
             continue
 
-        # ====================================================
-        # NO DEFORMAR EL GRUPO
-        # ====================================================
-        #
-        # Si el grupo original era una terna y alguno ya fue
-        # absorbido por otra salida, no convertimos aquí esa
-        # terna arbitrariamente en pareja.
-        #
-        # El orquestador ya construyó grupos sin duplicados.
-        # Esto es solamente una protección adicional.
-        # ====================================================
-
         cantidad_original = int(
             salida_motor.get(
                 "cantidad_sitios",
@@ -2498,30 +2377,21 @@ def generar_plan_diario_batch(
         if len(motores_disponibles) != cantidad_original:
             continue
 
-        # Creamos una copia con los sitios reales que vamos
-        # a distribuir.
         salida_para_distribuir = dict(salida_motor)
 
         salida_para_distribuir["sitios"] = motores_disponibles
 
         salida_para_distribuir["cantidad_sitios"] = len(motores_disponibles)
 
-        # ====================================================
-        # BUSCAR PRIMER DÍA REALMENTE DISPONIBLE
-        # ====================================================
-
         seleccion = _seleccionar_asignacion_regular_mas_temprana(
             batch=batch,
             salida_motor=(salida_para_distribuir),
             disponibilidades=(disponibilidades),
             fechas_ocupadas=(fechas_ocupadas),
+            incluir_hoy=incluir_hoy,
         )
 
         opcion = seleccion.get("opcion")
-
-        # ====================================================
-        # SIN FECHA / CUADRILLA
-        # ====================================================
 
         if opcion is None:
 
@@ -2539,10 +2409,6 @@ def generar_plan_diario_batch(
         calculo = opcion["calculo"]
 
         codigo_cuadrilla = disponibilidad.codigo_cuadrilla
-
-        # ====================================================
-        # USAR ORDEN REAL CALCULADO PARA ESA CUADRILLA
-        # ========================================================
 
         sitios_salida = []
 
@@ -2571,10 +2437,6 @@ def generar_plan_diario_batch(
 
         if not sitios_salida:
             continue
-
-        # ====================================================
-        # SALIDA FINAL
-        # ====================================================
 
         salidas_resultado.append(
             {
@@ -2635,7 +2497,6 @@ def generar_plan_diario_batch(
                     )
                     or 0
                 ),
-                # Conservamos el score de agrupación original.
                 "puntaje_motor": (salida_motor.get("score_salida")),
                 "es_prioridad": False,
                 "prioridad_id": None,
@@ -2645,17 +2506,9 @@ def generar_plan_diario_batch(
             }
         )
 
-        # ====================================================
-        # MARCAR SITIOS UTILIZADOS
-        # ====================================================
-
         for dato_sitio in sitios_salida:
 
             ids_planificados.add(dato_sitio["sitio_batch"].pk)
-
-        # ====================================================
-        # OCUPAR CUADRILLA / DÍA
-        # ====================================================
 
         fechas_ocupadas[disponibilidad.pk].add(fecha)
 
@@ -2706,10 +2559,6 @@ def generar_plan_diario_batch(
     )
 
     cantidad_planificada = len(ids_planificados)
-
-    # ========================================================
-    # RESULTADO
-    # ========================================================
 
     return {
         "batch_id": batch.pk,
@@ -2839,11 +2688,13 @@ def _limpiar_salidas_editables_batch(
 
 
 @transaction.atomic
+@transaction.atomic
 def guardar_plan_diario_batch(
     *,
     batch,
     usuario,
     estrategia=ESTRATEGIA_OPERATIVA,
+    incluir_hoy=False,
 ):
     """
     Recalcula y guarda la planificación diaria.
@@ -2901,17 +2752,6 @@ def guardar_plan_diario_batch(
     # ========================================================
     # BLOQUEAR EXCLUSIVAMENTE EL BATCH
     # ========================================================
-    #
-    # configuracion_semana puede ser NULL.
-    #
-    # Por eso NO usamos:
-    #
-    #     select_for_update()
-    #     .select_related("configuracion_semana")
-    #
-    # porque PostgreSQL puede generar un LEFT OUTER JOIN y
-    # rechazar el FOR UPDATE.
-    # ========================================================
 
     batch = BatchPlanificacionSemanal.objects.select_for_update().get(
         pk=batch.pk,
@@ -2931,6 +2771,7 @@ def guardar_plan_diario_batch(
     resultado = generar_plan_diario_batch(
         batch=batch,
         estrategia=estrategia,
+        incluir_hoy=incluir_hoy,
     )
 
     # ========================================================
@@ -2996,40 +2837,13 @@ def guardar_plan_diario_batch(
 
         if completar_existente and salida_existente_id:
 
-            # =================================================
-            # BLOQUEAR SOLAMENTE LA SALIDA
-            # =================================================
-            #
-            # disponibilidad_cuadrilla puede ser nullable.
-            #
-            # Se carga después mediante una consulta normal,
-            # fuera del JOIN bloqueado.
-            # =================================================
-
             salida = SalidaPlanificacionDiaria.objects.select_for_update().get(
                 pk=salida_existente_id,
                 batch=batch,
             )
 
-            # =================================================
-            # CARGAR DISPONIBILIDAD FUERA DEL FOR UPDATE
-            # =================================================
-
             if salida.disponibilidad_cuadrilla_id:
                 salida.disponibilidad_cuadrilla
-
-            # =================================================
-            # MAPA DE PARTICIPACIONES EXISTENTES
-            # =================================================
-            #
-            # Primero bloqueamos exclusivamente las filas de
-            # SitioSalidaPlanificacionDiaria.
-            #
-            # Después accedemos a sus relaciones normalmente.
-            #
-            # De esta forma tampoco extendemos FOR UPDATE
-            # mediante JOIN innecesarios.
-            # =================================================
 
             participaciones_existentes = list(
                 salida.sitios.exclude(
@@ -3046,10 +2860,6 @@ def guardar_plan_diario_batch(
                 )
             )
 
-            # =================================================
-            # CARGAR RELACIONES DESPUÉS DEL BLOQUEO
-            # =================================================
-
             for participacion in participaciones_existentes:
 
                 participacion.sitio_batch
@@ -3060,17 +2870,6 @@ def guardar_plan_diario_batch(
                 participacion.sitio_batch_id: participacion
                 for participacion in participaciones_existentes
             }
-
-            # =================================================
-            # RECORRER EN EL ORDEN OPERACIONAL
-            # =================================================
-            #
-            # salida_data["sitios"] ya viene:
-            #
-            #   prioridad
-            #   acompañante
-            #   acompañante
-            # =================================================
 
             for indice, dato_sitio in enumerate(
                 salida_data["sitios"],
@@ -3090,10 +2889,6 @@ def guardar_plan_diario_batch(
                     == item_batch.pk
                 )
 
-                # =============================================
-                # YA EXISTÍA
-                # =============================================
-
                 if participacion is not None:
 
                     campos = []
@@ -3106,9 +2901,6 @@ def guardar_plan_diario_batch(
                             "orden",
                         )
 
-                    # Una participación todavía puramente
-                    # planificada pasa a lista para asignar
-                    # cuando consolidamos la propuesta.
                     if participacion.estado == "planificado":
 
                         participacion.estado = "listo_asignar"
@@ -3131,10 +2923,6 @@ def guardar_plan_diario_batch(
                             "actualizado_en",
                         ]
                     )
-
-                # =============================================
-                # NUEVO ACOMPAÑANTE
-                # =============================================
 
                 else:
 
@@ -3170,10 +2958,6 @@ def guardar_plan_diario_batch(
 
                     mapa_participaciones[item_batch.pk] = participacion
 
-                # =============================================
-                # SITIO PLANIFICADO
-                # =============================================
-
                 sitio_planificado = item_batch.sitio_planificado
 
                 sitio_planificado.fecha_planificada = salida.fecha
@@ -3200,10 +2984,6 @@ def guardar_plan_diario_batch(
                     ]
                 )
 
-            # =================================================
-            # MÉTRICAS REALES
-            # =================================================
-
             salida.minutos_viaje_estimados = salida_data["minutos_viaje"]
 
             salida.minutos_trabajo_estimados = salida_data["minutos_trabajo"]
@@ -3223,17 +3003,6 @@ def guardar_plan_diario_batch(
             salida.puntaje_motor = salida_data.get(
                 "puntaje_motor",
             )
-
-            # =================================================
-            # ESTADO
-            # =================================================
-            #
-            # Una salida manual en borrador que ya fue
-            # consolidada por el recálculo queda lista para
-            # asignar.
-            #
-            # No tocamos estados comprometidos.
-            # =================================================
 
             if salida.estado == "borrador":
 
@@ -3361,18 +3130,6 @@ def guardar_plan_diario_batch(
             sitio_planificado.fecha_planificada = salida.fecha
 
             sitio_planificado.orden_dia = indice
-
-            # =================================================
-            # PROTEGER ESTADOS TERMINALES
-            # =================================================
-            #
-            # En condiciones normales un sitio completado,
-            # cancelado o bloqueado no entra al universo del
-            # motor.
-            #
-            # Conservamos igualmente esta protección para que
-            # una inconsistencia previa no pueda reabrirlo.
-            # =================================================
 
             if sitio_planificado.estado not in {
                 "completado",

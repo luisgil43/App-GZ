@@ -343,9 +343,16 @@ Planificación Diaria
             <form
               method="post"
               action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
+              class="form-recalculo-planificacion"
+              data-fecha-inicio="{{ batch.fecha_inicio|date:'Y-m-d' }}"
             >
               {% csrf_token %}
-
+              <input
+                type="hidden"
+                name="incluir_hoy"
+                value="0"
+                data-incluir-hoy
+              >
               <button
                 type="submit"
                 class="
@@ -809,10 +816,17 @@ Planificación Diaria
             <form
               method="post"
               action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
+              class="form-recalculo-planificacion"
+              data-fecha-inicio="{{ batch.fecha_inicio|date:'Y-m-d' }}"
             >
 
               {% csrf_token %}
-
+              <input
+                type="hidden"
+                name="incluir_hoy"
+                value="0"
+                data-incluir-hoy
+              >
               <button
                 type="submit"
                 class="
@@ -1232,10 +1246,17 @@ Planificación Diaria
           <form
             method="post"
             action="{% url 'planificacion:generar_planificacion_diaria' batch.id %}"
-            class="mt-6"
+            class="form-recalculo-planificacion mt-6"
+            data-fecha-inicio="{{ batch.fecha_inicio|date:'Y-m-d' }}"
+            
           >
             {% csrf_token %}
-
+            <input
+              type="hidden"
+              name="incluir_hoy"
+              value="0"
+              data-incluir-hoy
+            >
             <button
               type="submit"
               class="
@@ -4024,6 +4045,264 @@ Planificación Diaria
   window.setTimeout(
     mostrarPagina,
     500
+  );
+
+})();
+</script>
+<script>
+(function () {
+
+  // =========================================================
+  // RECÁLCULO SEGÚN DÍA OPERACIONAL ACTUAL
+  // =========================================================
+
+  function fechaLocalISO() {
+
+    const ahora =
+      new Date();
+
+    const anio =
+      ahora.getFullYear();
+
+    const mes =
+      String(
+        ahora.getMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      );
+
+    const dia =
+      String(
+        ahora.getDate()
+      ).padStart(
+        2,
+        "0"
+      );
+
+    return (
+      anio
+      +
+      "-"
+      +
+      mes
+      +
+      "-"
+      +
+      dia
+    );
+  }
+
+
+  function sumarDiasISO(
+    fechaISO,
+    cantidad
+  ) {
+
+    const partes =
+      fechaISO
+        .split("-")
+        .map(
+          Number
+        );
+
+    if (
+      partes.length !== 3
+      ||
+      partes.some(
+        Number.isNaN
+      )
+    ) {
+      return "";
+    }
+
+    const fecha =
+      new Date(
+        partes[0],
+        partes[1] - 1,
+        partes[2]
+      );
+
+    fecha.setDate(
+      fecha.getDate()
+      +
+      cantidad
+    );
+
+    const anio =
+      fecha.getFullYear();
+
+    const mes =
+      String(
+        fecha.getMonth() + 1
+      ).padStart(
+        2,
+        "0"
+      );
+
+    const dia =
+      String(
+        fecha.getDate()
+      ).padStart(
+        2,
+        "0"
+      );
+
+    return (
+      anio
+      +
+      "-"
+      +
+      mes
+      +
+      "-"
+      +
+      dia
+    );
+  }
+
+
+  document.addEventListener(
+    "submit",
+    function (
+      event
+    ) {
+
+      const form =
+        event.target;
+
+      if (
+        !form
+        ||
+        !form.matches(
+          ".form-recalculo-planificacion"
+        )
+      ) {
+        return;
+      }
+
+
+      // =====================================================
+      // EVITAR PREGUNTAR DOS VECES
+      // =====================================================
+
+      if (
+        form.dataset.decisionFechaActualTomada
+        ===
+        "1"
+      ) {
+        return;
+      }
+
+
+      const inputIncluirHoy =
+        form.querySelector(
+          "[data-incluir-hoy]"
+        );
+
+      if (!inputIncluirHoy) {
+        return;
+      }
+
+
+      const fechaInicio =
+        form.dataset.fechaInicio
+        ||
+        "";
+
+      if (!fechaInicio) {
+        return;
+      }
+
+
+      const hoy =
+        fechaLocalISO();
+
+      const fechaFin =
+        sumarDiasISO(
+          fechaInicio,
+          5
+        );
+
+
+      // =====================================================
+      // EL BATCH NO ES LA SEMANA ACTUAL
+      // =====================================================
+
+      if (
+        hoy < fechaInicio
+        ||
+        hoy > fechaFin
+      ) {
+
+        inputIncluirHoy.value =
+          "0";
+
+        return;
+      }
+
+
+      // =====================================================
+      // DETENER ENVÍO PARA TOMAR DECISIÓN
+      // =====================================================
+
+      event.preventDefault();
+
+
+      const incluir =
+        window.confirm(
+          (
+            "Hoy es "
+            +
+            new Date().toLocaleDateString(
+              "es-CL",
+              {
+                weekday:
+                  "long",
+
+                day:
+                  "2-digit",
+
+                month:
+                  "2-digit",
+
+                year:
+                  "numeric"
+              }
+            )
+            +
+            ".\n\n"
+            +
+            "Los días anteriores de esta semana ya no serán "
+            +
+            "considerados por el motor.\n\n"
+            +
+            "¿Quieres permitir que el recálculo incorpore "
+            +
+            "nuevos sitios también para HOY?\n\n"
+            +
+            "Aceptar: usar hoy y los días siguientes.\n"
+            +
+            "Cancelar: comenzar desde mañana."
+          )
+        );
+
+
+      inputIncluirHoy.value =
+        incluir
+          ?
+          "1"
+          :
+          "0";
+
+
+      form.dataset.decisionFechaActualTomada =
+        "1";
+
+
+      form.requestSubmit();
+
+    }
   );
 
 })();

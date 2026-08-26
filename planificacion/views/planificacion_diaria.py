@@ -1,6 +1,7 @@
 # planificacion/views/planificacion_diaria.py
 
 from collections import defaultdict
+from datetime import timedelta
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -8,6 +9,7 @@ from django.db import transaction
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from planificacion.modelos import (SalidaPlanificacionDiaria,
@@ -1028,10 +1030,21 @@ def generar_planificacion_diaria(
     """
     Ejecuta el motor diario y guarda las salidas.
 
-    El recálculo solamente reemplaza salidas todavía
-    editables.
+    REGLA DE FECHA ACTUAL
+    ==========================================================
 
-    Las salidas comprometidas quedan intactas.
+    Cuando el batch corresponde a la semana operacional
+    vigente:
+
+    - nunca se generan nuevas salidas en días anteriores a hoy;
+    - el día actual solamente puede utilizarse si el usuario
+      lo autorizó explícitamente;
+    - si no lo autoriza, el motor comienza desde mañana.
+
+    Las semanas futuras continúan funcionando normalmente.
+
+    Las semanas históricas fuera de la semana actual no cambian
+    su comportamiento por esta regla.
     """
 
     batch = get_object_or_404(
@@ -1041,11 +1054,55 @@ def generar_planificacion_diaria(
         pk=batch_id,
     )
 
+    # ========================================================
+    # DECISIÓN SOBRE EL DÍA ACTUAL
+    # ========================================================
+
+    incluir_hoy = (
+        request.POST.get(
+            "incluir_hoy",
+            "",
+        )
+        == "1"
+    )
+
+    # ========================================================
+    # SEGURIDAD
+    # ========================================================
+    #
+    # Solo tiene sentido permitir "incluir hoy" cuando hoy
+    # realmente pertenece al rango operacional de este batch.
+    #
+    # El rango base utilizado actualmente es:
+    #
+    # fecha_inicio + 0..5 días
+    #
+    # es decir:
+    #
+    # lunes -> sábado
+    # ========================================================
+
+    hoy = timezone.localdate()
+
+    fecha_fin_operacional = batch.fecha_inicio + timedelta(
+        days=5,
+    )
+
+    batch_es_semana_actual = batch.fecha_inicio <= hoy <= fecha_fin_operacional
+
+    if not batch_es_semana_actual:
+        incluir_hoy = False
+
+    # ========================================================
+    # GENERAR
+    # ========================================================
+
     try:
 
         resultado = guardar_plan_diario_batch(
             batch=batch,
             usuario=request.user,
+            incluir_hoy=incluir_hoy,
         )
 
     except Exception as exc:
@@ -1103,6 +1160,36 @@ def generar_planificacion_diaria(
             False,
         )
     )
+
+    # ========================================================
+    # INFORMAR DECISIÓN TEMPORAL
+    # ========================================================
+
+    if batch_es_semana_actual:
+
+        if incluir_hoy:
+
+            messages.info(
+                request,
+                (
+                    f"El recálculo consideró el día de hoy "
+                    f"{hoy:%d/%m/%Y} y los días operacionales "
+                    "posteriores. Los días anteriores fueron "
+                    "excluidos."
+                ),
+            )
+
+        else:
+
+            messages.info(
+                request,
+                (
+                    f"El recálculo no utilizó el día de hoy "
+                    f"{hoy:%d/%m/%Y}. Los nuevos sitios fueron "
+                    "evaluados únicamente para días operacionales "
+                    "posteriores."
+                ),
+            )
 
     # ========================================================
     # MENSAJE PRINCIPAL
