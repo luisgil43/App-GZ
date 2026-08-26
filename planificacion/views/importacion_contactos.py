@@ -19,7 +19,7 @@ from usuarios.decoradores import rol_requerido
 
 
 CACHE_TIMEOUT_PREVIEW = 60 * 30
-
+PREVIEW_FILAS_POR_PAGINA = 100
 
 # ============================================================
 # CACHE
@@ -163,32 +163,160 @@ def _construir_contexto_preview(
     sheet_name,
     token,
     nombre_archivo,
+    pagina=1,
 ):
     """
-    Construye en un único lugar toda la información necesaria
-    para mostrar el preview.
+    Construye el contexto visual del preview.
 
-    IMPORTANTE:
-    El preview se muestra COMPLETO.
+    IMPORTANTE
+    ==========================================================
 
-    Si el archivo tiene 5.125 registros:
-    - se analizan los 5.125;
-    - se guardan los 5.125 en caché;
-    - se muestran los 5.125;
-    - se procesan los 5.125 al confirmar.
+    El archivo completo se analiza y permanece disponible
+    para confirmar la importación.
+
+    Sin embargo, para evitar consumir memoria innecesaria
+    renderizando miles de filas HTML simultáneamente,
+    solamente mostramos una página del preview.
+
+    Esto NO limita:
+
+        - el análisis;
+        - los totales;
+        - la detección de cambios;
+        - los IDs sin vincular;
+        - la confirmación final.
+
+    Solamente limita las filas visibles simultáneamente.
     """
 
-    no_vinculados = _obtener_ids_no_vinculados(preview)
+    preview = list(preview or [])
+
+    total_registros = len(
+        preview,
+    )
+
+    # ========================================================
+    # IDS SIN VINCULAR
+    # ========================================================
+
+    no_vinculados = _obtener_ids_no_vinculados(
+        preview,
+    )
+
+    # ========================================================
+    # PAGINACIÓN
+    # ========================================================
+
+    try:
+        pagina = int(
+            pagina,
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+        pagina = 1
+
+    pagina = max(
+        pagina,
+        1,
+    )
+
+    if total_registros > 0:
+
+        total_paginas = (
+            total_registros + PREVIEW_FILAS_POR_PAGINA - 1
+        ) // PREVIEW_FILAS_POR_PAGINA
+
+    else:
+
+        total_paginas = 1
+
+    pagina = min(
+        pagina,
+        total_paginas,
+    )
+
+    indice_inicio = (pagina - 1) * PREVIEW_FILAS_POR_PAGINA
+
+    indice_fin = min(
+        indice_inicio + PREVIEW_FILAS_POR_PAGINA,
+        total_registros,
+    )
+
+    preview_pagina = preview[indice_inicio:indice_fin]
+
+    # ========================================================
+    # NAVEGACIÓN
+    # ========================================================
+
+    pagina_anterior = pagina - 1 if pagina > 1 else None
+
+    pagina_siguiente = pagina + 1 if pagina < total_paginas else None
+
+    # Ventana de páginas.
+    #
+    # Ejemplo:
+    #
+    #   1 2 3 4 5
+    #
+    # o:
+    #
+    #   24 25 26 27 28
+    #
+    radio_paginas = 2
+
+    pagina_desde = max(
+        pagina - radio_paginas,
+        1,
+    )
+
+    pagina_hasta = min(
+        pagina + radio_paginas,
+        total_paginas,
+    )
+
+    paginas_visibles = list(
+        range(
+            pagina_desde,
+            pagina_hasta + 1,
+        )
+    )
+
+    # ========================================================
+    # FILAS VISIBLES
+    # ========================================================
+
+    mostrando_desde = indice_inicio + 1 if total_registros else 0
+
+    mostrando_hasta = indice_fin
+
+    # ========================================================
+    # CONTEXTO
+    # ========================================================
 
     return {
         "form": form,
         # ----------------------------------------------------
-        # PREVIEW VISUAL COMPLETO
+        # PREVIEW VISUAL PAGINADO
         # ----------------------------------------------------
-        "preview": preview,
-        "preview_total": len(preview),
-        "preview_mostrados": len(preview),
-        "preview_limitado": False,
+        "preview": preview_pagina,
+        "preview_total": total_registros,
+        "preview_mostrados": len(
+            preview_pagina,
+        ),
+        "preview_limitado": (total_registros > PREVIEW_FILAS_POR_PAGINA),
+        # ----------------------------------------------------
+        # PAGINACIÓN
+        # ----------------------------------------------------
+        "pagina_actual": pagina,
+        "total_paginas": total_paginas,
+        "pagina_anterior": pagina_anterior,
+        "pagina_siguiente": pagina_siguiente,
+        "paginas_visibles": paginas_visibles,
+        "mostrando_desde": mostrando_desde,
+        "mostrando_hasta": mostrando_hasta,
         # ----------------------------------------------------
         # RESUMEN
         # ----------------------------------------------------
@@ -200,16 +328,18 @@ def _construir_contexto_preview(
         "filas_no_vinculadas": (no_vinculados["filas_no_vinculadas"]),
         "ids_unicos_no_vinculados": (no_vinculados["ids_unicos_no_vinculados"]),
         # ----------------------------------------------------
-        # ERRORES REALES DE ARCHIVO
+        # ERRORES
         # ----------------------------------------------------
         "errores": errores[:100],
-        "errores_total": len(errores),
+        "errores_total": len(
+            errores,
+        ),
         # ----------------------------------------------------
         # ARCHIVO
         # ----------------------------------------------------
         "sheet_name": sheet_name,
         "token": token,
-        "nombre_archivo": (nombre_archivo),
+        "nombre_archivo": nombre_archivo,
         # ----------------------------------------------------
         # AUDITORÍA
         # ----------------------------------------------------
@@ -226,8 +356,7 @@ def _construir_contexto_preview(
 @rol_requerido(
     "admin",
     "pm",
-    "supervisor",
-)
+    "supervisor")
 def importar_contactos(request):
     """
     Flujo completo:
@@ -235,29 +364,51 @@ def importar_contactos(request):
     1. Subir Excel.
     2. Analizar todas las filas.
     3. Buscar coincidencias contra SitioMovil.
-    4. Mostrar preview completo.
-    5. Informar IDs no vinculados.
-    6. Confirmar o cancelar.
-    7. Aplicar únicamente cambios sobre ContactoSitio.
+    4. Guardar el preview completo temporalmente.
+    5. Mostrar el preview paginado.
+    6. Informar IDs no vinculados.
+    7. Confirmar o cancelar.
+    8. Aplicar todos los registros del preview.
 
-    IMPORTANTE:
+    IMPORTANTE
+    ==========================================================
 
     SitioMovil se utiliza únicamente como tabla maestra
     de consulta/vinculación.
 
     Esta vista NO modifica SitioMovil.
+
+    La paginación afecta solamente la visualización.
+
+    Aunque solamente mostremos 100 registros simultáneamente,
+    la confirmación procesa TODO el preview.
     """
 
-    accion = request.POST.get("accion") or ""
+    accion = (
+        request.POST.get(
+            "accion",
+        )
+        or ""
+    )
 
-    token = request.POST.get("token") or ""
+    token = (
+        request.POST.get(
+            "token",
+        )
+        or request.GET.get(
+            "token",
+        )
+        or ""
+    )
 
     # ========================================================
     # CONFIRMAR IMPORTACIÓN
     # ========================================================
 
     if request.method == "POST" and accion == "confirmar":
+
         if not token:
+
             messages.error(
                 request,
                 ("No se encontró el preview " "de importación."),
@@ -270,9 +421,12 @@ def importar_contactos(request):
             token,
         )
 
-        payload = cache.get(cache_key)
+        payload = cache.get(
+            cache_key,
+        )
 
         if not payload:
+
             messages.error(
                 request,
                 ("El preview expiró o ya no existe. " "Vuelve a subir el archivo."),
@@ -280,11 +434,16 @@ def importar_contactos(request):
 
             return redirect("planificacion:importar_contactos")
 
-        preview_completo = payload.get("preview") or []
+        preview_completo = (
+            payload.get(
+                "preview",
+            )
+            or []
+        )
 
         try:
+
             resultado = aplicar_importacion_contactos(
-                # Se procesa TODO el preview.
                 preview=preview_completo,
                 user=request.user,
                 nombre_archivo=(
@@ -295,7 +454,9 @@ def importar_contactos(request):
                 ),
             )
 
-            cache.delete(cache_key)
+            cache.delete(
+                cache_key,
+            )
 
             messages.success(
                 request,
@@ -312,6 +473,7 @@ def importar_contactos(request):
             return redirect("planificacion:listar_contactos")
 
         except Exception as exc:
+
             messages.error(
                 request,
                 ("No fue posible aplicar " f"la importación: {exc}"),
@@ -324,7 +486,9 @@ def importar_contactos(request):
     # ========================================================
 
     if request.method == "POST" and accion == "cancelar":
+
         if token:
+
             cache.delete(
                 _contactos_preview_cache_key(
                     request.user.id,
@@ -340,24 +504,111 @@ def importar_contactos(request):
         return redirect("planificacion:listar_contactos")
 
     # ========================================================
+    # NAVEGAR ENTRE PÁGINAS DEL PREVIEW
+    # ========================================================
+
+    if request.method == "GET" and token:
+
+        cache_key = _contactos_preview_cache_key(
+            request.user.id,
+            token,
+        )
+
+        payload = cache.get(
+            cache_key,
+        )
+
+        if not payload:
+
+            messages.error(
+                request,
+                ("El preview expiró o ya no existe. " "Vuelve a subir el archivo."),
+            )
+
+            return redirect("planificacion:importar_contactos")
+
+        try:
+
+            pagina = int(
+                request.GET.get(
+                    "pagina",
+                    1,
+                )
+            )
+
+        except (
+            TypeError,
+            ValueError,
+        ):
+
+            pagina = 1
+
+        form = ImportarContactosForm()
+
+        return render(
+            request,
+            ("planificacion/" "contactos/" "importar.html"),
+            _construir_contexto_preview(
+                form=form,
+                preview=(
+                    payload.get(
+                        "preview",
+                    )
+                    or []
+                ),
+                resumen=(
+                    payload.get(
+                        "resumen",
+                    )
+                    or {}
+                ),
+                errores=(
+                    payload.get(
+                        "errores",
+                    )
+                    or []
+                ),
+                sheet_name=(
+                    payload.get(
+                        "sheet_name",
+                        "",
+                    )
+                ),
+                token=token,
+                nombre_archivo=(
+                    payload.get(
+                        "nombre_archivo",
+                        "",
+                    )
+                ),
+                pagina=pagina,
+            ),
+        )
+
+    # ========================================================
     # SUBIR ARCHIVO / GENERAR PREVIEW
     # ========================================================
 
     if request.method == "POST":
+
         form = ImportarContactosForm(
             request.POST,
             request.FILES,
         )
 
         if form.is_valid():
+
             archivo = form.cleaned_data["archivo"]
 
             try:
+
                 # =============================================
                 # LEER EXCEL
                 # =============================================
 
-                df, sheet_name = leer_excel_contactos(archivo)
+                df, sheet_name = leer_excel_contactos(
+                    archivo,
+                )
 
                 # =============================================
                 # ANALIZAR TODO EL ARCHIVO
@@ -367,7 +618,15 @@ def importar_contactos(request):
                     preview,
                     resumen,
                     errores,
-                ) = generar_preview_contactos(df)
+                ) = generar_preview_contactos(
+                    df,
+                )
+
+                # El DataFrame ya no es necesario.
+                #
+                # Permitimos que Python pueda liberar esa
+                # memoria antes de renderizar el template.
+                del df
 
                 # =============================================
                 # GENERAR TOKEN
@@ -381,30 +640,32 @@ def importar_contactos(request):
                 )
 
                 # =============================================
-                # GUARDAR TODO EL PREVIEW
-                #
-                # Ejemplo:
-                #
-                # 5.125 registros:
-                # - 5.125 en caché
-                # - 5.125 visibles
-                # - 5.125 al confirmar
+                # GUARDAR PREVIEW COMPLETO
                 # =============================================
+                #
+                # Guardamos todos los registros porque
+                # Confirmar importación debe procesarlos todos.
+                #
+                # El template, en cambio, recibirá únicamente
+                # una página.
+                # =============================================
+
+                payload = {
+                    "preview": preview,
+                    "resumen": resumen,
+                    "errores": errores,
+                    "sheet_name": sheet_name,
+                    "nombre_archivo": (archivo.name),
+                }
 
                 cache.set(
                     cache_key,
-                    {
-                        "preview": preview,
-                        "resumen": resumen,
-                        "errores": errores,
-                        "sheet_name": (sheet_name),
-                        "nombre_archivo": (archivo.name),
-                    },
+                    payload,
                     timeout=(CACHE_TIMEOUT_PREVIEW),
                 )
 
                 # =============================================
-                # RENDER
+                # RENDER PRIMERA PÁGINA
                 # =============================================
 
                 return render(
@@ -415,23 +676,26 @@ def importar_contactos(request):
                         preview=preview,
                         resumen=resumen,
                         errores=errores,
-                        sheet_name=(sheet_name),
+                        sheet_name=sheet_name,
                         token=token,
                         nombre_archivo=(archivo.name),
+                        pagina=1,
                     ),
                 )
 
             except Exception as exc:
+
                 messages.error(
                     request,
                     ("No fue posible leer " f"el archivo: {exc}"),
                 )
 
     else:
+
         form = ImportarContactosForm()
 
     # ========================================================
-    # GET NORMAL
+    # VISTA INICIAL
     # ========================================================
 
     return render(
