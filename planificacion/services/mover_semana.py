@@ -52,35 +52,43 @@ def _obtener_servicio(
     bloquear=False,
 ):
     """
-    Busca el ServicioCotizado vigente mediante ID Claro.
+    Obtiene exclusivamente el ServicioCotizado perteneciente
+    a esta ejecución mensual de SitioPlanificado.
 
-    Se utiliza la misma relación actual utilizada por
-    Planificación y Operaciones.
+    REGLA CRÍTICA
+    ==========================================================
 
-    Cuando bloquear=True:
+    Un mismo SitioMovil puede ejecutarse múltiples veces:
 
-        se bloquea exclusivamente ServicioCotizado.
+        05_750 - Octubre 2025
+        05_750 - Agosto 2026
+        05_750 - Diciembre 2026
 
-    No utilizamos select_related() junto con select_for_update()
-    para evitar que PostgreSQL intente bloquear relaciones
-    nullable mediante OUTER JOIN.
+    Por lo tanto NO se busca por ID Claro.
+
+    La relación correcta es:
+
+        ServicioCotizado.sitio_planificado
+            ==
+        sitio_planificado
+
+    Cuando bloquear=True se aplica select_for_update()
+    exclusivamente sobre ServicioCotizado.
     """
 
-    sitio = sitio_planificado.sitio
+    if sitio_planificado is None:
+        return None
 
-    id_claro = (sitio.id_claro or "").strip()
-
-    if not id_claro:
+    if not sitio_planificado.pk:
         return None
 
     queryset = ServicioCotizado.objects.filter(
-        id_claro=id_claro,
+        sitio_planificado=sitio_planificado,
     ).order_by(
         "-id",
     )
 
     if bloquear:
-
         queryset = queryset.select_for_update()
 
     return queryset.first()
@@ -541,6 +549,368 @@ def _mover_sitio_batch(
         ]
     )
 
+# ============================================================
+# ASIGNAR O MOVER SITIO PLANIFICADO A UNA SEMANA
+# ============================================================
+
+
+@transaction.atomic
+def asignar_o_mover_sitio_planificado_a_semana(
+    *,
+    sitio_planificado_id,
+    batch_destino_id,
+    usuario,
+):
+    """
+    Entrada general para enviar un SitioPlanificado hacia una
+    semana operacional global.
+
+    SOPORTA DOS ESCENARIOS
+    ==========================================================
+
+    1. SITIO SIN SEMANA ACTIVA
+
+        SitioPlanificado
+            ->
+        no existe SitioBatchSemanal activo
+
+    En este caso se crea directamente su participación dentro
+    de la semana destino.
+
+    NO se exige pertenecer previamente a otra semana.
+
+    Las participaciones históricas con estado:
+
+        excluido
+        reemplazado
+
+    NO cuentan como pertenencia semanal activa.
+
+    2. SITIO QUE YA PERTENECE A UNA SEMANA ACTIVA
+
+        SitioPlanificado
+            ->
+        SitioBatchSemanal activo
+
+    En este caso se utiliza mover_sitio_a_semana() para
+    conservar toda la lógica existente de:
+
+        - desmontar planificación diaria anterior;
+        - reiniciar Operaciones cuando corresponde;
+        - limpiar memoria semanal;
+        - mover el mismo SitioBatchSemanal;
+        - conservar trazabilidad mensual.
+
+    REGLA CRÍTICA
+    ==========================================================
+
+    Un sitio mensual puede ser asignado directamente:
+
+        Sin semana
+            ->
+        W36
+
+    sin tener que pasar previamente por otra semana.
+
+    El SitioPlanificado continúa perteneciendo a su
+    PlanificacionMensual original.
+    """
+
+    # ========================================================
+    # 1. IMPORT LOCAL PARA EVITAR CICLOS
+    # ========================================================
+
+    from planificacion.models import SitioPlanificado
+
+    # ========================================================
+    # 2. BLOQUEAR SITIO PLANIFICADO
+    # ========================================================
+
+    sitio_planificado = SitioPlanificado.objects.select_for_update().get(
+        pk=sitio_planificado_id,
+    )
+
+    sitio = sitio_planificado.sitio
+
+    planificacion_origen = (
+        sitio_planificado.planificacion if sitio_planificado.planificacion_id else None
+    )
+
+    identificador = sitio.id_claro or sitio.id_sites or f"Sitio {sitio.pk}"
+
+    # ========================================================
+    # 3. BLOQUEAR BATCH DESTINO
+    # ========================================================
+
+    batch_destino = BatchPlanificacionSemanal.objects.select_for_update().get(
+        pk=batch_destino_id,
+    )
+
+    # ========================================================
+    # 4. VALIDAR DESTINO
+    # ========================================================
+
+    if batch_destino.estado == "cancelado":
+
+        raise ValidationError("No puedes asignar sitios hacia una semana cancelada.")
+
+    # ========================================================
+    # 5. BUSCAR SOLO PARTICIPACIONES SEMANALES ACTIVAS
+    # ========================================================
+    #
+    # IMPORTANTE:
+    #
+    # Los registros excluido/reemplazado son históricos.
+    #
+    # No deben impedir que un sitio vuelva a entrar en una
+    # semana operacional.
+    # ========================================================
+
+    participaciones_activas = list(
+        SitioBatchSemanal.objects.select_for_update()
+        .filter(
+            sitio_planificado=sitio_planificado,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .order_by(
+            "id",
+        )
+    )
+
+    # ========================================================
+    # 6. INCONSISTENCIA: MÁS DE UNA SEMANA ACTIVA
+    # ========================================================
+
+    if len(participaciones_activas) > 1:
+
+        semanas = ", ".join(
+            participacion.batch.codigo_semana
+            for participacion in participaciones_activas
+        )
+
+        raise ValidationError(
+            (
+                f"{identificador} aparece actualmente en más de "
+                f"una semana activa ({semanas}). "
+                "Debe revisarse antes de moverlo."
+            )
+        )
+
+    # ========================================================
+    # 7. YA PERTENECE A UNA SEMANA ACTIVA
+    # ========================================================
+
+    if len(participaciones_activas) == 1:
+
+        sitio_batch = participaciones_activas[0]
+
+        if sitio_batch.batch_id == batch_destino.pk:
+
+            raise ValidationError(
+                (f"{identificador} ya pertenece a " f"{batch_destino.codigo_semana}.")
+            )
+
+        return mover_sitio_a_semana(
+            sitio_batch_id=sitio_batch.pk,
+            batch_destino_id=batch_destino.pk,
+            usuario=usuario,
+        )
+
+    # ========================================================
+    # 8. SITIO SIN SEMANA ACTIVA
+    # ========================================================
+    #
+    # Puede no existir ningún SitioBatchSemanal o solamente
+    # existir participaciones históricas excluidas/reemplazadas.
+    #
+    # En ambos casos hacemos una asignación semanal nueva.
+    # ========================================================
+
+    duplicado_destino_activo = (
+        SitioBatchSemanal.objects.filter(
+            batch=batch_destino,
+            sitio_planificado=sitio_planificado,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .exists()
+    )
+
+    if duplicado_destino_activo:
+
+        raise ValidationError(
+            (f"{identificador} ya existe dentro de " f"{batch_destino.codigo_semana}.")
+        )
+
+    # ========================================================
+    # 9. LIMPIAR POSICIÓN DE PLANIFICACIÓN
+    # ========================================================
+
+    sitio_planificado.fecha_planificada = None
+
+    sitio_planificado.orden_dia = 0
+
+    if sitio_planificado.estado not in {
+        "completado",
+        "cancelado",
+        "bloqueado",
+    }:
+
+        sitio_planificado.estado = "listo_planificar"
+
+    sitio_planificado.bloqueado_motor = False
+
+    sitio_planificado.planificado_manualmente = False
+
+    sitio_planificado.motivo_bloqueo = ""
+
+    sitio_planificado.alerta_motor = ""
+
+    sitio_planificado.actualizado_por = usuario
+
+    sitio_planificado.save(
+        update_fields=[
+            "fecha_planificada",
+            "orden_dia",
+            "estado",
+            "bloqueado_motor",
+            "planificado_manualmente",
+            "motivo_bloqueo",
+            "alerta_motor",
+            "actualizado_por",
+            "actualizado_en",
+        ]
+    )
+
+    # ========================================================
+    # 10. REUTILIZAR PARTICIPACIÓN HISTÓRICA EN DESTINO
+    # ========================================================
+    #
+    # Existe constraint único:
+    #
+    #     batch + sitio_planificado
+    #
+    # Por eso, si anteriormente el sitio estuvo en ESTA misma
+    # semana y quedó excluido/reemplazado, no podemos crear
+    # otro registro.
+    #
+    # Reactivamos el registro histórico existente.
+    # ========================================================
+
+    sitio_batch_historico_destino = (
+        SitioBatchSemanal.objects.select_for_update()
+        .filter(
+            batch=batch_destino,
+            sitio_planificado=sitio_planificado,
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .order_by(
+            "-id",
+        )
+        .first()
+    )
+
+    if sitio_batch_historico_destino is not None:
+
+        sitio_batch = sitio_batch_historico_destino
+
+        sitio_batch.estado = "confirmado"
+
+        sitio_batch.origen = "manual"
+
+        sitio_batch.puntaje_motor = None
+
+        sitio_batch.motivo_recomendacion = ""
+
+        sitio_batch.motivo_exclusion = ""
+
+        sitio_batch.agregado_manualmente = True
+
+        sitio_batch.bloqueado_en_batch = False
+
+        sitio_batch.es_reserva = False
+
+        sitio_batch.cluster_codigo = ""
+
+        sitio_batch.agregado_por = usuario
+
+        sitio_batch.save(
+            update_fields=[
+                "estado",
+                "origen",
+                "puntaje_motor",
+                "motivo_recomendacion",
+                "motivo_exclusion",
+                "agregado_manualmente",
+                "bloqueado_en_batch",
+                "es_reserva",
+                "cluster_codigo",
+                "agregado_por",
+                "actualizado_en",
+            ]
+        )
+
+    else:
+
+        # ====================================================
+        # 11. CREAR PRIMERA PARTICIPACIÓN SEMANAL
+        # ====================================================
+
+        sitio_batch = SitioBatchSemanal.objects.create(
+            batch=batch_destino,
+            sitio_planificado=sitio_planificado,
+            estado="confirmado",
+            origen="manual",
+            puntaje_motor=None,
+            motivo_recomendacion="",
+            motivo_exclusion="",
+            agregado_manualmente=True,
+            bloqueado_en_batch=False,
+            es_reserva=False,
+            agregado_por=usuario,
+            cluster_codigo="",
+        )
+
+    # ========================================================
+    # 12. TRAZABILIDAD DEL MES DE ORIGEN
+    # ========================================================
+
+    if planificacion_origen is not None:
+
+        batch_destino.planificaciones_origen.add(
+            planificacion_origen,
+        )
+
+    # ========================================================
+    # 13. RESULTADO
+    # ========================================================
+
+    return {
+        "sitio_batch": sitio_batch,
+        "sitio_planificado": sitio_planificado,
+        "servicio": _obtener_servicio(
+            sitio_planificado,
+            bloquear=False,
+        ),
+        "batch_origen": None,
+        "batch_destino": batch_destino,
+        "identificador": identificador,
+        "servicio_reiniciado": False,
+        "era_primera_asignacion_semanal": True,
+    }
+
 
 # ============================================================
 # MOVIMIENTO DEFINITIVO ENTRE SEMANAS
@@ -881,4 +1251,5 @@ def mover_sitio_a_semana(
         "batch_destino": batch_destino,
         "identificador": identificador,
         "servicio_reiniciado": (servicio_requeria_reinicio),
+        "era_primera_asignacion_semanal": False,
     }

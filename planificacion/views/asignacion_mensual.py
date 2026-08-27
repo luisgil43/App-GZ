@@ -18,7 +18,8 @@ from planificacion.services.asignacion_mensual_importer import (
     leer_excel_asignacion)
 from planificacion.services.completar_semana_anterior import \
     obtener_batches_completables
-from planificacion.services.mover_semana import mover_sitio_a_semana
+from planificacion.services.mover_semana import \
+    asignar_o_mover_sitio_planificado_a_semana
 from usuarios.decoradores import rol_requerido
 
 CACHE_TIMEOUT = 60 * 30
@@ -305,28 +306,58 @@ def mover_sitios_semana_masivo(
     pk,
 ):
     """
-    Mueve varios sitios seleccionados desde la pantalla de
-    planificación mensual hacia una semana operacional global.
+    Asigna o mueve varios sitios seleccionados desde la
+    pantalla de planificación mensual hacia una semana
+    operacional global.
+
+    SOPORTA DOS ESCENARIOS
+    ==========================================================
+
+    1. SITIO SIN SEMANA ACTIVA
+
+        SitioPlanificado
+            ->
+        Semana destino
+
+    Se crea su primera participación semanal.
+
+    2. SITIO CON SEMANA ACTIVA
+
+        Semana origen
+            ->
+        Semana destino
+
+    Se mueve utilizando toda la lógica operacional existente.
 
     IMPORTANTE
     ==========================================================
 
-    Esta vista NO implementa nuevamente la lógica de movimiento.
+    Esta vista NO implementa nuevamente la lógica de
+    asignación/movimiento.
 
     Cada sitio pasa individualmente por:
 
-        mover_sitio_a_semana()
+        asignar_o_mover_sitio_planificado_a_semana()
 
-    Por tanto se conservan todas las reglas existentes:
+    Por tanto el servicio decide si debe:
 
-    - eliminación de planificación diaria anterior;
-    - reinicio de Operaciones cuando corresponde;
-    - bloqueo de estados protegidos;
-    - movimiento entre meses;
-    - trazabilidad de planificaciones_origen;
-    - prevención de duplicados;
-    - limpieza de memoria semanal anterior.
+    - crear su primera participación semanal;
+    - reutilizar una participación histórica;
+    - mover una participación semanal activa;
+    - desmontar planificación diaria anterior;
+    - reiniciar Operaciones cuando corresponde;
+    - conservar estados protegidos;
+    - mantener la planificación mensual de origen;
+    - registrar planificaciones_origen;
+    - prevenir duplicados.
+
+    La semana operacional es GLOBAL y no está restringida
+    por el mes original del sitio.
     """
+
+    # ========================================================
+    # 1. PLANIFICACIÓN MENSUAL
+    # ========================================================
 
     planificacion = get_object_or_404(
         PlanificacionMensual,
@@ -334,7 +365,7 @@ def mover_sitios_semana_masivo(
     )
 
     # ========================================================
-    # SITIOS SELECCIONADOS
+    # 2. SITIOS SELECCIONADOS
     # ========================================================
 
     sitio_ids = request.POST.getlist(
@@ -354,7 +385,7 @@ def mover_sitios_semana_masivo(
         )
 
     # ========================================================
-    # SEMANA DESTINO
+    # 3. SEMANA DESTINO
     # ========================================================
 
     batch_destino_id = request.POST.get(
@@ -390,7 +421,7 @@ def mover_sitios_semana_masivo(
     )
 
     # ========================================================
-    # SITIOS VÁLIDOS DE ESTA PLANIFICACIÓN MENSUAL
+    # 4. SITIOS VÁLIDOS DE ESTA PLANIFICACIÓN MENSUAL
     # ========================================================
 
     sitios_planificados = list(
@@ -411,7 +442,7 @@ def mover_sitios_semana_masivo(
 
         messages.warning(
             request,
-            "No se encontraron sitios válidos para mover.",
+            "No se encontraron sitios válidos para asignar.",
         )
 
         return redirect(
@@ -420,8 +451,12 @@ def mover_sitios_semana_masivo(
         )
 
     # ========================================================
-    # CONTADORES
+    # 5. CONTADORES
     # ========================================================
+
+    procesados = 0
+
+    asignados = 0
 
     movidos = 0
 
@@ -430,7 +465,7 @@ def mover_sitios_semana_masivo(
     errores = []
 
     # ========================================================
-    # PROCESAR CADA SITIO
+    # 6. PROCESAR CADA SITIO
     # ========================================================
 
     for sitio_planificado in sitios_planificados:
@@ -441,105 +476,10 @@ def mover_sitios_semana_masivo(
             or f"Sitio {sitio_planificado.sitio_id}"
         )
 
-        # ====================================================
-        # PARTICIPACIÓN SEMANAL ACTUAL
-        # ====================================================
-        #
-        # Un sitio solamente puede moverse de semana si
-        # actualmente pertenece a un batch.
-        #
-        # Excluimos participaciones históricas retiradas.
-        # ====================================================
-
-        participaciones = list(
-            SitioBatchSemanal.objects.filter(
-                sitio_planificado=sitio_planificado,
-            )
-            .exclude(
-                estado__in=[
-                    "excluido",
-                    "reemplazado",
-                ],
-            )
-            .select_related(
-                "batch",
-            )
-            .order_by(
-                "-batch__fecha_inicio",
-                "-id",
-            )[:2]
-        )
-
-        # ====================================================
-        # NO ESTÁ EN NINGUNA SEMANA
-        # ====================================================
-
-        if not participaciones:
-
-            omitidos += 1
-
-            errores.append(
-                (
-                    f"{identificador}: todavía no pertenece "
-                    "a ninguna semana y por tanto no puede "
-                    "ser movido."
-                )
-            )
-
-            continue
-
-        # ====================================================
-        # SEGURIDAD ANTE INCONSISTENCIA
-        # ====================================================
-        #
-        # La arquitectura normal mantiene una única
-        # participación semanal activa.
-        #
-        # Si encontramos más de una no elegimos arbitrariamente
-        # cuál mover.
-        # ====================================================
-
-        if len(participaciones) > 1:
-
-            omitidos += 1
-
-            errores.append(
-                (
-                    f"{identificador}: posee más de una "
-                    "participación semanal activa. "
-                    "Debe revisarse antes de moverlo."
-                )
-            )
-
-            continue
-
-        sitio_batch = participaciones[0]
-
-        # ====================================================
-        # YA ESTÁ EN LA SEMANA DESTINO
-        # ====================================================
-
-        if sitio_batch.batch_id == batch_destino.pk:
-
-            omitidos += 1
-
-            errores.append(
-                (f"{identificador}: ya pertenece a " f"{batch_destino.codigo_semana}.")
-            )
-
-            continue
-
-        # ====================================================
-        # MOVIMIENTO REAL
-        # ====================================================
-        #
-        # Reutilizamos el servicio oficial.
-        # ====================================================
-
         try:
 
-            mover_sitio_a_semana(
-                sitio_batch_id=sitio_batch.pk,
+            resultado = asignar_o_mover_sitio_planificado_a_semana(
+                sitio_planificado_id=sitio_planificado.pk,
                 batch_destino_id=batch_destino.pk,
                 usuario=request.user,
             )
@@ -552,7 +492,10 @@ def mover_sitios_semana_masivo(
 
                 errores.append(f"{identificador}: {mensaje}")
 
+            continue
+
         except (
+            SitioPlanificado.DoesNotExist,
             SitioBatchSemanal.DoesNotExist,
             BatchPlanificacionSemanal.DoesNotExist,
         ):
@@ -562,47 +505,83 @@ def mover_sitios_semana_masivo(
             errores.append(
                 (
                     f"{identificador}: la planificación "
-                    "cambió mientras se realizaba el "
-                    "movimiento."
+                    "cambió mientras se realizaba la "
+                    "asignación."
                 )
             )
+
+            continue
 
         except Exception as exc:
 
             omitidos += 1
 
             errores.append(
-                (f"{identificador}: no fue posible " f"moverlo. Detalle: {exc}")
+                (f"{identificador}: no fue posible " f"asignarlo. Detalle: {exc}")
             )
+
+            continue
+
+        # ====================================================
+        # 7. CLASIFICAR RESULTADO
+        # ====================================================
+
+        procesados += 1
+
+        if resultado.get(
+            "era_primera_asignacion_semanal",
+            False,
+        ):
+
+            asignados += 1
 
         else:
 
             movidos += 1
 
     # ========================================================
-    # MENSAJE PRINCIPAL
+    # 8. MENSAJE PRINCIPAL
     # ========================================================
 
-    if movidos:
+    if procesados:
+
+        partes = []
+
+        if asignados:
+
+            partes.append(f"{asignados} asignado(s)")
+
+        if movidos:
+
+            partes.append(f"{movidos} movido(s)")
+
+        detalle = " y ".join(
+            partes,
+        )
 
         messages.success(
             request,
             (
-                f"{movidos} sitio(s) fueron movidos "
+                f"{procesados} sitio(s) procesado(s) "
                 f"correctamente hacia "
-                f"{batch_destino.codigo_semana}."
+                f"{batch_destino.codigo_semana}: "
+                f"{detalle}."
             ),
         )
+
+    # ========================================================
+    # 9. SITIOS OMITIDOS
+    # ========================================================
 
     if omitidos:
 
         messages.warning(
             request,
-            (f"{omitidos} sitio(s) no pudieron " "ser movidos."),
+            (f"{omitidos} sitio(s) no pudieron " "ser asignados o movidos."),
         )
 
     # ========================================================
-    # DETALLE DE ERRORES
+    # 10. DETALLE DE ERRORES
     # ========================================================
 
     for error in errores[:10]:
@@ -618,6 +597,10 @@ def mover_sitios_semana_masivo(
             request,
             (f"Existen {len(errores) - 10} " "advertencia(s) adicional(es)."),
         )
+
+    # ========================================================
+    # 11. VOLVER A PLANIFICACIÓN MENSUAL
+    # ========================================================
 
     return redirect(
         "planificacion:lista_asignacion_mensual",
