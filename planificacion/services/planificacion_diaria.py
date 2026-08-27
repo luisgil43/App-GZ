@@ -2687,7 +2687,6 @@ def _limpiar_salidas_editables_batch(
 # ============================================================
 
 
-
 @transaction.atomic
 def guardar_plan_diario_batch(
     *,
@@ -3181,63 +3180,125 @@ def guardar_plan_diario_batch(
 # ============================================================
 
 
+# ============================================================
+# BUSCAR SERVICIO OPERACIONAL DE ESTA EJECUCIÓN
+# ============================================================
+
+
 def obtener_servicio_operacional_sitio(
     sitio_planificado,
 ):
     """
-    Obtiene exclusivamente el ServicioCotizado perteneciente
-    a esta ejecución mensual de SitioPlanificado.
+    Obtiene exclusivamente el ServicioCotizado correspondiente
+    a esta ejecución mensual concreta de SitioPlanificado.
 
-    REGLA CRÍTICA
+    ARQUITECTURA
     ==========================================================
 
-    Un mismo SitioMovil puede ejecutarse múltiples veces:
+    Un mismo SitioMovil puede aparecer múltiples veces a lo
+    largo del tiempo.
 
-        05_750 - Octubre 2025
-        05_750 - Agosto 2026
-        05_750 - Diciembre 2026
+    Ejemplo:
 
-    Por lo tanto NO podemos buscar Operaciones solamente por:
+        05_750
+            Octubre 2025
+            Agosto 2026
+            Diciembre 2026
+            Marzo 2027
+
+    Cada una de esas apariciones representa una ejecución
+    operacional diferente.
+
+    Por lo tanto NO es válido buscar Operaciones mediante:
 
         id_claro
 
-    ni utilizar:
+    ni mediante:
 
         order_by("-id").first()
 
-    porque eso podría devolver una ejecución correspondiente
-    a otro mes o incluso a otro año.
+    porque el último ServicioCotizado creado podría pertenecer
+    a otro mes, otro año o incluso a otra ejecución histórica.
 
-    La relación correcta es:
+    RELACIÓN CORRECTA
+    ==========================================================
 
         SitioPlanificado
             ->
         ServicioCotizado.sitio_planificado
 
-    De esta manera cada planificación mensual consulta
-    exclusivamente su propia ejecución operacional.
+    Esto permite que la planificación diaria consulte
+    exclusivamente el servicio perteneciente a su propia
+    ejecución mensual.
 
-    IMPORTANTE
+    SIN FALLBACK
     ==========================================================
 
-    No se utiliza fallback por ID Claro.
+    No existe fallback por:
 
-    Si esta ejecución de SitioPlanificado todavía no posee
-    ServicioCotizado vinculado, se devuelve None.
+        id_claro
+        id_new
+        fecha_creacion
+        último DU
 
-    Esto evita que un servicio histórico de ese mismo sitio
-    contamine el estado de la planificación actual.
+    Si todavía no existe un ServicioCotizado vinculado a este
+    SitioPlanificado, se devuelve None.
+
+    Esto es intencional.
+
+    Es preferible mostrar:
+
+        Sin servicio operacional
+
+    antes que tomar accidentalmente un servicio histórico de
+    otra ejecución y marcar el sitio como:
+
+        asignado
+        en ejecución
+        revisión
+        finalizado
+
+    incorrectamente.
+
+    INTEGRIDAD
+    ==========================================================
+
+    En condiciones normales debe existir como máximo un
+    ServicioCotizado operacional asociado a una ejecución
+    mensual.
+
+    Si por datos históricos existieran varios, utilizamos el
+    más reciente únicamente DENTRO DEL MISMO SitioPlanificado.
+
+    Esto es seguro porque todos ellos pertenecerían a la misma
+    ejecución mensual y nunca a otro mes/año.
     """
+
+    # ========================================================
+    # SIN SITIO PLANIFICADO
+    # ========================================================
 
     if sitio_planificado is None:
         return None
 
-    if not sitio_planificado.pk:
+    # ========================================================
+    # INSTANCIA TODAVÍA NO GUARDADA
+    # ========================================================
+
+    if not getattr(
+        sitio_planificado,
+        "pk",
+        None,
+    ):
         return None
+
+    # ========================================================
+    # SERVICIO VINCULADO A ESTA EJECUCIÓN
+    # ========================================================
 
     return (
         ServicioCotizado.objects.filter(
-            sitio_planificado=sitio_planificado,
+            sitio_planificado_id=(sitio_planificado.pk),
         )
         .order_by(
             "-id",

@@ -2544,20 +2544,75 @@ def accion_masiva_cotizaciones_pm(
 
 
 @login_required
-@rol_requerido('pm', 'admin', 'facturacion')
-def crear_servicio_cotizado(request):
-    if request.method == 'POST':
+@rol_requerido(
+    "pm",
+    "admin",
+    "facturacion",
+)
+def crear_servicio_cotizado(
+    request,
+):
+    if request.method == "POST":
+
         form = ServicioCotizadoForm(request.POST)
+
         if form.is_valid():
-            print(form.cleaned_data)
+
             servicio = form.save(commit=False)
+
             servicio.creado_por = request.user
-            servicio.estado = 'cotizado'
+
+            servicio.estado = "cotizado"
+
+            # ====================================================
+            # VINCULAR A EJECUCIÓN MENSUAL EXACTA
+            # ====================================================
+
+            servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
+                id_claro=(servicio.id_claro),
+                mes_produccion=(servicio.mes_produccion),
+            )
+
             servicio.save()
-            return redirect('operaciones:listar_servicios_pm')
+
+            if servicio.sitio_planificado_id:
+
+                messages.success(
+                    request,
+                    (
+                        f"DU{servicio.du} creado y "
+                        "vinculado correctamente con "
+                        "su planificación mensual."
+                    ),
+                )
+
+            else:
+
+                messages.warning(
+                    request,
+                    (
+                        f"DU{servicio.du} fue creado, "
+                        "pero no existe una planificación "
+                        "mensual exacta para "
+                        f"{servicio.id_claro} / "
+                        f"{servicio.mes_produccion}. "
+                        "El servicio quedó sin vínculo."
+                    ),
+                )
+
+            return redirect("operaciones:listar_servicios_pm")
+
     else:
+
         form = ServicioCotizadoForm()
-    return render(request, 'operaciones/crear_servicio_cotizado.html', {'form': form})
+
+    return render(
+        request,
+        "operaciones/crear_servicio_cotizado.html",
+        {
+            "form": form,
+        },
+    )
 
 
 @login_required
@@ -2691,126 +2746,454 @@ def aprobar_cotizacion(request, pk):
 
     return redirect(next_url or "operaciones:listar_servicios_pm")
 
+# ============================================================
+# BUSCAR SITIO PLANIFICADO PARA SERVICIO COTIZADO
+# ============================================================
 
-@login_required
-@rol_requerido('pm', 'admin', 'facturacion')
-def importar_cotizaciones(request):
-    if request.method == 'POST' and request.FILES.get('archivo'):
-        archivo = request.FILES['archivo']
+
+def obtener_sitio_planificado_para_servicio(
+    *,
+    id_claro,
+    mes_produccion,
+):
+    """
+    Busca la ejecución mensual exacta de un sitio.
+
+    REGLA:
+        ID Claro
+        +
+        año de producción
+        +
+        mes de producción
+
+    No utiliza:
+        - último SitioPlanificado
+        - último ServicioCotizado
+        - fecha de creación
+        - estado histórico
+
+    Si no existe una coincidencia exacta o existe más de una,
+    devuelve None.
+    """
+
+    import unicodedata
+
+    from planificacion.models import SitioPlanificado
+
+    MESES = {
+        "enero": 1,
+        "febrero": 2,
+        "marzo": 3,
+        "abril": 4,
+        "mayo": 5,
+        "junio": 6,
+        "julio": 7,
+        "agosto": 8,
+        "septiembre": 9,
+        "setiembre": 9,
+        "octubre": 10,
+        "noviembre": 11,
+        "diciembre": 12,
+    }
+
+    id_claro = str(id_claro or "").strip()
+
+    if not id_claro:
+        return None
+
+    texto = str(mes_produccion or "").strip().lower()
+
+    if not texto:
+        return None
+
+    texto = unicodedata.normalize(
+        "NFKD",
+        texto,
+    )
+
+    texto = "".join(
+        caracter for caracter in texto if not unicodedata.combining(caracter)
+    )
+
+    texto = texto.strip()
+
+    anio = None
+    mes = None
+
+    # ========================================================
+    # YYYY-MM
+    # ========================================================
+
+    if len(texto) == 7 and texto[4] == "-":
 
         try:
-            # Cargar archivo
-            if archivo.name.endswith('.csv'):
+
+            anio = int(texto[:4])
+
+            mes = int(texto[5:7])
+
+        except ValueError:
+
+            anio = None
+            mes = None
+
+    # ========================================================
+    # MM/YYYY
+    # ========================================================
+
+    elif "/" in texto:
+
+        partes = [parte.strip() for parte in texto.split("/")]
+
+        if len(partes) == 2:
+
+            try:
+
+                mes = int(partes[0])
+
+                anio = int(partes[1])
+
+            except ValueError:
+
+                anio = None
+                mes = None
+
+    # ========================================================
+    # AGOSTO 2026
+    # ========================================================
+
+    else:
+
+        partes = texto.replace(
+            "-",
+            " ",
+        ).split()
+
+        if len(partes) >= 2:
+
+            mes = MESES.get(partes[0])
+
+            try:
+
+                anio = int(partes[-1])
+
+            except ValueError:
+
+                anio = None
+
+    if not anio or not mes or not 1 <= mes <= 12:
+        return None
+
+    candidatos = list(
+        SitioPlanificado.objects.filter(
+            sitio__id_claro=id_claro,
+            planificacion__anio=anio,
+            planificacion__mes=mes,
+        )
+        .select_related(
+            "sitio",
+            "planificacion",
+        )
+        .order_by(
+            "id",
+        )[:2]
+    )
+
+    if len(candidatos) != 1:
+        return None
+
+    return candidatos[0]
+
+
+@login_required
+@rol_requerido(
+    "pm",
+    "admin",
+    "facturacion",
+)
+def importar_cotizaciones(
+    request,
+):
+    if request.method == "POST" and request.FILES.get("archivo"):
+
+        archivo = request.FILES["archivo"]
+
+        try:
+
+            # ====================================================
+            # CARGAR ARCHIVO
+            # ====================================================
+
+            if archivo.name.endswith(".csv"):
+
                 df = pd.read_csv(archivo)
+
             else:
+
                 df = pd.read_excel(archivo)
 
+            # ====================================================
+            # ENCABEZADOS
+            # ====================================================
+
             encabezados_validos = {
-                'ID CLARO': 'id_claro',
-                'Id Claro': 'id_claro',
-                'REGION': 'region',
-                'REGIÓN': 'region',
-                'MES PRODUCCION': 'mes_produccion',
-                'Mes Producción': 'mes_produccion',
-                'ID NEW': 'id_new',
-                'DETALLE TAREA': 'detalle_tarea',
-                'MONTO COTIZADO': 'monto_cotizado',
-                'MONTO MMOO': 'monto_mmoo',
+                "ID CLARO": "id_claro",
+                "Id Claro": "id_claro",
+                "REGION": "region",
+                "REGIÓN": "region",
+                "MES PRODUCCION": "mes_produccion",
+                "Mes Producción": "mes_produccion",
+                "ID NEW": "id_new",
+                "DETALLE TAREA": "detalle_tarea",
+                "MONTO COTIZADO": "monto_cotizado",
+                "MONTO MMOO": "monto_mmoo",
             }
-            df.rename(columns=encabezados_validos, inplace=True)
+
+            df.rename(
+                columns=encabezados_validos,
+                inplace=True,
+            )
 
             columnas_requeridas = [
-                'id_claro', 'mes_produccion', 'detalle_tarea', 'monto_cotizado']
-            for col in columnas_requeridas:
-                if col not in df.columns:
-                    messages.error(
-                        request, f'Falta la columna requerida: {col}')
-                    return redirect('operaciones:listar_servicios_pm')
+                "id_claro",
+                "mes_produccion",
+                "detalle_tarea",
+                "monto_cotizado",
+            ]
 
-            # Lista para almacenar conflictos
+            for col in columnas_requeridas:
+
+                if col not in df.columns:
+
+                    messages.error(
+                        request,
+                        ("Falta la columna requerida: " f"{col}"),
+                    )
+
+                    return redirect("operaciones:listar_servicios_pm")
+
+            # ====================================================
+            # RESULTADOS
+            # ====================================================
+
             cotizaciones_omitidas = []
+
             cotizaciones_creadas = []
 
-            for _, row in df.iterrows():
-                id_claro = str(row['id_claro']).strip()
+            cotizaciones_vinculadas = 0
 
+            cotizaciones_sin_planificacion = []
+
+            # ====================================================
+            # FILAS
+            # ====================================================
+
+            for _, row in df.iterrows():
+
+                id_claro = str(row["id_claro"]).strip()
+
+                # ================================================
                 # REGION
-                region = row['region'] if 'region' in row and not pd.isna(row['region']) else (
-                    id_claro.split('_')[0] if '_' in id_claro else '13'
+                # ================================================
+
+                region = (
+                    row["region"]
+                    if ("region" in row and not pd.isna(row["region"]))
+                    else (id_claro.split("_")[0] if "_" in id_claro else "13")
                 )
 
+                # ================================================
                 # ID NEW
-                if 'id_new' in row and not pd.isna(row['id_new']):
-                    id_new = row['id_new']
+                # ================================================
+
+                if "id_new" in row and not pd.isna(row["id_new"]):
+
+                    id_new = row["id_new"]
+
                 else:
+
                     try:
+
                         sitio = SitioMovil.objects.get(id_claro=id_claro)
+
                         id_new = sitio.id_sites_new
+
                     except SitioMovil.DoesNotExist:
+
                         messages.warning(
-                            request, f"No se encontró ID NEW para ID CLARO {id_claro}. Se omitió.")
+                            request,
+                            (
+                                "No se encontró ID NEW "
+                                "para ID CLARO "
+                                f"{id_claro}. Se omitió."
+                            ),
+                        )
+
                         continue
 
+                # ================================================
                 # MES PRODUCCIÓN
-                valor = row['mes_produccion']
-                if isinstance(valor, (datetime, pd.Timestamp)):
-                    mes_produccion = valor.strftime('%B %Y').capitalize()
+                # ================================================
+
+                valor = row["mes_produccion"]
+
+                if isinstance(
+                    valor,
+                    (
+                        datetime,
+                        pd.Timestamp,
+                    ),
+                ):
+
+                    mes_produccion = valor.strftime("%B %Y").capitalize()
+
                 else:
+
                     try:
+
                         fecha_parseada = pd.to_datetime(
-                            str(valor), dayfirst=True, errors='coerce')
-                        mes_produccion = (
-                            fecha_parseada.strftime('%B %Y').capitalize()
-                            if not pd.isna(fecha_parseada) else str(valor).capitalize()
+                            str(valor),
+                            dayfirst=True,
+                            errors="coerce",
                         )
-                    except:
+
+                        mes_produccion = (
+                            fecha_parseada.strftime("%B %Y").capitalize()
+                            if not pd.isna(fecha_parseada)
+                            else str(valor).capitalize()
+                        )
+
+                    except Exception:
+
                         mes_produccion = str(valor).capitalize()
 
-                # Verificar si ya existe cotización
-                existente = ServicioCotizado.objects.filter(
-                    mes_produccion=mes_produccion
-                ).filter(models.Q(id_claro=id_claro) | models.Q(id_new=id_new)).first()
+                # ================================================
+                # EVITAR DUPLICADO
+                # ================================================
+
+                existente = (
+                    ServicioCotizado.objects.filter(mes_produccion=mes_produccion)
+                    .filter(models.Q(id_claro=id_claro) | models.Q(id_new=id_new))
+                    .first()
+                )
 
                 if existente:
-                    cotizaciones_omitidas.append({
-                        'id_claro': id_claro,
-                        'id_new': id_new,
-                        'mes_produccion': mes_produccion,
-                        'du': existente.du,
-                        'estado': existente.get_estado_display()
-                    })
+
+                    cotizaciones_omitidas.append(
+                        {
+                            "id_claro": id_claro,
+                            "id_new": id_new,
+                            "mes_produccion": mes_produccion,
+                            "du": existente.du,
+                            "estado": (existente.get_estado_display()),
+                        }
+                    )
+
                     continue
 
-                # Crear nueva cotización
-                ServicioCotizado.objects.create(
+                # ================================================
+                # BUSCAR EJECUCIÓN MENSUAL EXACTA
+                # ================================================
+
+                sitio_planificado = obtener_sitio_planificado_para_servicio(
+                    id_claro=id_claro,
+                    mes_produccion=mes_produccion,
+                )
+
+                # ================================================
+                # CREAR SERVICIO
+                # ================================================
+
+                servicio = ServicioCotizado.objects.create(
                     id_claro=id_claro,
                     region=region,
                     mes_produccion=mes_produccion,
                     id_new=id_new,
-                    detalle_tarea=row['detalle_tarea'],
-                    monto_cotizado=row['monto_cotizado'],
-                    monto_mmoo=row['monto_mmoo'],
-                    estado='cotizado',
-                    creado_por=request.user
+                    detalle_tarea=row["detalle_tarea"],
+                    monto_cotizado=row["monto_cotizado"],
+                    monto_mmoo=(
+                        row["monto_mmoo"]
+                        if ("monto_mmoo" in row and not pd.isna(row["monto_mmoo"]))
+                        else None
+                    ),
+                    estado="cotizado",
+                    creado_por=request.user,
+                    sitio_planificado=(sitio_planificado),
                 )
-                cotizaciones_creadas.append(f"{id_claro} - {mes_produccion}")
 
-            # ¿Hay conflictos?
+                if sitio_planificado:
+
+                    cotizaciones_vinculadas += 1
+
+                else:
+
+                    cotizaciones_sin_planificacion.append(
+                        {
+                            "servicio_id": (servicio.pk),
+                            "du": (servicio.du),
+                            "id_claro": (id_claro),
+                            "mes_produccion": (mes_produccion),
+                        }
+                    )
+
+                cotizaciones_creadas.append((f"{id_claro} - " f"{mes_produccion}"))
+
+            # ====================================================
+            # CONFLICTOS EXISTENTES
+            # ====================================================
+
             if cotizaciones_omitidas:
-                request.session['cotizaciones_omitidas'] = cotizaciones_omitidas
+
+                request.session["cotizaciones_omitidas"] = cotizaciones_omitidas
+
                 messages.warning(
-                    request, "Se detectaron cotizaciones ya registradas.")
-                return redirect('operaciones:advertencia_cotizaciones_omitidas')
+                    request,
+                    ("Se detectaron cotizaciones " "ya registradas."),
+                )
+
+                return redirect("operaciones:" "advertencia_cotizaciones_omitidas")
+
+            # ====================================================
+            # RESULTADO
+            # ====================================================
+
+            mensaje = (
+                "Se importaron correctamente "
+                f"{len(cotizaciones_creadas)} "
+                "cotizaciones. "
+                f"{cotizaciones_vinculadas} "
+                "quedaron vinculadas automáticamente "
+                "a su planificación mensual."
+            )
+
+            if cotizaciones_sin_planificacion:
+
+                mensaje += (
+                    f" {len(cotizaciones_sin_planificacion)} "
+                    "no tenían una planificación mensual "
+                    "exacta disponible y quedaron sin vínculo."
+                )
 
             messages.success(
-                request, f'Se importaron correctamente {len(cotizaciones_creadas)} cotizaciones.')
-            return redirect('operaciones:listar_servicios_pm')
+                request,
+                mensaje,
+            )
+
+            return redirect("operaciones:listar_servicios_pm")
 
         except Exception as e:
-            messages.error(request, f'Error al importar: {e}')
-            return redirect('operaciones:listar_servicios_pm')
 
-    return render(request, 'operaciones/importar_cotizaciones.html')
+            messages.error(
+                request,
+                f"Error al importar: {e}",
+            )
+
+            return redirect("operaciones:listar_servicios_pm")
+
+    return render(
+        request,
+        "operaciones/importar_cotizaciones.html",
+    )
 
 
 @login_required
