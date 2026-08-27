@@ -106,23 +106,66 @@ def obtener_servicio_sitio_salida(
     sitio_salida,
 ):
     """
-    Obtiene el ServicioCotizado vigente asociado al sitio.
+    Obtiene exclusivamente el ServicioCotizado asociado a la
+    ejecución operacional del SitioPlanificado contenido en
+    esta participación diaria.
 
-    La relación utilizada actualmente por Operaciones
-    continúa siendo id_claro.
+    REGLA CRÍTICA
+    ==========================================================
+
+    NO se busca por:
+
+        id_claro
+        +
+        order_by("-id").first()
+
+    porque un mismo sitio físico puede poseer múltiples
+    ejecuciones operacionales en distintos períodos.
+
+    Ejemplo:
+
+        05_750 - Octubre 2025
+        05_750 - Agosto 2026
+        05_750 - Diciembre 2026
+
+    La relación correcta es:
+
+        SitioSalidaPlanificacionDiaria
+            ->
+        SitioBatchSemanal
+            ->
+        SitioPlanificado
+            ->
+        ServicioCotizado.sitio_planificado
+
+    De esta manera la asignación diaria utiliza exclusivamente
+    el ServicioCotizado perteneciente a ESTA ejecución.
+
+    Si todavía no existe ServicioCotizado vinculado a este
+    SitioPlanificado, se devuelve None.
+
+    No existe fallback por ID Claro.
     """
 
-    sitio = sitio_salida.sitio_batch.sitio_planificado.sitio
+    if sitio_salida is None:
+        return None
 
-    id_claro = (sitio.id_claro or "").strip()
+    sitio_batch = sitio_salida.sitio_batch
 
-    if not id_claro:
+    if sitio_batch is None:
+        return None
 
+    sitio_planificado = sitio_batch.sitio_planificado
+
+    if sitio_planificado is None:
+        return None
+
+    if not sitio_planificado.pk:
         return None
 
     return (
         ServicioCotizado.objects.filter(
-            id_claro=id_claro,
+            sitio_planificado=sitio_planificado,
         )
         .order_by(
             "-id",
@@ -269,18 +312,82 @@ def _obtener_salida(
     *,
     bloquear=False,
 ):
-    queryset = SalidaPlanificacionDiaria.objects.select_related(
+    """
+    Obtiene una SalidaPlanificacionDiaria.
+
+    BLOQUEO POSTGRESQL
+    ==========================================================
+
+    Cuando bloquear=True:
+
+    se bloquea EXCLUSIVAMENTE la fila de:
+
+        SalidaPlanificacionDiaria
+
+    mediante:
+
+        select_for_update()
+
+    No combinamos ese bloqueo con select_related() porque
+    relaciones como:
+
+        disponibilidad_cuadrilla
+        cuadrilla_operativa
+        batch.planificacion
+
+    pueden ser nullable y Django puede construir:
+
+        LEFT OUTER JOIN
+        +
+        FOR UPDATE
+
+    PostgreSQL no permite aplicar FOR UPDATE sobre el lado
+    nullable de un OUTER JOIN.
+
+    Después de obtener y bloquear la salida, las relaciones se
+    cargan normalmente mediante accesos separados.
+    """
+
+    if bloquear:
+
+        salida = SalidaPlanificacionDiaria.objects.select_for_update().get(
+            pk=salida_id,
+        )
+
+        # ====================================================
+        # CARGAR RELACIONES DESPUÉS DEL LOCK
+        # ====================================================
+
+        salida.batch
+
+        if salida.batch_id:
+
+            batch = salida.batch
+
+            if getattr(
+                batch,
+                "planificacion_id",
+                None,
+            ):
+
+                batch.planificacion
+
+        if salida.disponibilidad_cuadrilla_id:
+
+            disponibilidad = salida.disponibilidad_cuadrilla
+
+            if disponibilidad.cuadrilla_operativa_id:
+
+                disponibilidad.cuadrilla_operativa
+
+        return salida
+
+    return SalidaPlanificacionDiaria.objects.select_related(
         "batch",
         "batch__planificacion",
         "disponibilidad_cuadrilla",
         ("disponibilidad_cuadrilla__" "cuadrilla_operativa"),
-    )
-
-    if bloquear:
-
-        queryset = queryset.select_for_update()
-
-    return queryset.get(
+    ).get(
         pk=salida_id,
     )
 
@@ -295,7 +402,38 @@ def _obtener_sitios_salida(
     *,
     bloquear=False,
 ):
-    queryset = (
+    """
+    Obtiene las participaciones activas de una salida.
+
+    BLOQUEO POSTGRESQL
+    ==========================================================
+
+    Cuando bloquear=True:
+
+    se bloquean exclusivamente las filas de:
+
+        SitioSalidaPlanificacionDiaria
+
+    SIN combinar:
+
+        select_for_update()
+        +
+        select_related()
+
+    Después del bloqueo se cargan normalmente:
+
+        salida
+        sitio_batch
+        sitio_planificado
+        sitio
+
+    Esto evita:
+
+        FOR UPDATE cannot be applied to the nullable side
+        of an outer join
+    """
+
+    queryset_base = (
         SitioSalidaPlanificacionDiaria.objects.filter(
             salida=salida,
         )
@@ -306,24 +444,47 @@ def _obtener_sitios_salida(
                 "reprogramado",
             ]
         )
-        .select_related(
-            "salida",
-            "sitio_batch",
-            "sitio_batch__sitio_planificado",
-            ("sitio_batch__" "sitio_planificado__sitio"),
-        )
         .order_by(
             "orden",
             "id",
         )
     )
 
+    # ========================================================
+    # CON BLOQUEO
+    # ========================================================
+
     if bloquear:
 
-        queryset = queryset.select_for_update()
+        sitios_salida = list(queryset_base.select_for_update())
+
+        # ====================================================
+        # CARGAR RELACIONES DESPUÉS DEL LOCK
+        # ====================================================
+
+        for sitio_salida in sitios_salida:
+
+            sitio_salida.salida
+
+            sitio_batch = sitio_salida.sitio_batch
+
+            sitio_planificado = sitio_batch.sitio_planificado
+
+            sitio_planificado.sitio
+
+        return sitios_salida
+
+    # ========================================================
+    # SOLO LECTURA
+    # ========================================================
 
     return list(
-        queryset,
+        queryset_base.select_related(
+            "salida",
+            "sitio_batch",
+            "sitio_batch__sitio_planificado",
+            ("sitio_batch__" "sitio_planificado__sitio"),
+        )
     )
 
 
@@ -740,11 +901,43 @@ def asignar_dia_completo(
     request=None,
 ):
     """
-    Ejecuta todas las salidas del día.
+    Ejecuta todas las salidas existentes de un día.
 
-    Cada salida utiliza exclusivamente los integrantes
-    activos configurados en su propia CuadrillaOperativa.
+    Cada salida utiliza exclusivamente los integrantes activos
+    configurados en su propia CuadrillaOperativa.
+
+    BLOQUEOS POSTGRESQL
+    ==========================================================
+
+    Primero se bloquean exclusivamente las filas de:
+
+        SalidaPlanificacionDiaria
+
+    correspondientes al día.
+
+    NO utilizamos:
+
+        select_for_update()
+        +
+        select_related(
+            "disponibilidad_cuadrilla",
+            "disponibilidad_cuadrilla__cuadrilla_operativa",
+        )
+
+    porque disponibilidad_cuadrilla o cuadrilla_operativa
+    pueden ser nullable y PostgreSQL rechaza un FOR UPDATE
+    aplicado sobre el lado nullable de un LEFT OUTER JOIN.
+
+    Después del bloqueo cada salida será procesada por:
+
+        asignar_salida_completa()
+
+    que realizará sus propios locks específicos y seguros.
     """
+
+    # ========================================================
+    # 1. BLOQUEAR SOLAMENTE LAS SALIDAS DEL DÍA
+    # ========================================================
 
     salidas = list(
         SalidaPlanificacionDiaria.objects.select_for_update()
@@ -755,14 +948,46 @@ def asignar_dia_completo(
         .exclude(
             estado="cancelada",
         )
-        .select_related(
-            "disponibilidad_cuadrilla",
-            ("disponibilidad_cuadrilla__" "cuadrilla_operativa"),
-        )
         .order_by(
-            ("disponibilidad_cuadrilla__" "cuadrilla_operativa__orden"),
             "orden",
             "id",
+        )
+    )
+
+    # ========================================================
+    # 2. CARGAR DATOS DE ORDEN DE CUADRILLA FUERA DEL LOCK SQL
+    # ========================================================
+
+    for salida in salidas:
+
+        if salida.disponibilidad_cuadrilla_id:
+
+            disponibilidad = salida.disponibilidad_cuadrilla
+
+            if disponibilidad.cuadrilla_operativa_id:
+
+                disponibilidad.cuadrilla_operativa
+
+    # ========================================================
+    # 3. ORDEN OPERACIONAL FINAL
+    # ========================================================
+
+    salidas.sort(
+        key=lambda salida: (
+            (
+                getattr(
+                    salida.disponibilidad_cuadrilla.cuadrilla_operativa,
+                    "orden",
+                    9999,
+                )
+                if (
+                    salida.disponibilidad_cuadrilla_id
+                    and salida.disponibilidad_cuadrilla.cuadrilla_operativa_id
+                )
+                else 9999
+            ),
+            salida.orden,
+            salida.pk,
         )
     )
 
@@ -773,7 +998,7 @@ def asignar_dia_completo(
     total_omitidos = 0
 
     # ========================================================
-    # PROCESAR CADA SALIDA
+    # 4. PROCESAR CADA SALIDA
     # ========================================================
 
     for salida in salidas:
@@ -803,6 +1028,10 @@ def asignar_dia_completo(
             )
             or 0
         )
+
+    # ========================================================
+    # 5. RESULTADO
+    # ========================================================
 
     return {
         "batch": batch,
