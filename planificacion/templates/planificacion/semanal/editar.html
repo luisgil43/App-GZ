@@ -1,0 +1,1058 @@
+{% extends "dashboard_admin/base.html" %}
+{% load l10n %}
+
+{% block title %}
+Editar Semana
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-6xl">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        overflow-hidden
+        rounded-3xl
+        border border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          bg-gradient-to-r
+          from-slate-50
+          via-white
+          to-blue-50/50
+          px-5
+          py-5
+          sm:px-6
+        "
+      >
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-4
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+
+          <div>
+
+            <p
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.14em]
+                text-blue-700
+              "
+            >
+              Configuración operacional
+            </p>
+
+            <h1
+              class="
+                mt-1
+                text-2xl
+                font-black
+                tracking-tight
+                text-slate-900
+                sm:text-3xl
+              "
+            >
+              Editar semana {{ batch.codigo_semana }}
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-600">
+              {{ batch.fecha_inicio|date:"d/m/Y" }}
+              al
+              {{ batch.fecha_fin|date:"d/m/Y" }}
+            </p>
+
+          </div>
+
+
+          <a
+            href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+            class="
+              inline-flex
+              items-center
+              justify-center
+              rounded-xl
+              border border-slate-300
+              bg-white
+              px-4
+              py-2.5
+              text-sm
+              font-semibold
+              text-slate-700
+              shadow-sm
+              transition
+              hover:bg-slate-50
+            "
+          >
+            Volver al batch
+          </a>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- INFORMACIÓN                                          -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-6
+        rounded-2xl
+        border border-blue-200
+        bg-blue-50
+        px-5
+        py-4
+      "
+    >
+
+      <div class="flex items-start gap-3">
+
+        <div
+          class="
+            flex
+            h-9
+            w-9
+            shrink-0
+            items-center
+            justify-center
+            rounded-full
+            bg-blue-100
+            font-black
+            text-blue-700
+          "
+        >
+          i
+        </div>
+
+        <div>
+
+          <p class="font-black text-blue-900">
+            Estás editando una semana ya existente
+          </p>
+
+          <p
+            class="
+              mt-1
+              text-sm
+              leading-relaxed
+              text-blue-800
+            "
+          >
+            Los sitios, permisos y salidas existentes no serán
+            eliminados ni recalculados. Los cambios modifican
+            únicamente la configuración operacional disponible
+            para esta semana.
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- FORMULARIO                                           -->
+    <!-- ==================================================== -->
+
+    <form method="post" class="space-y-6">
+
+      {% csrf_token %}
+
+
+      {% if form.non_field_errors %}
+
+        <div
+          class="
+            rounded-xl
+            border border-red-200
+            bg-red-50
+            px-4
+            py-3
+            text-sm
+            font-semibold
+            text-red-700
+          "
+        >
+
+          {% for error in form.non_field_errors %}
+
+            <div>
+              {{ error }}
+            </div>
+
+          {% endfor %}
+
+        </div>
+
+      {% endif %}
+
+
+      <!-- ================================================== -->
+      <!-- DATOS GENERALES                                    -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          p-5
+          shadow-sm
+        "
+      >
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.12em]
+            text-slate-400
+          "
+        >
+          Semana
+        </p>
+
+        <h2 class="mt-1 text-lg font-black text-slate-900">
+          Configuración general
+        </h2>
+
+
+        <div class="mt-5 grid gap-5 md:grid-cols-2">
+
+          <!-- SEMANA FIJA -->
+
+          <div>
+
+            <label
+              class="
+                mb-1.5
+                block
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              Semana operacional
+            </label>
+
+            <div
+              class="
+                rounded-xl
+                border border-slate-200
+                bg-slate-100
+                px-3
+                py-2.5
+                text-sm
+                font-bold
+                text-slate-700
+              "
+            >
+              {{ batch.codigo_semana }}
+              ·
+              {{ batch.fecha_inicio|date:"d/m/Y" }}
+              al
+              {{ batch.fecha_fin|date:"d/m/Y" }}
+            </div>
+
+            <p class="mt-2 text-xs text-slate-500">
+              La fecha no puede modificarse porque identifica
+              globalmente esta semana operacional.
+            </p>
+
+          </div>
+
+
+          <!-- OBJETIVO -->
+
+          <div>
+
+            <label
+              for="{{ form.objetivo_sitios.id_for_label }}"
+              class="
+                mb-1.5
+                block
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              Cantidad de sitios a proponer
+            </label>
+
+            {{ form.objetivo_sitios }}
+
+            {% for error in form.objetivo_sitios.errors %}
+
+              <div class="mt-1 text-xs font-semibold text-red-600">
+                {{ error }}
+              </div>
+
+            {% endfor %}
+
+          </div>
+
+
+          <!-- OBSERVACIONES -->
+
+          <div class="md:col-span-2">
+
+            <label
+              for="{{ form.observaciones.id_for_label }}"
+              class="
+                mb-1.5
+                block
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              Observaciones
+            </label>
+
+            {{ form.observaciones }}
+
+            {% for error in form.observaciones.errors %}
+
+              <div class="mt-1 text-xs font-semibold text-red-600">
+                {{ error }}
+              </div>
+
+            {% endfor %}
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- CUADRILLAS                                         -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          rounded-2xl
+          border border-slate-200
+          bg-white
+          p-5
+          shadow-sm
+        "
+      >
+
+        <div
+          class="
+            flex
+            flex-col
+            gap-3
+            lg:flex-row
+            lg:items-start
+            lg:justify-between
+          "
+        >
+
+          <div>
+
+            <p
+              class="
+                text-[11px]
+                font-black
+                uppercase
+                tracking-[0.12em]
+                text-cyan-700
+              "
+            >
+              Recursos
+            </p>
+
+            <h2 class="mt-1 text-lg font-black text-slate-900">
+              Disponibilidad de cuadrillas
+            </h2>
+
+            <p class="mt-1 max-w-3xl text-sm text-slate-500">
+              La configuración actual ya viene precargada.
+              Cambia únicamente lo que necesites para esta semana.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div class="mt-5 space-y-4">
+
+          {% for configuracion in form.cuadrillas_configuracion %}
+
+            {% with cuadrilla=configuracion.cuadrilla %}
+
+              <div
+                class="
+                  overflow-hidden
+                  rounded-2xl
+                  border border-slate-200
+                  bg-slate-50
+                  transition
+                "
+                data-cuadrilla-row
+                data-cuadrilla-id="{{ cuadrilla.pk }}"
+              >
+
+                <!-- ========================================= -->
+                <!-- CABECERA                                  -->
+                <!-- ========================================= -->
+
+                <div
+                  class="
+                    border-b border-slate-200
+                    bg-white
+                    px-4
+                    py-4
+                  "
+                >
+
+                  <div
+                    class="
+                      flex
+                      flex-col
+                      gap-3
+                      sm:flex-row
+                      sm:items-start
+                      sm:justify-between
+                    "
+                  >
+
+                    <div>
+
+                      <div class="flex flex-wrap items-center gap-2">
+
+                        <h3 class="text-base font-black text-slate-900">
+                          {{ cuadrilla.nombre }}
+                        </h3>
+
+                        <span
+                          class="
+                            rounded-full
+                            border border-slate-200
+                            bg-slate-50
+                            px-2
+                            py-0.5
+                            text-[10px]
+                            font-bold
+                            text-slate-500
+                          "
+                        >
+                          {{ cuadrilla.codigo }}
+                        </span>
+
+
+                        {% if not cuadrilla.activa %}
+
+                          <span
+                            class="
+                              rounded-full
+                              border border-amber-200
+                              bg-amber-50
+                              px-2
+                              py-0.5
+                              text-[10px]
+                              font-black
+                              text-amber-700
+                            "
+                          >
+                            Inactiva en catálogo
+                          </span>
+
+                        {% endif %}
+
+                      </div>
+
+
+                      <div class="mt-2 flex flex-wrap gap-2">
+
+                        <span
+                          class="
+                            rounded-full
+                            border border-slate-200
+                            bg-slate-50
+                            px-2.5
+                            py-1
+                            text-xs
+                            font-bold
+                            text-slate-700
+                          "
+                        >
+                          {{ cuadrilla.tipo_vehiculo|default:"Sin vehículo definido" }}
+                        </span>
+
+
+                        {% if cuadrilla.permite_urbano %}
+
+                          <span
+                            class="
+                              rounded-full
+                              bg-blue-50
+                              px-2.5
+                              py-1
+                              text-xs
+                              font-bold
+                              text-blue-700
+                            "
+                          >
+                            Urbano
+                          </span>
+
+                        {% endif %}
+
+
+                        {% if cuadrilla.permite_rural %}
+
+                          <span
+                            class="
+                              rounded-full
+                              bg-amber-50
+                              px-2.5
+                              py-1
+                              text-xs
+                              font-bold
+                              text-amber-700
+                            "
+                          >
+                            Rural
+                          </span>
+
+                        {% endif %}
+
+                      </div>
+
+                    </div>
+
+
+                    <label
+                      class="
+                        inline-flex
+                        cursor-pointer
+                        items-center
+                        gap-2
+                        rounded-xl
+                        border border-emerald-200
+                        bg-emerald-50
+                        px-3
+                        py-2
+                        text-sm
+                        font-bold
+                        text-emerald-700
+                      "
+                    >
+
+                      {{ configuracion.campo_activa }}
+
+                      Disponible esta semana
+
+                    </label>
+
+                  </div>
+
+                </div>
+
+
+                <!-- ========================================= -->
+                <!-- DATOS                                     -->
+                <!-- ========================================= -->
+
+                <div
+                  class="
+                    grid
+                    gap-4
+                    p-4
+                    md:grid-cols-2
+                  "
+                >
+
+                  <!-- MODALIDAD -->
+
+                  <div>
+
+                    <label
+                      class="
+                        mb-1.5
+                        block
+                        text-sm
+                        font-bold
+                        text-slate-700
+                      "
+                    >
+                      Modalidad semanal
+                    </label>
+
+                    {{ configuracion.campo_modalidad }}
+
+                    <p class="mt-1.5 text-xs text-slate-500">
+                      Lunes a sábado habilita esta cuadrilla
+                      para programación durante el sábado.
+                    </p>
+
+                    {% for error in configuracion.campo_modalidad.errors %}
+
+                      <div class="mt-1 text-xs font-semibold text-red-600">
+                        {{ error }}
+                      </div>
+
+                    {% endfor %}
+
+                  </div>
+
+
+                  <!-- CAPACIDAD -->
+
+                  <div>
+
+                    <label
+                      class="
+                        mb-1.5
+                        block
+                        text-sm
+                        font-bold
+                        text-slate-700
+                      "
+                    >
+                      Referencia sitios/día
+                    </label>
+
+                    {{ configuracion.campo_capacidad }}
+
+                    {% for error in configuracion.campo_capacidad.errors %}
+
+                      <div class="mt-1 text-xs font-semibold text-red-600">
+                        {{ error }}
+                      </div>
+
+                    {% endfor %}
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            {% endwith %}
+
+          {% endfor %}
+
+        </div>
+
+
+        <!-- ================================================ -->
+        <!-- CAPACIDAD                                        -->
+        <!-- ================================================ -->
+
+        <div
+          class="
+            mt-5
+            overflow-hidden
+            rounded-2xl
+            border border-blue-200
+            bg-gradient-to-r
+            from-blue-50
+            via-white
+            to-cyan-50
+          "
+        >
+
+          <div class="p-4 sm:p-5">
+
+            <p
+              class="
+                text-[10px]
+                font-black
+                uppercase
+                tracking-[0.12em]
+                text-blue-600
+              "
+            >
+              Referencia operacional
+            </p>
+
+            <h3 class="mt-1 font-black text-blue-950">
+              Capacidad nominal actualizada
+            </h3>
+
+
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+
+              <div
+                class="
+                  rounded-xl
+                  border border-blue-100
+                  bg-white
+                  p-3
+                "
+              >
+
+                <div class="text-xs font-bold uppercase text-blue-500">
+                  Lunes a viernes
+                </div>
+
+                <div
+                  id="capacidad-lv"
+                  class="mt-1 text-2xl font-black text-blue-950"
+                >
+                  0
+                </div>
+
+              </div>
+
+
+              <div
+                class="
+                  rounded-xl
+                  border border-cyan-100
+                  bg-white
+                  p-3
+                "
+              >
+
+                <div class="text-xs font-bold uppercase text-cyan-600">
+                  Capacidad sábado
+                </div>
+
+                <div
+                  id="capacidad-sabado"
+                  class="mt-1 text-2xl font-black text-cyan-900"
+                >
+                  0
+                </div>
+
+              </div>
+
+
+              <div
+                class="
+                  rounded-xl
+                  border border-emerald-100
+                  bg-white
+                  p-3
+                "
+              >
+
+                <div class="text-xs font-bold uppercase text-emerald-600">
+                  Máximo nominal
+                </div>
+
+                <div
+                  id="capacidad-total"
+                  class="mt-1 text-2xl font-black text-emerald-900"
+                >
+                  0
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ================================================== -->
+      <!-- ACCIONES                                           -->
+      <!-- ================================================== -->
+
+      <div
+        class="
+          flex
+          flex-col-reverse
+          gap-3
+          sm:flex-row
+          sm:justify-end
+        "
+      >
+
+        <a
+          href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border border-slate-300
+            bg-white
+            px-4
+            py-2.5
+            text-sm
+            font-semibold
+            text-slate-700
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Cancelar
+        </a>
+
+
+        <button
+          type="submit"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            bg-gradient-to-r
+            from-cyan-600
+            to-blue-600
+            px-5
+            py-2.5
+            text-sm
+            font-black
+            text-white
+            shadow-md
+            transition
+            hover:-translate-y-0.5
+            hover:shadow-lg
+          "
+        >
+          Guardar cambios
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<script>
+(function () {
+
+  function obtenerElementosFila(
+    row
+  ) {
+
+    return {
+      activa:
+        row.querySelector(
+          'input[type="checkbox"]'
+        ),
+
+      modalidad:
+        row.querySelector(
+          'select'
+        ),
+
+      capacidad:
+        row.querySelector(
+          'input[type="number"]'
+        )
+    };
+  }
+
+
+  function recalcularCapacidad() {
+
+    let capacidadLV = 0;
+    let capacidadSabado = 0;
+
+    document
+      .querySelectorAll(
+        '[data-cuadrilla-row]'
+      )
+      .forEach(
+        function (
+          row
+        ) {
+
+          const elementos =
+            obtenerElementosFila(
+              row
+            );
+
+          if (
+            !elementos.activa
+            ||
+            !elementos.activa.checked
+          ) {
+
+            row.classList.add(
+              'opacity-60'
+            );
+
+            return;
+          }
+
+
+          row.classList.remove(
+            'opacity-60'
+          );
+
+
+          let capacidadDiaria =
+            parseInt(
+              elementos.capacidad?.value || '0',
+              10
+            );
+
+
+          if (
+            Number.isNaN(
+              capacidadDiaria
+            )
+            ||
+            capacidadDiaria < 0
+          ) {
+
+            capacidadDiaria = 0;
+          }
+
+
+          capacidadLV += (
+            capacidadDiaria * 5
+          );
+
+
+          if (
+            elementos.modalidad
+            &&
+            elementos.modalidad.value
+            === 'lunes_sabado'
+          ) {
+
+            capacidadSabado +=
+              capacidadDiaria;
+          }
+
+        }
+      );
+
+
+    const nodeLV =
+      document.getElementById(
+        'capacidad-lv'
+      );
+
+    const nodeSabado =
+      document.getElementById(
+        'capacidad-sabado'
+      );
+
+    const nodeTotal =
+      document.getElementById(
+        'capacidad-total'
+      );
+
+
+    if (nodeLV) {
+
+      nodeLV.textContent =
+        String(
+          capacidadLV
+        );
+    }
+
+
+    if (nodeSabado) {
+
+      nodeSabado.textContent =
+        String(
+          capacidadSabado
+        );
+    }
+
+
+    if (nodeTotal) {
+
+      nodeTotal.textContent =
+        String(
+          capacidadLV
+          +
+          capacidadSabado
+        );
+    }
+  }
+
+
+  document
+    .querySelectorAll(
+      '[data-cuadrilla-row]'
+    )
+    .forEach(
+      function (
+        row
+      ) {
+
+        const elementos =
+          obtenerElementosFila(
+            row
+          );
+
+
+        if (elementos.activa) {
+
+          elementos.activa.addEventListener(
+            'change',
+            recalcularCapacidad
+          );
+        }
+
+
+        if (elementos.modalidad) {
+
+          elementos.modalidad.addEventListener(
+            'change',
+            recalcularCapacidad
+          );
+        }
+
+
+        if (elementos.capacidad) {
+
+          elementos.capacidad.addEventListener(
+            'input',
+            recalcularCapacidad
+          );
+
+          elementos.capacidad.addEventListener(
+            'change',
+            recalcularCapacidad
+          );
+        }
+
+      }
+    );
+
+
+  recalcularCapacidad();
+
+})();
+</script>
+
+{% endblock %}

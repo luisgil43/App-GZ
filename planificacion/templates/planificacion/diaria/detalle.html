@@ -354,7 +354,8 @@ Planificación Diaria
                 data-incluir-hoy
               >
               <button
-                type="submit"
+                type="button"
+                data-abrir-recalculo
                 class="
                   inline-flex
                   items-center
@@ -828,7 +829,8 @@ Planificación Diaria
                 data-incluir-hoy
               >
               <button
-                type="submit"
+                type="button"
+                data-abrir-recalculo
                 class="
                   inline-flex
                   w-full
@@ -1074,6 +1076,186 @@ Planificación Diaria
                         {{ item.sitio_planificado.sitio.comuna|default:"—" }}
                       </div>
 
+
+                      <!-- ======================================= -->
+                      <!-- ACCESO                                  -->
+                      <!-- ======================================= -->
+
+                      {% if item.sitio_planificado.sitio.condiciones_acceso %}
+
+                        <div class="mt-3">
+
+                          <div
+                            class="
+                              mb-1
+                              text-[9px]
+                              font-black
+                              uppercase
+                              tracking-[0.11em]
+                              text-slate-400
+                            "
+                          >
+                            Acceso
+                          </div>
+
+                          {% if item.sitio_planificado.sitio.condiciones_acceso|lower == "libre acceso" %}
+
+                            <span
+                              class="
+                                inline-flex
+                                items-center
+                                rounded-full
+                                border border-emerald-200
+                                bg-emerald-50
+                                px-2.5
+                                py-1
+                                text-[10px]
+                                font-black
+                                text-emerald-700
+                              "
+                            >
+                              {{ item.sitio_planificado.sitio.condiciones_acceso }}
+                            </span>
+
+                          {% else %}
+
+                            <span
+                              class="
+                                inline-flex
+                                items-center
+                                rounded-full
+                                border border-amber-200
+                                bg-amber-50
+                                px-2.5
+                                py-1
+                                text-[10px]
+                                font-black
+                                text-amber-700
+                              "
+                            >
+                              {{ item.sitio_planificado.sitio.condiciones_acceso }}
+                            </span>
+
+                          {% endif %}
+
+                        </div>
+
+                      {% endif %}
+
+
+                      <!-- ======================================= -->
+                      <!-- OBSERVACIONES DE CONTACTO               -->
+                      <!-- ======================================= -->
+
+                      {% if item.tiene_observaciones_contacto_ui %}
+
+                        <div
+                          class="
+                            mt-3
+                            rounded-xl
+                            border border-amber-200
+                            bg-amber-50
+                            px-3
+                            py-2.5
+                          "
+                        >
+
+                          <div
+                            class="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-amber-700
+                            "
+                          >
+                            <span>⚠️</span>
+                            Observaciones
+                          </div>
+
+                          <div class="mt-1.5 space-y-1">
+
+                            {% for observacion in item.observaciones_contacto_ui %}
+
+                              <p
+                                class="
+                                  text-xs
+                                  font-semibold
+                                  leading-relaxed
+                                  text-amber-900
+                                "
+                              >
+                                {{ observacion }}
+                              </p>
+
+                            {% endfor %}
+
+                          </div>
+
+                        </div>
+
+                      {% endif %}
+
+
+                      <!-- ======================================= -->
+                      <!-- ACCIONES DE CONTACTO                    -->
+                      <!-- ======================================= -->
+
+                      {% if item.tiene_acciones_contacto_ui %}
+
+                        <div
+                          class="
+                            mt-2
+                            rounded-xl
+                            border border-red-200
+                            bg-red-50
+                            px-3
+                            py-2.5
+                          "
+                        >
+
+                          <div
+                            class="
+                              flex
+                              items-center
+                              gap-1.5
+                              text-[10px]
+                              font-black
+                              uppercase
+                              tracking-wide
+                              text-red-700
+                            "
+                          >
+                            <span>⚠️</span>
+                            Acción requerida
+                          </div>
+
+                          <div class="mt-1.5 space-y-1">
+
+                            {% for accion in item.acciones_contacto_ui %}
+
+                              <p
+                                class="
+                                  text-xs
+                                  font-black
+                                  leading-relaxed
+                                  text-red-900
+                                "
+                              >
+                                {{ accion }}
+                              </p>
+
+                            {% endfor %}
+
+                          </div>
+
+                        </div>
+
+                      {% endif %}
+
                     </div>
 
 
@@ -1258,7 +1440,8 @@ Planificación Diaria
               data-incluir-hoy
             >
             <button
-              type="submit"
+              type="button"
+              data-abrir-recalculo
               class="
                 rounded-xl
                 bg-gradient-to-r
@@ -2088,6 +2271,212 @@ Planificación Diaria
                               {% endif %}
 
 
+                              <!-- ================================================ -->
+                              <!-- OBSERVACIONES DE CONTACTO                        -->
+                              <!-- ================================================ -->
+
+                              {% if fila.tiene_observaciones_contacto %}
+
+                                <div
+                                  class="
+                                    mt-3
+                                    rounded-xl
+                                    border border-amber-200
+                                    bg-amber-50
+                                    px-3
+                                    py-2.5
+                                  "
+                                >
+
+                                  <div
+                                    class="
+                                      flex
+                                      items-center
+                                      gap-1.5
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      tracking-wide
+                                      text-amber-700
+                                    "
+                                  >
+                                    <span>⚠️</span>
+                                    Observaciones
+                                  </div>
+
+                                  <div class="mt-1.5 space-y-1">
+
+                                    {% for observacion in fila.observaciones_contacto %}
+
+                                      <p
+                                        class="
+                                          text-xs
+                                          font-semibold
+                                          leading-relaxed
+                                          text-amber-900
+                                        "
+                                      >
+                                        {{ observacion }}
+                                      </p>
+
+                                    {% endfor %}
+
+                                  </div>
+
+                                </div>
+
+                              {% endif %}
+
+
+                              <!-- ================================================ -->
+                              <!-- ACCIONES DE CONTACTO                             -->
+                              <!-- ================================================ -->
+
+                              {% if fila.tiene_acciones_contacto %}
+
+                                <div
+                                  class="
+                                    mt-2
+                                    rounded-xl
+                                    border border-red-200
+                                    bg-red-50
+                                    px-3
+                                    py-2.5
+                                  "
+                                >
+
+                                  <div
+                                    class="
+                                      flex
+                                      items-center
+                                      gap-1.5
+                                      text-[10px]
+                                      font-black
+                                      uppercase
+                                      tracking-wide
+                                      text-red-700
+                                    "
+                                  >
+                                    <span>⚠️</span>
+                                    Acción requerida
+                                  </div>
+
+                                  <div class="mt-1.5 space-y-1">
+
+                                    {% for accion in fila.acciones_contacto %}
+
+                                      <p
+                                        class="
+                                          text-xs
+                                          font-black
+                                          leading-relaxed
+                                          text-red-900
+                                        "
+                                      >
+                                        {{ accion }}
+                                      </p>
+
+                                    {% endfor %}
+
+                                  </div>
+
+                                </div>
+
+                              {% endif %}
+
+
+                              <!-- ================================================ -->
+                              <!-- COMPARTIR DATOS DE CONTACTO                      -->
+                              <!-- ================================================ -->
+
+                              {% if fila.tiene_datos_contacto %}
+
+                                <div
+                                  class="
+                                    mt-3
+                                    rounded-xl
+                                    border border-blue-100
+                                    bg-blue-50/60
+                                    p-2.5
+                                  "
+                                  data-bloque-contacto
+                                >
+
+                                  <textarea
+                                    class="hidden"
+                                    data-texto-contacto
+                                    aria-hidden="true"
+                                  >{{ fila.texto_contacto_compartir }}</textarea>
+
+
+                                  <div
+                                    class="
+                                      mb-2
+                                      text-[9px]
+                                      font-black
+                                      uppercase
+                                      tracking-[0.11em]
+                                      text-blue-700
+                                    "
+                                  >
+                                    Datos de contacto
+                                  </div>
+
+
+                                  <div class="grid grid-cols-2 gap-2">
+
+                                    <button
+                                      type="button"
+                                      onclick="copiarDatosContacto(this);"
+                                      class="
+                                        inline-flex
+                                        items-center
+                                        justify-center
+                                        gap-1.5
+                                        rounded-lg
+                                        border border-blue-200
+                                        bg-white
+                                        px-3
+                                        py-2
+                                        text-[10px]
+                                        font-black
+                                        text-blue-700
+                                        transition
+                                        hover:bg-blue-50
+                                      "
+                                    >
+                                      Copiar contacto
+                                    </button>
+
+
+                                    <button
+                                      type="button"
+                                      onclick="compartirContactoWhatsApp(this);"
+                                      class="
+                                        inline-flex
+                                        items-center
+                                        justify-center
+                                        gap-1.5
+                                        rounded-lg
+                                        border border-emerald-200
+                                        bg-emerald-50
+                                        px-3
+                                        py-2
+                                        text-[10px]
+                                        font-black
+                                        text-emerald-700
+                                        transition
+                                        hover:bg-emerald-100
+                                      "
+                                    >
+                                      WhatsApp
+                                    </button>
+
+                                  </div>
+
+                                </div>
+
+                              {% endif %}
                               <!-- INDICADOR TEXTUAL DE PRIORIDAD -->
 
                               {% if fila.es_prioridad %}
@@ -3383,72 +3772,97 @@ Planificación Diaria
     <!-- ==================================================== -->
 
     <div
-      class="
-        flex
-        flex-col-reverse
-        gap-2
-        border-t
-        border-slate-100
-        bg-slate-50
-        px-6
-        py-4
-        sm:flex-row
-        sm:justify-end
-      "
-    >
+  class="
+    flex
+    flex-col-reverse
+    gap-2
+    border-t
+    border-slate-100
+    bg-slate-50
+    px-6
+    py-4
+    sm:flex-row
+    sm:justify-end
+  "
+>
 
-      <button
-        id="btn-recalculo-desde-manana"
-        type="button"
-        class="
-          inline-flex
-          w-full
-          items-center
-          justify-center
-          rounded-xl
-          border
-          border-slate-300
-          bg-white
-          px-5
-          py-2.5
-          text-sm
-          font-black
-          text-slate-700
-          shadow-sm
-          transition
-          hover:bg-slate-100
-          sm:w-auto
-        "
-      >
-        Comenzar desde mañana
-      </button>
+  <button
+    id="btn-recalculo-cancelar"
+    type="button"
+    class="
+      inline-flex
+      w-full
+      items-center
+      justify-center
+      rounded-xl
+      border
+      border-slate-300
+      bg-white
+      px-5
+      py-2.5
+      text-sm
+      font-black
+      text-slate-600
+      shadow-sm
+      transition
+      hover:bg-slate-100
+      sm:w-auto
+    "
+  >
+    Cancelar
+  </button>
 
+  <button
+    id="btn-recalculo-desde-manana"
+    type="button"
+    class="
+      inline-flex
+      w-full
+      items-center
+      justify-center
+      rounded-xl
+      border
+      border-slate-300
+      bg-white
+      px-5
+      py-2.5
+      text-sm
+      font-black
+      text-slate-700
+      shadow-sm
+      transition
+      hover:bg-slate-100
+      sm:w-auto
+    "
+  >
+    Comenzar desde mañana
+  </button>
 
-      <button
-        id="btn-recalculo-incluir-hoy"
-        type="button"
-        class="
-          inline-flex
-          w-full
-          items-center
-          justify-center
-          rounded-xl
-          bg-amber-600
-          px-5
-          py-2.5
-          text-sm
-          font-black
-          text-white
-          shadow-sm
-          transition
-          hover:bg-amber-700
-          sm:w-auto
-        "
-      >
-        Incluir hoy
-      </button>
+  <button
+    id="btn-recalculo-incluir-hoy"
+    type="button"
+    class="
+      inline-flex
+      w-full
+      items-center
+      justify-center
+      rounded-xl
+      bg-amber-600
+      px-5
+      py-2.5
+      text-sm
+      font-black
+      text-white
+      shadow-sm
+      transition
+      hover:bg-amber-700
+      sm:w-auto
+    "
+  >
+    Incluir hoy
+  </button>
 
-    </div>
+</div>
 
   </div>
 
@@ -4301,125 +4715,40 @@ Planificación Diaria
 (function () {
 
   // =========================================================
-  // ESTADO DEL RECÁLCULO
+  // ESTADO
   // =========================================================
 
-  let formularioRecalculoPendiente =
-    null;
-
-
-  // =========================================================
-  // FECHA LOCAL ISO
-  // =========================================================
-
-  function fechaLocalISO() {
-
-    const ahora =
-      new Date();
-
-    const anio =
-      ahora.getFullYear();
-
-    const mes =
-      String(
-        ahora.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      );
-
-    const dia =
-      String(
-        ahora.getDate()
-      ).padStart(
-        2,
-        "0"
-      );
-
-    return (
-      anio
-      +
-      "-"
-      +
-      mes
-      +
-      "-"
-      +
-      dia
-    );
-  }
+  let formularioRecalculoPendiente = null;
 
 
   // =========================================================
-  // SUMAR DÍAS
+  // ELEMENTOS
   // =========================================================
 
-  function sumarDiasISO(
-    fechaISO,
-    cantidad
-  ) {
-
-    const partes =
-      fechaISO
-        .split("-")
-        .map(
-          Number
-        );
-
-    if (
-      partes.length !== 3
-      ||
-      partes.some(
-        Number.isNaN
-      )
-    ) {
-      return "";
-    }
-
-    const fecha =
-      new Date(
-        partes[0],
-        partes[1] - 1,
-        partes[2]
-      );
-
-    fecha.setDate(
-      fecha.getDate()
-      +
-      cantidad
+  const modal =
+    document.getElementById(
+      "modal-recalculo-dia-actual"
     );
 
-    const anio =
-      fecha.getFullYear();
-
-    const mes =
-      String(
-        fecha.getMonth() + 1
-      ).padStart(
-        2,
-        "0"
-      );
-
-    const dia =
-      String(
-        fecha.getDate()
-      ).padStart(
-        2,
-        "0"
-      );
-
-    return (
-      anio
-      +
-      "-"
-      +
-      mes
-      +
-      "-"
-      +
-      dia
+  const textoModal =
+    document.getElementById(
+      "modal-recalculo-dia-texto"
     );
-  }
+
+  const botonCancelar =
+    document.getElementById(
+      "btn-recalculo-cancelar"
+    );
+
+  const botonIncluirHoy =
+    document.getElementById(
+      "btn-recalculo-incluir-hoy"
+    );
+
+  const botonDesdeManana =
+    document.getElementById(
+      "btn-recalculo-desde-manana"
+    );
 
 
   // =========================================================
@@ -4431,17 +4760,10 @@ Planificación Diaria
     return new Date().toLocaleDateString(
       "es-CL",
       {
-        weekday:
-          "long",
-
-        day:
-          "2-digit",
-
-        month:
-          "2-digit",
-
-        year:
-          "numeric"
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
       }
     );
   }
@@ -4455,28 +4777,25 @@ Planificación Diaria
     form
   ) {
 
-    const modal =
-      document.getElementById(
-        "modal-recalculo-dia-actual"
-      );
-
-    const texto =
-      document.getElementById(
-        "modal-recalculo-dia-texto"
-      );
-
     if (
       !modal
       ||
-      !texto
+      !textoModal
+      ||
+      !form
     ) {
+      console.error(
+        "No se pudo abrir el modal de recálculo."
+      );
+
       return;
     }
 
     formularioRecalculoPendiente =
       form;
 
-    texto.textContent =
+
+    textoModal.textContent =
       (
         "Hoy es "
         +
@@ -4487,6 +4806,7 @@ Planificación Diaria
         "a incorporar nuevos sitios en este recálculo."
       );
 
+
     modal.classList.remove(
       "hidden"
     );
@@ -4495,6 +4815,7 @@ Planificación Diaria
       "aria-hidden",
       "false"
     );
+
 
     document.documentElement.classList.add(
       "overflow-hidden"
@@ -4512,11 +4833,6 @@ Planificación Diaria
 
   function cerrarModalRecalculoDiaActual() {
 
-    const modal =
-      document.getElementById(
-        "modal-recalculo-dia-actual"
-      );
-
     if (!modal) {
       return;
     }
@@ -4530,6 +4846,7 @@ Planificación Diaria
       "true"
     );
 
+
     document.documentElement.classList.remove(
       "overflow-hidden"
     );
@@ -4541,22 +4858,23 @@ Planificación Diaria
 
 
   // =========================================================
-  // ENVIAR FORMULARIO DEFINITIVAMENTE
-  // =========================================================
-  //
-  // MUY IMPORTANTE:
-  //
-  // utilizamos form.submit()
-  //
-  // NO requestSubmit().
-  //
-  // requestSubmit() vuelve a disparar el evento "submit"
-  // y nos haría entrar nuevamente en esta lógica.
-  //
-  // form.submit() realiza directamente el POST definitivo.
+  // CANCELAR
   // =========================================================
 
-  function ejecutarRecalculo(
+  function cancelarRecalculo() {
+
+    formularioRecalculoPendiente =
+      null;
+
+    cerrarModalRecalculoDiaActual();
+  }
+
+
+  // =========================================================
+  // ENVIAR FORMULARIO DEFINITIVO
+  // =========================================================
+
+  function enviarFormularioRecalculo(
     incluirHoy
   ) {
 
@@ -4567,33 +4885,125 @@ Planificación Diaria
       return;
     }
 
+
     const input =
       form.querySelector(
         "[data-incluir-hoy]"
       );
 
     if (!input) {
+
+      console.error(
+        "No existe el campo incluir_hoy."
+      );
+
       return;
     }
 
+
     input.value =
       incluirHoy
-        ?
-        "1"
-        :
-        "0";
+        ? "1"
+        : "0";
 
-    cerrarModalRecalculoDiaActual();
+
+    // =======================================================
+    // GUARDAR REFERENCIA ANTES DE LIMPIAR ESTADO
+    // =======================================================
+
+    const formularioEnviar =
+      form;
+
 
     formularioRecalculoPendiente =
       null;
 
-    form.submit();
+
+    cerrarModalRecalculoDiaActual();
+
+
+    // =======================================================
+    // POST REAL
+    // =======================================================
+
+    HTMLFormElement.prototype.submit.call(
+      formularioEnviar
+    );
   }
 
 
   // =========================================================
-  // INTERCEPTAR RECÁLCULO
+  // ABRIR SIEMPRE EL MODAL DESDE LOS BOTONES
+  // =========================================================
+
+  document.addEventListener(
+    "click",
+    function (
+      event
+    ) {
+
+      const boton =
+        event.target.closest(
+          "[data-abrir-recalculo]"
+        );
+
+      if (!boton) {
+        return;
+      }
+
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+
+      const form =
+        boton.closest(
+          "form.form-recalculo-planificacion"
+        );
+
+      if (!form) {
+
+        console.error(
+          "No se encontró el formulario de recálculo."
+        );
+
+        return;
+      }
+
+
+      // =====================================================
+      // IMPORTANTE
+      // =====================================================
+      //
+      // NO hacemos POST aquí.
+      //
+      // SIEMPRE se abre primero el modal.
+      //
+      // Solamente los botones:
+      //
+      //   - Incluir hoy
+      //   - Comenzar desde mañana
+      //
+      // pueden ejecutar el formulario.
+      // =====================================================
+
+      abrirModalRecalculoDiaActual(
+        form
+      );
+
+    },
+    true
+  );
+
+
+  // =========================================================
+  // PROTECCIÓN ADICIONAL CONTRA SUBMIT DIRECTO
+  // =========================================================
+  //
+  // Si por algún otro script o por Enter se intenta enviar
+  // uno de estos formularios directamente, lo interceptamos
+  // y mostramos el modal.
   // =========================================================
 
   document.addEventListener(
@@ -4609,101 +5019,68 @@ Planificación Diaria
         !form
         ||
         !form.matches(
-          ".form-recalculo-planificacion"
+          "form.form-recalculo-planificacion"
         )
       ) {
         return;
       }
 
-      const inputIncluirHoy =
-        form.querySelector(
-          "[data-incluir-hoy]"
-        );
-
-      if (!inputIncluirHoy) {
-        return;
-      }
-
-      const fechaInicio =
-        form.dataset.fechaInicio
-        ||
-        "";
-
-      if (!fechaInicio) {
-        return;
-      }
-
-      const hoy =
-        fechaLocalISO();
-
-      const fechaFin =
-        sumarDiasISO(
-          fechaInicio,
-          5
-        );
-
-
-      // =====================================================
-      // SEMANA PASADA O FUTURA
-      // =====================================================
-      //
-      // No preguntamos nada.
-      //
-      // El backend recibirá:
-      //
-      // incluir_hoy = 0
-      //
-      // =====================================================
-
-      if (
-        hoy < fechaInicio
-        ||
-        hoy > fechaFin
-      ) {
-
-        inputIncluirHoy.value =
-          "0";
-
-        return;
-      }
-
-
-      // =====================================================
-      // SEMANA ACTUAL
-      // =====================================================
 
       event.preventDefault();
+
+      event.stopPropagation();
+
 
       abrirModalRecalculoDiaActual(
         form
       );
 
-    }
+    },
+    true
   );
+
+
+  // =========================================================
+  // CANCELAR
+  // =========================================================
+
+  if (botonCancelar) {
+
+    botonCancelar.addEventListener(
+      "click",
+      function (
+        event
+      ) {
+
+        event.preventDefault();
+
+        cancelarRecalculo();
+
+      }
+    );
+  }
 
 
   // =========================================================
   // INCLUIR HOY
   // =========================================================
 
-  const botonIncluirHoy =
-    document.getElementById(
-      "btn-recalculo-incluir-hoy"
-    );
-
   if (botonIncluirHoy) {
 
     botonIncluirHoy.addEventListener(
       "click",
-      function () {
+      function (
+        event
+      ) {
 
-        ejecutarRecalculo(
+        event.preventDefault();
+
+        enviarFormularioRecalculo(
           true
         );
 
       }
     );
-
   }
 
 
@@ -4711,34 +5088,52 @@ Planificación Diaria
   // COMENZAR DESDE MAÑANA
   // =========================================================
 
-  const botonDesdeManana =
-    document.getElementById(
-      "btn-recalculo-desde-manana"
-    );
-
   if (botonDesdeManana) {
 
     botonDesdeManana.addEventListener(
       "click",
-      function () {
+      function (
+        event
+      ) {
 
-        ejecutarRecalculo(
+        event.preventDefault();
+
+        enviarFormularioRecalculo(
           false
         );
 
       }
     );
+  }
 
+
+  // =========================================================
+  // CLIC FUERA DEL MODAL
+  // =========================================================
+
+  if (modal) {
+
+    modal.addEventListener(
+      "click",
+      function (
+        event
+      ) {
+
+        if (
+          event.target !== modal
+        ) {
+          return;
+        }
+
+        cancelarRecalculo();
+
+      }
+    );
   }
 
 
   // =========================================================
   // ESC
-  // =========================================================
-  //
-  // ESC solamente cierra el modal.
-  //
-  // NO ejecuta el recálculo.
   // =========================================================
 
   document.addEventListener(
@@ -4748,16 +5143,11 @@ Planificación Diaria
     ) {
 
       if (
-        event.key !==
-        "Escape"
+        event.key !== "Escape"
       ) {
         return;
       }
 
-      const modal =
-        document.getElementById(
-          "modal-recalculo-dia-actual"
-        );
 
       if (
         !modal
@@ -4769,13 +5159,268 @@ Planificación Diaria
         return;
       }
 
-      cerrarModalRecalculoDiaActual();
 
-      formularioRecalculoPendiente =
-        null;
+      cancelarRecalculo();
 
     }
   );
+
+})();
+</script>
+<script>
+(function () {
+
+  // =========================================================
+  // OBTENER TEXTO DE CONTACTO
+  // =========================================================
+
+  function obtenerTextoContacto(
+    boton
+  ) {
+
+    if (!boton) {
+      return "";
+    }
+
+    const bloque =
+      boton.closest(
+        "[data-bloque-contacto]"
+      );
+
+    if (!bloque) {
+      return "";
+    }
+
+    const textarea =
+      bloque.querySelector(
+        "[data-texto-contacto]"
+      );
+
+    if (!textarea) {
+      return "";
+    }
+
+    return (
+      textarea.value
+      ||
+      textarea.textContent
+      ||
+      ""
+    ).trim();
+  }
+
+
+  // =========================================================
+  // COPIA DE RESPALDO
+  // =========================================================
+
+  function copiarTextoLegacy(
+    texto
+  ) {
+
+    const textarea =
+      document.createElement(
+        "textarea"
+      );
+
+    textarea.value =
+      texto;
+
+    textarea.setAttribute(
+      "readonly",
+      ""
+    );
+
+    textarea.style.position =
+      "fixed";
+
+    textarea.style.left =
+      "-9999px";
+
+    textarea.style.top =
+      "0";
+
+
+    document.body.appendChild(
+      textarea
+    );
+
+    textarea.select();
+
+    textarea.setSelectionRange(
+      0,
+      textarea.value.length
+    );
+
+
+    let copiado =
+      false;
+
+    try {
+
+      copiado =
+        document.execCommand(
+          "copy"
+        );
+
+    } catch (error) {
+
+      copiado =
+        false;
+    }
+
+
+    textarea.remove();
+
+    return copiado;
+  }
+
+
+  // =========================================================
+  // CAMBIAR TEXTO TEMPORAL DEL BOTÓN
+  // =========================================================
+
+  function mostrarConfirmacionBoton(
+    boton,
+    texto
+  ) {
+
+    if (!boton) {
+      return;
+    }
+
+    const original =
+      boton.textContent;
+
+    boton.textContent =
+      texto;
+
+    boton.disabled =
+      true;
+
+
+    window.setTimeout(
+      function () {
+
+        boton.textContent =
+          original;
+
+        boton.disabled =
+          false;
+
+      },
+      1400
+    );
+  }
+
+
+  // =========================================================
+  // COPIAR
+  // =========================================================
+
+  window.copiarDatosContacto =
+    async function (
+      boton
+    ) {
+
+      const texto =
+        obtenerTextoContacto(
+          boton
+        );
+
+      if (!texto) {
+        return;
+      }
+
+
+      let copiado =
+        false;
+
+
+      if (
+        navigator.clipboard
+        &&
+        window.isSecureContext
+      ) {
+
+        try {
+
+          await navigator.clipboard.writeText(
+            texto
+          );
+
+          copiado =
+            true;
+
+        } catch (error) {
+
+          copiado =
+            false;
+        }
+      }
+
+
+      if (!copiado) {
+
+        copiado =
+          copiarTextoLegacy(
+            texto
+          );
+      }
+
+
+      if (copiado) {
+
+        mostrarConfirmacionBoton(
+          boton,
+          "Copiado ✓"
+        );
+
+      } else {
+
+        mostrarConfirmacionBoton(
+          boton,
+          "No se pudo copiar"
+        );
+      }
+
+    };
+
+
+  // =========================================================
+  // WHATSAPP
+  // =========================================================
+
+  window.compartirContactoWhatsApp =
+    function (
+      boton
+    ) {
+
+      const texto =
+        obtenerTextoContacto(
+          boton
+        );
+
+      if (!texto) {
+        return;
+      }
+
+
+      const url =
+        "https://wa.me/?text="
+        +
+        encodeURIComponent(
+          texto
+        );
+
+
+      window.open(
+        url,
+        "_blank",
+        "noopener,noreferrer"
+      );
+
+    };
 
 })();
 </script>

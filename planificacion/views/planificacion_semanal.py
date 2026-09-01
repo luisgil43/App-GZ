@@ -13,7 +13,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from planificacion.forms.planificacion_semanal import CrearBatchSemanalForm
+from planificacion.forms.planificacion_semanal import (CrearBatchSemanalForm,
+                                                       EditarBatchSemanalForm)
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
 from planificacion.models import (BatchPlanificacionSemanal,
@@ -22,11 +23,12 @@ from planificacion.models import (BatchPlanificacionSemanal,
 from planificacion.services.planificacion_diaria import \
     obtener_estado_operacional_sitio
 from planificacion.services.planificacion_semanal import (
-    actualizar_permiso_desde_batch, agregar_sitios_al_batch,
-    cerrar_propuesta_batch, confirmar_sitios_para_planificacion,
-    crear_batch_semanal, marcar_gestion_permisos_enviada,
-    obtener_candidatos_batch, obtener_resumen_batch,
-    obtener_resumen_planificacion_mensual, quitar_sitio_del_batch)
+    actualizar_configuracion_batch_semanal, actualizar_permiso_desde_batch,
+    agregar_sitios_al_batch, cerrar_propuesta_batch,
+    confirmar_sitios_para_planificacion, crear_batch_semanal,
+    marcar_gestion_permisos_enviada, obtener_candidatos_batch,
+    obtener_resumen_batch, obtener_resumen_planificacion_mensual,
+    quitar_sitio_del_batch)
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
@@ -695,10 +697,22 @@ def descargar_excel_batch(
     batch_id,
 ):
     """
-    Genera el archivo Excel que puede enviarse al cliente
-    con los sitios correspondientes a una semana.
+    Genera el archivo Excel correspondiente al batch semanal.
 
-    Incluye principales y reservas, claramente identificados.
+    TIPOS DE EXPORTACIÓN
+    ==========================================================
+
+    completo:
+        Exportación interna.
+        Conserva todas las columnas actuales de A hasta Q.
+
+    cliente:
+        Exportación para enviar al cliente.
+        Conserva únicamente las columnas de A hasta K.
+
+    Si no se indica el parámetro ?tipo=, se mantiene por
+    compatibilidad el comportamiento histórico y se genera
+    el archivo completo.
     """
 
     batch = get_object_or_404(
@@ -729,16 +743,47 @@ def descargar_excel_batch(
         )
     )
 
+    # --------------------------------------------------------
+    # TIPO DE EXPORTACIÓN
+    # --------------------------------------------------------
+
+    tipo_exportacion = (
+        (
+            request.GET.get(
+                "tipo",
+                "completo",
+            )
+            or "completo"
+        )
+        .strip()
+        .lower()
+    )
+
+    exportacion_cliente = tipo_exportacion == "cliente"
+
+    # --------------------------------------------------------
+    # LIBRO
+    # --------------------------------------------------------
+
     workbook = Workbook()
 
     worksheet = workbook.active
     worksheet.title = "Sitios semana"
 
     # --------------------------------------------------------
+    # ÚLTIMA COLUMNA SEGÚN TIPO DE EXPORTACIÓN
+    # --------------------------------------------------------
+
+    if exportacion_cliente:
+        ultima_columna = "K"
+    else:
+        ultima_columna = "Q"
+
+    # --------------------------------------------------------
     # TÍTULO
     # --------------------------------------------------------
 
-    worksheet.merge_cells("A1:Q1")
+    worksheet.merge_cells(f"A1:{ultima_columna}1")
 
     titulo = worksheet["A1"]
 
@@ -772,7 +817,7 @@ def descargar_excel_batch(
     # ENCABEZADOS
     # --------------------------------------------------------
 
-    encabezados = [
+    encabezados_completos = [
         "Tipo",
         "ID Claro",
         "ID Sites",
@@ -791,6 +836,16 @@ def descargar_excel_batch(
         "Estado batch",
         "Observaciones",
     ]
+
+    if exportacion_cliente:
+
+        # A hasta K.
+        encabezados = encabezados_completos[:11]
+
+    else:
+
+        # A hasta Q.
+        encabezados = encabezados_completos
 
     fila_encabezado = 4
 
@@ -831,7 +886,7 @@ def descargar_excel_batch(
 
         sitio = sitio_planificado.sitio
 
-        valores = [
+        valores_completos = [
             ("Reserva" if item.es_reserva else "Principal"),
             _valor_sitio(
                 sitio,
@@ -887,6 +942,16 @@ def descargar_excel_batch(
             ),
         ]
 
+        if exportacion_cliente:
+
+            # A hasta K.
+            valores = valores_completos[:11]
+
+        else:
+
+            # A hasta Q.
+            valores = valores_completos
+
         for columna, valor in enumerate(
             valores,
             start=1,
@@ -902,19 +967,35 @@ def descargar_excel_batch(
 
     worksheet.freeze_panes = "A5"
 
-    worksheet.auto_filter.ref = f"A4:Q{max(fila - 1, 4)}"
+    worksheet.auto_filter.ref = f"A4:{ultima_columna}" f"{max(fila - 1, 4)}"
 
-    _ajustar_ancho_columnas_excel(worksheet)
+    _ajustar_ancho_columnas_excel(
+        worksheet,
+    )
 
     archivo = BytesIO()
 
-    workbook.save(archivo)
+    workbook.save(
+        archivo,
+    )
 
-    archivo.seek(0)
+    archivo.seek(
+        0,
+    )
 
-    nombre_seguro = batch.nombre or f"semana_{batch.fecha_inicio:%Y_%m_%d}"
+    nombre_seguro = batch.nombre or (f"semana_" f"{batch.fecha_inicio:%Y_%m_%d}")
 
-    nombre_seguro = nombre_seguro.strip().replace(" ", "_").replace("/", "-")
+    nombre_seguro = (
+        nombre_seguro.strip()
+        .replace(
+            " ",
+            "_",
+        )
+        .replace(
+            "/",
+            "-",
+        )
+    )
 
     response = HttpResponse(
         archivo.getvalue(),
@@ -1424,6 +1505,146 @@ def crear_planificacion_semanal(
             "disponibles_reales": (disponibles_reales),
             "semanas_disponibles": (form.semanas_disponibles),
             "semanas_ocupadas": (form.semanas_ocupadas),
+        },
+    )
+
+
+# ============================================================
+# EDITAR CONFIGURACIÓN DE SEMANA
+# ============================================================
+
+
+@rol_requerido(*ROLES_PLANIFICACION)
+def editar_planificacion_semanal(
+    request,
+    batch_id,
+):
+    """
+    Edita la configuración operacional de una semana
+    existente.
+
+    La semana continúa siendo el MISMO batch.
+
+    No reconstruye:
+
+        sitios
+        permisos
+        planificación diaria
+        Operaciones
+
+    Tampoco ejecuta automáticamente el motor.
+    """
+
+    batch = get_object_or_404(
+        BatchPlanificacionSemanal.objects.select_related(
+            "configuracion_semana",
+            "planificacion",
+        ).prefetch_related(
+            "planificaciones_origen",
+        ),
+        pk=batch_id,
+    )
+
+    if batch.configuracion_semana is None:
+
+        messages.error(
+            request,
+            ("Esta semana no posee una configuración " "operacional editable."),
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    # ========================================================
+    # MES PARA VOLVER A LA LISTA
+    # ========================================================
+
+    mensual = batch.planificacion
+
+    if mensual is None:
+
+        mensual = batch.planificaciones_origen.order_by(
+            "anio",
+            "mes",
+        ).first()
+
+    # ========================================================
+    # POST
+    # ========================================================
+
+    if request.method == "POST":
+
+        form = EditarBatchSemanalForm(
+            request.POST,
+            batch=batch,
+        )
+
+        if form.is_valid():
+
+            try:
+
+                actualizar_configuracion_batch_semanal(
+                    batch=batch,
+                    objetivo_sitios=(form.cleaned_data["objetivo_sitios"]),
+                    observaciones=(
+                        form.cleaned_data.get(
+                            "observaciones",
+                            "",
+                        )
+                    ),
+                    disponibilidades=(form.obtener_disponibilidades()),
+                    usuario=request.user,
+                )
+
+            except ValueError as exc:
+
+                form.add_error(
+                    None,
+                    str(exc),
+                )
+
+            else:
+
+                messages.success(
+                    request,
+                    (
+                        f"{batch.codigo_semana} fue "
+                        "actualizada correctamente. "
+                        "La configuración operacional quedó "
+                        "guardada sin recalcular ni modificar "
+                        "las salidas existentes."
+                    ),
+                )
+
+                return redirect(
+                    "planificacion:detalle_planificacion_semanal",
+                    batch_id=batch.pk,
+                )
+
+    # ========================================================
+    # GET
+    # ========================================================
+
+    else:
+
+        form = EditarBatchSemanalForm(
+            batch=batch,
+        )
+
+    # ========================================================
+    # RESPUESTA
+    # ========================================================
+
+    return render(
+        request,
+        "planificacion/semanal/editar.html",
+        {
+            "batch": batch,
+            "mensual": mensual,
+            "configuracion_semana": (batch.configuracion_semana),
+            "form": form,
         },
     )
 

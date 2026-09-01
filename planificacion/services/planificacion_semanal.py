@@ -4,7 +4,8 @@ from math import asin, cos, radians, sin, sqrt
 from django.db import transaction
 
 from planificacion.modelos import (CuadrillaOperativa,
-                                   DisponibilidadCuadrillaSemana)
+                                   DisponibilidadCuadrillaSemana,
+                                   SalidaPlanificacionDiaria)
 from planificacion.models import (BatchPlanificacionSemanal,
                                   ConfiguracionSemana, SitioBatchSemanal,
                                   SitioPlanificado)
@@ -270,6 +271,280 @@ def obtener_disponibilidades_semana(
             "id",
         )
     )
+
+# ============================================================
+# ACTUALIZAR CONFIGURACIÓN DE UNA SEMANA EXISTENTE
+# ============================================================
+
+
+@transaction.atomic
+def actualizar_configuracion_batch_semanal(
+    *,
+    batch,
+    objetivo_sitios,
+    observaciones,
+    disponibilidades,
+    usuario=None,
+):
+    """
+    Actualiza la configuración operacional de un batch
+    existente SIN reconstruir la semana.
+
+    NO modifica:
+
+        SitioBatchSemanal
+        sitios seleccionados
+        permisos
+        prioridades
+        Operaciones
+        salidas existentes
+
+    Tampoco ejecuta automáticamente el motor diario.
+
+    PROTECCIONES
+    ==========================================================
+
+    1. Una cuadrilla con salidas activas no puede
+       desactivarse.
+
+    2. Una cuadrilla que ya posee una salida el sábado no
+       puede cambiarse de Lunes-Sábado a Lunes-Viernes.
+
+    3. Las disponibilidades existentes se actualizan sobre
+       la MISMA fila para conservar sus relaciones.
+    """
+
+    # ========================================================
+    # BLOQUEAR BATCH
+    # ========================================================
+
+    batch = BatchPlanificacionSemanal.objects.select_for_update().get(
+        pk=batch.pk,
+    )
+
+    if not batch.configuracion_semana_id:
+
+        raise ValueError("El batch no posee una configuración semanal.")
+
+    # ========================================================
+    # BLOQUEAR CONFIGURACIÓN
+    # ========================================================
+
+    configuracion = ConfiguracionSemana.objects.select_for_update().get(
+        pk=batch.configuracion_semana_id,
+    )
+
+    try:
+
+        objetivo_sitios = int(
+            objetivo_sitios,
+        )
+
+    except (
+        TypeError,
+        ValueError,
+    ) as exc:
+
+        raise ValueError("El objetivo semanal debe ser un número entero.") from exc
+
+    if objetivo_sitios <= 0:
+
+        raise ValueError("El objetivo semanal debe ser mayor que cero.")
+
+    disponibilidades = list(disponibilidades or [])
+
+    if not disponibilidades:
+
+        raise ValueError("Debe existir al menos una cuadrilla configurada.")
+
+    if not any(bool(datos.get("activa")) for datos in disponibilidades):
+
+        raise ValueError("Debe existir al menos una cuadrilla activa.")
+
+    # ========================================================
+    # DISPONIBILIDADES ACTUALES
+    # ========================================================
+
+    existentes = {
+        disponibilidad.cuadrilla_operativa_id: disponibilidad
+        for disponibilidad in (
+            DisponibilidadCuadrillaSemana.objects.select_for_update()
+            .filter(
+                configuracion_semana=configuracion,
+            )
+            .select_related(
+                "cuadrilla_operativa",
+            )
+        )
+        if disponibilidad.cuadrilla_operativa_id
+    }
+
+    # ========================================================
+    # VALIDAR CONTRA SALIDAS YA EXISTENTES
+    # ========================================================
+
+    for datos in disponibilidades:
+
+        cuadrilla = datos.get(
+            "cuadrilla_operativa",
+        )
+
+        if cuadrilla is None:
+            raise ValueError("Existe una disponibilidad sin cuadrilla.")
+
+        disponibilidad_actual = existentes.get(
+            cuadrilla.pk,
+        )
+
+        if disponibilidad_actual is None:
+            continue
+
+        nueva_activa = bool(
+            datos.get(
+                "activa",
+                False,
+            )
+        )
+
+        nueva_modalidad = datos.get(
+            "modalidad",
+            DisponibilidadCuadrillaSemana.LUNES_VIERNES,
+        )
+
+        # ====================================================
+        # SALIDAS ACTIVAS DE ESTA DISPONIBILIDAD
+        # ====================================================
+
+        salidas_existentes = SalidaPlanificacionDiaria.objects.filter(
+            batch=batch,
+            disponibilidad_cuadrilla=(disponibilidad_actual),
+        ).exclude(
+            estado="cancelada",
+        )
+
+        # ====================================================
+        # NO DESACTIVAR SI YA TIENE PLANIFICACIÓN
+        # ====================================================
+
+        if (
+            disponibilidad_actual.activa
+            and not nueva_activa
+            and salidas_existentes.exists()
+        ):
+
+            raise ValueError(
+                (
+                    f"{disponibilidad_actual.nombre_cuadrilla} "
+                    "no puede desactivarse porque ya posee "
+                    "salidas dentro de esta semana."
+                )
+            )
+
+        # ====================================================
+        # NO QUITAR SÁBADO SI EXISTE SALIDA EL SÁBADO
+        # ====================================================
+
+        if (
+            nueva_activa
+            and nueva_modalidad == DisponibilidadCuadrillaSemana.LUNES_VIERNES
+        ):
+
+            existe_salida_sabado = any(
+                salida.fecha.weekday() == 5
+                for salida
+                in salidas_existentes.only(
+                    "id",
+                    "fecha",
+                )
+            )
+
+            if existe_salida_sabado:
+
+                raise ValueError(
+                    (
+                        f"{disponibilidad_actual.nombre_cuadrilla} "
+                        "ya posee una salida programada el "
+                        "sábado y no puede cambiarse a "
+                        "Lunes a viernes."
+                    )
+                )
+
+    # ========================================================
+    # GUARDAR DISPONIBILIDADES
+    # ========================================================
+
+    alguna_trabaja_sabado = False
+
+    for datos in disponibilidades:
+
+        cuadrilla = datos["cuadrilla_operativa"]
+
+        activa = bool(
+            datos.get(
+                "activa",
+                False,
+            )
+        )
+
+        modalidad = datos.get(
+            "modalidad",
+            DisponibilidadCuadrillaSemana.LUNES_VIERNES,
+        )
+
+        capacidad_diaria = datos.get(
+            "capacidad_diaria",
+            3,
+        )
+
+        guardar_disponibilidad_cuadrilla(
+            configuracion=configuracion,
+            cuadrilla_operativa=cuadrilla,
+            modalidad=modalidad,
+            activa=activa,
+            capacidad_diaria=capacidad_diaria,
+            usuario=usuario,
+        )
+
+        if activa and modalidad == DisponibilidadCuadrillaSemana.LUNES_SABADO:
+
+            alguna_trabaja_sabado = True
+
+    # ========================================================
+    # CONFIGURACIÓN GENERAL
+    # ========================================================
+
+    configuracion.trabaja_sabado = alguna_trabaja_sabado
+
+    configuracion.actualizado_por = usuario
+
+    configuracion.save(
+        update_fields=[
+            "trabaja_sabado",
+            "actualizado_por",
+            "actualizado_en",
+        ]
+    )
+
+    # ========================================================
+    # BATCH
+    # ========================================================
+
+    batch.objetivo_sitios = objetivo_sitios
+
+    batch.observaciones = str(observaciones or "").strip()
+
+    batch.actualizado_por = usuario
+
+    batch.save(
+        update_fields=[
+            "objetivo_sitios",
+            "observaciones",
+            "actualizado_por",
+            "actualizado_en",
+        ]
+    )
+
+    return batch
 
 
 # ============================================================

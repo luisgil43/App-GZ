@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from django import forms
+from django.db.models import Q
 
 from planificacion.modelos import (CuadrillaOperativa,
                                    DisponibilidadCuadrillaSemana)
@@ -1080,6 +1081,388 @@ class CrearBatchSemanalForm(forms.ModelForm):
                     "activa": activa,
                     "modalidad": modalidad,
                     "capacidad_diaria": int(capacidad_diaria),
+                }
+            )
+
+        return resultado
+
+
+# ============================================================
+# EDITAR CONFIGURACIÓN DE SEMANA EXISTENTE
+# ============================================================
+
+
+class EditarBatchSemanalForm(forms.Form):
+    """
+    Edita la configuración operacional de un batch semanal
+    EXISTENTE.
+
+    REGLAS
+    ==========================================================
+
+    La identidad de la semana NO puede modificarse.
+
+    Por tanto este formulario NO permite cambiar:
+
+        fecha_inicio
+
+    Sí permite modificar:
+
+        objetivo_sitios
+        observaciones
+        cuadrillas activas
+        modalidad L-V / L-S
+        capacidad nominal diaria
+
+    Las disponibilidades existentes se precargan exactamente
+    desde ConfiguracionSemana.
+
+    IMPORTANTE
+    ==========================================================
+
+    También incluimos una cuadrilla que actualmente esté
+    inactiva en el catálogo si ya forma parte de esta semana.
+
+    Esto evita perder una configuración histórica existente
+    solamente porque posteriormente se desactivó la cuadrilla
+    maestra.
+    """
+
+    objetivo_sitios = forms.IntegerField(
+        min_value=1,
+        label="Cantidad de sitios a proponer",
+        widget=forms.NumberInput(
+            attrs={
+                "min": 1,
+                "step": 1,
+                "class": (
+                    "w-full rounded-xl border border-slate-300 "
+                    "bg-white px-3 py-2.5 text-sm text-slate-800 "
+                    "outline-none transition "
+                    "focus:border-blue-500 focus:ring-2 "
+                    "focus:ring-blue-100"
+                ),
+            }
+        ),
+    )
+
+    observaciones = forms.CharField(
+        required=False,
+        label="Observaciones",
+        widget=forms.Textarea(
+            attrs={
+                "rows": 4,
+                "class": (
+                    "w-full rounded-xl border border-slate-300 "
+                    "bg-white px-3 py-2.5 text-sm text-slate-800 "
+                    "outline-none transition "
+                    "focus:border-blue-500 focus:ring-2 "
+                    "focus:ring-blue-100"
+                ),
+                "placeholder": (
+                    "Información adicional para la preparación " "de esta semana."
+                ),
+            }
+        ),
+    )
+
+    def __init__(
+        self,
+        *args,
+        batch=None,
+        **kwargs,
+    ):
+        super().__init__(
+            *args,
+            **kwargs,
+        )
+
+        if batch is None:
+            raise ValueError("EditarBatchSemanalForm requiere un batch.")
+
+        self.batch = batch
+
+        self.configuracion = batch.configuracion_semana
+
+        if self.configuracion is None:
+            raise ValueError("El batch no posee una configuración semanal.")
+
+        # ====================================================
+        # VALORES GENERALES
+        # ====================================================
+
+        self.fields["objetivo_sitios"].initial = batch.objetivo_sitios
+
+        self.fields["observaciones"].initial = batch.observaciones or ""
+
+        # ====================================================
+        # DISPONIBILIDADES EXISTENTES
+        # ====================================================
+
+        disponibilidades_existentes = list(
+            self.configuracion.disponibilidades_cuadrillas.select_related(
+                "cuadrilla_operativa",
+            ).order_by(
+                "cuadrilla_operativa__orden",
+                "cuadrilla_operativa__nombre",
+                "cuadrilla",
+                "id",
+            )
+        )
+
+        self.disponibilidades_existentes = disponibilidades_existentes
+
+        disponibilidades_por_cuadrilla = {
+            disponibilidad.cuadrilla_operativa_id: disponibilidad
+            for disponibilidad in disponibilidades_existentes
+            if disponibilidad.cuadrilla_operativa_id
+        }
+
+        ids_existentes = {
+            disponibilidad.cuadrilla_operativa_id
+            for disponibilidad in disponibilidades_existentes
+            if disponibilidad.cuadrilla_operativa_id
+        }
+
+        # ====================================================
+        # CUADRILLAS A MOSTRAR
+        # ====================================================
+        #
+        # Mostramos:
+        #
+        # - todas las activas del catálogo;
+        # - cualquier cuadrilla ya configurada en esta semana,
+        #   aunque actualmente esté inactiva en el catálogo.
+        # ====================================================
+
+        self.cuadrillas_operativas = list(
+            CuadrillaOperativa.objects.filter(
+                Q(
+                    activa=True,
+                )
+                | Q(
+                    pk__in=ids_existentes,
+                )
+            )
+            .distinct()
+            .order_by(
+                "orden",
+                "nombre",
+                "id",
+            )
+        )
+
+        # ====================================================
+        # ESTILOS
+        # ====================================================
+
+        select_class = (
+            "w-full rounded-xl "
+            "border border-slate-300 "
+            "bg-white px-3 py-2.5 "
+            "text-sm text-slate-800 "
+            "outline-none transition "
+            "focus:border-blue-500 "
+            "focus:ring-2 "
+            "focus:ring-blue-100"
+        )
+
+        checkbox_class = (
+            "h-4 w-4 rounded "
+            "border-slate-300 "
+            "text-blue-600 "
+            "focus:ring-blue-500"
+        )
+
+        number_class = (
+            "w-full rounded-xl "
+            "border border-slate-300 "
+            "bg-white px-3 py-2.5 "
+            "text-sm text-slate-800 "
+            "outline-none transition "
+            "focus:border-blue-500 "
+            "focus:ring-2 "
+            "focus:ring-blue-100"
+        )
+
+        # ====================================================
+        # CAMPOS DINÁMICOS
+        # ====================================================
+
+        self.cuadrillas_configuracion = []
+
+        for cuadrilla in self.cuadrillas_operativas:
+
+            disponibilidad = disponibilidades_por_cuadrilla.get(
+                cuadrilla.pk,
+            )
+
+            campo_activa = f"cuadrilla_{cuadrilla.pk}_activa"
+
+            campo_modalidad = f"cuadrilla_{cuadrilla.pk}_modalidad"
+
+            campo_capacidad = f"cuadrilla_{cuadrilla.pk}_capacidad"
+
+            # ================================================
+            # PRECARGA REAL
+            # ================================================
+
+            if disponibilidad is not None:
+
+                activa_inicial = bool(disponibilidad.activa)
+
+                modalidad_inicial = disponibilidad.modalidad
+
+                capacidad_inicial = disponibilidad.capacidad_diaria_objetivo
+
+            else:
+
+                activa_inicial = False
+
+                modalidad_inicial = DisponibilidadCuadrillaSemana.LUNES_VIERNES
+
+                capacidad_inicial = 3
+
+            self.fields[campo_activa] = forms.BooleanField(
+                required=False,
+                initial=activa_inicial,
+                label=f"{cuadrilla.nombre} activa",
+                widget=forms.CheckboxInput(
+                    attrs={
+                        "class": checkbox_class,
+                        "data-cuadrilla-activa": str(cuadrilla.pk),
+                    }
+                ),
+            )
+
+            self.fields[campo_modalidad] = forms.ChoiceField(
+                choices=(DisponibilidadCuadrillaSemana.MODALIDADES),
+                initial=modalidad_inicial,
+                label=f"Jornada {cuadrilla.nombre}",
+                widget=forms.Select(
+                    attrs={
+                        "class": select_class,
+                        "data-cuadrilla-modalidad": str(cuadrilla.pk),
+                    }
+                ),
+            )
+
+            self.fields[campo_capacidad] = forms.IntegerField(
+                required=True,
+                min_value=1,
+                initial=capacidad_inicial,
+                label=(f"Capacidad nominal " f"{cuadrilla.nombre}"),
+                widget=forms.NumberInput(
+                    attrs={
+                        "min": 1,
+                        "step": 1,
+                        "class": number_class,
+                        "data-cuadrilla-capacidad": str(cuadrilla.pk),
+                    }
+                ),
+            )
+
+            self.cuadrillas_configuracion.append(
+                {
+                    "cuadrilla": cuadrilla,
+                    "disponibilidad": disponibilidad,
+                    "campo_activa": self[campo_activa],
+                    "campo_modalidad": self[campo_modalidad],
+                    "campo_capacidad": self[campo_capacidad],
+                }
+            )
+
+    # ========================================================
+    # VALIDACIÓN GENERAL
+    # ========================================================
+
+    def clean(
+        self,
+    ):
+        cleaned_data = super().clean()
+
+        if not self.cuadrillas_operativas:
+
+            raise forms.ValidationError(
+                ("No existen cuadrillas disponibles " "para configurar esta semana.")
+            )
+
+        existe_activa = False
+
+        for cuadrilla in self.cuadrillas_operativas:
+
+            campo_activa = f"cuadrilla_{cuadrilla.pk}_activa"
+
+            if bool(
+                cleaned_data.get(
+                    campo_activa,
+                    False,
+                )
+            ):
+
+                existe_activa = True
+                break
+
+        if not existe_activa:
+
+            raise forms.ValidationError(
+                ("Debe existir al menos una cuadrilla " "activa para la semana.")
+            )
+
+        return cleaned_data
+
+    # ========================================================
+    # DISPONIBILIDADES NORMALIZADAS
+    # ========================================================
+
+    def obtener_disponibilidades(
+        self,
+    ):
+        if not hasattr(
+            self,
+            "cleaned_data",
+        ):
+            raise RuntimeError("Primero debes validar el formulario.")
+
+        if self.errors:
+            raise RuntimeError(
+                (
+                    "No se pueden obtener disponibilidades "
+                    "desde un formulario con errores."
+                )
+            )
+
+        resultado = []
+
+        for cuadrilla in self.cuadrillas_operativas:
+
+            campo_activa = f"cuadrilla_{cuadrilla.pk}_activa"
+
+            campo_modalidad = f"cuadrilla_{cuadrilla.pk}_modalidad"
+
+            campo_capacidad = f"cuadrilla_{cuadrilla.pk}_capacidad"
+
+            resultado.append(
+                {
+                    "cuadrilla_operativa": cuadrilla,
+                    "activa": bool(
+                        self.cleaned_data.get(
+                            campo_activa,
+                            False,
+                        )
+                    ),
+                    "modalidad": (
+                        self.cleaned_data.get(
+                            campo_modalidad,
+                            DisponibilidadCuadrillaSemana.LUNES_VIERNES,
+                        )
+                    ),
+                    "capacidad_diaria": int(
+                        self.cleaned_data.get(
+                            campo_capacidad,
+                            3,
+                        )
+                    ),
                 }
             )
 

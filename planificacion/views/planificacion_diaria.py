@@ -14,7 +14,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
-from planificacion.models import BatchPlanificacionSemanal
+from planificacion.models import BatchPlanificacionSemanal, ContactoSitio
 from planificacion.services.motor_batch_semanal.cuadrillas import \
     construir_configuracion_cuadrilla
 from planificacion.services.motor_batch_semanal.salidas import \
@@ -70,6 +70,320 @@ def _identificador_sitio_planificacion(
         or sitio.id_sites
         or f"Sitio {sitio.pk}"
     )
+
+# ============================================================
+# INFORMACIÓN DE CONTACTO PARA PLANIFICACIÓN DIARIA
+# ============================================================
+
+
+def _limpiar_texto_contacto(
+    valor,
+):
+    """
+    Normaliza exclusivamente para visualización.
+
+    No modifica ContactoSitio ni SitioMovil.
+    """
+
+    return str(valor or "").strip()
+
+
+def _deduplicar_textos_contacto(
+    valores,
+):
+    """
+    Elimina textos vacíos y duplicados conservando
+    el orden original.
+    """
+
+    resultado = []
+
+    vistos = set()
+
+    for valor in valores:
+
+        texto = _limpiar_texto_contacto(
+            valor,
+        )
+
+        if not texto:
+            continue
+
+        clave = texto.casefold()
+
+        if clave in vistos:
+            continue
+
+        vistos.add(
+            clave,
+        )
+
+        resultado.append(
+            texto,
+        )
+
+    return resultado
+
+
+def _construir_info_contactos_ui(
+    sitio,
+    contactos,
+):
+    """
+    Consolida la información ACTUAL de ContactoSitio
+    para mostrarla en Planificación Diaria.
+
+    IMPORTANTE
+    ==========================================================
+
+    - No persiste ningún snapshot.
+    - No modifica el motor.
+    - No modifica PerfilAccesoSitio.
+    - No modifica SitioMovil.
+    - Conserva todos los contactos activos del sitio.
+    """
+
+    contactos_ui = []
+
+    observaciones = []
+
+    acciones = []
+
+    for contacto in contactos:
+
+        propietario = _limpiar_texto_contacto(
+            contacto.propietario,
+        )
+
+        telefono = _limpiar_texto_contacto(
+            contacto.telefono,
+        )
+
+        correo = _limpiar_texto_contacto(
+            contacto.correo,
+        )
+
+        responsable = _limpiar_texto_contacto(
+            contacto.responsable,
+        )
+
+        tipo_contacto = _limpiar_texto_contacto(
+            contacto.tipo_contacto,
+        )
+
+        observacion = _limpiar_texto_contacto(
+            contacto.observaciones,
+        )
+
+        accion = _limpiar_texto_contacto(
+            contacto.accion,
+        )
+
+        if observacion:
+
+            observaciones.append(
+                observacion,
+            )
+
+        if accion:
+
+            acciones.append(
+                accion,
+            )
+
+        contactos_ui.append(
+            {
+                "id": contacto.pk,
+                "propietario": propietario,
+                "telefono": telefono,
+                "correo": correo,
+                "responsable": responsable,
+                "tipo_contacto": tipo_contacto,
+                "prioridad_contacto": contacto.prioridad_contacto,
+                "fecha_informacion": contacto.fecha_informacion,
+            }
+        )
+
+    observaciones = _deduplicar_textos_contacto(
+        observaciones,
+    )
+
+    acciones = _deduplicar_textos_contacto(
+        acciones,
+    )
+
+    # ========================================================
+    # ¿EXISTEN DATOS REALMENTE COMPARTIBLES?
+    # ========================================================
+
+    tiene_datos_contacto = any(
+        (
+            contacto["propietario"]
+            or contacto["telefono"]
+            or contacto["correo"]
+            or contacto["responsable"]
+            or contacto["tipo_contacto"]
+        )
+        for contacto in contactos_ui
+    )
+
+    # ========================================================
+    # TEXTO PARA COPIAR / WHATSAPP
+    # ========================================================
+
+    identificador = sitio.id_claro or sitio.id_sites or f"Sitio {sitio.pk}"
+
+    lineas = [
+        "GZ SERVICES - DATOS DE CONTACTO",
+        "",
+        f"Sitio: {identificador}",
+    ]
+
+    nombre = _limpiar_texto_contacto(
+        sitio.nombre,
+    )
+
+    if nombre:
+
+        lineas.append(f"Nombre: {nombre}")
+
+    comuna = _limpiar_texto_contacto(
+        sitio.comuna,
+    )
+
+    if comuna:
+
+        lineas.append(f"Comuna: {comuna}")
+
+    direccion = _limpiar_texto_contacto(
+        sitio.direccion,
+    )
+
+    if direccion:
+
+        lineas.append(f"Dirección: {direccion}")
+
+    acceso = _limpiar_texto_contacto(
+        sitio.condiciones_acceso,
+    )
+
+    if acceso:
+
+        lineas.append(f"Acceso: {acceso}")
+
+    # ========================================================
+    # CONTACTOS
+    # ========================================================
+
+    if tiene_datos_contacto:
+
+        lineas.extend(
+            [
+                "",
+                "CONTACTOS",
+            ]
+        )
+
+        numero_contacto = 0
+
+        for contacto in contactos_ui:
+
+            if not (
+                contacto["propietario"]
+                or contacto["telefono"]
+                or contacto["correo"]
+                or contacto["responsable"]
+                or contacto["tipo_contacto"]
+            ):
+                continue
+
+            numero_contacto += 1
+
+            lineas.extend(
+                [
+                    "",
+                    f"Contacto {numero_contacto}",
+                ]
+            )
+
+            if contacto["tipo_contacto"]:
+
+                lineas.append(f"Tipo: {contacto['tipo_contacto']}")
+
+            if contacto["propietario"]:
+
+                lineas.append(f"Propietario / contacto: {contacto['propietario']}")
+
+            if contacto["telefono"]:
+
+                lineas.append(f"Teléfono: {contacto['telefono']}")
+
+            if contacto["correo"]:
+
+                lineas.append(f"Correo: {contacto['correo']}")
+
+            if contacto["responsable"]:
+
+                lineas.append(f"Responsable: {contacto['responsable']}")
+
+            if contacto["fecha_informacion"]:
+
+                lineas.append(
+                    ("Fecha información: " f"{contacto['fecha_informacion']:%d/%m/%Y}")
+                )
+
+    # ========================================================
+    # OBSERVACIONES
+    # ========================================================
+
+    if observaciones:
+
+        lineas.extend(
+            [
+                "",
+                "⚠️ OBSERVACIONES",
+            ]
+        )
+
+        for observacion in observaciones:
+
+            lineas.append(f"- {observacion}")
+
+    # ========================================================
+    # ACCIONES
+    # ========================================================
+
+    if acciones:
+
+        lineas.extend(
+            [
+                "",
+                "⚠️ ACCIONES",
+            ]
+        )
+
+        for accion in acciones:
+
+            lineas.append(f"- {accion}")
+
+    return {
+        "contactos": contactos_ui,
+        "observaciones": observaciones,
+        "acciones": acciones,
+        "tiene_observaciones": bool(
+            observaciones,
+        ),
+        "tiene_acciones": bool(
+            acciones,
+        ),
+        "tiene_alertas": bool(observaciones or acciones),
+        "tiene_datos_contacto": bool(
+            tiene_datos_contacto,
+        ),
+        "texto_compartir": "\n".join(
+            lineas,
+        ),
+    }
 
 
 def _estado_visual_operaciones(
@@ -294,6 +608,8 @@ def mapa_pendientes_planificacion_diaria(
 
 def _construir_fila_sitio(
     sitio_salida,
+    *,
+    contactos_por_sitio=None,
 ):
     """
     Construye toda la información necesaria para la interfaz.
@@ -304,22 +620,15 @@ def _construir_fila_sitio(
     Todo sitio visible dentro de una jornada puede retirarse
     desde Planificación Diaria.
 
-    Ya no importa si:
-
-    - fue generado por el motor;
-    - fue programado manualmente;
-    - pertenece a una prioridad;
-    - la salida está bloqueada;
-    - la participación está bloqueada.
-
     Quitar de la jornada NO significa cancelar Operaciones.
 
-    Si el sitio todavía no tiene compromiso operacional,
-    volverá a quedar disponible para planificación.
+    INFORMACIÓN DE CONTACTO
+    ==========================================================
 
-    Si ya está asignado, en ejecución, revisión o finalizado,
-    simplemente se retira de esta jornada de planificación,
-    sin alterar el estado real de Operaciones.
+    La información de ContactoSitio utilizada aquí corresponde
+    a la lectura actual realizada al cargar esta pantalla.
+
+    No se persiste ningún snapshot.
     """
 
     item_batch = sitio_salida.sitio_batch
@@ -329,6 +638,22 @@ def _construir_fila_sitio(
     sitio = sitio_planificado.sitio
 
     salida = sitio_salida.salida
+
+    # ========================================================
+    # CONTACTOS DEL SITIO
+    # ========================================================
+
+    contactos_por_sitio = contactos_por_sitio or {}
+
+    contactos_sitio = contactos_por_sitio.get(
+        sitio.pk,
+        [],
+    )
+
+    info_contactos = _construir_info_contactos_ui(
+        sitio,
+        contactos_sitio,
+    )
 
     # ========================================================
     # PRIORIDAD DIARIA
@@ -378,13 +703,6 @@ def _construir_fila_sitio(
     # ========================================================
     # RETIRO DE PLANIFICACIÓN
     # ========================================================
-    #
-    # Todo sitio mostrado en la planificación diaria puede
-    # retirarse de la jornada.
-    #
-    # Las protecciones operacionales se resuelven dentro de
-    # quitar_sitio_planificacion_diaria().
-    # ========================================================
 
     puede_quitar_planificacion = True
 
@@ -411,6 +729,17 @@ def _construir_fila_sitio(
         "direccion": (sitio.direccion or ""),
         "tipo_zona": (sitio.tipo_zona or ""),
         "condiciones_acceso": (sitio.condiciones_acceso or ""),
+        # ====================================================
+        # CONTACTOS / ALERTAS
+        # ====================================================
+        "contactos": info_contactos["contactos"],
+        "observaciones_contacto": (info_contactos["observaciones"]),
+        "acciones_contacto": (info_contactos["acciones"]),
+        "tiene_observaciones_contacto": (info_contactos["tiene_observaciones"]),
+        "tiene_acciones_contacto": (info_contactos["tiene_acciones"]),
+        "tiene_alertas_contacto": (info_contactos["tiene_alertas"]),
+        "tiene_datos_contacto": (info_contactos["tiene_datos_contacto"]),
+        "texto_contacto_compartir": (info_contactos["texto_compartir"]),
         # ====================================================
         # PLANIFICACIÓN
         # ====================================================
@@ -760,7 +1089,44 @@ def detalle_planificacion_diaria(
             "id",
         )
     )
+    # ========================================================
+    # CONTACTOS ACTUALES DE LOS SITIOS DEL BATCH
+    # ========================================================
+    #
+    # Esta consulta se ejecuta en CADA carga de la pantalla.
+    #
+    # No utilizamos caché ni snapshots.
+    #
+    # Solo consultamos ContactoSitio de los SitioMovil que
+    # realmente pertenecen al batch actual.
+    # ========================================================
 
+    contactos_actuales = list(
+        ContactoSitio.objects.filter(
+            sitio__planificaciones__participaciones_batch__batch=batch,
+            activo=True,
+            sitio__isnull=False,
+        )
+        .select_related(
+            "sitio",
+        )
+        .order_by(
+            "sitio_id",
+            "prioridad_contacto",
+            "id",
+        )
+        .distinct()
+    )
+
+    contactos_por_sitio = defaultdict(
+        list,
+    )
+
+    for contacto in contactos_actuales:
+
+        contactos_por_sitio[contacto.sitio_id].append(
+            contacto,
+        )
     # ========================================================
     # CONSTRUIR SALIDAS PARA LA INTERFAZ
     # ========================================================
@@ -776,6 +1142,7 @@ def detalle_planificacion_diaria(
             filas.append(
                 _construir_fila_sitio(
                     sitio_salida,
+                    contactos_por_sitio=contactos_por_sitio,
                 )
             )
 
@@ -877,9 +1244,51 @@ def detalle_planificacion_diaria(
 
         item.es_prioridad = prioridad_activa
 
-        item.prioridad_id = prioridad_diaria.pk if prioridad_activa else None
+        item.prioridad_id = (
+            prioridad_diaria.pk
+            if prioridad_activa
+            else None
+        )
 
-        item.prioridad_diaria_ui = prioridad_diaria if prioridad_activa else None
+        item.prioridad_diaria_ui = (
+            prioridad_diaria
+            if prioridad_activa
+            else None
+        )
+
+        # ====================================================
+        # CONTACTOS / ALERTAS DEL PENDIENTE
+        # ====================================================
+
+        sitio = item.sitio_planificado.sitio
+
+        info_contactos = _construir_info_contactos_ui(
+            sitio,
+            contactos_por_sitio.get(
+                sitio.pk,
+                [],
+            ),
+        )
+
+        item.observaciones_contacto_ui = (
+            info_contactos["observaciones"]
+        )
+
+        item.acciones_contacto_ui = (
+            info_contactos["acciones"]
+        )
+
+        item.tiene_observaciones_contacto_ui = (
+            info_contactos["tiene_observaciones"]
+        )
+
+        item.tiene_acciones_contacto_ui = (
+            info_contactos["tiene_acciones"]
+        )
+
+        item.tiene_alertas_contacto_ui = (
+            info_contactos["tiene_alertas"]
+        )
 
     # ========================================================
     # RESUMEN

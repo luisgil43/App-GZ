@@ -40,9 +40,9 @@ from planificacion.views.planificacion_semanal import (
     actualizar_permiso_sitio_batch, agregar_sitios_batch,
     cerrar_propuesta_semanal, confirmar_sitios_batch,
     crear_planificacion_semanal, descargar_excel_batch,
-    detalle_planificacion_semanal, eliminar_planificacion_semanal,
-    enviar_gestion_permisos_batch, lista_planificacion_semanal,
-    mapa_batches_mensuales, quitar_sitio_batch)
+    detalle_planificacion_semanal, editar_planificacion_semanal,
+    eliminar_planificacion_semanal, enviar_gestion_permisos_batch,
+    lista_planificacion_semanal, mapa_batches_mensuales, quitar_sitio_batch)
 from planificacion.views.prioridades_diarias import (
     cancelar_prioridad_diaria, crear_prioridad_diaria, editar_prioridad_diaria,
     quitar_prioridad_planificacion_diaria, reactivar_prioridad_diaria)
@@ -132,6 +132,11 @@ urlpatterns = [
         "semanal/<int:batch_id>/",
         detalle_planificacion_semanal,
         name="detalle_planificacion_semanal",
+    ),
+    path(
+        "semanal/<int:batch_id>/editar/",
+        editar_planificacion_semanal,
+        name="editar_planificacion_semanal",
     ),
     # ========================================================
     # SITIOS DEL BATCH SEMANAL
