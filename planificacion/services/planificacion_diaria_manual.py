@@ -314,13 +314,96 @@ def obtener_salida_destino_manual(
     fecha,
 ):
     """
-    Busca una salida existente editable de la misma cuadrilla
-    y fecha.
+    Obtiene la ÚNICA jornada operacional existente para la
+    misma cuadrilla y fecha.
 
-    Si existe una salida manual o bloqueada, puede seguir
-    utilizándose siempre que no esté comprometida.
+    REGLA FUNDAMENTAL
+    ==========================================================
 
-    Se prioriza orden=0.
+    Una cuadrilla física solamente puede poseer una jornada
+    operacional por fecha dentro del mismo batch.
+
+    Por ejemplo:
+
+        W36
+        01/09/2026
+        B1
+
+    debe representarse como:
+
+        una SalidaPlanificacionDiaria
+            +
+        varios SitioSalidaPlanificacionDiaria
+
+    y NUNCA como:
+
+        B1 -> salida #120
+        B1 -> salida #123
+
+    simplemente porque la primera salida ya fue asignada.
+
+    SALIDA ASIGNADA
+    ==========================================================
+
+    Una salida cuyo estado es:
+
+        asignada
+
+    continúa siendo la jornada real de esa cuadrilla para ese
+    día.
+
+    Por tanto, si posteriormente se programa manualmente otro
+    sitio para esa misma cuadrilla/fecha, debe incorporarse a
+    ESA MISMA salida.
+
+    Ejemplo:
+
+        B1
+        1. 05_416  asignado
+        2. 05_031  asignado
+
+    y posteriormente agregamos:
+
+        05_409
+
+    el resultado correcto es:
+
+        B1
+        1. 05_416  asignado
+        2. 05_031  asignado
+        3. 05_409  planificado
+
+    Los dos servicios ya asignados NO cambian de estado.
+
+    ESTADOS NO REUTILIZABLES
+    ==========================================================
+
+    No incorporamos nuevos sitios manualmente cuando la jornada
+    ya se encuentra:
+
+        cancelada
+        en_ejecucion
+        parcial
+        finalizada
+
+    porque en esos casos la ejecución operacional del día ya
+    comenzó o alcanzó una etapa posterior.
+
+    BLOQUEO
+    ==========================================================
+
+    Una salida bloqueada SÍ puede encontrarse aquí.
+
+    El bloqueo existe para protegerla frente al motor
+    automático, no para impedir una decisión manual explícita
+    del usuario.
+
+    Si por datos históricos existieran varias salidas para la
+    misma cuadrilla/fecha, devolvemos la más antigua como
+    jornada principal.
+
+    Esa inconsistencia debe corregirse aparte; esta función
+    evita seguir creando nuevas duplicadas.
     """
 
     return (
@@ -335,7 +418,6 @@ def obtener_salida_destino_manual(
                 "finalizada",
                 "en_ejecucion",
                 "parcial",
-                "asignada",
             ],
         )
         .order_by(
