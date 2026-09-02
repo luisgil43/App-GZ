@@ -364,18 +364,42 @@ def actualizar_configuracion_batch_semanal(
     # ========================================================
     # DISPONIBILIDADES ACTUALES
     # ========================================================
+    #
+    # IMPORTANTE:
+    #
+    # cuadrilla_operativa es nullable.
+    #
+    # PostgreSQL no permite aplicar FOR UPDATE sobre el lado
+    # nullable de un OUTER JOIN.
+    #
+    # Por eso bloqueamos exclusivamente las filas de
+    # DisponibilidadCuadrillaSemana mediante:
+    #
+    #     select_for_update(of=("self",))
+    #
+    # mientras select_related("cuadrilla_operativa") sigue
+    # utilizándose normalmente para cargar la relación.
+    # ========================================================
+
+    disponibilidades_actuales = list(
+        DisponibilidadCuadrillaSemana.objects
+        .select_related(
+            "cuadrilla_operativa",
+        )
+        .select_for_update(
+            of=("self",),
+        )
+        .filter(
+            configuracion_semana=configuracion,
+        )
+        .order_by(
+            "id",
+        )
+    )
 
     existentes = {
         disponibilidad.cuadrilla_operativa_id: disponibilidad
-        for disponibilidad in (
-            DisponibilidadCuadrillaSemana.objects.select_for_update()
-            .filter(
-                configuracion_semana=configuracion,
-            )
-            .select_related(
-                "cuadrilla_operativa",
-            )
-        )
+        for disponibilidad in disponibilidades_actuales
         if disponibilidad.cuadrilla_operativa_id
     }
 
