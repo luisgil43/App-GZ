@@ -1281,14 +1281,42 @@ def mover_sitio_a_semana(
         servicio = servicio_vinculado
 
     # ========================================================
-    # 16. RESULTADO
+    # 16. SINCRONIZAR ESTADO DEL BATCH ORIGEN
+    # ========================================================
+    #
+    # Si el sitio trasladado era el último pendiente de
+    # planificación dentro de la semana origen, esa semana
+    # puede quedar ahora completamente planificada.
+    #
+    # Import local intencional para evitar dependencias
+    # circulares entre los servicios de planificación diaria
+    # y movimiento semanal.
+    # ========================================================
+
+    from planificacion.services.planificacion_diaria import \
+        sincronizar_estado_batch_desde_planificacion_diaria
+
+    # El batch origen todavía pertenece a esta transacción.
+    # Lo bloqueamos antes de evaluar su estado definitivo.
+
+    batch_origen_bloqueado = BatchPlanificacionSemanal.objects.select_for_update().get(
+        pk=batch_origen.pk,
+    )
+
+    sincronizar_estado_batch_desde_planificacion_diaria(
+        batch=batch_origen_bloqueado,
+        usuario=usuario,
+    )
+
+    # ========================================================
+    # 17. RESULTADO
     # ========================================================
 
     return {
         "sitio_batch": sitio_batch,
         "sitio_planificado": sitio_planificado,
         "servicio": servicio,
-        "batch_origen": batch_origen,
+        "batch_origen": batch_origen_bloqueado,
         "batch_destino": batch_destino,
         "identificador": identificador,
         "servicio_reiniciado": (servicio_requeria_reinicio),

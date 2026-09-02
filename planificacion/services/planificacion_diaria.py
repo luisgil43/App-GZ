@@ -2693,41 +2693,65 @@ def sincronizar_estado_batch_desde_planificacion_diaria(
     usuario=None,
 ):
     """
-    Sincroniza el estado general del batch cuando ya existe
-    planificación diaria persistida.
+    Sincroniza el estado general del batch con el estado real
+    de su planificación diaria.
 
-    REGLA
+    REGLA OPERACIONAL
     ==========================================================
 
-    Si existe al menos una SalidaPlanificacionDiaria
-    persistida, el batch ya alcanzó operacionalmente la etapa
-    de planificación diaria y no puede permanecer en un estado
-    semanal anterior.
-
-    Estados que pueden avanzar:
-
-        borrador
-        propuesto
-        gestion_permisos
-        listo_planificar
-
-    Estado destino:
+    Un batch pasa a:
 
         planificado
+
+    únicamente cuando YA NO quedan sitios activos de esa
+    semana pendientes de recibir planificación diaria.
+
+    Un sitio se considera resuelto para esta semana cuando:
+
+        - posee una participación diaria activa; o
+        - fue rechazado;
+        - fue excluido;
+        - fue reemplazado / trasladado a otra semana.
+
+    Los sitios de reserva no bloquean el estado general del
+    batch mientras continúen siendo reserva.
+
+    ESTADOS QUE PUEDEN BLOQUEAR
+    ==========================================================
+
+        seleccionado
+        gestion_permiso
+        disponible
+        sin_respuesta
+        confirmado
+
+    Estos representan sitios que todavía pertenecen
+    operacionalmente a la semana y que, mientras no tengan
+    planificación diaria activa, mantienen el batch pendiente.
+
+    ESTADOS TERMINALES PARA ESTA SEMANA
+    ==========================================================
+
+        rechazado
+        excluido
+        reemplazado
+
+    Estos no requieren una salida diaria dentro del batch
+    original.
 
     PROTECCIONES
     ==========================================================
 
     Esta función:
 
+    - NO crea planificación diaria;
+    - NO elimina planificación diaria;
     - NO modifica sitios del batch;
-    - NO modifica SitioPlanificado;
     - NO modifica permisos;
-    - NO modifica salidas;
     - NO reconstruye la semana;
     - NO recupera sitios trasladados;
     - NO modifica Operaciones;
-    - NO retrocede estados posteriores;
+    - NO modifica batches ya planificados;
     - NO modifica batches cerrados;
     - NO modifica batches cancelados.
 
@@ -2746,12 +2770,97 @@ def sincronizar_estado_batch_desde_planificacion_diaria(
     if batch.estado not in estados_que_pueden_avanzar:
         return False
 
-    existe_planificacion_diaria = SalidaPlanificacionDiaria.objects.filter(
-        batch=batch,
-    ).exists()
+    # ========================================================
+    # PARTICIPACIONES DIARIAS ACTIVAS
+    # ========================================================
+    #
+    # Una participación retirada, reprogramada o cancelada
+    # NO significa que el sitio siga planificado actualmente
+    # dentro de esta semana.
+    # ========================================================
+
+    sitios_con_planificacion_activa = (
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            salida__batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "retirado",
+                "reprogramado",
+                "cancelado",
+            ],
+        )
+        .values_list(
+            "sitio_batch_id",
+            flat=True,
+        )
+    )
+
+    # ========================================================
+    # SITIOS QUE TODAVÍA DEBEN RESOLVERSE EN ESTA SEMANA
+    # ========================================================
+    #
+    # candidato:
+    #     no bloquea porque todavía no forma parte de la
+    #     selección operacional efectiva.
+    #
+    # rechazado / excluido / reemplazado:
+    #     ya están resueltos para esta semana.
+    #
+    # reservas:
+    #     no forman parte de la obligación operacional mientras
+    #     continúen marcadas como reserva.
+    # ========================================================
+
+    quedan_sitios_pendientes = (
+        batch.sitios.filter(
+            es_reserva=False,
+            estado__in=[
+                "seleccionado",
+                "gestion_permiso",
+                "disponible",
+                "sin_respuesta",
+                "confirmado",
+            ],
+        )
+        .exclude(
+            pk__in=sitios_con_planificacion_activa,
+        )
+        .exists()
+    )
+
+    if quedan_sitios_pendientes:
+        return False
+
+    # ========================================================
+    # DEBE EXISTIR PLANIFICACIÓN REAL
+    # ========================================================
+    #
+    # Evita marcar como planificado un batch vacío o una
+    # propuesta cuyos sitios simplemente terminaron excluidos
+    # sin que haya existido planificación diaria.
+    # ========================================================
+
+    existe_planificacion_diaria = (
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            salida__batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "retirado",
+                "reprogramado",
+                "cancelado",
+            ],
+        )
+        .exists()
+    )
 
     if not existe_planificacion_diaria:
         return False
+
+    # ========================================================
+    # AVANZAR ESTADO DEL BATCH
+    # ========================================================
 
     batch.estado = "planificado"
 
@@ -3244,9 +3353,6 @@ def guardar_plan_diario_batch(
     resultado["propuesta_anterior_conservada"] = False
 
     return resultado
-
-
-
 
 
 # ============================================================
