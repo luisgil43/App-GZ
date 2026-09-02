@@ -12,7 +12,8 @@ from planificacion.services.motor_batch_semanal.cuadrillas import \
     construir_configuracion_cuadrilla
 from planificacion.services.motor_batch_semanal.salidas import \
     encontrar_mejor_salida
-from planificacion.services.planificacion_diaria import _sitio_batch_a_motor
+from planificacion.services.planificacion_diaria import (
+    _sitio_batch_a_motor, sincronizar_estado_batch_desde_planificacion_diaria)
 
 # ============================================================
 # CONSTANTES
@@ -1177,17 +1178,24 @@ def programar_sitio_manual(
     BLOQUEOS SQL
     ==========================================================
 
-    Los select_for_update() se ejecutan únicamente sobre
-    la tabla concreta que necesitamos bloquear.
+    El orden de bloqueo comienza siempre por el batch.
+
+    Después se bloquean exclusivamente las filas concretas
+    necesarias para la programación manual.
 
     NO combinamos select_for_update() con select_related()
     porque algunas relaciones pueden ser nullable y
     PostgreSQL no permite aplicar FOR UPDATE sobre el lado
     nullable de un OUTER JOIN.
-
-    Las relaciones se cargan posteriormente mediante
-    consultas normales independientes.
     """
+
+    # ========================================================
+    # BLOQUEAR BATCH
+    # ========================================================
+
+    batch = batch.__class__.objects.select_for_update().get(
+        pk=batch.pk,
+    )
 
     # ========================================================
     # BLOQUEAR SITIO BATCH
@@ -1198,19 +1206,22 @@ def programar_sitio_manual(
     )
 
     # ========================================================
+    # VALIDAR PERTENENCIA AL BATCH
+    # ========================================================
+
+    if sitio_batch.batch_id != batch.pk:
+        raise ValidationError("El sitio no pertenece al batch indicado.")
+
+    # ========================================================
     # CARGAR RELACIONES DEL SITIO FUERA DEL FOR UPDATE
     # ========================================================
 
     sitio_planificado = sitio_batch.sitio_planificado
-
     sitio = sitio_planificado.sitio
-
     batch_sitio = sitio_batch.batch
 
     sitio_planificado.pk
-
     sitio.pk
-
     batch_sitio.pk
 
     # ========================================================
@@ -1245,13 +1256,11 @@ def programar_sitio_manual(
     )
 
     if analisis["errores"]:
-
         raise ValidationError(
             analisis["errores"],
         )
 
     if analisis["requiere_confirmacion"] and not confirmar_excepcion:
-
         raise ValidationError(
             [
                 (
@@ -1272,19 +1281,11 @@ def programar_sitio_manual(
 
     if participacion_actual is not None:
 
-        # ====================================================
-        # BLOQUEAR ÚNICAMENTE PARTICIPACIÓN
-        # ====================================================
-
         participacion_actual = (
             SitioSalidaPlanificacionDiaria.objects.select_for_update().get(
                 pk=participacion_actual.pk,
             )
         )
-
-        # ====================================================
-        # CARGAR SALIDA FUERA DEL FOR UPDATE
-        # ====================================================
 
         salida_origen = participacion_actual.salida
 
@@ -1324,7 +1325,6 @@ def programar_sitio_manual(
         )
 
         while orden_salida in ordenes_existentes:
-
             orden_salida += 1
 
         # ====================================================
@@ -1364,7 +1364,6 @@ def programar_sitio_manual(
         )
 
         if observaciones:
-
             participacion_actual.observaciones = observaciones
 
         participacion_actual.actualizado_por = usuario
@@ -1386,11 +1385,9 @@ def programar_sitio_manual(
         salida_destino.origen = "manual"
 
         if bloquear_salida:
-
             salida_destino.bloqueada = True
 
         if observaciones:
-
             salida_destino.observaciones = observaciones
 
         salida_destino.actualizado_por = usuario
@@ -1435,7 +1432,6 @@ def programar_sitio_manual(
         sitio_planificado = sitio_batch.sitio_planificado
 
         sitio_planificado.fecha_planificada = salida_destino.fecha
-
         sitio_planificado.orden_dia = participacion_actual.orden
 
         if sitio_planificado.estado not in {
@@ -1443,11 +1439,9 @@ def programar_sitio_manual(
             "cancelado",
             "bloqueado",
         }:
-
             sitio_planificado.estado = "planificado"
 
         sitio_planificado.planificado_manualmente = True
-
         sitio_planificado.actualizado_por = usuario
 
         sitio_planificado.save(
@@ -1461,13 +1455,22 @@ def programar_sitio_manual(
             ]
         )
 
+        # ====================================================
+        # SINCRONIZAR ESTADO DEL BATCH
+        # ====================================================
+
+        sincronizar_estado_batch_desde_planificacion_diaria(
+            batch=batch,
+            usuario=usuario,
+        )
+
         return {
             "salida": salida_destino,
-            "sitio_salida": (participacion_actual),
+            "sitio_salida": participacion_actual,
             "salida_creada": False,
             "sitio_movido": False,
             "salida_origen_eliminada": False,
-            "advertencias": (analisis["advertencias"]),
+            "advertencias": analisis["advertencias"],
             "cantidad_sitios": (
                 contar_sitios_activos_salida(
                     salida_destino,
@@ -1475,6 +1478,261 @@ def programar_sitio_manual(
             ),
         }
 
+    # ========================================================
+    # RETIRAR PARTICIPACIÓN ANTERIOR EDITABLE
+    # ========================================================
+
+    sitio_movido = False
+
+    if participacion_actual is not None:
+
+        participacion_actual.estado = "reprogramado"
+
+        participacion_actual.motivo_reprogramacion = (
+            "Reprogramado manualmente desde " "Planificación Diaria."
+        )
+
+        participacion_actual.actualizado_por = usuario
+
+        participacion_actual.save(
+            update_fields=[
+                "estado",
+                "motivo_reprogramacion",
+                "actualizado_por",
+                "actualizado_en",
+            ]
+        )
+
+        sitio_movido = True
+
+    # ========================================================
+    # ORDEN NUEVO
+    # ========================================================
+
+    ultimo_orden = (
+        salida_destino.sitios.exclude(
+            estado__in=[
+                "retirado",
+                "reprogramado",
+                "cancelado",
+            ],
+        )
+        .order_by(
+            "-orden",
+            "-id",
+        )
+        .values_list(
+            "orden",
+            flat=True,
+        )
+        .first()
+    )
+
+    nuevo_orden = int(ultimo_orden or 0) + 1
+
+    # ========================================================
+    # PARTICIPACIÓN DESTINO EXISTENTE
+    # ========================================================
+
+    participacion_destino_existente = (
+        SitioSalidaPlanificacionDiaria.objects.select_for_update()
+        .filter(
+            salida=salida_destino,
+            sitio_batch=sitio_batch,
+        )
+        .order_by(
+            "-id",
+        )
+        .first()
+    )
+
+    # ========================================================
+    # REACTIVAR PARTICIPACIÓN EXISTENTE
+    # ========================================================
+
+    if participacion_destino_existente is not None:
+
+        sitio_salida = participacion_destino_existente
+
+        sitio_salida.orden = nuevo_orden
+        sitio_salida.estado = "planificado"
+        sitio_salida.origen = "manual"
+
+        sitio_salida.bloqueado = bool(
+            bloquear_salida,
+        )
+
+        if (
+            participacion_actual is not None
+            and participacion_actual.pk != sitio_salida.pk
+        ):
+            sitio_salida.reprogramado_desde = participacion_actual
+
+        sitio_salida.motivo_reprogramacion = (
+            "Reincorporado manualmente a esta " "jornada desde Planificación Diaria."
+        )
+
+        sitio_salida.observaciones = observaciones or ""
+
+        sitio_salida.actualizado_por = usuario
+
+        sitio_salida.save(
+            update_fields=[
+                "orden",
+                "estado",
+                "origen",
+                "bloqueado",
+                "reprogramado_desde",
+                "motivo_reprogramacion",
+                "observaciones",
+                "actualizado_por",
+                "actualizado_en",
+            ]
+        )
+
+    # ========================================================
+    # CREAR PARTICIPACIÓN NUEVA
+    # ========================================================
+
+    else:
+
+        sitio_salida = SitioSalidaPlanificacionDiaria.objects.create(
+            salida=salida_destino,
+            sitio_batch=sitio_batch,
+            orden=nuevo_orden,
+            estado="planificado",
+            origen="manual",
+            bloqueado=bool(
+                bloquear_salida,
+            ),
+            reprogramado_desde=(
+                participacion_actual if participacion_actual is not None else None
+            ),
+            motivo_reprogramacion=(
+                ("Programación manual desde " "Planificación Diaria.")
+                if participacion_actual is not None
+                else ""
+            ),
+            observaciones=(observaciones or ""),
+            creado_por=usuario,
+            actualizado_por=usuario,
+        )
+
+    # ========================================================
+    # MARCAR SALIDA COMO MANUAL
+    # ========================================================
+
+    salida_destino.origen = "manual"
+
+    if bloquear_salida:
+        salida_destino.bloqueada = True
+
+    if observaciones:
+        salida_destino.observaciones = observaciones
+
+    salida_destino.actualizado_por = usuario
+
+    # ========================================================
+    # REORDENAR
+    # ========================================================
+
+    _reordenar_sitios_salida(
+        salida_destino,
+    )
+
+    # ========================================================
+    # RECALCULAR RUTA Y MÉTRICAS
+    # ========================================================
+
+    _actualizar_metricas_basicas_salida(
+        salida_destino,
+    )
+
+    salida_destino.save(
+        update_fields=[
+            "origen",
+            "bloqueada",
+            "observaciones",
+            "actualizado_por",
+            "minutos_viaje_estimados",
+            "minutos_trabajo_estimados",
+            "minutos_total_estimados",
+            "distancia_directa_km",
+            "distancia_vial_estimada_km",
+            "jornada_extendida",
+            "exceso_jornada_minutos",
+            "actualizado_en",
+        ]
+    )
+
+    # ========================================================
+    # SITIO PLANIFICADO
+    # ========================================================
+
+    sitio_planificado = sitio_batch.sitio_planificado
+
+    sitio_planificado.fecha_planificada = salida_destino.fecha
+    sitio_planificado.orden_dia = sitio_salida.orden
+
+    if sitio_planificado.estado not in {
+        "completado",
+        "cancelado",
+        "bloqueado",
+    }:
+        sitio_planificado.estado = "planificado"
+
+    sitio_planificado.planificado_manualmente = True
+    sitio_planificado.actualizado_por = usuario
+
+    sitio_planificado.save(
+        update_fields=[
+            "fecha_planificada",
+            "orden_dia",
+            "estado",
+            "planificado_manualmente",
+            "actualizado_por",
+            "actualizado_en",
+        ]
+    )
+
+    # ========================================================
+    # LIMPIAR / RECALCULAR SALIDA ANTERIOR
+    # ========================================================
+
+    salida_origen_eliminada = False
+
+    if salida_origen is not None and salida_origen.pk != salida_destino.pk:
+
+        salida_origen_eliminada = _limpiar_salida_origen_si_corresponde(
+            salida_origen,
+        )
+
+    # ========================================================
+    # SINCRONIZAR ESTADO DEL BATCH
+    # ========================================================
+
+    sincronizar_estado_batch_desde_planificacion_diaria(
+        batch=batch,
+        usuario=usuario,
+    )
+
+    # ========================================================
+    # RESULTADO
+    # ========================================================
+
+    return {
+        "salida": salida_destino,
+        "sitio_salida": sitio_salida,
+        "salida_creada": salida_creada,
+        "sitio_movido": sitio_movido,
+        "salida_origen_eliminada": salida_origen_eliminada,
+        "advertencias": analisis["advertencias"],
+        "cantidad_sitios": (
+            contar_sitios_activos_salida(
+                salida_destino,
+            )
+        ),
+    }
     # ========================================================
     # RETIRAR PARTICIPACIÓN ANTERIOR EDITABLE
     # ========================================================

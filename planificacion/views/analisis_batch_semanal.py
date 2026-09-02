@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib import messages
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -228,7 +229,7 @@ def aplicar_propuesta_batch_view(
     )
 
     propuesta = next(
-        (item for item in propuestas if (item.get("posicion") == posicion)),
+        (item for item in propuestas if item.get("posicion") == posicion),
         None,
     )
 
@@ -236,7 +237,7 @@ def aplicar_propuesta_batch_view(
 
         messages.error(
             request,
-            ("La propuesta seleccionada " "no existe."),
+            "La propuesta seleccionada no existe.",
         )
 
         return redirect(
@@ -252,8 +253,42 @@ def aplicar_propuesta_batch_view(
 
         resultado_aplicacion = aplicar_propuesta_batch(
             batch=batch,
-            propuesta_serializada=(propuesta),
+            propuesta_serializada=propuesta,
             usuario=request.user,
+        )
+
+    except ProtectedError:
+
+        # ====================================================
+        # PROTECCIÓN DE PLANIFICACIÓN DIARIA EXISTENTE
+        # ====================================================
+        #
+        # La propuesta intenta retirar uno o más
+        # SitioBatchSemanal que ya poseen participaciones
+        # dentro de la planificación diaria.
+        #
+        # La FK PROTECT está funcionando correctamente.
+        #
+        # No eliminamos esas participaciones ni debilitamos
+        # la protección. Solamente convertimos la excepción
+        # técnica en un mensaje comprensible para el usuario.
+        # ====================================================
+
+        messages.warning(
+            request,
+            (
+                "No se pudo aplicar esta propuesta porque "
+                "la semana ya contiene sitios que forman parte "
+                "de una planificación diaria existente. "
+                "Para proteger esas salidas, el sistema no permite "
+                "eliminar automáticamente esos sitios del batch. "
+                "La planificación actual no fue modificada."
+            ),
+        )
+
+        return redirect(
+            ("planificacion:" "analizar_batch_semanal"),
+            batch_id=batch.pk,
         )
 
     except ValueError as exc:

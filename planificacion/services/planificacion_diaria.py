@@ -2683,6 +2683,93 @@ def _limpiar_salidas_editables_batch(
 
 
 # ============================================================
+# SINCRONIZAR ESTADO DEL BATCH DESDE PLANIFICACIÓN DIARIA
+# ============================================================
+
+
+def sincronizar_estado_batch_desde_planificacion_diaria(
+    *,
+    batch,
+    usuario=None,
+):
+    """
+    Sincroniza el estado general del batch cuando ya existe
+    planificación diaria persistida.
+
+    REGLA
+    ==========================================================
+
+    Si existe al menos una SalidaPlanificacionDiaria
+    persistida, el batch ya alcanzó operacionalmente la etapa
+    de planificación diaria y no puede permanecer en un estado
+    semanal anterior.
+
+    Estados que pueden avanzar:
+
+        borrador
+        propuesto
+        gestion_permisos
+        listo_planificar
+
+    Estado destino:
+
+        planificado
+
+    PROTECCIONES
+    ==========================================================
+
+    Esta función:
+
+    - NO modifica sitios del batch;
+    - NO modifica SitioPlanificado;
+    - NO modifica permisos;
+    - NO modifica salidas;
+    - NO reconstruye la semana;
+    - NO recupera sitios trasladados;
+    - NO modifica Operaciones;
+    - NO retrocede estados posteriores;
+    - NO modifica batches cerrados;
+    - NO modifica batches cancelados.
+
+    El batch debe encontrarse bloqueado previamente mediante
+    select_for_update() cuando esta función forme parte de una
+    operación concurrente de escritura.
+    """
+
+    estados_que_pueden_avanzar = {
+        "borrador",
+        "propuesto",
+        "gestion_permisos",
+        "listo_planificar",
+    }
+
+    if batch.estado not in estados_que_pueden_avanzar:
+        return False
+
+    existe_planificacion_diaria = SalidaPlanificacionDiaria.objects.filter(
+        batch=batch,
+    ).exists()
+
+    if not existe_planificacion_diaria:
+        return False
+
+    batch.estado = "planificado"
+
+    if usuario is not None:
+        batch.actualizado_por = usuario
+
+    batch.save(
+        update_fields=[
+            "estado",
+            "actualizado_por",
+            "actualizado_en",
+        ]
+    )
+
+    return True
+
+
+# ============================================================
 # GUARDAR PLAN DIARIO
 # ============================================================
 
@@ -2780,14 +2867,24 @@ def guardar_plan_diario_batch(
     if not resultado.get("salidas"):
 
         resultado["salidas_creadas"] = 0
-
         resultado["salidas_actualizadas"] = 0
-
         resultado["salida_ids"] = []
-
         resultado["salidas_eliminadas"] = 0
-
         resultado["propuesta_anterior_conservada"] = True
+
+        # ====================================================
+        # SINCRONIZAR BATCH SI YA EXISTE PLANIFICACIÓN
+        # ====================================================
+        #
+        # Este caso es importante para semanas que ya poseen
+        # salidas persistidas pero cuyo recálculo actual no
+        # necesita crear ni completar nuevas salidas.
+        # ====================================================
+
+        sincronizar_estado_batch_desde_planificacion_diaria(
+            batch=batch,
+            usuario=usuario,
+        )
 
         return resultado
 
@@ -2801,9 +2898,7 @@ def guardar_plan_diario_batch(
     )
 
     creadas = []
-
     actualizadas = []
-
     salidas_resultado_ids = []
 
     # ========================================================
@@ -2860,9 +2955,7 @@ def guardar_plan_diario_batch(
             )
 
             for participacion in participaciones_existentes:
-
                 participacion.sitio_batch
-
                 participacion.sitio_batch.sitio_planificado
 
             mapa_participaciones = {
@@ -2893,32 +2986,19 @@ def guardar_plan_diario_batch(
                     campos = []
 
                     if participacion.orden != indice:
-
                         participacion.orden = indice
-
-                        campos.append(
-                            "orden",
-                        )
+                        campos.append("orden")
 
                     if participacion.estado == "planificado":
-
                         participacion.estado = "listo_asignar"
-
-                        campos.append(
-                            "estado",
-                        )
+                        campos.append("estado")
 
                     participacion.actualizado_por = usuario
-
-                    campos.append(
-                        "actualizado_por",
-                    )
+                    campos.append("actualizado_por")
 
                     participacion.save(
                         update_fields=[
-                            *dict.fromkeys(
-                                campos,
-                            ),
+                            *dict.fromkeys(campos),
                             "actualizado_en",
                         ]
                     )
@@ -2926,13 +3006,10 @@ def guardar_plan_diario_batch(
                 else:
 
                     if es_ancla_prioridad:
-
                         motivo_sitio = (
                             "Sitio ancla de una prioridad " "de planificación diaria."
                         )
-
                     else:
-
                         motivo_sitio = (
                             "Sitio incorporado por el motor "
                             "para completar una salida "
@@ -2950,7 +3027,7 @@ def guardar_plan_diario_batch(
                                 "puntaje_motor",
                             )
                         ),
-                        motivo_motor=(motivo_sitio),
+                        motivo_motor=motivo_sitio,
                         creado_por=usuario,
                         actualizado_por=usuario,
                     )
@@ -2960,7 +3037,6 @@ def guardar_plan_diario_batch(
                 sitio_planificado = item_batch.sitio_planificado
 
                 sitio_planificado.fecha_planificada = salida.fecha
-
                 sitio_planificado.orden_dia = indice
 
                 if sitio_planificado.estado not in {
@@ -2968,7 +3044,6 @@ def guardar_plan_diario_batch(
                     "cancelado",
                     "bloqueado",
                 }:
-
                     sitio_planificado.estado = "planificado"
 
                 sitio_planificado.actualizado_por = usuario
@@ -2984,11 +3059,8 @@ def guardar_plan_diario_batch(
                 )
 
             salida.minutos_viaje_estimados = salida_data["minutos_viaje"]
-
             salida.minutos_trabajo_estimados = salida_data["minutos_trabajo"]
-
             salida.minutos_total_estimados = salida_data["minutos_total"]
-
             salida.distancia_directa_km = salida_data["distancia_directa_km"]
 
             salida.distancia_vial_estimada_km = salida_data[
@@ -3004,7 +3076,6 @@ def guardar_plan_diario_batch(
             )
 
             if salida.estado == "borrador":
-
                 salida.estado = "lista_asignar"
 
             salida.actualizado_por = usuario
@@ -3052,7 +3123,7 @@ def guardar_plan_diario_batch(
         salida = SalidaPlanificacionDiaria.objects.create(
             batch=batch,
             disponibilidad_cuadrilla=(salida_data["disponibilidad"]),
-            fecha=(salida_data["fecha"]),
+            fecha=salida_data["fecha"],
             orden=0,
             estado="lista_asignar",
             origen="motor",
@@ -3068,7 +3139,7 @@ def guardar_plan_diario_batch(
                     "puntaje_motor",
                 )
             ),
-            motivo_motor=(motivo_motor),
+            motivo_motor=motivo_motor,
             creado_por=usuario,
             actualizado_por=usuario,
         )
@@ -3093,19 +3164,16 @@ def guardar_plan_diario_batch(
             )
 
             if es_ancla_prioridad:
-
                 motivo_sitio = (
                     "Sitio ancla de una prioridad " "de planificación diaria."
                 )
 
             elif es_prioridad:
-
                 motivo_sitio = (
                     "Sitio incorporado como acompañante " "de una prioridad diaria."
                 )
 
             else:
-
                 motivo_sitio = "Incluido por el motor dentro " "de la salida diaria."
 
             SitioSalidaPlanificacionDiaria.objects.create(
@@ -3119,7 +3187,7 @@ def guardar_plan_diario_batch(
                         "puntaje_motor",
                     )
                 ),
-                motivo_motor=(motivo_sitio),
+                motivo_motor=motivo_sitio,
                 creado_por=usuario,
                 actualizado_por=usuario,
             )
@@ -3127,7 +3195,6 @@ def guardar_plan_diario_batch(
             sitio_planificado = item_batch.sitio_planificado
 
             sitio_planificado.fecha_planificada = salida.fecha
-
             sitio_planificado.orden_dia = indice
 
             if sitio_planificado.estado not in {
@@ -3135,7 +3202,6 @@ def guardar_plan_diario_batch(
                 "cancelado",
                 "bloqueado",
             }:
-
                 sitio_planificado.estado = "planificado"
 
             sitio_planificado.actualizado_por = usuario
@@ -3159,25 +3225,28 @@ def guardar_plan_diario_batch(
         )
 
     # ========================================================
+    # SINCRONIZAR ESTADO GENERAL DEL BATCH
+    # ========================================================
+
+    sincronizar_estado_batch_desde_planificacion_diaria(
+        batch=batch,
+        usuario=usuario,
+    )
+
+    # ========================================================
     # RESULTADO
     # ========================================================
 
     resultado["salidas_eliminadas"] = salidas_eliminadas
-
     resultado["salidas_creadas"] = len(creadas)
-
     resultado["salidas_actualizadas"] = len(actualizadas)
-
     resultado["salida_ids"] = salidas_resultado_ids
-
     resultado["propuesta_anterior_conservada"] = False
 
     return resultado
 
 
-# ============================================================
-# BUSCAR SERVICIO OPERACIONAL
-# ============================================================
+
 
 
 # ============================================================
