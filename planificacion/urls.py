@@ -25,8 +25,9 @@ from planificacion.views.completar_semana_anterior import (
     confirmar_completar_semanas)
 from planificacion.views.mapa_planificacion import mapa_batch_semanal
 from planificacion.views.mapa_planificacion_diaria import (
-    mapa_dia_planificacion_diaria, mapa_pendientes_planificacion_diaria,
-    mapa_salida_planificacion_diaria)
+    mapa_dia_planificacion_diaria,
+    mapa_operacional_semanal_planificacion_diaria,
+    mapa_pendientes_planificacion_diaria, mapa_salida_planificacion_diaria)
 from planificacion.views.mover_semana import (confirmar_mover_semana,
                                               seleccionar_semana_destino)
 from planificacion.views.planificacion_diaria import (
@@ -221,6 +222,11 @@ urlpatterns = [
         "semanal/<int:batch_id>/diaria/",
         detalle_planificacion_diaria,
         name="detalle_planificacion_diaria",
+    ),
+    path(
+        "semanal/<int:batch_id>/diaria/mapa-operacional/",
+        mapa_operacional_semanal_planificacion_diaria,
+        name="mapa_operacional_semanal_planificacion_diaria",
     ),
     # ========================================================
     # MOTOR DIARIO

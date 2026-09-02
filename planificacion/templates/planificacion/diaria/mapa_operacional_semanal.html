@@ -1,0 +1,1730 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Mapa operacional semanal
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+
+  <div class="mx-auto max-w-[1750px]">
+
+    <!-- ==================================================== -->
+    <!-- CABECERA                                             -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-5
+        flex
+        flex-col
+        gap-4
+        xl:flex-row
+        xl:items-center
+        xl:justify-between
+      "
+    >
+
+      <div>
+
+        <p
+          class="
+            text-[11px]
+            font-black
+            uppercase
+            tracking-[0.15em]
+            text-cyan-700
+          "
+        >
+          Operación semanal
+        </p>
+
+        <h1
+          class="
+            mt-1
+            text-2xl
+            font-black
+            text-slate-900
+          "
+        >
+          Mapa operacional semanal
+        </h1>
+
+        <p class="mt-1 text-sm text-slate-600">
+
+          {% if batch.nombre %}
+            {{ batch.nombre }}
+          {% else %}
+            Semana {{ batch.fecha_inicio|date:"d/m/Y" }}
+          {% endif %}
+
+          ·
+
+          {{ mapa.total_sitios }} sitio(s)
+
+          ·
+
+          Rutas del {{ fecha_rutas|date:"d/m/Y" }}
+
+        </p>
+
+      </div>
+
+
+      <div class="flex flex-wrap gap-2">
+
+        <a
+          href="{% url 'planificacion:detalle_planificacion_diaria' batch.id %}"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            rounded-xl
+            border
+            border-slate-300
+            bg-white
+            px-4
+            py-2.5
+            text-sm
+            font-bold
+            text-slate-700
+            shadow-sm
+            transition
+            hover:bg-slate-50
+          "
+        >
+          Volver a planificación
+        </a>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- SELECTOR DE DÍA                                      -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-4
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-4
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          flex
+          flex-col
+          gap-3
+          lg:flex-row
+          lg:items-center
+          lg:justify-between
+        "
+      >
+
+        <div>
+
+          <div
+            class="
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-slate-400
+            "
+          >
+            Rutas visibles
+          </div>
+
+          <div class="mt-1 text-sm font-bold text-slate-800">
+            Selecciona el día cuyas rutas deseas superponer.
+          </div>
+
+        </div>
+
+
+        <div class="flex flex-wrap gap-2">
+
+          {% for dia in dias %}
+
+            <a
+              href="{% url 'planificacion:mapa_operacional_semanal_planificacion_diaria' batch.id %}?fecha={{ dia.fecha_iso }}"
+              class="
+                inline-flex
+                min-w-[92px]
+                flex-col
+                items-center
+                justify-center
+                rounded-xl
+                border
+                px-3
+                py-2
+                text-center
+                transition
+
+                {% if dia.seleccionado %}
+                  border-cyan-600
+                  bg-cyan-600
+                  text-white
+                  shadow-sm
+                {% else %}
+                  border-slate-200
+                  bg-slate-50
+                  text-slate-700
+                  hover:border-cyan-300
+                  hover:bg-cyan-50
+                {% endif %}
+              "
+            >
+
+              <span
+                class="
+                  text-[10px]
+                  font-black
+                  uppercase
+                "
+              >
+                {{ dia.fecha|date:"D" }}
+              </span>
+
+              <span class="text-xs font-bold">
+                {{ dia.fecha|date:"d/m" }}
+              </span>
+
+            </a>
+
+          {% endfor %}
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- RESUMEN / LEYENDA                                    -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-4
+        grid
+        gap-3
+        sm:grid-cols-2
+        lg:grid-cols-4
+        2xl:grid-cols-7
+      "
+    >
+
+      <!-- D -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('disponible')"
+        class="
+          rounded-2xl
+          border
+          border-amber-200
+          bg-amber-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-amber-600
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            D
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-amber-900">
+              Disponible
+            </div>
+
+            <div class="text-lg font-black text-amber-700">
+              {{ mapa.conteos.D }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- P -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('planificado')"
+        class="
+          rounded-2xl
+          border
+          border-slate-200
+          bg-white
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-slate-600
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            P
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-slate-800">
+              Planificado
+            </div>
+
+            <div class="text-lg font-black text-slate-700">
+              {{ mapa.conteos.P }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- Bx -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('asignado')"
+        class="
+          rounded-2xl
+          border
+          border-blue-200
+          bg-blue-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              min-w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-blue-600
+              px-2
+              text-xs
+              font-black
+              text-white
+            "
+          >
+            Bx
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-blue-900">
+              Asignado
+            </div>
+
+            <div class="text-lg font-black text-blue-700">
+              {{ mapa.conteos.asignados }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- E -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('en_ejecucion')"
+        class="
+          rounded-2xl
+          border
+          border-orange-200
+          bg-orange-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-orange-600
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            E
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-orange-900">
+              En ejecución
+            </div>
+
+            <div class="text-lg font-black text-orange-700">
+              {{ mapa.conteos.E }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- R -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('revision')"
+        class="
+          rounded-2xl
+          border
+          border-violet-200
+          bg-violet-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-violet-600
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            R
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-violet-900">
+              Revisión
+            </div>
+
+            <div class="text-lg font-black text-violet-700">
+              {{ mapa.conteos.R }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- F -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('finalizado')"
+        class="
+          rounded-2xl
+          border
+          border-emerald-200
+          bg-emerald-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-emerald-600
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            F
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-emerald-900">
+              Finalizado
+            </div>
+
+            <div class="text-lg font-black text-emerald-700">
+              {{ mapa.conteos.F }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+
+      <!-- TODOS -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('todos')"
+        class="
+          rounded-2xl
+          border
+          border-cyan-200
+          bg-cyan-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-cyan-700
+              text-xs
+              font-black
+              text-white
+            "
+          >
+            ALL
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-cyan-900">
+              Mostrar todos
+            </div>
+
+            <div class="text-lg font-black text-cyan-700">
+              {{ mapa.total_sitios }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- CUADRILLAS / RUTAS DEL DÍA                           -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        mb-4
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-4
+        shadow-sm
+      "
+    >
+
+      <div
+        class="
+          mb-3
+          flex
+          flex-wrap
+          items-center
+          justify-between
+          gap-2
+        "
+      >
+
+        <div>
+
+          <div
+            class="
+              text-[10px]
+              font-black
+              uppercase
+              tracking-[0.14em]
+              text-slate-400
+            "
+          >
+            Rutas del día
+          </div>
+
+          <div class="mt-1 text-sm font-bold text-slate-800">
+            {{ fecha_rutas|date:"l d/m/Y" }}
+          </div>
+
+        </div>
+
+
+        <div class="text-xs font-semibold text-slate-500">
+
+          {{ mapa.rutas_dia.total_cuadrillas }}
+          cuadrilla(s)
+
+          ·
+
+          {{ mapa.rutas_dia.total_sitios }}
+          sitio(s)
+
+        </div>
+
+      </div>
+
+
+      {% if mapa.rutas_dia.cuadrillas %}
+
+        <div class="flex flex-wrap gap-2">
+
+          {% for cuadrilla in mapa.rutas_dia.cuadrillas %}
+
+            <button
+              type="button"
+              onclick="enfocarRutaCuadrilla('{{ cuadrilla.codigo|escapejs }}')"
+              class="
+                flex
+                items-center
+                gap-3
+                rounded-xl
+                border
+                border-slate-200
+                bg-slate-50
+                px-3
+                py-2
+                text-left
+                transition
+                hover:bg-white
+                hover:shadow-sm
+              "
+            >
+
+              <span
+                class="h-4 w-4 rounded-full"
+                style="
+                  background:
+                  {{ cuadrilla.color.marcador }};
+                "
+              ></span>
+
+              <span>
+
+                <span
+                  class="
+                    block
+                    text-xs
+                    font-black
+                    text-slate-800
+                  "
+                >
+                  {{ cuadrilla.nombre }}
+                </span>
+
+                <span
+                  class="
+                    block
+                    text-[10px]
+                    text-slate-500
+                  "
+                >
+                  {{ cuadrilla.tipo_vehiculo }}
+                  ·
+                  {{ cuadrilla.cantidad }} sitio(s)
+                </span>
+
+              </span>
+
+            </button>
+
+          {% endfor %}
+
+        </div>
+
+      {% else %}
+
+        <div
+          class="
+            rounded-xl
+            border
+            border-dashed
+            border-slate-300
+            bg-slate-50
+            px-4
+            py-3
+            text-sm
+            font-semibold
+            text-slate-500
+          "
+        >
+          No existen rutas programadas para este día.
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MAPA                                                 -->
+    <!-- ==================================================== -->
+
+    <div
+      class="
+        overflow-hidden
+        rounded-3xl
+        border
+        border-slate-200
+        bg-white
+        shadow-sm
+      "
+    >
+
+      {% if google_maps_api_key %}
+
+        <div
+          id="mapa-operacional"
+          class="h-[78vh] min-h-[680px] w-full"
+        ></div>
+
+      {% else %}
+
+        <div
+          class="
+            p-10
+            text-center
+            font-bold
+            text-amber-700
+          "
+        >
+          Google Maps no está configurado.
+        </div>
+
+      {% endif %}
+
+    </div>
+
+
+    {% if mapa.total_sin_coordenadas %}
+
+      <div
+        class="
+          mt-4
+          rounded-2xl
+          border
+          border-amber-200
+          bg-amber-50
+          p-4
+          text-sm
+          text-amber-800
+        "
+      >
+
+        <strong>
+          {{ mapa.total_sin_coordenadas }}
+          sitio(s)
+        </strong>
+
+        no pudieron mostrarse porque no tienen coordenadas
+        válidas.
+
+      </div>
+
+    {% endif %}
+
+  </div>
+
+</div>
+
+
+{{ mapa|json_script:"mapa-operacional-data" }}
+
+
+<script>
+(function () {
+
+  const mapaData =
+    JSON.parse(
+      document.getElementById(
+        "mapa-operacional-data"
+      )?.textContent || "{}"
+    );
+
+
+  let mapa = null;
+
+  const marcadoresSitios = [];
+
+  const boundsRutas = {};
+
+
+  function escaparHtml(valor) {
+
+    const div =
+      document.createElement(
+        "div"
+      );
+
+    div.textContent =
+      valor == null
+        ? ""
+        : String(valor);
+
+    return div.innerHTML;
+
+  }
+
+
+  function listaHtml(
+    titulo,
+    valores
+  ) {
+
+    if (
+      !Array.isArray(valores)
+      ||
+      !valores.length
+    ) {
+      return "";
+    }
+
+    const items =
+      valores
+        .map(
+          valor =>
+            `<div
+              style="
+                margin-top:3px;
+                line-height:1.35;
+              "
+            >
+              ${escaparHtml(valor)}
+            </div>`
+        )
+        .join("");
+
+    return `
+      <div style="margin-top:10px;">
+        <div
+          style="
+            font-size:11px;
+            font-weight:800;
+            text-transform:uppercase;
+            letter-spacing:.05em;
+            color:#64748b;
+          "
+        >
+          ${escaparHtml(titulo)}
+        </div>
+
+        <div
+          style="
+            margin-top:3px;
+            font-size:12px;
+            color:#334155;
+          "
+        >
+          ${items}
+        </div>
+      </div>
+    `;
+
+  }
+
+
+  function contenidoPopupSitio(
+    sitio
+  ) {
+
+    const tieneProgramacion =
+      Boolean(
+        sitio.fecha
+      );
+
+
+    const bloqueProgramacion =
+      tieneProgramacion
+        ? `
+          <div
+            style="
+              margin-top:10px;
+              padding:9px 10px;
+              border-radius:10px;
+              background:#f8fafc;
+              border:1px solid #e2e8f0;
+            "
+          >
+
+            <div>
+              <strong>Día:</strong>
+              ${escaparHtml(
+                sitio.fecha_display || "—"
+              )}
+            </div>
+
+            <div style="margin-top:3px;">
+              <strong>Cuadrilla:</strong>
+              ${escaparHtml(
+                sitio.cuadrilla_nombre
+                || sitio.cuadrilla_codigo
+                || "—"
+              )}
+            </div>
+
+            <div style="margin-top:3px;">
+              <strong>Orden:</strong>
+              ${escaparHtml(
+                sitio.orden == null
+                  ? "—"
+                  : sitio.orden
+              )}
+            </div>
+
+          </div>
+        `
+        : "";
+
+
+    const condiciones =
+      sitio.condiciones_acceso
+        ? `
+          <div style="margin-top:10px;">
+
+            <div
+              style="
+                font-size:11px;
+                font-weight:800;
+                text-transform:uppercase;
+                letter-spacing:.05em;
+                color:#64748b;
+              "
+            >
+              Acceso
+            </div>
+
+            <div
+              style="
+                margin-top:3px;
+                font-size:12px;
+                line-height:1.4;
+                color:#334155;
+              "
+            >
+              ${escaparHtml(
+                sitio.condiciones_acceso
+              )}
+            </div>
+
+          </div>
+        `
+        : "";
+
+
+    const urlGoogleMaps =
+      "https://www.google.com/maps/search/?api=1&query="
+      + encodeURIComponent(
+          sitio.latitud
+          + ","
+          + sitio.longitud
+        );
+
+
+    const volverMapa =
+      window.location.pathname
+      +
+      window.location.search;
+
+
+    const urlProgramar =
+      sitio.puede_programar
+      &&
+      sitio.programar_url
+        ? (
+            sitio.programar_url
+            +
+            "?next="
+            +
+            encodeURIComponent(
+              volverMapa
+            )
+          )
+        : "";
+
+
+    const botonProgramar =
+      urlProgramar
+        ? `
+          <a
+            href="${escaparHtml(urlProgramar)}"
+            style="
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+              min-width:110px;
+              padding:9px 13px;
+              border-radius:9px;
+              border:1px solid #16a34a;
+              background:#16a34a;
+              color:#ffffff;
+              text-decoration:none;
+              font-size:11px;
+              font-weight:900;
+              box-shadow:0 1px 2px rgba(15,23,42,.08);
+            "
+          >
+            Programar
+          </a>
+        `
+        : "";
+
+
+    return `
+      <div
+        style="
+          min-width:285px;
+          max-width:380px;
+          font-family:Arial,sans-serif;
+          color:#0f172a;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            gap:9px;
+            margin-bottom:8px;
+          "
+        >
+
+          <span
+            style="
+              min-width:30px;
+              height:30px;
+              padding:0 7px;
+              border-radius:999px;
+              background:${sitio.color.marcador};
+              border:2px solid ${sitio.color.borde};
+              color:white;
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+              font-size:11px;
+              font-weight:900;
+            "
+          >
+            ${escaparHtml(
+              sitio.codigo_mapa || "•"
+            )}
+          </span>
+
+          <div>
+
+            <div
+              style="
+                font-size:12px;
+                font-weight:900;
+              "
+            >
+              ${escaparHtml(
+                sitio.estado_mapa
+              )}
+            </div>
+
+            <div
+              style="
+                margin-top:1px;
+                font-size:11px;
+                color:#64748b;
+              "
+            >
+              ${escaparHtml(
+                sitio.estado_operativo || ""
+              )}
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div
+          style="
+            font-size:18px;
+            font-weight:900;
+          "
+        >
+          ${escaparHtml(
+            sitio.id_claro
+          )}
+        </div>
+
+
+        <div
+          style="
+            margin-top:2px;
+            font-size:14px;
+            font-weight:700;
+          "
+        >
+          ${escaparHtml(
+            sitio.nombre
+          )}
+        </div>
+
+
+        <hr
+          style="
+            border:0;
+            border-top:1px solid #e5e7eb;
+            margin:10px 0;
+          "
+        >
+
+
+        <div style="font-size:12px;">
+
+          <div>
+            <strong>ID New:</strong>
+            ${escaparHtml(
+              sitio.id_new || "—"
+            )}
+          </div>
+
+          <div style="margin-top:3px;">
+            <strong>Comuna:</strong>
+            ${escaparHtml(
+              sitio.comuna || "—"
+            )}
+          </div>
+
+          <div style="margin-top:3px;">
+            <strong>Zona:</strong>
+            ${escaparHtml(
+              sitio.tipo_zona || "—"
+            )}
+          </div>
+
+          <div style="margin-top:3px;">
+            <strong>Permiso:</strong>
+            ${escaparHtml(
+              sitio.estado_permiso || "—"
+            )}
+          </div>
+
+        </div>
+
+
+        ${bloqueProgramacion}
+
+        ${condiciones}
+
+        ${listaHtml(
+          "Responsable",
+          sitio.responsables
+        )}
+
+        ${listaHtml(
+          "Teléfono",
+          sitio.telefonos
+        )}
+
+        ${listaHtml(
+          "Correo",
+          sitio.correos
+        )}
+
+        ${listaHtml(
+          "Observaciones",
+          sitio.observaciones_contacto
+        )}
+
+        ${listaHtml(
+          "Acción",
+          sitio.acciones_contacto
+        )}
+
+
+        ${
+          sitio.direccion
+            ? `
+              <div
+                style="
+                  margin-top:10px;
+                  font-size:11px;
+                  line-height:1.4;
+                  color:#64748b;
+                "
+              >
+                ${escaparHtml(
+                  sitio.direccion
+                )}
+              </div>
+            `
+            : ""
+        }
+
+
+        <div
+        style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:7px;
+          margin-top:13px;
+        "
+      >
+
+        ${botonProgramar}
+
+        <a
+          href="${urlGoogleMaps}"
+          target="_blank"
+          rel="noopener noreferrer"
+          style="
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            padding:8px 10px;
+            border-radius:9px;
+            border:1px solid #cbd5e1;
+            background:#ffffff;
+            color:#334155;
+            text-decoration:none;
+            font-size:11px;
+            font-weight:800;
+          "
+        >
+          Google Maps
+        </a>
+
+      </div>
+
+      </div>
+    `;
+
+  }
+
+
+  window.inicializarMapaOperacional =
+    async function () {
+
+      const nodo =
+        document.getElementById(
+          "mapa-operacional"
+        );
+
+      if (
+        !nodo
+        ||
+        !window.google
+        ||
+        !google.maps
+      ) {
+        return;
+      }
+
+
+      const {
+        AdvancedMarkerElement,
+        PinElement
+      } =
+        await google.maps.importLibrary(
+          "marker"
+        );
+
+
+      mapa =
+        new google.maps.Map(
+          nodo,
+          {
+            center: {
+              lat:
+                Number(
+                  mapaData.centro?.latitud
+                  ?? -33.4489
+                ),
+
+              lng:
+                Number(
+                  mapaData.centro?.longitud
+                  ?? -70.6693
+                )
+            },
+
+            zoom: 9,
+
+            mapId:
+              "DEMO_MAP_ID",
+
+            streetViewControl:
+              false,
+
+            fullscreenControl:
+              true,
+
+            mapTypeControl:
+              true
+          }
+        );
+
+
+      const boundsGlobal =
+        new google.maps.LatLngBounds();
+
+
+      /* ================================================ */
+      /* TODOS LOS SITIOS DE LA SEMANA                    */
+      /* ================================================ */
+
+      mapaData.sitios.forEach(
+        function (sitio) {
+
+          const posicion = {
+            lat:
+              Number(
+                sitio.latitud
+              ),
+
+            lng:
+              Number(
+                sitio.longitud
+              )
+          };
+
+
+          const pin =
+            new PinElement({
+              background:
+                sitio.color.marcador,
+
+              borderColor:
+                sitio.color.borde,
+
+              glyphColor:
+                "#ffffff",
+
+              glyph:
+                String(
+                  sitio.codigo_mapa
+                  || "•"
+                ),
+
+              scale:
+                sitio.tipo_mapa
+                  === "disponible"
+                    ? 1.25
+                    : 1.05
+            });
+
+
+          const marker =
+            new AdvancedMarkerElement({
+              map: mapa,
+              position: posicion,
+              content: pin.element,
+
+              title:
+                sitio.id_claro
+                + " - "
+                + sitio.nombre
+            });
+
+
+          marker.__tipoMapa =
+            sitio.tipo_mapa;
+
+
+          marker.__sitio =
+            sitio;
+
+
+          marcadoresSitios.push(
+            marker
+          );
+
+
+          const info =
+            new google.maps.InfoWindow({
+              content:
+                contenidoPopupSitio(
+                  sitio
+                )
+            });
+
+
+          marker.addListener(
+            "click",
+            function () {
+
+              info.open({
+                map: mapa,
+                anchor: marker
+              });
+
+            }
+          );
+
+
+          boundsGlobal.extend(
+            posicion
+          );
+
+        }
+      );
+
+
+      /* ================================================ */
+      /* RUTAS DEL DÍA SELECCIONADO                       */
+      /* ================================================ */
+
+      mapaData.rutas_dia.cuadrillas.forEach(
+        function (cuadrilla) {
+
+          const boundsRuta =
+            new google.maps.LatLngBounds();
+
+          const camino = [];
+
+
+          /* ============================================ */
+          /* BASE                                         */
+          /* ============================================ */
+
+          if (cuadrilla.base) {
+
+            const posicionBase = {
+              lat:
+                Number(
+                  cuadrilla.base.latitud
+                ),
+
+              lng:
+                Number(
+                  cuadrilla.base.longitud
+                )
+            };
+
+
+            const pinBase =
+              new PinElement({
+                background:
+                  cuadrilla.color.borde,
+
+                borderColor:
+                  "#0f172a",
+
+                glyphColor:
+                  "#ffffff",
+
+                glyph:
+                  "B",
+
+                scale:
+                  1.0
+              });
+
+
+            new AdvancedMarkerElement({
+              map: mapa,
+              position: posicionBase,
+              content: pinBase.element,
+
+              title:
+                cuadrilla.nombre
+                + " - "
+                + cuadrilla.base.nombre
+            });
+
+
+            boundsRuta.extend(
+              posicionBase
+            );
+
+            boundsGlobal.extend(
+              posicionBase
+            );
+
+            camino.push(
+              posicionBase
+            );
+
+          }
+
+
+          /* ============================================ */
+          /* ORDEN DE LA RUTA                             */
+          /* ============================================ */
+
+          cuadrilla.sitios.forEach(
+            function (sitioRuta) {
+
+              const posicion = {
+                lat:
+                  Number(
+                    sitioRuta.latitud
+                  ),
+
+                lng:
+                  Number(
+                    sitioRuta.longitud
+                  )
+              };
+
+
+              boundsRuta.extend(
+                posicion
+              );
+
+
+              camino.push(
+                posicion
+              );
+
+            }
+          );
+
+
+          if (cuadrilla.base) {
+
+            camino.push({
+              lat:
+                Number(
+                  cuadrilla.base.latitud
+                ),
+
+              lng:
+                Number(
+                  cuadrilla.base.longitud
+                )
+            });
+
+          }
+
+
+          /* ============================================ */
+          /* LÍNEA                                        */
+          /* ============================================ */
+
+          if (camino.length >= 2) {
+
+            new google.maps.Polyline({
+              path: camino,
+              geodesic: true,
+
+              strokeColor:
+                cuadrilla
+                  .color
+                  .marcador,
+
+              strokeOpacity:
+                0.72,
+
+              strokeWeight:
+                5,
+
+              map:
+                mapa
+            });
+
+          }
+
+
+          boundsRutas[
+            cuadrilla.codigo
+          ] = boundsRuta;
+
+        }
+      );
+
+
+      if (!boundsGlobal.isEmpty()) {
+
+        mapa.fitBounds(
+          boundsGlobal,
+          55
+        );
+
+      }
+
+    };
+
+
+  /* ==================================================== */
+  /* FILTRAR MARCADORES                                   */
+  /* ==================================================== */
+
+  window.filtrarEstadoMapa =
+    function (tipo) {
+
+      marcadoresSitios.forEach(
+        function (marker) {
+
+          const visible =
+            tipo === "todos"
+            ||
+            marker.__tipoMapa === tipo;
+
+          marker.map =
+            visible
+              ? mapa
+              : null;
+
+        }
+      );
+
+    };
+
+
+  /* ==================================================== */
+  /* ENFOCAR RUTA                                         */
+  /* ==================================================== */
+
+  window.enfocarRutaCuadrilla =
+    function (codigo) {
+
+      if (!mapa) {
+        return;
+      }
+
+      const bounds =
+        boundsRutas[
+          codigo
+        ];
+
+      if (
+        bounds
+        &&
+        !bounds.isEmpty()
+      ) {
+
+        mapa.fitBounds(
+          bounds,
+          80
+        );
+
+      }
+
+    };
+
+})();
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=inicializarMapaOperacional"
+></script>
+
+{% endif %}
+
+{% endblock %}
