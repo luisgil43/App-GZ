@@ -3112,7 +3112,25 @@ def guardar_plan_diario_batch(
                         participacion.orden = indice
                         campos.append("orden")
 
-                    if participacion.estado == "planificado":
+                    # ============================================
+                    # REACTIVAR PARTICIPACIÓN HISTÓRICA
+                    # ============================================
+                    #
+                    # Si el sitio estuvo previamente retirado,
+                    # reprogramado o cancelado de ESTA MISMA
+                    # salida y el motor vuelve a seleccionarlo,
+                    # reutilizamos la fila existente.
+                    #
+                    # No se crea una segunda participación para
+                    # el mismo (salida, sitio_batch).
+                    # ============================================
+
+                    if participacion.estado in {
+                        "planificado",
+                        "retirado",
+                        "reprogramado",
+                        "cancelado",
+                    }:
                         participacion.estado = "listo_asignar"
                         campos.append("estado")
 
