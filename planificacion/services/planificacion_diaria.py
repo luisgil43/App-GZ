@@ -3048,16 +3048,31 @@ def guardar_plan_diario_batch(
             if salida.disponibilidad_cuadrilla_id:
                 salida.disponibilidad_cuadrilla
 
+                        # ====================================================
+            # PARTICIPACIONES DE LA SALIDA
+            # ====================================================
+            #
+            # Cargamos y bloqueamos TODAS las participaciones,
+            # incluidas las históricas retiradas, reprogramadas o
+            # canceladas.
+            #
+            # Estas últimas NO se consideran planificación vigente,
+            # pero debemos conservarlas en el mapa interno porque la
+            # restricción:
+            #
+            #     uq_sitio_salida_diaria
+            #
+            # impide crear nuevamente el mismo par:
+            #
+            #     (salida, sitio_batch)
+            #
+            # Si el motor vuelve a incorporar el mismo sitio dentro
+            # de la misma salida, reutilizamos/reactivamos la fila
+            # histórica en lugar de intentar insertar un duplicado.
+            # ====================================================
+
             participaciones_existentes = list(
-                salida.sitios.exclude(
-                    estado__in=[
-                        "retirado",
-                        "reprogramado",
-                        "cancelado",
-                    ],
-                )
-                .select_for_update()
-                .order_by(
+                salida.sitios.select_for_update().order_by(
                     "orden",
                     "id",
                 )
@@ -3071,7 +3086,6 @@ def guardar_plan_diario_batch(
                 participacion.sitio_batch_id: participacion
                 for participacion in participaciones_existentes
             }
-
             for indice, dato_sitio in enumerate(
                 salida_data["sitios"],
                 start=1,
