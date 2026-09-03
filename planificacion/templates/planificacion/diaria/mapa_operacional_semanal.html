@@ -220,7 +220,7 @@ Mapa operacional semanal
         gap-3
         sm:grid-cols-2
         lg:grid-cols-4
-        2xl:grid-cols-7
+        2xl:grid-cols-8
       "
     >
 
@@ -279,6 +279,60 @@ Mapa operacional semanal
 
       </button>
 
+            <!-- G -->
+
+      <button
+        type="button"
+        onclick="filtrarEstadoMapa('gestion_permiso')"
+        class="
+          rounded-2xl
+          border
+          border-yellow-200
+          bg-yellow-50
+          p-3
+          text-left
+          shadow-sm
+          transition
+          hover:-translate-y-0.5
+          hover:shadow-md
+        "
+      >
+
+        <div class="flex items-center gap-3">
+
+          <span
+            class="
+              flex
+              h-9
+              w-9
+              shrink-0
+              items-center
+              justify-center
+              rounded-full
+              bg-yellow-500
+              text-sm
+              font-black
+              text-white
+            "
+          >
+            G
+          </span>
+
+          <div>
+
+            <div class="text-xs font-black text-yellow-900">
+              Gestión de permiso
+            </div>
+
+            <div class="text-lg font-black text-yellow-700">
+              {{ mapa.conteos.G }}
+            </div>
+
+          </div>
+
+        </div>
+
+      </button>
 
       <!-- P -->
 
@@ -1418,10 +1472,13 @@ Mapa operacional semanal
                 ),
 
               scale:
-                sitio.tipo_mapa
-                  === "disponible"
-                    ? 1.25
-                    : 1.05
+                (
+                  sitio.tipo_mapa === "disponible"
+                  ||
+                  sitio.tipo_mapa === "gestion_permiso"
+                )
+                  ? 1.25
+                  : 1.05
             });
 
 

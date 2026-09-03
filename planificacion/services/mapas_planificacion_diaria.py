@@ -798,10 +798,24 @@ COLOR_DISPONIBLE_MAPA_OPERACIONAL = {
 }
 
 
+COLOR_GESTION_PERMISO_MAPA_OPERACIONAL = {
+    "marcador": "#eab308",
+    "borde": "#ca8a04",
+    "relleno": "#fef9c3",
+}
+
+
 COLOR_PLANIFICADO_MAPA_OPERACIONAL = {
     "marcador": "#475569",
     "borde": "#334155",
     "relleno": "#f1f5f9",
+}
+
+
+COLOR_ASIGNADO_MAPA_OPERACIONAL = {
+    "marcador": "#2563eb",
+    "borde": "#1d4ed8",
+    "relleno": "#dbeafe",
 }
 
 
@@ -925,9 +939,17 @@ def _codigo_cuadrilla_mapa_operacional(
     participacion,
 ):
     """
-    Obtiene el código visual real de la cuadrilla.
+    Obtiene un código corto y legible para el marcador.
 
-    No asumimos que existan solamente B1/B2/B3.
+    Prioridad:
+    1. Nombre de la CuadrillaOperativa vinculada, por ejemplo C1/C2/C3.
+    2. Nombre almacenado en la salida si ya es corto.
+    3. Código interno normalizado.
+
+    Nunca mostramos códigos internos largos como:
+        cuadrilla_c1
+        cuadrilla_c2
+        cuadrilla_c3
     """
 
     if participacion is None:
@@ -935,9 +957,60 @@ def _codigo_cuadrilla_mapa_operacional(
 
     salida = participacion.salida
 
-    return _texto_limpio_mapa(
+    disponibilidad = getattr(
+        salida,
+        "disponibilidad_cuadrilla",
+        None,
+    )
+
+    if disponibilidad is not None:
+
+        cuadrilla_operativa = getattr(
+            disponibilidad,
+            "cuadrilla_operativa",
+            None,
+        )
+
+        if cuadrilla_operativa is not None:
+
+            nombre_operativo = _texto_limpio_mapa(
+                cuadrilla_operativa.nombre,
+            )
+
+            if nombre_operativo:
+                return nombre_operativo
+
+    nombre_salida = _texto_limpio_mapa(
+        salida.cuadrilla_nombre,
+    )
+
+    if nombre_salida and len(nombre_salida) <= 6:
+        return nombre_salida
+
+    codigo = _texto_limpio_mapa(
         salida.cuadrilla_codigo,
     )
+
+    if not codigo:
+        return ""
+
+    codigo_normalizado = codigo.lower()
+
+    if codigo_normalizado.startswith("cuadrilla_"):
+
+        sufijo = codigo_normalizado.removeprefix(
+            "cuadrilla_",
+        )
+
+        if sufijo.isdigit():
+            return f"C{sufijo}"
+
+        return sufijo.upper()
+
+    if len(codigo) <= 6:
+        return codigo.upper()
+
+    return codigo[:6].upper()
 
 
 def _clasificar_sitio_mapa_operacional(
@@ -955,9 +1028,10 @@ def _clasificar_sitio_mapa_operacional(
     F  Finalizado
     R  Revisión
     E  En ejecución
-    Bx Asignado operativamente a cuadrilla
+    Cx Asignado operativamente a cuadrilla
     P  Tiene planificación diaria pero todavía no está
        asignado operativamente
+    G  Gestión de permiso
     D  Disponible/aprobado todavía sin salida diaria
 
     La ejecución REAL proviene de
@@ -1038,7 +1112,7 @@ def _clasificar_sitio_mapa_operacional(
                     "Asignado" + (f" · {codigo_cuadrilla}" if codigo_cuadrilla else "")
                 ),
                 "tipo": "asignado",
-                "color": COLOR_PLANIFICADO_MAPA_OPERACIONAL,
+                "color": COLOR_ASIGNADO_MAPA_OPERACIONAL,
                 "estado_operativo": estado_operativo,
             }
 
@@ -1047,6 +1121,20 @@ def _clasificar_sitio_mapa_operacional(
             "texto": "Planificado",
             "tipo": "planificado",
             "color": COLOR_PLANIFICADO_MAPA_OPERACIONAL,
+            "estado_operativo": estado_operativo,
+        }
+
+    # ========================================================
+    # GESTIÓN DE PERMISO
+    # ========================================================
+
+    if item_batch.estado == "gestion_permiso":
+
+        return {
+            "codigo": "G",
+            "texto": "Gestión de permiso",
+            "tipo": "gestion_permiso",
+            "color": COLOR_GESTION_PERMISO_MAPA_OPERACIONAL,
             "estado_operativo": estado_operativo,
         }
 
@@ -1369,6 +1457,7 @@ def construir_mapa_operacional_semanal(
 
     conteos = {
         "D": 0,
+        "G": 0,
         "P": 0,
         "asignados": 0,
         "E": 0,
@@ -1416,6 +1505,9 @@ def construir_mapa_operacional_semanal(
 
         if tipo == "disponible":
             conteos["D"] += 1
+
+        elif tipo == "gestion_permiso":
+            conteos["G"] += 1
 
         elif tipo == "planificado":
             conteos["P"] += 1
