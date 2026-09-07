@@ -311,6 +311,7 @@ EMAIL_BACKEND = os.environ.get(
 )
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "mail.grupogzs.com")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "465"))
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 EMAIL_USE_TLS = os.environ.get(
     "EMAIL_USE_TLS", "False").strip().lower() == "true"
 EMAIL_USE_SSL = os.environ.get(
