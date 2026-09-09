@@ -427,23 +427,57 @@ def _limpiar_sitio_planificado(
     usuario,
 ):
     """
-    Deja el SitioPlanificado nuevamente disponible para que
-    el motor de la nueva semana lo procese desde cero.
+    Reinicia el SitioPlanificado para una NUEVA semana
+    operacional.
+
+    REGLA DE PERMISOS
+    ==========================================================
+
+    Los permisos son semanales.
+
+    Si un sitio se mueve desde una semana hacia otra, cualquier
+    permiso obtenido en la semana anterior deja de ser válido
+    para la nueva semana.
+
+    Ejemplo:
+
+        W36 -> permiso aprobado
+        W36 -> sitio no ejecutado
+        W37 -> nueva gestión de permiso obligatoria
+
+    Si vuelve a moverse:
+
+        W37 -> W38
+
+    W38 también comienza una nueva gestión de permiso.
+
+    Por lo tanto, un movimiento entre semanas:
+
+        - NO conserva estado_permiso;
+        - NO conserva una aprobación anterior;
+        - NO conserva un rechazo anterior;
+        - NO conserva un bloqueo originado por ese permiso;
+        - reinicia la gestión de permiso de la nueva semana.
 
     SE CONSERVA
     ==========================================================
 
     - planificación mensual original;
-    - permiso;
     - prioridad mensual;
-    - información del sitio;
-    - gestiones de acceso/contacto.
+    - información maestra del sitio;
+    - gestiones/datos maestros de acceso y contacto;
+    - mes histórico de origen.
 
-    SE ELIMINA
+    SE REINICIA
     ==========================================================
 
-    Únicamente la memoria correspondiente a su posición
-    diaria/semanal anterior.
+    - posición diaria anterior;
+    - estado operacional de planificación;
+    - permiso semanal;
+    - bloqueos del motor;
+    - planificación manual anterior;
+    - motivo de bloqueo;
+    - alerta del motor.
 
     IMPORTANTE
     ==========================================================
@@ -459,14 +493,24 @@ def _limpiar_sitio_planificado(
         W38 de septiembre
 
     y continuará teniendo julio como planificación mensual
-    de origen histórica.
+    histórica de origen.
     """
 
     sitio_planificado.fecha_planificada = None
 
     sitio_planificado.orden_dia = 0
 
-    sitio_planificado.estado = "listo_planificar"
+    # ========================================================
+    # NUEVA SEMANA = NUEVA GESTIÓN DE PERMISO
+    # ========================================================
+
+    sitio_planificado.estado_permiso = "por_solicitar"
+
+    sitio_planificado.estado = "gestionando_permiso"
+
+    # ========================================================
+    # LIMPIAR MEMORIA OPERACIONAL DE LA SEMANA ANTERIOR
+    # ========================================================
 
     sitio_planificado.bloqueado_motor = False
 
@@ -482,6 +526,7 @@ def _limpiar_sitio_planificado(
         update_fields=[
             "fecha_planificada",
             "orden_dia",
+            "estado_permiso",
             "estado",
             "bloqueado_motor",
             "planificado_manualmente",
@@ -491,7 +536,6 @@ def _limpiar_sitio_planificado(
             "actualizado_en",
         ]
     )
-
 
 # ============================================================
 # LIMPIAR Y MOVER SITIO BATCH
@@ -514,7 +558,7 @@ def _mover_sitio_batch(
 
     sitio_batch.batch = batch_destino
 
-    sitio_batch.estado = "confirmado"
+    sitio_batch.estado = "gestion_permiso"
 
     sitio_batch.origen = "manual"
 
@@ -1164,7 +1208,7 @@ def mover_sitio_a_semana(
 
         sitio_batch_destino = sitio_batch_historico_destino
 
-        sitio_batch_destino.estado = "confirmado"
+        sitio_batch_destino.estado = "gestion_permiso"
 
         sitio_batch_destino.origen = "manual"
 
