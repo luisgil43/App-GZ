@@ -1897,7 +1897,15 @@ Detalle Batch Semanal
   }
 
 
-  const csrftoken =
+    const csrfInput =
+    document.querySelector(
+      'input[name="csrfmiddlewaretoken"]'
+    );
+
+
+    const csrftoken =
+    csrfInput?.value
+    ||
     getCookie("csrftoken");
 
 
