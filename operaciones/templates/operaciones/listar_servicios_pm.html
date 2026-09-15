@@ -926,6 +926,28 @@
             >
               ✅ Aprobar seleccionadas
             </button>
+                        <button
+              type="button"
+              id="btnBulkChangeMonth"
+              class="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                rounded-xl
+                border border-blue-500
+                bg-blue-600
+                px-4 py-2
+                text-xs
+                font-black
+                text-white
+                shadow-sm
+                transition
+                hover:bg-blue-700
+              "
+            >
+              📅 Cambiar mes
+            </button>
 
             {% if request.user.is_superuser or request.user.es_admin_general %}
 
@@ -2263,6 +2285,339 @@
   </div>
 
 </div>
+<!-- ====================================================== -->
+<!-- MODAL CAMBIAR MES MASIVO                              -->
+<!-- ====================================================== -->
+
+<div
+  id="modalBulkChangeMonth"
+  class="
+    fixed
+    inset-0
+    z-[210]
+    hidden
+    items-center
+    justify-center
+    px-4
+    py-6
+  "
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="bulkChangeMonthTitle"
+>
+  <div
+    class="
+      absolute
+      inset-0
+      bg-slate-950/55
+      backdrop-blur-[3px]
+    "
+    id="bulkChangeMonthBackdrop"
+  ></div>
+
+  <div
+    class="
+      relative
+      z-10
+      w-full
+      max-w-lg
+      overflow-hidden
+      rounded-3xl
+      border
+      border-white/70
+      bg-white
+      shadow-2xl
+    "
+  >
+
+    <div class="px-6 pb-5 pt-6 sm:px-7 sm:pt-7">
+
+      <div class="flex items-start gap-4">
+
+        <div
+          class="
+            flex
+            h-12
+            w-12
+            shrink-0
+            items-center
+            justify-center
+            rounded-2xl
+            bg-blue-100
+            text-2xl
+          "
+        >
+          📅
+        </div>
+
+        <div class="min-w-0 flex-1">
+
+          <h3
+            id="bulkChangeMonthTitle"
+            class="
+              text-lg
+              font-black
+              tracking-tight
+              text-slate-900
+            "
+          >
+            Cambiar mes de producción
+          </h3>
+
+          <p class="mt-2 text-sm leading-6 text-slate-600">
+            Selecciona el nuevo mes de producción para las
+            cotizaciones seleccionadas.
+          </p>
+
+        </div>
+
+      </div>
+
+      <div
+        class="
+          mt-5
+          flex
+          items-center
+          gap-3
+          rounded-2xl
+          border
+          border-slate-200
+          bg-slate-50
+          px-4
+          py-3
+        "
+      >
+
+        <div
+          id="bulkChangeMonthCount"
+          class="
+            flex
+            h-9
+            min-w-9
+            items-center
+            justify-center
+            rounded-xl
+            bg-white
+            px-2
+            text-sm
+            font-black
+            text-slate-800
+            shadow-sm
+            ring-1
+            ring-slate-200
+          "
+        >
+          0
+        </div>
+
+        <div>
+          <p class="text-xs font-bold text-slate-700">
+            Cotizaciones seleccionadas
+          </p>
+
+          <p class="text-[11px] text-slate-500">
+            Todas serán movidas al mismo mes de producción.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- ================================================== -->
+      <!-- SELECTOR DE MES                                   -->
+      <!-- ================================================== -->
+
+      <div class="mt-5">
+
+        <label
+          for="bulkMonthSelect"
+          class="
+            mb-2
+            block
+            text-sm
+            font-black
+            text-slate-700
+          "
+        >
+          Nuevo mes de producción
+        </label>
+
+        <div class="grid grid-cols-[1fr_auto] gap-3">
+
+          <select
+            id="bulkMonthSelect"
+            class="
+              w-full
+              rounded-xl
+              border
+              border-slate-300
+              bg-white
+              px-4
+              py-3
+              text-sm
+              font-bold
+              text-slate-700
+              shadow-sm
+              outline-none
+              transition
+              focus:border-blue-400
+              focus:ring-2
+              focus:ring-blue-100
+            "
+          >
+            <option value="">Selecciona un mes</option>
+            <option value="Enero">Enero</option>
+            <option value="Febrero">Febrero</option>
+            <option value="Marzo">Marzo</option>
+            <option value="Abril">Abril</option>
+            <option value="Mayo">Mayo</option>
+            <option value="Junio">Junio</option>
+            <option value="Julio">Julio</option>
+            <option value="Agosto">Agosto</option>
+            <option value="Septiembre">Septiembre</option>
+            <option value="Octubre">Octubre</option>
+            <option value="Noviembre">Noviembre</option>
+            <option value="Diciembre">Diciembre</option>
+          </select>
+
+          <input
+            type="number"
+            id="bulkYearInput"
+            min="2020"
+            max="2100"
+            class="
+              w-28
+              rounded-xl
+              border
+              border-slate-300
+              bg-white
+              px-3
+              py-3
+              text-center
+              text-sm
+              font-black
+              text-slate-700
+              shadow-sm
+              outline-none
+              transition
+              focus:border-blue-400
+              focus:ring-2
+              focus:ring-blue-100
+            "
+          >
+
+        </div>
+
+        <div
+          id="bulkChangeMonthPreview"
+          class="
+            mt-3
+            hidden
+            rounded-xl
+            border
+            border-blue-200
+            bg-blue-50
+            px-4
+            py-3
+            text-sm
+            font-bold
+            text-blue-800
+          "
+        ></div>
+
+        <div
+          id="bulkChangeMonthError"
+          class="
+            mt-3
+            hidden
+            rounded-xl
+            border
+            border-red-200
+            bg-red-50
+            px-4
+            py-3
+            text-xs
+            font-bold
+            text-red-700
+          "
+        >
+          Debes seleccionar el mes y el año.
+        </div>
+
+      </div>
+
+    </div>
+
+    <div
+      class="
+        flex
+        flex-col-reverse
+        gap-2
+        border-t
+        border-slate-200
+        bg-slate-50
+        px-6
+        py-4
+        sm:flex-row
+        sm:justify-end
+      "
+    >
+
+      <button
+        type="button"
+        id="btnBulkChangeMonthCancel"
+        class="
+          inline-flex
+          min-h-11
+          items-center
+          justify-center
+          rounded-xl
+          border
+          border-slate-300
+          bg-white
+          px-5
+          text-sm
+          font-bold
+          text-slate-700
+          shadow-sm
+          transition
+          hover:bg-slate-100
+        "
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="btnBulkChangeMonthAccept"
+        class="
+          inline-flex
+          min-h-11
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          border
+          border-blue-600
+          bg-blue-600
+          px-5
+          text-sm
+          font-black
+          text-white
+          shadow-md
+          transition
+          hover:-translate-y-0.5
+          hover:bg-blue-700
+          hover:shadow-lg
+        "
+      >
+        📅 Cambiar mes
+      </button>
+
+    </div>
+
+  </div>
+
+</div>
 <script>
   function abrirModal(id) {
     const modal = document.getElementById(id);
@@ -3031,92 +3386,95 @@ function syncFiltersWithUrl(){
   /* ======================================================== */
 
   function actualizarBarraMasiva() {
-  const z = zona();
+    const z = zona();
 
-  if (!z) return;
+    if (!z) return;
 
-  const seleccionados = getSelectedChecks();
+    const seleccionados = getSelectedChecks();
 
-  const barra = z.querySelector(
-    '#bulkActionsBar'
-  );
+    const barra = z.querySelector(
+      '#bulkActionsBar'
+    );
 
-  const contador = z.querySelector(
-    '#bulkSelectedCount'
-  );
+    const contador = z.querySelector(
+      '#bulkSelectedCount'
+    );
 
-  const selectAll = z.querySelector(
-    '#selectAllCotizaciones'
-  );
+    const selectAll = z.querySelector(
+      '#selectAllCotizaciones'
+    );
 
-  const btnApprove = z.querySelector(
-    '#btnBulkApprove'
-  );
+    const btnApprove = z.querySelector(
+      '#btnBulkApprove'
+    );
 
-  if (contador) {
-    contador.textContent = seleccionados.length;
-  }
+    if (contador) {
+      contador.textContent = seleccionados.length;
+    }
 
-  if (barra) {
+    if (barra) {
 
-    if (seleccionados.length) {
-      barra.classList.remove('hidden');
-      barra.classList.add('flex');
+      if (seleccionados.length) {
+        barra.classList.remove('hidden');
+        barra.classList.add('flex');
 
-    } else {
-      barra.classList.add('hidden');
-      barra.classList.remove('flex');
+      } else {
+        barra.classList.add('hidden');
+        barra.classList.remove('flex');
+      }
+    }
+
+    /* ====================================================== */
+    /* APROBAR SOLO COTIZACIONES EN ESTADO "COTIZADO"        */
+    /* ====================================================== */
+
+    if (btnApprove) {
+
+      const haySeleccionados =
+        seleccionados.length > 0;
+
+      const todosSonCotizados =
+        haySeleccionados &&
+        seleccionados.every(
+          checkbox =>
+            checkbox.dataset.estado === 'cotizado'
+        );
+
+      btnApprove.disabled =
+        !todosSonCotizados;
+
+      btnApprove.classList.toggle(
+        'opacity-50',
+        !todosSonCotizados
+      );
+
+      btnApprove.classList.toggle(
+        'cursor-not-allowed',
+        !todosSonCotizados
+      );
+
+      btnApprove.title =
+        todosSonCotizados
+          ? 'Aprobar cotizaciones seleccionadas'
+          : 'Solo se pueden aprobar cotizaciones en estado Cotizado';
+    }
+
+    if (selectAll) {
+
+      const checks = getChecks();
+
+      selectAll.checked =
+        checks.length > 0 &&
+        seleccionados.length === checks.length;
+
+      selectAll.indeterminate =
+        seleccionados.length > 0 &&
+        seleccionados.length < checks.length;
     }
   }
 
   /* ======================================================== */
-  /* APROBAR SOLO COTIZACIONES EN ESTADO "COTIZADO"          */
-  /* ======================================================== */
-
-  if (btnApprove) {
-
-    const haySeleccionados = seleccionados.length > 0;
-
-    const todosSonCotizados =
-      haySeleccionados &&
-      seleccionados.every(
-        checkbox => checkbox.dataset.estado === 'cotizado'
-      );
-
-    btnApprove.disabled = !todosSonCotizados;
-
-    btnApprove.classList.toggle(
-      'opacity-50',
-      !todosSonCotizados
-    );
-
-    btnApprove.classList.toggle(
-      'cursor-not-allowed',
-      !todosSonCotizados
-    );
-
-    btnApprove.title =
-      todosSonCotizados
-        ? 'Aprobar cotizaciones seleccionadas'
-        : 'Solo se pueden aprobar cotizaciones en estado Cotizado';
-  }
-
-  if (selectAll) {
-
-    const checks = getChecks();
-
-    selectAll.checked =
-      checks.length > 0 &&
-      seleccionados.length === checks.length;
-
-    selectAll.indeterminate =
-      seleccionados.length > 0 &&
-      seleccionados.length < checks.length;
-  }
-}
-
-  /* ======================================================== */
-  /* MODAL MASIVO                                             */
+  /* MODAL APROBAR / ELIMINAR                                 */
   /* ======================================================== */
 
   function abrirModalMasivo(
@@ -3218,7 +3576,6 @@ function syncFiltersWithUrl(){
 
       buttonIcon.textContent = '✅';
       buttonText.textContent = 'Aprobar';
-
     }
 
     /* ====================================================== */
@@ -3289,16 +3646,147 @@ function syncFiltersWithUrl(){
   }
 
   /* ======================================================== */
+  /* MODAL CAMBIAR MES                                        */
+  /* ======================================================== */
+
+  function actualizarPreviewMes() {
+
+    const mes = document.getElementById(
+      'bulkMonthSelect'
+    );
+
+    const anio = document.getElementById(
+      'bulkYearInput'
+    );
+
+    const preview = document.getElementById(
+      'bulkChangeMonthPreview'
+    );
+
+    const error = document.getElementById(
+      'bulkChangeMonthError'
+    );
+
+    if (
+      !mes ||
+      !anio ||
+      !preview
+    ) {
+      return;
+    }
+
+    error?.classList.add('hidden');
+
+    if (
+      mes.value &&
+      anio.value
+    ) {
+
+      preview.textContent =
+        'Nuevo mes: ' +
+        mes.value +
+        ' ' +
+        anio.value;
+
+      preview.classList.remove('hidden');
+
+    } else {
+
+      preview.textContent = '';
+      preview.classList.add('hidden');
+    }
+  }
+
+  function abrirModalCambiarMes() {
+
+    const ids = idsSeleccionados();
+
+    if (!ids.length) {
+      return;
+    }
+
+    const modal = document.getElementById(
+      'modalBulkChangeMonth'
+    );
+
+    const count = document.getElementById(
+      'bulkChangeMonthCount'
+    );
+
+    const mes = document.getElementById(
+      'bulkMonthSelect'
+    );
+
+    const anio = document.getElementById(
+      'bulkYearInput'
+    );
+
+    const error = document.getElementById(
+      'bulkChangeMonthError'
+    );
+
+    if (
+      !modal ||
+      !count ||
+      !mes ||
+      !anio
+    ) {
+      return;
+    }
+
+    count.textContent = ids.length;
+
+    mes.value = '';
+
+    const hoy = new Date();
+
+    anio.value = hoy.getFullYear();
+
+    error?.classList.add('hidden');
+
+    actualizarPreviewMes();
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    document.body.classList.add(
+      'overflow-hidden'
+    );
+
+    setTimeout(() => {
+      mes.focus();
+    }, 50);
+  }
+
+  function cerrarModalCambiarMes() {
+
+    const modal = document.getElementById(
+      'modalBulkChangeMonth'
+    );
+
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+
+    document.body.classList.remove(
+      'overflow-hidden'
+    );
+  }
+
+  /* ======================================================== */
   /* ENVIAR ACCIÓN                                            */
   /* ======================================================== */
 
   function enviarAccionMasiva(
-    accion
+    accion,
+    datosExtra = {}
   ) {
     const ids = idsSeleccionados();
 
     if (!ids.length) {
       cerrarModalMasivo();
+      cerrarModalCambiarMes();
       return;
     }
 
@@ -3344,6 +3832,27 @@ function syncFiltersWithUrl(){
     );
 
     /* ====================================================== */
+    /* DATOS EXTRA                                            */
+    /* ====================================================== */
+
+    Object.entries(
+      datosExtra
+    ).forEach(([nombre, valor]) => {
+
+      const input = document.createElement(
+        'input'
+      );
+
+      input.type = 'hidden';
+      input.name = nombre;
+      input.value = valor;
+
+      form.appendChild(
+        input
+      );
+    });
+
+    /* ====================================================== */
     /* RETORNO                                                */
     /* ====================================================== */
 
@@ -3384,6 +3893,10 @@ function syncFiltersWithUrl(){
     /* ====================================================== */
     /* ENVIAR                                                 */
     /* ====================================================== */
+
+    if (window.serviciosPmSaveScroll) {
+      window.serviciosPmSaveScroll();
+    }
 
     document.body.appendChild(
       form
@@ -3431,6 +3944,34 @@ function syncFiltersWithUrl(){
       ) {
 
         actualizarBarraMasiva();
+
+        return;
+      }
+
+      if (
+        e.target.matches(
+          '#bulkMonthSelect'
+        ) ||
+        e.target.matches(
+          '#bulkYearInput'
+        )
+      ) {
+
+        actualizarPreviewMes();
+      }
+    }
+  );
+
+  document.addEventListener(
+    'input',
+    function (e) {
+
+      if (
+        e.target.matches(
+          '#bulkYearInput'
+        )
+      ) {
+        actualizarPreviewMes();
       }
     }
   );
@@ -3451,12 +3992,125 @@ function syncFiltersWithUrl(){
 
         e.preventDefault();
 
+        if (approve.disabled) {
+          return;
+        }
+
         abrirModalMasivo(
           'aprobar'
         );
 
         return;
       }
+
+      /* ==================================================== */
+      /* CAMBIAR MES                                          */
+      /* ==================================================== */
+
+      const cambiarMes = e.target.closest(
+        '#btnBulkChangeMonth'
+      );
+
+      if (cambiarMes) {
+
+        e.preventDefault();
+
+        abrirModalCambiarMes();
+
+        return;
+      }
+
+      const cancelarCambioMes = e.target.closest(
+        '#btnBulkChangeMonthCancel'
+      );
+
+      if (cancelarCambioMes) {
+
+        e.preventDefault();
+
+        cerrarModalCambiarMes();
+
+        return;
+      }
+
+      const aceptarCambioMes = e.target.closest(
+        '#btnBulkChangeMonthAccept'
+      );
+
+      if (aceptarCambioMes) {
+
+        e.preventDefault();
+
+        const mes = document.getElementById(
+          'bulkMonthSelect'
+        );
+
+        const anio = document.getElementById(
+          'bulkYearInput'
+        );
+
+        const error = document.getElementById(
+          'bulkChangeMonthError'
+        );
+
+        if (
+          !mes ||
+          !anio ||
+          !mes.value ||
+          !anio.value
+        ) {
+
+          error?.classList.remove('hidden');
+
+          return;
+        }
+
+        const anioNumero = parseInt(
+          anio.value,
+          10
+        );
+
+        if (
+          !Number.isInteger(anioNumero) ||
+          anioNumero < 2020 ||
+          anioNumero > 2100
+        ) {
+
+          if (error) {
+            error.textContent =
+              'Debes ingresar un año válido.';
+
+            error.classList.remove('hidden');
+          }
+
+          return;
+        }
+
+        const nuevoMes =
+          mes.value +
+          ' ' +
+          anioNumero;
+
+        aceptarCambioMes.disabled = true;
+
+        aceptarCambioMes.classList.add(
+          'opacity-70',
+          'cursor-wait'
+        );
+
+        enviarAccionMasiva(
+          'cambiar_mes',
+          {
+            mes_produccion: nuevoMes
+          }
+        );
+
+        return;
+      }
+
+      /* ==================================================== */
+      /* ELIMINAR                                             */
+      /* ==================================================== */
 
       const eliminar = e.target.closest(
         '#btnBulkDelete'
@@ -3495,6 +4149,7 @@ function syncFiltersWithUrl(){
         }
 
         aceptar.disabled = true;
+
         aceptar.classList.add(
           'opacity-70',
           'cursor-wait'
@@ -3508,7 +4163,24 @@ function syncFiltersWithUrl(){
   );
 
   /* ======================================================== */
-  /* CERRAR HACIENDO CLICK EN EL FONDO                        */
+  /* CERRAR CAMBIO DE MES DESDE EL FONDO                      */
+  /* ======================================================== */
+
+  document.addEventListener(
+    'click',
+    function (e) {
+
+      if (
+        e.target &&
+        e.target.id === 'bulkChangeMonthBackdrop'
+      ) {
+        cerrarModalCambiarMes();
+      }
+    }
+  );
+
+  /* ======================================================== */
+  /* CERRAR MODAL MASIVO DESDE EL FONDO                       */
   /* ======================================================== */
 
   document.addEventListener(
@@ -3541,6 +4213,20 @@ function syncFiltersWithUrl(){
     function (e) {
 
       if (e.key !== 'Escape') {
+        return;
+      }
+
+      const modalMes = document.getElementById(
+        'modalBulkChangeMonth'
+      );
+
+      if (
+        modalMes &&
+        !modalMes.classList.contains('hidden')
+      ) {
+
+        cerrarModalCambiarMes();
+
         return;
       }
 

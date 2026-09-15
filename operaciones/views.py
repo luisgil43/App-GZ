@@ -2327,15 +2327,20 @@ def accion_masiva_cotizaciones_pm(
     ==========================================================
 
     PM:
-        puede aprobar masivamente.
+        puede aprobar masivamente;
+        puede cambiar mes de producción masivamente.
 
     ADMIN:
         puede aprobar masivamente;
-        puede eliminar masivamente.
+        puede eliminar masivamente;
+        puede cambiar mes de producción masivamente.
 
-    Solamente se procesan cotizaciones que todavía estén:
+    Para aprobar y eliminar solamente se procesan cotizaciones:
 
         estado = "cotizado"
+
+    Para cambiar mes se procesan las cotizaciones seleccionadas
+    independientemente de su estado operativo visible.
     """
 
     accion = (
@@ -2370,10 +2375,7 @@ def accion_masiva_cotizaciones_pm(
     # SEGURIDAD DE ACCIONES
     # ========================================================
 
-    es_admin = bool(
-        request.user.is_superuser
-        or request.user.es_admin_general
-    )
+    es_admin = bool(request.user.is_superuser or request.user.es_admin_general)
 
     es_pm = bool(
         getattr(
@@ -2390,17 +2392,11 @@ def accion_masiva_cotizaciones_pm(
 
     if accion == "aprobar":
 
-        if not (
-            es_admin
-            or es_pm
-        ):
+        if not (es_admin or es_pm):
 
             messages.error(
                 request,
-                (
-                    "No tienes permisos para aprobar "
-                    "cotizaciones masivamente."
-                ),
+                ("No tienes permisos para aprobar " "cotizaciones masivamente."),
             )
 
             return redirect(
@@ -2418,10 +2414,44 @@ def accion_masiva_cotizaciones_pm(
 
             messages.error(
                 request,
+                ("Solo un administrador puede eliminar " "cotizaciones masivamente."),
+            )
+
+            return redirect(
+                "operaciones:listar_servicios_pm",
+            )
+
+    # --------------------------------------------------------
+    # CAMBIAR MES:
+    # PM + ADMIN
+    # --------------------------------------------------------
+
+    elif accion == "cambiar_mes":
+
+        if not (es_admin or es_pm):
+
+            messages.error(
+                request,
                 (
-                    "Solo un administrador puede eliminar "
-                    "cotizaciones masivamente."
+                    "No tienes permisos para cambiar "
+                    "el mes de producción masivamente."
                 ),
+            )
+
+            return redirect(
+                "operaciones:listar_servicios_pm",
+            )
+
+        nuevo_mes = request.POST.get(
+            "mes_produccion",
+            "",
+        ).strip()
+
+        if not nuevo_mes:
+
+            messages.error(
+                request,
+                "Debes seleccionar el nuevo mes de producción.",
             )
 
             return redirect(
@@ -2443,17 +2473,30 @@ def accion_masiva_cotizaciones_pm(
     # BLOQUEAR Y OBTENER REGISTROS
     # ========================================================
 
-    servicios = list(
-        ServicioCotizado.objects
-        .select_for_update()
-        .filter(
-            pk__in=servicio_ids,
-            estado="cotizado",
+    if accion == "cambiar_mes":
+
+        servicios = list(
+            ServicioCotizado.objects.select_for_update()
+            .filter(
+                pk__in=servicio_ids,
+            )
+            .order_by(
+                "id",
+            )
         )
-        .order_by(
-            "id",
+
+    else:
+
+        servicios = list(
+            ServicioCotizado.objects.select_for_update()
+            .filter(
+                pk__in=servicio_ids,
+                estado="cotizado",
+            )
+            .order_by(
+                "id",
+            )
         )
-    )
 
     if not servicios:
 
@@ -2494,10 +2537,7 @@ def accion_masiva_cotizaciones_pm(
 
         messages.success(
             request,
-            (
-                f"{cantidad} cotización(es) "
-                "fueron aprobadas correctamente."
-            ),
+            (f"{cantidad} cotización(es) " "fueron aprobadas correctamente."),
         )
 
     # ========================================================
@@ -2515,9 +2555,49 @@ def accion_masiva_cotizaciones_pm(
 
         messages.success(
             request,
+            (f"{cantidad} cotización(es) " "fueron eliminadas correctamente."),
+        )
+
+    # ========================================================
+    # CAMBIAR MES DE PRODUCCIÓN
+    # ========================================================
+
+    elif accion == "cambiar_mes":
+
+        cantidad = 0
+        vinculadas = 0
+        sin_planificacion = 0
+
+        for servicio in servicios:
+
+            servicio.mes_produccion = nuevo_mes
+
+            servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
+                id_claro=servicio.id_claro,
+                mes_produccion=nuevo_mes,
+            )
+
+            servicio.save(
+                update_fields=[
+                    "mes_produccion",
+                    "sitio_planificado",
+                ]
+            )
+
+            cantidad += 1
+
+            if servicio.sitio_planificado_id:
+                vinculadas += 1
+            else:
+                sin_planificacion += 1
+
+        messages.success(
+            request,
             (
-                f"{cantidad} cotización(es) "
-                "fueron eliminadas correctamente."
+                f"{cantidad} cotización(es) fueron cambiadas "
+                f"a {nuevo_mes}. "
+                f"{vinculadas} vinculada(s) a la planificación "
+                f"y {sin_planificacion} sin planificación exacta."
             ),
         )
 
@@ -2525,13 +2605,10 @@ def accion_masiva_cotizaciones_pm(
     # RETORNO
     # ========================================================
 
-    next_url = (
-        request.POST.get(
-            "next",
-            "",
-        )
-        .strip()
-    )
+    next_url = request.POST.get(
+        "next",
+        "",
+    ).strip()
 
     if next_url:
         return redirect(
@@ -2646,6 +2723,11 @@ def editar_servicio_cotizado(request, pk):
                 if sitio:
                     servicio.id_new = sitio.id_sites_new
                     servicio.region = sitio.region
+
+            servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
+                id_claro=servicio.id_claro,
+                mes_produccion=servicio.mes_produccion,
+            )
 
             servicio.save()
             messages.success(request, "Cotización actualizada correctamente.")
