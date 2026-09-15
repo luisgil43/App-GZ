@@ -3141,6 +3141,10 @@ function syncFiltersWithUrl(){
     bindHeaders();
     updateHeaderStates();
 
+    if (window.restaurarSeleccionMasivaCotizaciones) {
+      window.restaurarSeleccionMasivaCotizaciones();
+    }
+
     if (window.applyServiciosPmColumnsVisibility) {
       window.applyServiciosPmColumnsVisibility();
     }
@@ -3260,11 +3264,15 @@ function syncFiltersWithUrl(){
         return;
       }
 
-      zona.innerHTML = nuevaZona.innerHTML;
+     zona.innerHTML = nuevaZona.innerHTML;
       zona.dataset.excelGlobal = nuevaZona.dataset.excelGlobal || '{}';
 
       bindHeaders();
       updateHeaderStates();
+
+      if (window.restaurarSeleccionMasivaCotizaciones) {
+        window.restaurarSeleccionMasivaCotizaciones();
+      }
 
       if (window.applyServiciosPmColumnsVisibility) {
         window.applyServiciosPmColumnsVisibility();
@@ -3326,6 +3334,10 @@ function syncFiltersWithUrl(){
     zona.innerHTML = nuevaZona.innerHTML;
     zona.dataset.excelGlobal = nuevaZona.dataset.excelGlobal || '{}';
 
+    if (window.restaurarSeleccionMasivaCotizaciones) {
+      window.restaurarSeleccionMasivaCotizaciones();
+    }
+
     if (window.serviciosPmExcelRebindHeaders) {
       window.serviciosPmExcelRebindHeaders();
     }
@@ -3351,6 +3363,15 @@ function syncFiltersWithUrl(){
 
   let bulkAccionPendiente = null;
 
+  /*
+   * Selección acumulada.
+   *
+   * Aquí permanecen los IDs aunque la tabla sea recargada
+   * por filtros, paginación o cambio de cantidad.
+   */
+  const bulkSelectedIds = new Set();
+  const bulkSelectedEstados = new Map();
+
   /* ======================================================== */
   /* HELPERS                                                  */
   /* ======================================================== */
@@ -3371,14 +3392,32 @@ function syncFiltersWithUrl(){
 
   function getSelectedChecks() {
     return getChecks().filter(
-      checkbox => checkbox.checked
+      checkbox => bulkSelectedIds.has(
+        String(checkbox.value)
+      )
     );
   }
 
   function idsSeleccionados() {
-    return getSelectedChecks().map(
-      checkbox => checkbox.value
+    return Array.from(
+      bulkSelectedIds
     );
+  }
+
+  function restaurarSeleccionVisible() {
+
+    getChecks().forEach(
+      checkbox => {
+
+        checkbox.checked =
+          bulkSelectedIds.has(
+            String(checkbox.value)
+          );
+
+      }
+    );
+
+    actualizarBarraMasiva();
   }
 
   /* ======================================================== */
@@ -3390,7 +3429,11 @@ function syncFiltersWithUrl(){
 
     if (!z) return;
 
-    const seleccionados = getSelectedChecks();
+    const seleccionadosVisibles =
+      getSelectedChecks();
+
+    const cantidadSeleccionada =
+      bulkSelectedIds.size;
 
     const barra = z.querySelector(
       '#bulkActionsBar'
@@ -3408,13 +3451,18 @@ function syncFiltersWithUrl(){
       '#btnBulkApprove'
     );
 
+    const btnChangeMonth = z.querySelector(
+      '#btnBulkChangeMonth'
+    );
+
     if (contador) {
-      contador.textContent = seleccionados.length;
+      contador.textContent =
+        cantidadSeleccionada;
     }
 
     if (barra) {
 
-      if (seleccionados.length) {
+      if (cantidadSeleccionada) {
         barra.classList.remove('hidden');
         barra.classList.add('flex');
 
@@ -3431,13 +3479,15 @@ function syncFiltersWithUrl(){
     if (btnApprove) {
 
       const haySeleccionados =
-        seleccionados.length > 0;
+        bulkSelectedIds.size > 0;
 
       const todosSonCotizados =
         haySeleccionados &&
-        seleccionados.every(
-          checkbox =>
-            checkbox.dataset.estado === 'cotizado'
+        Array.from(
+          bulkSelectedIds
+        ).every(
+          id =>
+            bulkSelectedEstados.get(id) === 'cotizado'
         );
 
       btnApprove.disabled =
@@ -3459,17 +3509,53 @@ function syncFiltersWithUrl(){
           : 'Solo se pueden aprobar cotizaciones en estado Cotizado';
     }
 
+    /* ====================================================== */
+    /* CAMBIAR MES PARA CUALQUIER SELECCIÓN                   */
+    /* ====================================================== */
+
+    if (btnChangeMonth) {
+
+      const haySeleccionados =
+        bulkSelectedIds.size > 0;
+
+      btnChangeMonth.disabled =
+        !haySeleccionados;
+
+      btnChangeMonth.classList.toggle(
+        'opacity-50',
+        !haySeleccionados
+      );
+
+      btnChangeMonth.classList.toggle(
+        'cursor-not-allowed',
+        !haySeleccionados
+      );
+
+      btnChangeMonth.title =
+        haySeleccionados
+          ? 'Cambiar mes de producción de las cotizaciones seleccionadas'
+          : 'Selecciona al menos una cotización';
+    }
+
     if (selectAll) {
 
       const checks = getChecks();
 
+      const seleccionadosVisiblesCantidad =
+        checks.filter(
+          checkbox =>
+            bulkSelectedIds.has(
+              String(checkbox.value)
+            )
+        ).length;
+
       selectAll.checked =
         checks.length > 0 &&
-        seleccionados.length === checks.length;
+        seleccionadosVisiblesCantidad === checks.length;
 
       selectAll.indeterminate =
-        seleccionados.length > 0 &&
-        seleccionados.length < checks.length;
+        seleccionadosVisiblesCantidad > 0 &&
+        seleccionadosVisiblesCantidad < checks.length;
     }
   }
 
@@ -3675,7 +3761,11 @@ function syncFiltersWithUrl(){
       return;
     }
 
-    error?.classList.add('hidden');
+    if (error) {
+      error.classList.add('hidden');
+      error.textContent =
+        'Debes seleccionar el mes y el año.';
+    }
 
     if (
       mes.value &&
@@ -3725,6 +3815,10 @@ function syncFiltersWithUrl(){
       'bulkChangeMonthError'
     );
 
+    const accept = document.getElementById(
+      'btnBulkChangeMonthAccept'
+    );
+
     if (
       !modal ||
       !count ||
@@ -3742,7 +3836,21 @@ function syncFiltersWithUrl(){
 
     anio.value = hoy.getFullYear();
 
-    error?.classList.add('hidden');
+    if (error) {
+      error.textContent =
+        'Debes seleccionar el mes y el año.';
+
+      error.classList.add('hidden');
+    }
+
+    if (accept) {
+      accept.disabled = false;
+
+      accept.classList.remove(
+        'opacity-70',
+        'cursor-wait'
+      );
+    }
 
     actualizarPreviewMes();
 
@@ -3928,7 +4036,35 @@ function syncFiltersWithUrl(){
 
         getChecks().forEach(
           checkbox => {
-            checkbox.checked = marcado;
+
+            const id =
+              String(checkbox.value);
+
+            checkbox.checked =
+              marcado;
+
+            if (marcado) {
+
+              bulkSelectedIds.add(
+                id
+              );
+
+              bulkSelectedEstados.set(
+                id,
+                checkbox.dataset.estado || ''
+              );
+
+            } else {
+
+              bulkSelectedIds.delete(
+                id
+              );
+
+              bulkSelectedEstados.delete(
+                id
+              );
+            }
+
           }
         );
 
@@ -3942,6 +4078,31 @@ function syncFiltersWithUrl(){
           '.cotizacion-row-check'
         )
       ) {
+
+        const id =
+          String(e.target.value);
+
+        if (e.target.checked) {
+
+          bulkSelectedIds.add(
+            id
+          );
+
+          bulkSelectedEstados.set(
+            id,
+            e.target.dataset.estado || ''
+          );
+
+        } else {
+
+          bulkSelectedIds.delete(
+            id
+          );
+
+          bulkSelectedEstados.delete(
+            id
+          );
+        }
 
         actualizarBarraMasiva();
 
@@ -4015,6 +4176,10 @@ function syncFiltersWithUrl(){
 
         e.preventDefault();
 
+        if (cambiarMes.disabled) {
+          return;
+        }
+
         abrirModalCambiarMes();
 
         return;
@@ -4041,6 +4206,10 @@ function syncFiltersWithUrl(){
 
         e.preventDefault();
 
+        if (aceptarCambioMes.disabled) {
+          return;
+        }
+
         const mes = document.getElementById(
           'bulkMonthSelect'
         );
@@ -4060,7 +4229,12 @@ function syncFiltersWithUrl(){
           !anio.value
         ) {
 
-          error?.classList.remove('hidden');
+          if (error) {
+            error.textContent =
+              'Debes seleccionar el mes y el año.';
+
+            error.classList.remove('hidden');
+          }
 
           return;
         }
@@ -4251,6 +4425,9 @@ function syncFiltersWithUrl(){
 
   window.actualizarBarraMasivaCotizaciones =
     actualizarBarraMasiva;
+
+  window.restaurarSeleccionMasivaCotizaciones =
+    restaurarSeleccionVisible;
 
 })();
 </script>
