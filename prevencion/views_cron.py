@@ -77,9 +77,11 @@ def cron_prevencion_documentos(request):
     """
     CRON Prevención:
     - Token ?token=...
-    - Solo una vez por día (lock DB); si falla, libera lock para reintentar.
+    - Solo una vez por día (lock DB).
     - Nunca antes de las 08:00 (hora local), salvo force=1.
     - Envía 1 solo correo consolidado.
+    - Si falla el envío, conserva el lock diario para evitar reintentos
+      continuos que puedan bloquear el servicio web.
     - Reglas:
         * Vigente: >20 días
         * Próximo: <=20 y >0, notifica por próximo umbral pendiente:
@@ -93,7 +95,11 @@ def cron_prevencion_documentos(request):
     token_recibido = (request.GET.get("token") or "").strip()
     token_esperado = (getattr(settings, "PREVENCION_CRON_TOKEN", "") or "").strip()
 
-    logger.info("CRON Prevención token recibido=%r esperado=%r", token_recibido, token_esperado)
+    logger.info(
+        "CRON Prevención token recibido=%r esperado=%r",
+        token_recibido,
+        token_esperado,
+    )
 
     if not token_esperado or token_recibido != token_esperado:
         return HttpResponseForbidden("Forbidden")
@@ -104,20 +110,41 @@ def cron_prevencion_documentos(request):
 
     if ahora.hour < 8 and not force_run:
         return JsonResponse(
-            {"status": "before-8am", "detail": "Aún no son las 08:00"},
+            {
+                "status": "before-8am",
+                "detail": "Aún no son las 08:00",
+            },
             status=200,
         )
 
     job_name = "prevencion_documentos"
 
     cron_obj = None
+
     if force_run:
-        PrevencionCronDiarioEjecutado.objects.filter(nombre=job_name, fecha=hoy).delete()
-        cron_obj = PrevencionCronDiarioEjecutado.objects.create(nombre=job_name, fecha=hoy)
+        PrevencionCronDiarioEjecutado.objects.filter(
+            nombre=job_name,
+            fecha=hoy,
+        ).delete()
+
+        cron_obj = PrevencionCronDiarioEjecutado.objects.create(
+            nombre=job_name,
+            fecha=hoy,
+        )
     else:
-        cron_obj, created = PrevencionCronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
+        cron_obj, created = PrevencionCronDiarioEjecutado.objects.get_or_create(
+            nombre=job_name,
+            fecha=hoy,
+        )
+
         if not created:
-            return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
+            return JsonResponse(
+                {
+                    "status": "already-run",
+                    "detail": "Ya se ejecutó hoy",
+                },
+                status=200,
+            )
 
     enviados = 0
     errores = 0
@@ -126,13 +153,19 @@ def cron_prevencion_documentos(request):
 
     try:
         cfg, _ = PrevencionNotificationSettings.objects.get_or_create(pk=1)
+
         if not cfg.enabled:
             success = True
-            return JsonResponse({"status": "disabled", "detail": "Notificaciones desactivadas"}, status=200)
+            return JsonResponse(
+                {
+                    "status": "disabled",
+                    "detail": "Notificaciones desactivadas",
+                },
+                status=200,
+            )
 
         docs = (
-            PrevencionDocument.objects
-            .select_related("doc_type")
+            PrevencionDocument.objects.select_related("doc_type")
             .prefetch_related("workers")
             .filter(
                 current=True,
@@ -147,18 +180,22 @@ def cron_prevencion_documentos(request):
 
         for d in docs:
             remaining = d.remaining_days(today=hoy)
+
             if remaining is None:
                 continue
 
             if remaining <= 0:
                 if not _already_sent_overdue_today(d.id, hoy):
-                    overdue_items.append({
-                        "doc": d,
-                        "remaining": remaining,
-                        "scope": d.scope,
-                        "type": d.doc_type.name,
-                        "workers": list(d.workers.all()),
-                    })
+                    overdue_items.append(
+                        {
+                            "doc": d,
+                            "remaining": remaining,
+                            "scope": d.scope,
+                            "type": d.doc_type.name,
+                            "workers": list(d.workers.all()),
+                        }
+                    )
+
                 continue
 
             chosen = None
@@ -167,26 +204,38 @@ def cron_prevencion_documentos(request):
             if 11 <= remaining <= 20:
                 if not _already_sent_pre(d.id, 10):
                     chosen = 10
+
             elif 6 <= remaining <= 10:
                 if not _already_sent_pre(d.id, 5):
                     chosen = 5
+
             elif 1 <= remaining <= 5:
                 if not _already_sent_pre(d.id, 1):
                     chosen = 1
 
             if chosen is not None:
-                upcoming_items.append({
-                    "doc": d,
-                    "remaining": remaining,
-                    "threshold": chosen,
-                    "scope": d.scope,
-                    "type": d.doc_type.name,
-                    "workers": list(d.workers.all()),
-                })
+                upcoming_items.append(
+                    {
+                        "doc": d,
+                        "remaining": remaining,
+                        "threshold": chosen,
+                        "scope": d.scope,
+                        "type": d.doc_type.name,
+                        "workers": list(d.workers.all()),
+                    }
+                )
 
         if not upcoming_items and not overdue_items:
             success = True
-            return JsonResponse({"status": "ok", "detail": "Nada que notificar", "sent": 0}, status=200)
+
+            return JsonResponse(
+                {
+                    "status": "ok",
+                    "detail": "Nada que notificar",
+                    "sent": 0,
+                },
+                status=200,
+            )
 
         to_emails = cfg.get_to_emails()
         cc_emails = cfg.get_cc_emails()
@@ -196,24 +245,31 @@ def cron_prevencion_documentos(request):
                 if item["scope"] in {"trabajador", "ambos"}:
                     for w in item["workers"]:
                         em = (getattr(w, "email", "") or "").strip()
+
                         if em:
                             to_emails.append(em)
 
         seen = set()
         to_final = []
+
         for e in to_emails:
             k = e.lower()
+
             if k in seen:
                 continue
+
             seen.add(k)
             to_final.append(e)
 
         seen2 = set()
         cc_final = []
+
         for e in cc_emails:
             k = e.lower()
+
             if k in seen2:
                 continue
+
             seen2.add(k)
             cc_final.append(e)
 
@@ -222,17 +278,35 @@ def cron_prevencion_documentos(request):
 
         if not to_final:
             success = True
-            return JsonResponse({"status": "skipped", "detail": "Sin destinatarios configurados"}, status=200)
+
+            return JsonResponse(
+                {
+                    "status": "skipped",
+                    "detail": "Sin destinatarios configurados",
+                },
+                status=200,
+            )
 
         logo_url = _get_logo_url()
-        subject = f"[GZ Services] Prevención - Documentos por vencer/vencidos ({hoy:%Y-%m-%d})"
+
+        subject = (
+            f"[GZ Services] Prevención - Documentos "
+            f"por vencer/vencidos ({hoy:%Y-%m-%d})"
+        )
 
         def _row_html(d, remaining, badge, extra):
             workers_txt = "—"
+
             if d.scope in {"trabajador", "ambos"}:
-                workers_txt = ", ".join([(w.get_full_name() or w.username) for w in d.workers.all()]) or "—"
+                workers_txt = (
+                    ", ".join(
+                        [(w.get_full_name() or w.username) for w in d.workers.all()]
+                    )
+                    or "—"
+                )
 
             exp = d.expiry_date.strftime("%d-%m-%Y") if d.expiry_date else "—"
+
             iss = d.issue_date.strftime("%d-%m-%Y") if d.issue_date else "—"
 
             return f"""
@@ -253,19 +327,28 @@ def cron_prevencion_documentos(request):
         badge_od = "background:#fee2e2;color:#991b1b;"
 
         up_rows = ""
+
         for it in upcoming_items:
             d = it["doc"]
+
             up_rows += _row_html(
                 d,
                 it["remaining"],
                 badge_up,
-                f"Próximo (umbral {it['threshold']} días)"
+                f"Próximo (umbral {it['threshold']} días)",
             )
 
         od_rows = ""
+
         for it in overdue_items:
             d = it["doc"]
-            od_rows += _row_html(d, it["remaining"], badge_od, "Vencido")
+
+            od_rows += _row_html(
+                d,
+                it["remaining"],
+                badge_od,
+                "Vencido",
+            )
 
         html_body = f"""\
 <!DOCTYPE html>
@@ -305,6 +388,9 @@ def cron_prevencion_documentos(request):
             f"Vencidos: {len(overdue_items)}\n"
         )
 
+        # IMPORTANTE:
+        # Las alertas se marcan como enviadas únicamente DESPUÉS
+        # de que este envío termine correctamente.
         _send_email(
             subject=subject,
             to_emails=to_final,
@@ -312,29 +398,44 @@ def cron_prevencion_documentos(request):
             text_body=text_body,
             html_body=html_body,
         )
+
         enviados = 1
 
         for it in upcoming_items:
-            _mark_sent_pre(it["doc"].id, int(it["threshold"]))
+            _mark_sent_pre(
+                it["doc"].id,
+                int(it["threshold"]),
+            )
 
         for it in overdue_items:
-            _mark_sent_overdue_today(it["doc"].id, hoy)
+            _mark_sent_overdue_today(
+                it["doc"].id,
+                hoy,
+            )
 
         success = True
 
     except Exception as e:
         errores += 1
         ultimo_error = e.__class__.__name__
-        logger.exception("Fallo CRON Prevención")
+
+        logger.exception(
+            "Fallo CRON Prevención. "
+            "El lock diario se conserva para evitar reintentos continuos "
+            "que puedan afectar el servicio web."
+        )
+
         success = False
 
-    finally:
-        if not success and cron_obj:
-            PrevencionCronDiarioEjecutado.objects.filter(pk=cron_obj.pk).delete()
+    # IMPORTANTE:
+    # NO eliminamos PrevencionCronDiarioEjecutado cuando falla.
+    #
+    # Si SMTP está inaccesible, el siguiente ping del mismo día encontrará
+    # el lock y responderá "already-run" sin volver a intentar SMTP.
 
     return JsonResponse(
         {
-            "status": "ok" if success else "retry-enabled",
+            "status": "ok" if success else "mail-error",
             "date": str(hoy),
             "sent": enviados,
             "send_errors": errores,
