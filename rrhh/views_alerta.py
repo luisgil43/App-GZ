@@ -106,7 +106,7 @@ def cron_contratos_por_vencer(request):
     """
     Endpoint para ser llamado por UptimeRobot (o similar) varias veces al día.
     - Protegido por token (?token=...).
-    - Solo ejecuta el envío una vez por día (pero si hay errores/fallas, libera el lock para reintentar).
+    - Solo ejecuta el envío una vez por día.
     - Nunca se ejecuta antes de las 08:00 (hora local).
     - PRE-vencimiento: envía correos cuando faltan 20, 15, 10, 5, 3, 2, 1 días.
     - POST-vencimiento: envía correos TODOS los días (hasta MAX_DIAS_POST)
@@ -133,7 +133,12 @@ def cron_contratos_por_vencer(request):
             status=200,
         )
 
-    # 3) Lock diario (para evitar doble ejecución). Si hay cualquier falla, lo liberamos al final para reintentar.
+    # 3) Lock diario (para evitar doble ejecución).
+    #
+    # IMPORTANTE:
+    # El lock se conserva aunque falle el SMTP. De esta forma, si el servidor
+    # de correo está caído o inaccesible, los siguientes pings del mismo día
+    # no vuelven a disparar continuamente conexiones SMTP.
     job_name = "contratos_por_vencer"
     cron_obj, created = CronDiarioEjecutado.objects.get_or_create(
         nombre=job_name, fecha=hoy
@@ -206,93 +211,90 @@ def cron_contratos_por_vencer(request):
     saltados = 0
     errores_envio = 0
     ultimo_error = None
-    success = False
 
-    try:
-        for c in contratos:
-            # Si ya existe un documento nuevo para este técnico, no seguir molestando
-            if not contrato_sigue_siend_ultimo(c):
+    for c in contratos:
+        # Si ya existe un documento nuevo para este técnico, no seguir molestando
+        if not contrato_sigue_siend_ultimo(c):
+            saltados += 1
+            continue
+
+        dias_relativos = (c.fecha_termino - hoy).days
+        es_pre = dias_relativos > 0
+
+        # ---------------- PRE-VENCIMIENTO ----------------
+        if es_pre:
+            if dias_relativos not in DIAS_ALERTA_PRE:
                 saltados += 1
                 continue
 
-            dias_relativos = (c.fecha_termino - hoy).days
-            es_pre = dias_relativos > 0
+            estado_tabla = "Por vencer"
+            estado_subject = f"por vencer en {dias_relativos} días"
+            texto_linea_plain = f"Quedan {dias_relativos} día(s) para su vencimiento."
+            alerta_html = (
+                f"<strong>Quedan {dias_relativos} día(s)</strong> "
+                f"para su vencimiento."
+            )
 
-            # ---------------- PRE-VENCIMIENTO ----------------
-            if es_pre:
-                if dias_relativos not in DIAS_ALERTA_PRE:
-                    saltados += 1
-                    continue
+        # ---------------- POST-VENCIMIENTO ----------------
+        else:
+            dias_pasados = -dias_relativos  # 0 => vence hoy, 1 => vencido hace 1 día...
 
-                estado_tabla = "Por vencer"
-                estado_subject = f"por vencer en {dias_relativos} días"
-                texto_linea_plain = (
-                    f"Quedan {dias_relativos} día(s) para su vencimiento."
-                )
-                alerta_html = f"<strong>Quedan {dias_relativos} día(s)</strong> para su vencimiento."
+            if MAX_DIAS_POST is not None and dias_pasados > MAX_DIAS_POST:
+                saltados += 1
+                continue
 
-            # ---------------- POST-VENCIMIENTO ----------------
+            estado_tabla = "Vencido"
+
+            if dias_pasados == 0:
+                estado_subject = "vence hoy"
+                texto_linea_plain = "El contrato vence hoy."
+                alerta_html = "<strong>El contrato vence hoy.</strong>"
             else:
-                dias_pasados = (
-                    -dias_relativos
-                )  # 0 => vence hoy, 1 => vencido hace 1 día...
+                estado_subject = f"vencido hace {dias_pasados} día(s)"
+                texto_linea_plain = (
+                    f"El contrato se encuentra vencido hace {dias_pasados} día(s)."
+                )
+                alerta_html = (
+                    f"<strong>El contrato se encuentra vencido</strong> "
+                    f"hace {dias_pasados} día(s)."
+                )
 
-                if MAX_DIAS_POST is not None and dias_pasados > MAX_DIAS_POST:
-                    saltados += 1
-                    continue
+        # Evitar duplicados: usamos el mismo valor relativo (positivo o negativo)
+        ya_enviada = ContratoAlertaEnviada.objects.filter(
+            contrato=c,
+            fecha_termino=c.fecha_termino,
+            dias_antes=dias_relativos,
+        ).exists()
 
-                estado_tabla = "Vencido"
+        if ya_enviada:
+            saltados += 1
+            continue
 
-                if dias_pasados == 0:
-                    estado_subject = "vence hoy"
-                    texto_linea_plain = "El contrato vence hoy."
-                    alerta_html = "<strong>El contrato vence hoy.</strong>"
-                else:
-                    estado_subject = f"vencido hace {dias_pasados} día(s)"
-                    texto_linea_plain = (
-                        f"El contrato se encuentra vencido hace {dias_pasados} día(s)."
-                    )
-                    alerta_html = (
-                        f"<strong>El contrato se encuentra vencido</strong> "
-                        f"hace {dias_pasados} día(s)."
-                    )
+        # ===== Construir correo =====
+        tecnico = c.tecnico
+        nombre_tecnico = (
+            tecnico.get_full_name()
+            if hasattr(tecnico, "get_full_name")
+            else str(tecnico)
+        )
+        rut_tecnico = getattr(tecnico, "identidad", "")
 
-            # Evitar duplicados: usamos el mismo valor relativo (positivo o negativo)
-            ya_enviada = ContratoAlertaEnviada.objects.filter(
-                contrato=c,
-                fecha_termino=c.fecha_termino,
-                dias_antes=dias_relativos,
-            ).exists()
+        subject = f"[GZ Services] Contrato {estado_subject} - {nombre_tecnico}"
 
-            if ya_enviada:
-                saltados += 1
-                continue
+        # Texto plano (fallback)
+        text_body = (
+            "Hola,\n\n"
+            f"El contrato de trabajo del técnico {nombre_tecnico}"
+            f"{f' (RUT {rut_tecnico})' if rut_tecnico else ''} "
+            f"tiene fecha de término el día {c.fecha_termino:%Y-%m-%d}.\n\n"
+            f"{texto_linea_plain}\n\n"
+            "Por favor, revisar renovaciones, anexos o término en el módulo de "
+            "RRHH de GZ Services.\n\n"
+            "Este mensaje fue generado automáticamente por el sistema Planix.\n"
+        )
 
-            # ===== Construir correo =====
-            tecnico = c.tecnico
-            nombre_tecnico = (
-                tecnico.get_full_name()
-                if hasattr(tecnico, "get_full_name")
-                else str(tecnico)
-            )
-            rut_tecnico = getattr(tecnico, "identidad", "")
-
-            subject = f"[GZ Services] Contrato {estado_subject} - {nombre_tecnico}"
-
-            # Texto plano (fallback)
-            text_body = (
-                "Hola,\n\n"
-                f"El contrato de trabajo del técnico {nombre_tecnico}"
-                f"{f' (RUT {rut_tecnico})' if rut_tecnico else ''} "
-                f"tiene fecha de término el día {c.fecha_termino:%Y-%m-%d}.\n\n"
-                f"{texto_linea_plain}\n\n"
-                "Por favor, revisar renovaciones, anexos o término en el módulo de "
-                "RRHH de GZ Services.\n\n"
-                "Este mensaje fue generado automáticamente por el sistema Planix.\n"
-            )
-
-            # HTML estilo similar al mail de recuperación
-            html_body = f"""\
+        # HTML estilo similar al mail de recuperación
+        html_body = f"""\
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -325,7 +327,7 @@ def cron_contratos_por_vencer(request):
     <p style="font-size:14px; color:#374151; margin:0 0 12px;">
       El contrato de trabajo del técnico
       <strong>{nombre_tecnico}</strong>
-      {f"(RUT <strong>{rut_tecnico}</strong>)" if rut_tecnico else ""} 
+      {f"(RUT <strong>{rut_tecnico}</strong>)" if rut_tecnico else ""}
       tiene fecha de término el día <strong>{c.fecha_termino:%Y-%m-%d}</strong>.
     </p>
 
@@ -365,47 +367,48 @@ def cron_contratos_por_vencer(request):
 </html>
 """
 
-            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
-            email = EmailMultiAlternatives(
-                subject=subject,
-                body=text_body,
-                from_email=from_email,
-                to=destinatarios,
+        from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=text_body,
+            from_email=from_email,
+            to=destinatarios,
+        )
+        email.attach_alternative(html_body, "text/html")
+
+        try:
+            email.send(fail_silently=False)
+        except Exception as e:
+            errores_envio += 1
+            ultimo_error = e.__class__.__name__
+            logger.exception(
+                "Fallo enviando alerta contrato_id=%s dias_relativos=%s. "
+                "Se detienen los demás envíos de esta ejecución para proteger "
+                "el servicio web.",
+                c.id,
+                dias_relativos,
             )
-            email.attach_alternative(html_body, "text/html")
 
-            try:
-                email.send(fail_silently=False)
-            except Exception as e:
-                errores_envio += 1
-                ultimo_error = e.__class__.__name__
-                logger.exception(
-                    "Fallo enviando alerta contrato_id=%s dias_relativos=%s",
-                    c.id,
-                    dias_relativos,
-                )
-                # No registramos ContratoAlertaEnviada si el envío falló
-                continue
+            # No registramos ContratoAlertaEnviada si el envío falló.
+            #
+            # Si el servidor SMTP está caído o inaccesible, no seguimos
+            # intentando contrato por contrato. Todos usarían el mismo servidor
+            # y cada intento podría consumir el timeout configurado.
+            break
 
-            # Registrar alerta enviada SOLO si el send fue OK
-            ContratoAlertaEnviada.objects.create(
-                contrato=c,
-                fecha_termino=c.fecha_termino,
-                dias_antes=dias_relativos,
-            )
-            enviados += 1
+        # Registrar alerta enviada SOLO si el send fue OK
+        ContratoAlertaEnviada.objects.create(
+            contrato=c,
+            fecha_termino=c.fecha_termino,
+            dias_antes=dias_relativos,
+        )
+        enviados += 1
 
-        success = errores_envio == 0
-
-    finally:
-        # Si hubo cualquier problema (errores SMTP o excepción inesperada),
-        # liberamos el lock para que el próximo ping reintente hoy.
-        if not success:
-            CronDiarioEjecutado.objects.filter(pk=cron_obj.pk).delete()
+    success = errores_envio == 0
 
     return JsonResponse(
         {
-            "status": "ok" if success else "retry-enabled",
+            "status": "ok" if success else "mail-error",
             "date": str(hoy),
             "method": request.method,
             "sent": enviados,
