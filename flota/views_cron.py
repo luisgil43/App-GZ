@@ -150,6 +150,7 @@ def cron_flota_mantenciones(request):
     - ✅ Anti-concurrencia: advisory lock por día (Postgres)
     - ✅ Anti-bug: si lock existe pero hoy NO hay alertas marcadas, re-ejecuta (recovery) sin force
     - ✅ Marca "enviada" SOLO después de enviar el correo OK
+    - ✅ Si falla SMTP, detiene los demás envíos de esa ejecución
     """
     token_recibido = (request.GET.get("token") or "").strip()
     token_esperado = (getattr(settings, "FLOTA_CRON_TOKEN", "") or "").strip()
@@ -161,25 +162,41 @@ def cron_flota_mantenciones(request):
     force_run = (request.GET.get("force") or "").strip() == "1"
 
     if ahora.hour < 8 and not force_run:
-        return JsonResponse({"status": "before-8am", "detail": "Aún no son las 08:00"}, status=200)
+        return JsonResponse(
+            {"status": "before-8am", "detail": "Aún no son las 08:00"},
+            status=200,
+        )
 
     # ✅ advisory lock estable (NO usar hash())
     import zlib
+
     lock_key = zlib.crc32(f"flota_mantenciones:{hoy.isoformat()}".encode("utf-8"))
 
     if not _try_pg_advisory_lock(lock_key):
-        return JsonResponse({"status": "already-running", "detail": "Otro proceso ya está ejecutando"}, status=200)
+        return JsonResponse(
+            {
+                "status": "already-running",
+                "detail": "Otro proceso ya está ejecutando",
+            },
+            status=200,
+        )
 
     job_name = "flota_mantenciones"
 
     try:
         if force_run:
-            FlotaCronDiarioEjecutado.objects.filter(nombre=job_name, fecha=hoy).delete()
+            FlotaCronDiarioEjecutado.objects.filter(
+                nombre=job_name,
+                fecha=hoy,
+            ).delete()
 
         # Creamos/obtenemos lock diario
         try:
             with transaction.atomic():
-                _cron_obj, created = FlotaCronDiarioEjecutado.objects.get_or_create(nombre=job_name, fecha=hoy)
+                _cron_obj, created = FlotaCronDiarioEjecutado.objects.get_or_create(
+                    nombre=job_name,
+                    fecha=hoy,
+                )
         except IntegrityError:
             created = False
 
@@ -187,7 +204,13 @@ def cron_flota_mantenciones(request):
         # Si ya existe lock pero NO hay ninguna alerta de hoy marcada, NO nos salimos.
         # Esto arregla el caso "marcado como ejecutado pero no envió nada".
         if not created and not force_run:
-            return JsonResponse({"status": "already-run", "detail": "Ya se ejecutó hoy"}, status=200)
+            return JsonResponse(
+                {
+                    "status": "already-run",
+                    "detail": "Ya se ejecutó hoy",
+                },
+                status=200,
+            )
 
         enviados = 0
         saltados = 0
@@ -195,21 +218,22 @@ def cron_flota_mantenciones(request):
         errores_logica = 0
         ultimo_error = None
 
+        # Si el servidor SMTP falla una vez, no seguimos intentando
+        # más correos dentro de esta misma ejecución.
+        smtp_failed = False
+
         logo_url = _get_logo_url()
 
-        cfgs = (
-            VehicleNotificationSettings.objects
-            .select_related("vehicle")
-            .filter(enabled=True)
+        cfgs = VehicleNotificationSettings.objects.select_related("vehicle").filter(
+            enabled=True
         )
 
-        tipos = (
-            VehicleServiceType.objects
-            .filter(is_active=True)
-            .order_by("name")
-        )
+        tipos = VehicleServiceType.objects.filter(is_active=True).order_by("name")
 
         for cfg in cfgs:
+            if smtp_failed:
+                break
+
             v = cfg.vehicle
             to_emails, cc_emails = _build_recipients(cfg)
 
@@ -220,6 +244,9 @@ def cron_flota_mantenciones(request):
             km_actual = int(v.kilometraje_actual or 0)
 
             for t in tipos:
+                if smtp_failed:
+                    break
+
                 has_km = bool((t.interval_km or 0) > 0)
                 has_days = bool((t.interval_days or 0) > 0)
                 if not has_km and not has_days:
@@ -250,7 +277,10 @@ def cron_flota_mantenciones(request):
                                 ).exists()
 
                                 if not already:
-                                    subject = f"[GZ Services] Mantención vencida (KM) - {t.name} - {v.patente}"
+                                    subject = (
+                                        f"[GZ Services] Mantención vencida (KM) "
+                                        f"- {t.name} - {v.patente}"
+                                    )
                                     text_body = (
                                         "Hola,\n\n"
                                         f"El vehículo {v.patente} tiene una mantención vencida.\n"
@@ -293,14 +323,23 @@ def cron_flota_mantenciones(request):
                                         _send_email(
                                             subject=subject,
                                             to_emails=to_emails or cc_emails,
-                                            cc_emails=cc_emails if to_emails else [],
+                                            cc_emails=(cc_emails if to_emails else []),
                                             text_body=text_body,
                                             html_body=html_body,
                                         )
                                     except Exception as e:
                                         errores_envio += 1
                                         ultimo_error = e.__class__.__name__
-                                        logger.exception("Fallo envío flota overdue_km veh=%s tipo=%s", v.id, t.id)
+                                        smtp_failed = True
+                                        logger.exception(
+                                            "Fallo envío flota overdue_km "
+                                            "veh=%s tipo=%s. "
+                                            "Se detienen los demás envíos "
+                                            "de esta ejecución para proteger "
+                                            "el servicio web.",
+                                            v.id,
+                                            t.id,
+                                        )
                                     else:
                                         # ✅ marcar SOLO si el envío fue OK
                                         try:
@@ -315,12 +354,16 @@ def cron_flota_mantenciones(request):
                                         except IntegrityError:
                                             pass
                                         enviados += 1
+
                             continue
 
                         # Pre-alertas KM (una sola vez por threshold)
                         steps = t.alert_km_steps_list
                         if steps:
                             for threshold in steps:
+                                if smtp_failed:
+                                    break
+
                                 if remaining_km <= int(threshold):
                                     already = FlotaAlertaEnviada.objects.filter(
                                         vehicle_id=v.id,
@@ -331,7 +374,10 @@ def cron_flota_mantenciones(request):
                                     ).exists()
 
                                     if not already:
-                                        subject = f"[GZ Services] Mantención próxima (KM) - {t.name} - {v.patente}"
+                                        subject = (
+                                            f"[GZ Services] Mantención próxima (KM) "
+                                            f"- {t.name} - {v.patente}"
+                                        )
                                         text_body = (
                                             "Hola,\n\n"
                                             f"El vehículo {v.patente} tiene una mantención próxima.\n"
@@ -375,15 +421,26 @@ def cron_flota_mantenciones(request):
                                         try:
                                             _send_email(
                                                 subject=subject,
-                                                to_emails=to_emails or cc_emails,
-                                                cc_emails=cc_emails if to_emails else [],
+                                                to_emails=(to_emails or cc_emails),
+                                                cc_emails=(
+                                                    cc_emails if to_emails else []
+                                                ),
                                                 text_body=text_body,
                                                 html_body=html_body,
                                             )
                                         except Exception as e:
                                             errores_envio += 1
                                             ultimo_error = e.__class__.__name__
-                                            logger.exception("Fallo envío flota pre_km veh=%s tipo=%s", v.id, t.id)
+                                            smtp_failed = True
+                                            logger.exception(
+                                                "Fallo envío flota pre_km "
+                                                "veh=%s tipo=%s. "
+                                                "Se detienen los demás envíos "
+                                                "de esta ejecución para proteger "
+                                                "el servicio web.",
+                                                v.id,
+                                                t.id,
+                                            )
                                         else:
                                             try:
                                                 FlotaAlertaEnviada.objects.get_or_create(
@@ -403,14 +460,23 @@ def cron_flota_mantenciones(request):
                     except Exception as e:
                         errores_logica += 1
                         ultimo_error = e.__class__.__name__
-                        logger.exception("Error lógica flota km veh=%s tipo=%s", v.id, t.id)
+                        logger.exception(
+                            "Error lógica flota km veh=%s tipo=%s",
+                            v.id,
+                            t.id,
+                        )
+
+                if smtp_failed:
+                    break
 
                 # -----------------------
                 # B) ALERTAS POR DÍAS
                 # -----------------------
                 if has_days:
                     try:
-                        due_date = last.service_date + timedelta(days=int(t.interval_days))
+                        due_date = last.service_date + timedelta(
+                            days=int(t.interval_days)
+                        )
                         remaining_days = (due_date - hoy).days
 
                         if remaining_days <= 0:
@@ -425,7 +491,10 @@ def cron_flota_mantenciones(request):
                                 ).exists()
 
                                 if not already:
-                                    subject = f"[GZ Services] Mantención vencida (días) - {t.name} - {v.patente}"
+                                    subject = (
+                                        f"[GZ Services] Mantención vencida (días) "
+                                        f"- {t.name} - {v.patente}"
+                                    )
                                     text_body = (
                                         "Hola,\n\n"
                                         f"El vehículo {v.patente} tiene una mantención vencida.\n"
@@ -461,18 +530,28 @@ def cron_flota_mantenciones(request):
 </body>
 </html>
 """
+
                                     try:
                                         _send_email(
                                             subject=subject,
                                             to_emails=to_emails or cc_emails,
-                                            cc_emails=cc_emails if to_emails else [],
+                                            cc_emails=(cc_emails if to_emails else []),
                                             text_body=text_body,
                                             html_body=html_body,
                                         )
                                     except Exception as e:
                                         errores_envio += 1
                                         ultimo_error = e.__class__.__name__
-                                        logger.exception("Fallo envío flota overdue_days veh=%s tipo=%s", v.id, t.id)
+                                        smtp_failed = True
+                                        logger.exception(
+                                            "Fallo envío flota overdue_days "
+                                            "veh=%s tipo=%s. "
+                                            "Se detienen los demás envíos "
+                                            "de esta ejecución para proteger "
+                                            "el servicio web.",
+                                            v.id,
+                                            t.id,
+                                        )
                                     else:
                                         try:
                                             FlotaAlertaEnviada.objects.get_or_create(
@@ -486,11 +565,15 @@ def cron_flota_mantenciones(request):
                                         except IntegrityError:
                                             pass
                                         enviados += 1
+
                             continue
 
                         steps_days = t.alert_days_steps_list
                         if steps_days:
                             for threshold in steps_days:
+                                if smtp_failed:
+                                    break
+
                                 if remaining_days <= int(threshold):
                                     already = FlotaAlertaEnviada.objects.filter(
                                         vehicle_id=v.id,
@@ -501,7 +584,10 @@ def cron_flota_mantenciones(request):
                                     ).exists()
 
                                     if not already:
-                                        subject = f"[GZ Services] Mantención próxima (días) - {t.name} - {v.patente}"
+                                        subject = (
+                                            f"[GZ Services] Mantención próxima (días) "
+                                            f"- {t.name} - {v.patente}"
+                                        )
                                         text_body = (
                                             "Hola,\n\n"
                                             f"El vehículo {v.patente} tiene una mantención próxima.\n"
@@ -539,18 +625,30 @@ def cron_flota_mantenciones(request):
 </body>
 </html>
 """
+
                                         try:
                                             _send_email(
                                                 subject=subject,
-                                                to_emails=to_emails or cc_emails,
-                                                cc_emails=cc_emails if to_emails else [],
+                                                to_emails=(to_emails or cc_emails),
+                                                cc_emails=(
+                                                    cc_emails if to_emails else []
+                                                ),
                                                 text_body=text_body,
                                                 html_body=html_body,
                                             )
                                         except Exception as e:
                                             errores_envio += 1
                                             ultimo_error = e.__class__.__name__
-                                            logger.exception("Fallo envío flota pre_days veh=%s tipo=%s", v.id, t.id)
+                                            smtp_failed = True
+                                            logger.exception(
+                                                "Fallo envío flota pre_days "
+                                                "veh=%s tipo=%s. "
+                                                "Se detienen los demás envíos "
+                                                "de esta ejecución para proteger "
+                                                "el servicio web.",
+                                                v.id,
+                                                t.id,
+                                            )
                                         else:
                                             try:
                                                 FlotaAlertaEnviada.objects.get_or_create(
@@ -570,9 +668,13 @@ def cron_flota_mantenciones(request):
                     except Exception as e:
                         errores_logica += 1
                         ultimo_error = e.__class__.__name__
-                        logger.exception("Error lógica flota days veh=%s tipo=%s", v.id, t.id)
+                        logger.exception(
+                            "Error lógica flota days veh=%s tipo=%s",
+                            v.id,
+                            t.id,
+                        )
 
-        ok = (errores_envio == 0 and errores_logica == 0)
+        ok = errores_envio == 0 and errores_logica == 0
 
         return JsonResponse(
             {
