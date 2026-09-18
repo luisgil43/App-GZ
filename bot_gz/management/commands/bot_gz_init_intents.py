@@ -182,6 +182,63 @@ INTENTS_BASE = [
             "dónde tirar la basura",
         ],
     },
+    {
+        "slug": "planificar_ruta",
+        "nombre": "Planificación de ruta",
+        "descripcion": (
+            "Permite al técnico organizar y optimizar una ruta con sus sitios "
+            "asignados, considerando origen, ubicaciones, recogida de compañeros "
+            "y destino final."
+        ),
+        "scope": "tecnico",
+        "requiere_revision_humana": False,
+        "training": [
+            "planifica mi ruta",
+            "planificar mi ruta",
+            "planifica la ruta",
+            "planificar la ruta",
+            "arma mi ruta",
+            "armar mi ruta",
+            "arma la ruta",
+            "mejor ruta",
+            "mejor ruta para hoy",
+            "ordena mis sitios",
+            "ordenar mis sitios",
+            "qué sitio hago primero",
+            "que sitio hago primero",
+            "ruta de hoy",
+            "ruta para hoy",
+            "mis rutas",
+            "mi ruta",
+            "organiza mi ruta",
+            "organiza mis sitios",
+            "ayúdame a organizar la ruta",
+        ],
+    },
+    {
+        "slug": "finalizar_proyectos",
+        "nombre": "Finalizar proyectos",
+        "descripcion": (
+            "Permite al técnico iniciar y completar desde Telegram el flujo "
+            "para finalizar uno o varios proyectos propios en progreso."
+        ),
+        "scope": "tecnico",
+        "requiere_revision_humana": False,
+        "training": [
+            "finalizar",
+            "finalizar proyecto",
+            "finalizar proyectos",
+            "quiero finalizar",
+            "quiero finalizar un proyecto",
+            "quiero finalizar proyectos",
+            "terminar proyecto",
+            "terminar proyectos",
+            "quiero terminar un proyecto",
+            "cerrar proyecto",
+            "cerrar proyectos",
+            "quiero cerrar un proyecto",
+        ],
+    },
 ]
 
 
@@ -198,7 +255,10 @@ class Command(BaseCommand):
                 "descripcion": item.get("descripcion", ""),
                 "scope": item.get("scope", "tecnico"),
                 "activo": True,
-                "requiere_revision_humana": item.get("requiere_revision_humana", False),
+                "requiere_revision_humana": item.get(
+                    "requiere_revision_humana",
+                    False,
+                ),
             }
 
             obj, created = BotIntent.objects.get_or_create(
@@ -210,6 +270,7 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"  + Intent '{slug}' creado."))
             else:
                 changed = False
+
                 for field, value in defaults.items():
                     if getattr(obj, field) != value:
                         setattr(obj, field, value)

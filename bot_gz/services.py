@@ -708,7 +708,6 @@ def detect_intent_from_text(
     if {"basura", "residuos", "desechos", "botar", "tirar"} & user_tokens:
         add_keyword_candidate("direccion_basura", 0.9)
 
-
     # =========================
     # Sitio
     # =========================
@@ -722,6 +721,32 @@ def detect_intent_from_text(
         or re.search(r"\b[A-Z]{2,3}\d{3,6}\b", txt_up)
     ):
         add_keyword_candidate("info_sitio_id_claro", 0.72)
+
+    # =========================
+    # Planificación de ruta
+    # =========================
+    if es_intencion_planificar_ruta(texto):
+        add_keyword_candidate("planificar_ruta", 0.95)
+
+    # =========================
+    # Finalizar proyectos
+    # =========================
+    if (
+        {"finalizar", "terminar", "cerrar"} & user_tokens
+        and {"proyecto", "proyectos", "servicio", "servicios"} & user_tokens
+    ) or norm in {
+        "finalizar",
+        "quiero finalizar",
+        "quiero terminar",
+        "quiero cerrar",
+        "finalizar proyecto",
+        "finalizar proyectos",
+        "terminar proyecto",
+        "terminar proyectos",
+        "cerrar proyecto",
+        "cerrar proyectos",
+    }:
+        add_keyword_candidate("finalizar_proyectos", 1.01)
 
     final_intent = best_intent
     final_score = best_score
@@ -4012,6 +4037,29 @@ def run_intent(
         )
 
     # ============================
+    # Prioridad: consulta explícita de sitio
+    # ============================
+    site_key_run = _extract_site_key(texto_usuario)
+
+    if site_key_run and (
+        "sitio" in tokens_run
+        or "site" in tokens_run
+        or "ubicacion" in tokens_run
+        or "ubicación" in tokens_run
+        or "direccion" in tokens_run
+        or "dirección" in tokens_run
+        or _is_only_site_id(
+            texto_usuario,
+            site_key_run[0],
+            site_key_run[1],
+        )
+    ):
+        inbound_log.status = "ok"
+        inbound_log.marcar_para_entrenamiento = False
+        inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
+        return _handler_info_sitio_id_claro(texto_usuario)
+
+    # ============================
     # Sin intent: resolver palabras genéricas del menú
     # ============================
     if not intent:
@@ -4065,16 +4113,42 @@ def run_intent(
         return _handler_mis_proyectos(usuario, texto_usuario)
 
     if slug == "ayuda_rendicion_gastos":
-        return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+        return _handler_mis_rendiciones_pendientes(
+            usuario,
+            texto_usuario,
+        )
 
     if slug == "mis_rendiciones_pendientes":
-        return _handler_mis_rendiciones_pendientes(usuario, texto_usuario)
+        return _handler_mis_rendiciones_pendientes(
+            usuario,
+            texto_usuario,
+        )
 
     if slug == "direccion_basura":
         return _handler_direccion_basura(usuario, texto_usuario)
 
     if slug == "mi_asignacion":
         return _handler_asignacion(usuario, texto_usuario)
+
+    # ============================
+    # Planificación de ruta
+    # ============================
+    if slug == "planificar_ruta":
+        return procesar_planificacion_ruta(
+            chat_id=sesion.chat_id,
+            usuario=usuario,
+            texto=texto_usuario,
+            message={"text": texto_usuario},
+        )
+
+    # ============================
+    # Finalizar proyectos
+    # ============================
+    if slug == "finalizar_proyectos":
+        return _handler_iniciar_finalizar_proyectos(
+            usuario,
+            sesion,
+        )
 
     resolved = _resolver_texto_generico_sin_intent(
         texto_usuario=texto_usuario,

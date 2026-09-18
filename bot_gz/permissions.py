@@ -15,6 +15,8 @@ TECNICO_ALLOWED_INTENTS = {
     "mi_asignacion",
     "info_sitio_id_claro",
     "cronograma_produccion_corte",
+    "planificar_ruta",
+    "finalizar_proyectos",
 }
 
 
@@ -47,7 +49,10 @@ def get_bot_allowed_intent_slugs(user) -> set[str]:
     if not user or not getattr(user, "is_authenticated", False):
         return set()
 
-    if getattr(user, "is_superuser", False) or _has_attr_true(user, "es_admin_general"):
+    if getattr(user, "is_superuser", False) or _has_attr_true(
+        user,
+        "es_admin_general",
+    ):
         return set(ADMIN_ALLOWED_INTENTS)
 
     if _has_attr_true(user, "es_rrhh"):
@@ -66,6 +71,7 @@ def get_bot_allowed_intent_slugs(user) -> set[str]:
 def user_can_use_bot_intent(user, intent_slug: str) -> bool:
     if not intent_slug:
         return False
+
     return intent_slug in get_bot_allowed_intent_slugs(user)
 
 
@@ -77,28 +83,44 @@ def build_ai_capabilities_text(user) -> str:
     allowed = sorted(get_bot_allowed_intent_slugs(user))
 
     descriptions = {
-        "mis_liquidaciones": "Consultar liquidaciones propias del usuario.",
-        "mi_contrato_vigente": "Consultar contrato/anexos propios del usuario.",
-        "mi_produccion_hasta_hoy": "Consultar producción propia.",
+        "mis_liquidaciones": ("Consultar liquidaciones propias del usuario."),
+        "mi_contrato_vigente": ("Consultar contrato/anexos propios del usuario."),
+        "mi_produccion_hasta_hoy": ("Consultar producción propia."),
         "mis_proyectos_pendientes": (
-            "Consultar proyectos o servicios propios pendientes en general, no necesariamente "
-            "la asignación específica del día."
+            "Consultar proyectos o servicios propios pendientes en general, "
+            "no necesariamente la asignación específica del día."
         ),
-        "mis_proyectos_rechazados": "Consultar proyectos propios rechazados.",
-        "mis_rendiciones_pendientes": "Consultar rendiciones propias.",
-        "ayuda_rendicion_gastos": "Ayuda sobre rendiciones de gastos.",
-        "direccion_basura": "Consultar lugar autorizado para disposición de residuos.",
+        "mis_proyectos_rechazados": ("Consultar proyectos propios rechazados."),
+        "mis_rendiciones_pendientes": ("Consultar rendiciones propias."),
+        "ayuda_rendicion_gastos": ("Ayuda sobre rendiciones de gastos."),
+        "direccion_basura": (
+            "Consultar lugar autorizado para disposición de residuos."
+        ),
         "mi_asignacion": (
-            "Consultar asignación propia del usuario, pega del día, sitio al que debe ir, "
-            "trabajo asignado, tarea de hoy o destino de trabajo."
+            "Consultar asignación propia del usuario, pega del día, sitio al "
+            "que debe ir, trabajo asignado, tarea de hoy o destino de trabajo."
         ),
-        "info_sitio_id_claro": "Consultar información de un sitio por ID.",
-        "cronograma_produccion_corte": "Consultar cronograma de pago/corte configurado.",
+        "info_sitio_id_claro": ("Consultar información de un sitio por ID."),
+        "cronograma_produccion_corte": (
+            "Consultar cronograma de pago/corte configurado."
+        ),
+        "planificar_ruta": (
+            "Planificar, organizar u optimizar una ruta con los sitios propios "
+            "asignados al usuario."
+        ),
+        "finalizar_proyectos": (
+            "Iniciar el flujo para finalizar uno o varios proyectos propios "
+            "del usuario."
+        ),
     }
 
     lines = []
+
     for slug in allowed:
-        desc = descriptions.get(slug, "Intent disponible para este usuario.")
+        desc = descriptions.get(
+            slug,
+            "Intent disponible para este usuario.",
+        )
         lines.append(f"- {slug}: {desc}")
 
     return "\n".join(lines)
