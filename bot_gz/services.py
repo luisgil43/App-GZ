@@ -4506,7 +4506,7 @@ def handle_telegram_update(update: dict) -> None:
             "reason": str(e),
         }
 
-    marcar_train_out = (intent is None) or intent.requiere_revision_humana
+    marcar_train_out = False
 
     send_telegram_message(
         chat_id,

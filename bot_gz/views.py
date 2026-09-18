@@ -91,12 +91,14 @@ def _forbidden(request):
 #  Consola de entrenamiento
 # ========================
 
+
 @login_required
 def training_dashboard(request):
     """
     Vista principal de entrenamiento:
-    - Lista mensajes que el bot no entendió bien (fallback/error)
-      o marcados para entrenamiento.
+    - Lista únicamente mensajes recibidos del usuario.
+    - Muestra los que el bot no entendió bien (fallback/error)
+      o fueron marcados para entrenamiento.
     - Permite filtrar y acceder a una vista de edición por mensaje.
     """
 
@@ -108,7 +110,10 @@ def training_dashboard(request):
     intent_slug = request.GET.get("intent", "").strip()
     solo_entrenamiento = request.GET.get("solo_entrenamiento", "1") == "1"
 
-    logs = BotMessageLog.objects.all().select_related(
+    # Para entrenamiento solo interesan los mensajes escritos por el usuario.
+    # Los mensajes "out" del bot se conservan como historial/auditoría,
+    # pero no deben utilizarse como ejemplos de entrenamiento.
+    logs = BotMessageLog.objects.filter(direccion="in").select_related(
         "usuario",
         "intent_detectado",
         "intent_corregido",
@@ -129,7 +134,9 @@ def training_dashboard(request):
             | Q(intent_corregido__slug=intent_slug)
         )
 
-    logs = logs.order_by("-creado_en")[:200]  # límite razonable para no explotar la página
+    logs = logs.order_by("-creado_en")[
+        :200
+    ]  # límite razonable para no explotar la página
 
     intents = BotIntent.objects.filter(activo=True).order_by("slug")
 
