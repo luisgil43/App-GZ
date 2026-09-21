@@ -339,20 +339,24 @@ def _ids_sitios_batch_ya_programados(
 def _query_sitios_elegibles_planificacion_diaria(
     batch,
 ):
-    return (
+    """
+    Devuelve los sitios del batch elegibles para planificación
+    diaria y reconcilia únicamente estados "completado" que
+    hayan quedado obsoletos frente a Operaciones.
+    """
+
+    items = list(
         SitioBatchSemanal.objects.filter(
             batch=batch,
-            estado__in=(ESTADOS_BATCH_DISPONIBLES_DIARIO),
+            estado__in=ESTADOS_BATCH_DISPONIBLES_DIARIO,
             sitio_planificado__activo_en_mes=True,
             sitio_planificado__estado_permiso__in=[
                 "aprobado",
                 "no_requiere",
             ],
-            sitio_planificado__estado__in=(ESTADOS_SITIO_PLANIFICACION_DISPONIBLES),
         )
         .exclude(
             sitio_planificado__estado__in=[
-                "completado",
                 "cancelado",
                 "bloqueado",
             ]
@@ -368,6 +372,51 @@ def _query_sitios_elegibles_planificacion_diaria(
         )
     )
 
+    resultado = []
+
+    for item in items:
+
+        sitio_planificado = item.sitio_planificado
+
+        # ====================================================
+        # ESTADO NORMAL DE PLANIFICACIÓN
+        # ====================================================
+
+        if (
+            sitio_planificado.estado
+            in ESTADOS_SITIO_PLANIFICACION_DISPONIBLES
+        ):
+            resultado.append(item)
+            continue
+
+        # ====================================================
+        # COMPLETADO POTENCIALMENTE OBSOLETO
+        # ====================================================
+        #
+        # Solamente reconciliamos "completado".
+        #
+        # Los estados normales de planificación conservan su
+        # semántica propia y no se modifican simplemente por
+        # consultar esta pantalla.
+        # ====================================================
+
+        if sitio_planificado.estado != "completado":
+            continue
+
+        estado_operacional = (
+            reconciliar_estado_sitio_planificado_desde_operaciones(
+                sitio_planificado,
+            )
+        )
+
+        if (
+            estado_operacional["estado_planificacion"]
+            == "listo_asignar"
+            and estado_operacional["puede_asignar"]
+        ):
+            resultado.append(item)
+
+    return resultado
 
 # ============================================================
 # SITIOS DISPONIBLES PARA EL MOTOR DIARIO
@@ -3582,6 +3631,72 @@ def obtener_estado_operacional_sitio(
         "finalizado": (estado_planificacion == "finalizado"),
     }
 
+def reconciliar_estado_sitio_planificado_desde_operaciones(
+    sitio_planificado,
+    *,
+    usuario=None,
+):
+    """
+    Reconcilia el estado persistido de SitioPlanificado con el
+    ServicioCotizado exacto de esa misma ejecución mensual.
+
+    No utiliza fallback por ID Claro.
+
+    Solamente modifica estados cuya verdad depende directamente
+    del estado operacional.
+
+    Los estados administrativos cancelado y bloqueado permanecen
+    protegidos.
+    """
+
+    estado_operacional = obtener_estado_operacional_sitio(
+        sitio_planificado,
+    )
+
+    estado_planificacion = estado_operacional["estado_planificacion"]
+
+    # ========================================================
+    # ESTADOS ADMINISTRATIVOS PROTEGIDOS
+    # ========================================================
+
+    if sitio_planificado.estado in {
+        "cancelado",
+        "bloqueado",
+    }:
+        return estado_operacional
+
+    # ========================================================
+    # TRADUCCIÓN OPERACIONES -> SITIO PLANIFICADO
+    # ========================================================
+
+    mapa_estado_sitio = {
+        "listo_asignar": "planificado",
+        "asignado": "planificado",
+        "en_ejecucion": "en_ejecucion",
+        "revision": "en_ejecucion",
+        "finalizado": "completado",
+    }
+
+    nuevo_estado = mapa_estado_sitio.get(
+        estado_planificacion,
+    )
+
+    if (
+        nuevo_estado
+        and sitio_planificado.estado != nuevo_estado
+    ):
+        sitio_planificado.estado = nuevo_estado
+        sitio_planificado.actualizado_por = usuario
+
+        sitio_planificado.save(
+            update_fields=[
+                "estado",
+                "actualizado_por",
+                "actualizado_en",
+            ]
+        )
+
+    return estado_operacional
 
 # ============================================================
 # SINCRONIZAR ESTADO DESDE OPERACIONES
