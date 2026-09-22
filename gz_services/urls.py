@@ -135,6 +135,11 @@ urlpatterns = [
         "cron/",
         include(("notificaciones.urls", "notificaciones"), namespace="cron_general"),
     ),
+    # API interna — Scano ML Collector
+    path(
+        "api/internal/scano-ml/",
+        include(("scano_ml.urls", "scano_ml"), namespace="scano_ml"),
+    ),
 ]
 
 # Archivos estáticos y media (solo en DEBUG)

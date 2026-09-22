@@ -123,6 +123,8 @@ INSTALLED_APPS = [
     "widget_tweaks",
     "geo_cam",
     "django.contrib.humanize",
+    # Scano ML Collector
+    "scano_ml.apps.ScanoMlConfig",
 ]
 
 # ===============================
@@ -466,3 +468,42 @@ GOOGLE_MAPS_API_KEY = os.getenv(
     "GOOGLE_MAPS_API_KEY",
     "",
 )
+
+
+# ============================================================
+# SCANO ML COLLECTOR
+# ============================================================
+
+SCANO_ML_ENABLED = os.getenv("SCANO_ML_ENABLED", "False").strip().lower() == "true"
+
+SCANO_ML_COLLECTOR_TOKEN = os.getenv(
+    "SCANO_ML_COLLECTOR_TOKEN",
+    "",
+).strip()
+
+# Wasabi exclusivo de Scano ML.
+# Estas credenciales NO reutilizan WASABI_GZ_*.
+SCANO_ML_WASABI_ACCESS_KEY_ID = os.getenv(
+    "SCANO_ML_WASABI_ACCESS_KEY_ID",
+    "",
+).strip()
+
+SCANO_ML_WASABI_SECRET_ACCESS_KEY = os.getenv(
+    "SCANO_ML_WASABI_SECRET_ACCESS_KEY",
+    "",
+).strip()
+
+SCANO_ML_WASABI_BUCKET = os.getenv(
+    "SCANO_ML_WASABI_BUCKET",
+    "",
+).strip()
+
+SCANO_ML_WASABI_REGION = os.getenv(
+    "SCANO_ML_WASABI_REGION",
+    "",
+).strip()
+
+SCANO_ML_WASABI_ENDPOINT = os.getenv(
+    "SCANO_ML_WASABI_ENDPOINT",
+    "",
+).strip()
