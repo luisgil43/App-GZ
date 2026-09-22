@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import TrainingJob
-from .services.auth import verify_collector_token
+from .services.auth import verify_collector_token, verify_worker_token
 from .services.storage import (ScanoStorageConfigurationError,
                                ScanoStorageError, generate_presigned_put_url,
                                head_object)
@@ -744,3 +744,619 @@ def start_training(request):
             {"detail": ("No se pudo iniciar el " f"entrenamiento: {exc}")},
             status=500,
         )
+
+
+# ============================================================
+# WORKER API
+# ============================================================
+
+
+def _worker_payload(request):
+    payload = _parse_json_body(request)
+
+    if not isinstance(payload, dict):
+        return None
+
+    return payload
+
+
+def _worker_job_or_error(job_id):
+    try:
+        job = TrainingJob.objects.get(
+            pk=job_id,
+        )
+    except TrainingJob.DoesNotExist:
+        return None, JsonResponse(
+            {
+                "detail": "Training job not found",
+            },
+            status=404,
+        )
+
+    return job, None
+
+
+@csrf_exempt
+@require_POST
+def worker_claim_training(request):
+    auth_error = verify_worker_token(request)
+
+    if auth_error is not None:
+        return auth_error
+
+    payload = _worker_payload(request)
+
+    if payload is None:
+        return JsonResponse(
+            {
+                "detail": "Invalid JSON body",
+            },
+            status=400,
+        )
+
+    worker_id = str(
+        payload.get(
+            "worker_id",
+            "",
+        )
+    ).strip()
+
+    if not worker_id:
+        return JsonResponse(
+            {
+                "detail": "worker_id is required",
+            },
+            status=400,
+        )
+
+    if len(worker_id) > 128:
+        return JsonResponse(
+            {
+                "detail": "worker_id is too long",
+            },
+            status=400,
+        )
+
+    with transaction.atomic():
+        job = (
+            TrainingJob.objects.select_for_update(skip_locked=True)
+            .filter(
+                status=(TrainingJob.Status.WAITING_FOR_WORKER),
+            )
+            .order_by(
+                "requested_at",
+                "pk",
+            )
+            .first()
+        )
+
+        if job is None:
+            return JsonResponse(
+                {
+                    "status": "idle",
+                    "job": None,
+                }
+            )
+
+        now = django_timezone.now()
+
+        job.status = TrainingJob.Status.PREPARING_DATASET
+        job.claimed_at = now
+        job.started_at = now
+        job.worker_id = worker_id
+        job.pipeline_stage = "preparing_dataset"
+        job.pipeline_message = "Worker conectado. " "Preparando dataset."
+        job.error_message = ""
+
+        job.save(
+            update_fields=[
+                "status",
+                "claimed_at",
+                "started_at",
+                "worker_id",
+                "pipeline_stage",
+                "pipeline_message",
+                "error_message",
+                "updated_at",
+            ]
+        )
+
+    return JsonResponse(
+        {
+            "status": "claimed",
+            "job": {
+                "id": job.pk,
+                "status": job.status,
+                "worker_id": job.worker_id,
+                "pending_training_at_request": (job.pending_training_at_request),
+                "collection_snapshot": (job.collection_snapshot),
+                "requested_at": (job.requested_at.isoformat()),
+                "claimed_at": (job.claimed_at.isoformat()),
+            },
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
+def worker_update_training(
+    request,
+    job_id,
+):
+    auth_error = verify_worker_token(request)
+
+    if auth_error is not None:
+        return auth_error
+
+    payload = _worker_payload(request)
+
+    if payload is None:
+        return JsonResponse(
+            {
+                "detail": "Invalid JSON body",
+            },
+            status=400,
+        )
+
+    with transaction.atomic():
+        try:
+            job = TrainingJob.objects.select_for_update().get(
+                pk=job_id,
+            )
+        except TrainingJob.DoesNotExist:
+            return JsonResponse(
+                {
+                    "detail": ("Training job not found"),
+                },
+                status=404,
+            )
+
+        worker_id = str(
+            payload.get(
+                "worker_id",
+                "",
+            )
+        ).strip()
+
+        if not worker_id or worker_id != job.worker_id:
+            return JsonResponse(
+                {
+                    "detail": ("Worker does not own " "this training job"),
+                },
+                status=409,
+            )
+
+        if job.status not in {
+            TrainingJob.Status.PREPARING_DATASET,
+            TrainingJob.Status.TRAINING,
+        }:
+            return JsonResponse(
+                {
+                    "detail": ("Training job is not active"),
+                    "status": job.status,
+                },
+                status=409,
+            )
+
+        status_value = str(
+            payload.get(
+                "status",
+                job.status,
+            )
+        ).strip()
+
+        allowed_statuses = {
+            TrainingJob.Status.PREPARING_DATASET,
+            TrainingJob.Status.TRAINING,
+        }
+
+        if status_value not in allowed_statuses:
+            return JsonResponse(
+                {
+                    "detail": ("Invalid active training status"),
+                },
+                status=400,
+            )
+
+        job.status = status_value
+
+        if "stage" in payload:
+            job.pipeline_stage = str(payload.get("stage") or "")[:64]
+
+        if "message" in payload:
+            job.pipeline_message = str(payload.get("message") or "")
+
+        if "current_epoch" in payload:
+            try:
+                current_epoch = int(payload["current_epoch"])
+            except (
+                TypeError,
+                ValueError,
+            ):
+                return JsonResponse(
+                    {
+                        "detail": ("current_epoch must " "be an integer"),
+                    },
+                    status=400,
+                )
+
+            if current_epoch < 0:
+                return JsonResponse(
+                    {
+                        "detail": ("current_epoch cannot " "be negative"),
+                    },
+                    status=400,
+                )
+
+            job.current_epoch = current_epoch
+
+        if "total_epochs" in payload:
+            total_epochs_raw = payload["total_epochs"]
+
+            if total_epochs_raw is None:
+                job.total_epochs = None
+            else:
+                try:
+                    total_epochs = int(total_epochs_raw)
+                except (
+                    TypeError,
+                    ValueError,
+                ):
+                    return JsonResponse(
+                        {
+                            "detail": ("total_epochs must " "be an integer"),
+                        },
+                        status=400,
+                    )
+
+                if total_epochs <= 0:
+                    return JsonResponse(
+                        {
+                            "detail": ("total_epochs must " "be greater than zero"),
+                        },
+                        status=400,
+                    )
+
+                job.total_epochs = total_epochs
+
+        if "dataset_snapshot" in payload:
+            dataset_snapshot = payload["dataset_snapshot"]
+
+            if not isinstance(
+                dataset_snapshot,
+                dict,
+            ):
+                return JsonResponse(
+                    {
+                        "detail": ("dataset_snapshot must " "be an object"),
+                    },
+                    status=400,
+                )
+
+            job.dataset_snapshot = dataset_snapshot
+
+        if "model_snapshot" in payload:
+            model_snapshot = payload["model_snapshot"]
+
+            if not isinstance(
+                model_snapshot,
+                dict,
+            ):
+                return JsonResponse(
+                    {
+                        "detail": ("model_snapshot must " "be an object"),
+                    },
+                    status=400,
+                )
+
+            job.model_snapshot = model_snapshot
+
+        job.save()
+
+    return JsonResponse(
+        {
+            "status": "updated",
+            "job_id": job.pk,
+            "job_status": job.status,
+            "stage": job.pipeline_stage,
+            "current_epoch": job.current_epoch,
+            "total_epochs": job.total_epochs,
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
+def worker_complete_training(
+    request,
+    job_id,
+):
+    auth_error = verify_worker_token(request)
+
+    if auth_error is not None:
+        return auth_error
+
+    payload = _worker_payload(request)
+
+    if payload is None:
+        return JsonResponse(
+            {
+                "detail": "Invalid JSON body",
+            },
+            status=400,
+        )
+
+    worker_id = str(
+        payload.get(
+            "worker_id",
+            "",
+        )
+    ).strip()
+
+    dataset_snapshot = payload.get("dataset_snapshot")
+
+    model_snapshot = payload.get("model_snapshot")
+
+    collection_snapshot = payload.get(
+        "collection_snapshot",
+        {},
+    )
+
+    if not isinstance(
+        dataset_snapshot,
+        dict,
+    ):
+        return JsonResponse(
+            {
+                "detail": ("dataset_snapshot is required"),
+            },
+            status=400,
+        )
+
+    if not isinstance(
+        model_snapshot,
+        dict,
+    ):
+        return JsonResponse(
+            {
+                "detail": ("model_snapshot is required"),
+            },
+            status=400,
+        )
+
+    if not isinstance(
+        collection_snapshot,
+        dict,
+    ):
+        return JsonResponse(
+            {
+                "detail": ("collection_snapshot must " "be an object"),
+            },
+            status=400,
+        )
+
+    dataset_name = str(
+        dataset_snapshot.get(
+            "name",
+            "",
+        )
+    ).strip()
+
+    model_name = str(
+        model_snapshot.get(
+            "name",
+            "",
+        )
+    ).strip()
+
+    try:
+        dataset_total = int(
+            dataset_snapshot.get(
+                "total",
+                0,
+            )
+            or 0
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return JsonResponse(
+            {
+                "detail": ("dataset total is invalid"),
+            },
+            status=400,
+        )
+
+    if not dataset_name:
+        return JsonResponse(
+            {
+                "detail": ("dataset_snapshot.name " "is required"),
+            },
+            status=400,
+        )
+
+    if dataset_total <= 0:
+        return JsonResponse(
+            {
+                "detail": ("dataset_snapshot.total " "must be greater than zero"),
+            },
+            status=400,
+        )
+
+    if not model_name:
+        return JsonResponse(
+            {
+                "detail": ("model_snapshot.name " "is required"),
+            },
+            status=400,
+        )
+
+    with transaction.atomic():
+        try:
+            job = TrainingJob.objects.select_for_update().get(
+                pk=job_id,
+            )
+        except TrainingJob.DoesNotExist:
+            return JsonResponse(
+                {
+                    "detail": ("Training job not found"),
+                },
+                status=404,
+            )
+
+        if not worker_id or worker_id != job.worker_id:
+            return JsonResponse(
+                {
+                    "detail": ("Worker does not own " "this training job"),
+                },
+                status=409,
+            )
+
+        if job.status not in {
+            TrainingJob.Status.PREPARING_DATASET,
+            TrainingJob.Status.TRAINING,
+        }:
+            return JsonResponse(
+                {
+                    "detail": ("Training job is not active"),
+                    "status": job.status,
+                },
+                status=409,
+            )
+
+        now = django_timezone.now()
+
+        final_collection = dict(collection_snapshot)
+
+        final_collection.setdefault(
+            "unique_total",
+            dataset_total,
+        )
+        final_collection["trained_total"] = dataset_total
+        final_collection["pending_training"] = 0
+
+        job.status = TrainingJob.Status.COMPLETED
+        job.finished_at = now
+        job.pipeline_stage = "completed"
+        job.pipeline_message = str(
+            payload.get(
+                "message",
+                "Entrenamiento completado.",
+            )
+        )
+        job.dataset_snapshot = dataset_snapshot
+        job.model_snapshot = model_snapshot
+        job.collection_snapshot = final_collection
+        job.error_message = ""
+
+        if "current_epoch" in payload:
+            job.current_epoch = int(payload["current_epoch"] or 0)
+
+        if "total_epochs" in payload:
+            total_epochs = payload["total_epochs"]
+
+            job.total_epochs = int(total_epochs) if total_epochs is not None else None
+
+        job.save()
+
+    return JsonResponse(
+        {
+            "status": "completed",
+            "job_id": job.pk,
+            "dataset": job.dataset_snapshot,
+            "model": job.model_snapshot,
+        }
+    )
+
+
+@csrf_exempt
+@require_POST
+def worker_fail_training(
+    request,
+    job_id,
+):
+    auth_error = verify_worker_token(request)
+
+    if auth_error is not None:
+        return auth_error
+
+    payload = _worker_payload(request)
+
+    if payload is None:
+        return JsonResponse(
+            {
+                "detail": "Invalid JSON body",
+            },
+            status=400,
+        )
+
+    worker_id = str(
+        payload.get(
+            "worker_id",
+            "",
+        )
+    ).strip()
+
+    error_message = str(
+        payload.get(
+            "error",
+            "",
+        )
+    ).strip()
+
+    if not error_message:
+        return JsonResponse(
+            {
+                "detail": "error is required",
+            },
+            status=400,
+        )
+
+    with transaction.atomic():
+        try:
+            job = TrainingJob.objects.select_for_update().get(
+                pk=job_id,
+            )
+        except TrainingJob.DoesNotExist:
+            return JsonResponse(
+                {
+                    "detail": ("Training job not found"),
+                },
+                status=404,
+            )
+
+        if not worker_id or worker_id != job.worker_id:
+            return JsonResponse(
+                {
+                    "detail": ("Worker does not own " "this training job"),
+                },
+                status=409,
+            )
+
+        if job.status not in {
+            TrainingJob.Status.PREPARING_DATASET,
+            TrainingJob.Status.TRAINING,
+        }:
+            return JsonResponse(
+                {
+                    "detail": ("Training job is not active"),
+                    "status": job.status,
+                },
+                status=409,
+            )
+
+        job.status = TrainingJob.Status.FAILED
+        job.finished_at = django_timezone.now()
+        job.pipeline_stage = "failed"
+        job.pipeline_message = "El entrenamiento terminó con error."
+        job.error_message = error_message
+
+        job.save()
+
+    return JsonResponse(
+        {
+            "status": "failed",
+            "job_id": job.pk,
+        }
+    )

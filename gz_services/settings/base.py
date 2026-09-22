@@ -507,3 +507,8 @@ SCANO_ML_WASABI_ENDPOINT = os.getenv(
     "SCANO_ML_WASABI_ENDPOINT",
     "",
 ).strip()
+
+SCANO_ML_WORKER_TOKEN = os.getenv(
+    "SCANO_ML_WORKER_TOKEN",
+    "",
+).strip()
