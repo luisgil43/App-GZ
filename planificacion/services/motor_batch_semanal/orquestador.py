@@ -5906,6 +5906,33 @@ def _optimizar_ternas_protegidas_y_residual(
     mejor_cupos_restantes = None
 
     # ========================================================
+    # PRESUPUESTO DE BÚSQUEDA
+    # ========================================================
+    #
+    # La asignación exhaustiva de ternas puede crecer de forma
+    # combinatoria cuando existen muchos grupos compatibles con
+    # varias cuadrillas.
+    #
+    # Mantenemos exactamente la misma lógica de evaluación y
+    # selección del mejor plan, pero limitamos la cantidad de
+    # planes completos que puede evaluar una ejecución de este
+    # optimizador.
+    #
+    # El límite protege al worker web frente a explosiones
+    # combinatorias sin modificar:
+    #
+    #     - generación de variantes;
+    #     - compatibilidad de cuadrillas;
+    #     - optimización residual;
+    #     - métricas del plan;
+    #     - clave de calidad.
+    # ========================================================
+
+    MAX_PLANES_TERNAS_EVALUADOS = 2000
+
+    planes_ternas_evaluados = 0
+
+    # ========================================================
     # BÚSQUEDA RECURSIVA DE ASIGNACIÓN DE TERNAS
     # ========================================================
 
@@ -5918,6 +5945,14 @@ def _optimizar_ternas_protegidas_y_residual(
         nonlocal mejor_clave
         nonlocal mejor_salidas_ternas
         nonlocal mejor_cupos_restantes
+        nonlocal planes_ternas_evaluados
+
+        # ====================================================
+        # PRESUPUESTO AGOTADO
+        # ====================================================
+
+        if planes_ternas_evaluados >= MAX_PLANES_TERNAS_EVALUADOS:
+            return
 
         # ====================================================
         # YA ASIGNAMOS TODAS LAS TERNAS
@@ -5926,6 +5961,8 @@ def _optimizar_ternas_protegidas_y_residual(
         if indice_grupo >= len(
             grupos_ternas,
         ):
+
+            planes_ternas_evaluados += 1
 
             cupos_restantes = {}
 
@@ -5990,6 +6027,9 @@ def _optimizar_ternas_protegidas_y_residual(
         # ====================================================
 
         for variante in variantes:
+
+            if planes_ternas_evaluados >= MAX_PLANES_TERNAS_EVALUADOS:
+                break
 
             cuadrilla = variante.get(
                 "cuadrilla",
