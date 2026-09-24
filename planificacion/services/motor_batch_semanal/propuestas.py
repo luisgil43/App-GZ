@@ -957,6 +957,34 @@ def _reparar_seleccion_operacional(
     cache_planes[firma_actual] = resultado_actual
 
     # ========================================================
+    # PRESUPUESTO DE REPARACIÓN OPERACIONAL
+    # ========================================================
+    #
+    # Cada sustitución nueva obliga a reconstruir un plan
+    # operativo completo.
+    #
+    # Con universos grandes, probar exhaustivamente:
+    #
+    #     sitios problemáticos x candidatos externos
+    #
+    # puede producir cientos o miles de reconstrucciones.
+    #
+    # Los candidatos externos ya llegan ordenados por
+    # _ordenar_candidatos_reparacion(), por lo que evaluamos
+    # primero las alternativas más prometedoras y limitamos
+    # el coste total de esta reparación.
+    #
+    # Las firmas encontradas en cache_planes NO consumen
+    # presupuesto porque no reconstruyen el plan.
+    # ========================================================
+
+    MAX_PLANES_NUEVOS_REPARACION = 20
+
+    planes_nuevos_reparacion = 0
+
+    presupuesto_reparacion_agotado = False
+
+    # ========================================================
     # ITERACIONES DE REPARACIÓN
     # ========================================================
     #
@@ -971,6 +999,9 @@ def _reparar_seleccion_operacional(
     )
 
     for _ in range(max_iteraciones):
+
+        if presupuesto_reparacion_agotado:
+            break
 
         cantidad_planificada = int(
             plan_actual.get(
@@ -1084,7 +1115,13 @@ def _reparar_seleccion_operacional(
 
         for sitio_sale in sitios_problematicos:
 
+            if presupuesto_reparacion_agotado:
+                break
+
             for sitio_entra in candidatos_externos:
+
+                if presupuesto_reparacion_agotado:
+                    break
 
                 nueva_seleccion = [
                     sitio
@@ -1103,6 +1140,15 @@ def _reparar_seleccion_operacional(
                     resultado_prueba = cache_planes[firma]
 
                 else:
+
+                    if (
+                        planes_nuevos_reparacion
+                        >= MAX_PLANES_NUEVOS_REPARACION
+                    ):
+                        presupuesto_reparacion_agotado = True
+                        break
+
+                    planes_nuevos_reparacion += 1
 
                     resultado_prueba = _construir_plan_para_seleccion(
                         sitios=nueva_seleccion,

@@ -5928,7 +5928,7 @@ def _optimizar_ternas_protegidas_y_residual(
     #     - clave de calidad.
     # ========================================================
 
-    MAX_PLANES_TERNAS_EVALUADOS = 2000
+    MAX_PLANES_TERNAS_EVALUADOS = 300
 
     planes_ternas_evaluados = 0
 
