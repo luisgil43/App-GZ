@@ -1898,18 +1898,36 @@ def agregar_sitios_batch(
         pk=batch_id,
     )
 
+    es_ajax = (
+        request.headers.get(
+            "X-Requested-With",
+        )
+        == "XMLHttpRequest"
+    )
+
     if batch.estado not in [
         "borrador",
         "propuesto",
         "gestion_permisos",
     ]:
 
+        mensaje = (
+            "No se pueden agregar sitios a un batch "
+            "que ya se encuentra en esta etapa."
+        )
+
+        if es_ajax:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": mensaje,
+                },
+                status=400,
+            )
+
         messages.error(
             request,
-            (
-                "No se pueden agregar sitios a un batch "
-                "que ya se encuentra en esta etapa."
-            ),
+            mensaje,
         )
 
         return redirect(
@@ -1923,9 +1941,20 @@ def agregar_sitios_batch(
 
     if not sitio_ids:
 
+        mensaje = "Debes seleccionar al menos un sitio."
+
+        if es_ajax:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": mensaje,
+                },
+                status=400,
+            )
+
         messages.warning(
             request,
-            "Debes seleccionar al menos un sitio.",
+            mensaje,
         )
 
         return redirect(
@@ -1933,7 +1962,12 @@ def agregar_sitios_batch(
             batch_id=batch.pk,
         )
 
-    es_reserva = request.POST.get("es_reserva") == "1"
+    es_reserva = (
+        request.POST.get(
+            "es_reserva",
+        )
+        == "1"
+    )
 
     cantidad = agregar_sitios_al_batch(
         batch=batch,
@@ -1944,16 +1978,40 @@ def agregar_sitios_batch(
 
     if cantidad:
 
+        mensaje = f"{cantidad} sitio(s) " "agregado(s) al batch."
+
+        if es_ajax:
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "cantidad": cantidad,
+                    "mensaje": mensaje,
+                    "batch_id": batch.pk,
+                }
+            )
+
         messages.success(
             request,
-            (f"{cantidad} sitio(s) " "agregado(s) al batch."),
+            mensaje,
         )
 
     else:
 
+        mensaje = "No se agregó ningún sitio al batch."
+
+        if es_ajax:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": mensaje,
+                    "cantidad": 0,
+                },
+                status=400,
+            )
+
         messages.warning(
             request,
-            "No se agregó ningún sitio al batch.",
+            mensaje,
         )
 
     return redirect(
@@ -1992,6 +2050,24 @@ def quitar_sitio_batch(
         usuario=request.user,
         motivo=motivo,
     )
+
+    es_ajax = (
+        request.headers.get(
+            "X-Requested-With",
+        )
+        == "XMLHttpRequest"
+    )
+
+    if es_ajax:
+        return JsonResponse(
+            {
+                "ok": True,
+                "item_id": item.pk,
+                "sitio_planificado_id": (item.sitio_planificado_id),
+                "estado": item.estado,
+                "batch_id": batch.pk,
+            }
+        )
 
     messages.success(
         request,

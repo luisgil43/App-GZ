@@ -866,10 +866,6 @@ Detalle Batch Semanal
                 "
               >
 
-                <!-- ========================================= -->
-                <!-- SELECTOR MASIVO                           -->
-                <!-- ========================================= -->
-
                 <th class="px-3 py-3">
 
                   <input
@@ -948,10 +944,6 @@ Detalle Batch Semanal
                   data-item-row
                 >
 
-                  <!-- ======================================= -->
-                  <!-- CHECKBOX                                -->
-                  <!-- ======================================= -->
-
                   <td class="px-3 py-3">
 
                     {% if item.estado != "excluido" and item.estado != "reemplazado" %}
@@ -975,8 +967,6 @@ Detalle Batch Semanal
                   </td>
 
 
-                  <!-- ID -->
-
                   <td
                     class="
                       whitespace-nowrap
@@ -989,21 +979,15 @@ Detalle Batch Semanal
                   </td>
 
 
-                  <!-- NOMBRE -->
-
                   <td class="min-w-[200px] px-3 py-3 text-slate-700">
                     {{ item.sitio_planificado.sitio.nombre|default:"—" }}
                   </td>
 
 
-                  <!-- COMUNA -->
-
                   <td class="whitespace-nowrap px-3 py-3">
                     {{ item.sitio_planificado.sitio.comuna|default:"—" }}
                   </td>
 
-
-                  <!-- ZONA -->
 
                   <td class="whitespace-nowrap px-3 py-3">
 
@@ -1054,14 +1038,10 @@ Detalle Batch Semanal
                   </td>
 
 
-                  <!-- ACCESO -->
-
                   <td class="min-w-[180px] px-3 py-3">
                     {{ item.sitio_planificado.sitio.condiciones_acceso|default:"Sin información" }}
                   </td>
 
-
-                  <!-- PERMISO -->
 
                   <td class="min-w-[180px] px-3 py-3">
 
@@ -1106,8 +1086,6 @@ Detalle Batch Semanal
                   </td>
 
 
-                  <!-- ESTADO BATCH -->
-
                   <td class="px-3 py-3">
 
                     <span
@@ -1127,8 +1105,6 @@ Detalle Batch Semanal
 
                   </td>
 
-
-                  <!-- TIPO -->
 
                   <td class="px-3 py-3">
 
@@ -1169,8 +1145,6 @@ Detalle Batch Semanal
                   </td>
 
 
-                  <!-- PUNTAJE -->
-
                   <td class="px-3 py-3 text-center">
 
                     {% if item.puntaje_motor %}
@@ -1200,8 +1174,6 @@ Detalle Batch Semanal
 
                   </td>
 
-
-                  <!-- ACCIÓN -->
 
                   <td class="px-3 py-3 text-right">
 
@@ -1240,10 +1212,6 @@ Detalle Batch Semanal
         </div>
 
 
-        <!-- ================================================= -->
-        <!-- CONFIRMACIÓN PARA PLANIFICACIÓN DIARIA            -->
-        <!-- ================================================= -->
-
         {% if resumen.disponibles > 0 %}
 
           <div
@@ -1273,8 +1241,7 @@ Detalle Batch Semanal
               class="
                 rounded-xl
                 bg-emerald-600
-                px-4
-                py-2.5
+                px-4 py-2.5
                 text-sm
                 font-semibold
                 text-white
@@ -1300,7 +1267,7 @@ Detalle Batch Semanal
             id="quitar-item-{{ item.id }}"
             method="post"
             action="{% url 'planificacion:quitar_sitio_batch' item.id %}"
-            class="hidden"
+            class="hidden quitar-sitio-form"
           >
             {% csrf_token %}
           </form>
@@ -1381,6 +1348,7 @@ Detalle Batch Semanal
   {% if batch.estado == "borrador" or batch.estado == "propuesto" or batch.estado == "gestion_permisos" %}
 
     <details
+      id="ajuste-manual-candidatos"
       class="
         overflow-hidden
         rounded-2xl
@@ -1439,7 +1407,11 @@ Detalle Batch Semanal
 
       <!-- FILTROS -->
 
-      <form method="get" class="border-b border-slate-200 bg-slate-50 p-4">
+      <form
+        id="form-filtros-candidatos"
+        method="get"
+        class="border-b border-slate-200 bg-slate-50 p-4"
+      >
 
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 
@@ -1565,6 +1537,7 @@ Detalle Batch Semanal
             </button>
 
             <a
+              id="limpiar-filtros-candidatos"
               href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
               class="
                 rounded-xl
@@ -1591,6 +1564,7 @@ Detalle Batch Semanal
       <!-- TABLA DE CANDIDATOS -->
 
       <form
+        id="form-agregar-candidatos"
         method="post"
         action="{% url 'planificacion:agregar_sitios_batch' batch.id %}"
       >
@@ -1846,6 +1820,10 @@ Detalle Batch Semanal
 <script>
 (function () {
 
+  /* ======================================================== */
+  /* CSRF                                                     */
+  /* ======================================================== */
+
   function getCookie(name) {
 
     let cookieValue = null;
@@ -1897,101 +1875,319 @@ Detalle Batch Semanal
   }
 
 
+  function obtenerCsrfToken() {
+
     const csrfInput =
-    document.querySelector(
-      'input[name="csrfmiddlewaretoken"]'
-    );
+      document.querySelector(
+        'input[name="csrfmiddlewaretoken"]'
+      );
 
 
-    const csrftoken =
-    csrfInput?.value
-    ||
-    getCookie("csrftoken");
-
-
-  /* ======================================================== */
-  /* SELECCIONAR TODOS CANDIDATOS                             */
-  /* ======================================================== */
-
-  const selectAll =
-    document.getElementById(
-      "seleccionar-todos"
-    );
-
-
-  if (selectAll) {
-
-    selectAll.addEventListener(
-      "change",
-      function () {
-
-        document
-          .querySelectorAll(
-            ".sitio-checkbox"
-          )
-          .forEach(
-            function (checkbox) {
-
-              checkbox.checked =
-                selectAll.checked;
-
-            }
-          );
-
-      }
+    return (
+      csrfInput?.value
+      ||
+      getCookie("csrftoken")
     );
 
   }
 
 
   /* ======================================================== */
-  /* SELECCIÓN MASIVA SITIOS DEL BATCH                        */
+  /* ESTADO VISUAL                                            */
   /* ======================================================== */
 
-  const seleccionarTodosIncluidos =
-    document.getElementById(
-      "seleccionar-todos-incluidos"
+  function obtenerEstadoVista() {
+
+    const ajusteManual =
+      document.getElementById(
+        "ajuste-manual-candidatos"
+      );
+
+
+    return {
+      scrollX:
+        window.scrollX,
+
+      scrollY:
+        window.scrollY,
+
+      ajusteManualAbierto:
+        Boolean(
+          ajusteManual?.open
+        )
+    };
+
+  }
+
+
+  function restaurarEstadoVista(
+    estado,
+    forzarAjusteAbierto = false
+  ) {
+
+    const ajusteManual =
+      document.getElementById(
+        "ajuste-manual-candidatos"
+      );
+
+
+    if (ajusteManual) {
+
+      ajusteManual.open =
+        (
+          forzarAjusteAbierto
+          ||
+          estado.ajusteManualAbierto
+        );
+
+    }
+
+
+    window.scrollTo({
+      left:
+        estado.scrollX,
+
+      top:
+        estado.scrollY,
+
+      behavior:
+        "auto"
+    });
+
+  }
+
+
+  /* ======================================================== */
+  /* OBTENER HTML ACTUALIZADO                                 */
+  /* ======================================================== */
+
+  async function obtenerDocumento(
+    url
+  ) {
+
+    const response =
+      await fetch(
+        url,
+        {
+          method:
+            "GET",
+
+          headers: {
+            "X-Requested-With":
+              "XMLHttpRequest"
+          },
+
+          credentials:
+            "same-origin"
+        }
+      );
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        "No fue posible actualizar la información."
+      );
+
+    }
+
+
+    const html =
+      await response.text();
+
+
+    return new DOMParser()
+      .parseFromString(
+        html,
+        "text/html"
+      );
+
+  }
+
+
+  /* ======================================================== */
+  /* ACTUALIZAR SECCIÓN DE CANDIDATOS                         */
+  /* ======================================================== */
+
+  async function actualizarCandidatos(
+    url,
+    actualizarUrl = false
+  ) {
+
+    const estadoVista =
+      obtenerEstadoVista();
+
+
+    const documentoNuevo =
+      await obtenerDocumento(
+        url
+      );
+
+
+    const detailsNuevo =
+      documentoNuevo.getElementById(
+        "ajuste-manual-candidatos"
+      );
+
+
+    const detailsActual =
+      document.getElementById(
+        "ajuste-manual-candidatos"
+      );
+
+
+    if (
+      !detailsNuevo
+      ||
+      !detailsActual
+    ) {
+
+      throw new Error(
+        "No fue posible actualizar los candidatos."
+      );
+
+    }
+
+
+    detailsActual.innerHTML =
+      detailsNuevo.innerHTML;
+
+
+    /*
+     * Al filtrar estamos trabajando dentro de esta sección.
+     * Debe permanecer abierta.
+     */
+
+    detailsActual.open =
+      true;
+
+
+    if (actualizarUrl) {
+
+      window.history.replaceState(
+        {},
+        "",
+        url
+      );
+
+    }
+
+
+    restaurarEstadoVista(
+      estadoVista,
+      true
+    );
+
+  }
+
+
+  /* ======================================================== */
+  /* ACTUALIZAR CONTENIDO COMPLETO DEL BATCH                  */
+  /* ======================================================== */
+
+  async function actualizarContenidoBatch(
+    url
+  ) {
+
+    const estadoVista =
+      obtenerEstadoVista();
+
+
+    const documentoNuevo =
+      await obtenerDocumento(
+        url
+      );
+
+
+    const contenidoNuevo =
+      documentoNuevo.querySelector(
+        ".mx-auto.max-w-\\[1650px\\]"
+      );
+
+
+    const contenidoActual =
+      document.querySelector(
+        ".mx-auto.max-w-\\[1650px\\]"
+      );
+
+
+    if (
+      !contenidoNuevo
+      ||
+      !contenidoActual
+    ) {
+
+      throw new Error(
+        "La operación fue procesada, pero no fue posible actualizar la vista."
+      );
+
+    }
+
+
+    contenidoActual.innerHTML =
+      contenidoNuevo.innerHTML;
+
+
+    restaurarEstadoVista(
+      estadoVista
     );
 
 
-  const checkboxesBatch =
-    Array.from(
-      document.querySelectorAll(
-        ".item-batch-checkbox"
-      )
-    );
+    actualizarSeleccionBatch();
+
+  }
 
 
-  const contadorSeleccionados =
-    document.getElementById(
-      "contador-seleccionados-batch"
-    );
-
-
-  const selectorEstadoBatch =
-    document.getElementById(
-      "estado-batch-masivo"
-    );
-
-
-  const botonEstadoMasivo =
-    document.getElementById(
-      "boton-estado-batch-masivo"
-    );
-
-
-  const botonLimpiar =
-    document.getElementById(
-      "limpiar-seleccion-batch"
-    );
-
+  /* ======================================================== */
+  /* SELECCIÓN MASIVA DE SITIOS DEL BATCH                     */
+  /* ======================================================== */
 
   function actualizarSeleccionBatch() {
+
+    const seleccionarTodosIncluidos =
+      document.getElementById(
+        "seleccionar-todos-incluidos"
+      );
+
+
+    const checkboxesBatch =
+      Array.from(
+        document.querySelectorAll(
+          ".item-batch-checkbox"
+        )
+      );
+
+
+    const contadorSeleccionados =
+      document.getElementById(
+        "contador-seleccionados-batch"
+      );
+
+
+    const selectorEstadoBatch =
+      document.getElementById(
+        "estado-batch-masivo"
+      );
+
+
+    const botonEstadoMasivo =
+      document.getElementById(
+        "boton-estado-batch-masivo"
+      );
+
+
+    const botonLimpiar =
+      document.getElementById(
+        "limpiar-seleccion-batch"
+      );
+
 
     const seleccionados =
       checkboxesBatch.filter(
         function (checkbox) {
+
           return checkbox.checked;
+
         }
       );
 
@@ -2067,66 +2263,291 @@ Detalle Batch Semanal
   }
 
 
-  if (seleccionarTodosIncluidos) {
+  /* ======================================================== */
+  /* CHANGE GLOBAL                                            */
+  /* ======================================================== */
 
-    seleccionarTodosIncluidos.addEventListener(
-      "change",
-      function () {
+  document.addEventListener(
+    "change",
+    async function (event) {
 
-        checkboxesBatch.forEach(
-          function (checkbox) {
+      const target =
+        event.target;
 
-            checkbox.checked =
-              seleccionarTodosIncluidos.checked;
 
-          }
-        );
+      /* ==================================================== */
+      /* SELECCIONAR TODOS CANDIDATOS                         */
+      /* ==================================================== */
+
+      if (
+        target.id
+        ===
+        "seleccionar-todos"
+      ) {
+
+        document
+          .querySelectorAll(
+            ".sitio-checkbox"
+          )
+          .forEach(
+            function (checkbox) {
+
+              checkbox.checked =
+                target.checked;
+
+            }
+          );
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
+      /* SELECCIONAR TODOS LOS INCLUIDOS                      */
+      /* ==================================================== */
+
+      if (
+        target.id
+        ===
+        "seleccionar-todos-incluidos"
+      ) {
+
+        document
+          .querySelectorAll(
+            ".item-batch-checkbox"
+          )
+          .forEach(
+            function (checkbox) {
+
+              checkbox.checked =
+                target.checked;
+
+            }
+          );
 
 
         actualizarSeleccionBatch();
 
+
+        return;
+
       }
-    );
-
-  }
 
 
-  checkboxesBatch.forEach(
-    function (checkbox) {
+      /* ==================================================== */
+      /* CHECKBOX INDIVIDUAL DEL BATCH                        */
+      /* ==================================================== */
 
-      checkbox.addEventListener(
-        "change",
-        actualizarSeleccionBatch
-      );
+      if (
+        target.classList.contains(
+          "item-batch-checkbox"
+        )
+      ) {
+
+        actualizarSeleccionBatch();
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
+      /* SELECT ESTADO MASIVO                                 */
+      /* ==================================================== */
+
+      if (
+        target.id
+        ===
+        "estado-batch-masivo"
+      ) {
+
+        actualizarSeleccionBatch();
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
+      /* PERMISO INLINE                                       */
+      /* ==================================================== */
+
+      if (
+        target.classList.contains(
+          "permiso-inline"
+        )
+      ) {
+
+        const select =
+          target;
+
+
+        const nuevoValor =
+          select.value;
+
+
+        const valorAnterior =
+          select.dataset.original;
+
+
+        select.disabled =
+          true;
+
+
+        const body =
+          new URLSearchParams();
+
+
+        body.append(
+          "estado_permiso",
+          nuevoValor
+        );
+
+
+        try {
+
+          const response =
+            await fetch(
+              select.dataset.url,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "X-CSRFToken":
+                    obtenerCsrfToken(),
+
+                  "X-Requested-With":
+                    "XMLHttpRequest",
+
+                  "Content-Type":
+                    "application/x-www-form-urlencoded;charset=UTF-8"
+                },
+
+                credentials:
+                  "same-origin",
+
+                body:
+                  body.toString()
+              }
+            );
+
+
+          const data =
+            await response.json();
+
+
+          if (
+            !response.ok
+            ||
+            !data.ok
+          ) {
+
+            throw new Error(
+              data.error
+              ||
+              "No fue posible actualizar el permiso."
+            );
+
+          }
+
+
+          select.dataset.original =
+            data.estado_permiso;
+
+
+          const row =
+            select.closest(
+              "[data-item-row]"
+            );
+
+
+          const estadoLabel =
+            row?.querySelector(
+              ".estado-batch-label"
+            );
+
+
+          if (estadoLabel) {
+
+            estadoLabel.textContent =
+              data.estado_batch_display;
+
+          }
+
+
+        } catch (error) {
+
+          select.value =
+            valorAnterior;
+
+
+          alert(
+            error.message
+          );
+
+
+        } finally {
+
+          select.disabled =
+            false;
+
+        }
+
+
+        return;
+
+      }
 
     }
   );
 
 
-  if (selectorEstadoBatch) {
+  /* ======================================================== */
+  /* CLICK GLOBAL                                             */
+  /* ======================================================== */
 
-    selectorEstadoBatch.addEventListener(
-      "change",
-      actualizarSeleccionBatch
-    );
+  document.addEventListener(
+    "click",
+    async function (event) {
 
-  }
+      /* ==================================================== */
+      /* LIMPIAR SELECCIÓN DEL BATCH                          */
+      /* ==================================================== */
 
-
-  if (botonLimpiar) {
-
-    botonLimpiar.addEventListener(
-      "click",
-      function () {
-
-        checkboxesBatch.forEach(
-          function (checkbox) {
-
-            checkbox.checked =
-              false;
-
-          }
+      const botonLimpiarSeleccion =
+        event.target.closest(
+          "#limpiar-seleccion-batch"
         );
+
+
+      if (botonLimpiarSeleccion) {
+
+        event.preventDefault();
+
+
+        document
+          .querySelectorAll(
+            ".item-batch-checkbox"
+          )
+          .forEach(
+            function (checkbox) {
+
+              checkbox.checked =
+                false;
+
+            }
+          );
+
+
+        const selectorEstadoBatch =
+          document.getElementById(
+            "estado-batch-masivo"
+          );
 
 
         if (selectorEstadoBatch) {
@@ -2139,145 +2560,456 @@ Detalle Batch Semanal
 
         actualizarSeleccionBatch();
 
+
+        return;
+
       }
-    );
-
-  }
 
 
-  actualizarSeleccionBatch();
+      /* ==================================================== */
+      /* LIMPIAR FILTROS                                      */
+      /* ==================================================== */
+
+      const enlaceLimpiar =
+        event.target.closest(
+          "#limpiar-filtros-candidatos"
+        );
+
+
+      if (enlaceLimpiar) {
+
+        event.preventDefault();
+
+
+        try {
+
+          await actualizarCandidatos(
+            enlaceLimpiar.href,
+            true
+          );
+
+
+        } catch (error) {
+
+          alert(
+            error.message
+          );
+
+        }
+
+
+        return;
+
+      }
+
+    }
+  );
 
 
   /* ======================================================== */
-  /* PERMISOS INLINE                                          */
+  /* SUBMIT GLOBAL                                            */
   /* ======================================================== */
 
-  document
-    .querySelectorAll(
-      ".permiso-inline"
-    )
-    .forEach(
-      function (select) {
+  document.addEventListener(
+    "submit",
+    async function (event) {
 
-        select.addEventListener(
-          "change",
-          async function () {
-
-            const nuevoValor =
-              select.value;
+      const formulario =
+        event.target;
 
 
-            const valorAnterior =
-              select.dataset.original;
+      /* ==================================================== */
+      /* FILTROS                                              */
+      /* ==================================================== */
+
+      if (
+        formulario.id
+        ===
+        "form-filtros-candidatos"
+      ) {
+
+        event.preventDefault();
 
 
-            select.disabled =
-              true;
+        const boton =
+          formulario.querySelector(
+            'button[type="submit"]'
+          );
 
 
-            const body =
-              new URLSearchParams();
+        const textoOriginal =
+          boton?.textContent;
 
 
-            body.append(
-              "estado_permiso",
-              nuevoValor
+        if (boton) {
+
+          boton.disabled =
+            true;
+
+          boton.textContent =
+            "Filtrando...";
+
+        }
+
+
+        try {
+
+          const datos =
+            new FormData(
+              formulario
             );
 
 
-            try {
-
-              const response =
-                await fetch(
-                  select.dataset.url,
-                  {
-                    method: "POST",
-
-                    headers: {
-                      "X-CSRFToken":
-                        csrftoken,
-
-                      "X-Requested-With":
-                        "XMLHttpRequest",
-
-                      "Content-Type":
-                        "application/x-www-form-urlencoded;charset=UTF-8"
-                    },
-
-                    body:
-                      body.toString()
-                  }
-                );
+          const parametros =
+            new URLSearchParams();
 
 
-              const data =
-                await response.json();
+          datos.forEach(
+            function (valor, clave) {
+
+              const valorLimpio =
+                String(valor).trim();
 
 
               if (
-                !response.ok
-                ||
-                !data.ok
+                valorLimpio !== ""
               ) {
 
-                throw new Error(
-                  data.error
-                  ||
-                  "No fue posible actualizar el permiso."
+                parametros.append(
+                  clave,
+                  valorLimpio
                 );
 
               }
-
-
-              select.dataset.original =
-                data.estado_permiso;
-
-
-              const row =
-                select.closest(
-                  "[data-item-row]"
-                );
-
-
-              const estadoLabel =
-                row?.querySelector(
-                  ".estado-batch-label"
-                );
-
-
-              if (estadoLabel) {
-
-                estadoLabel.textContent =
-                  data.estado_batch_display;
-
-              }
-
-
-            } catch (error) {
-
-              select.value =
-                valorAnterior;
-
-
-              alert(
-                error.message
-              );
-
-
-            } finally {
-
-              select.disabled =
-                false;
 
             }
+          );
+
+
+          const baseUrl =
+            formulario.action
+            ||
+            window.location.pathname;
+
+
+          const url =
+            parametros.toString()
+              ? `${baseUrl}?${parametros.toString()}`
+              : baseUrl;
+
+
+          await actualizarCandidatos(
+            url,
+            true
+          );
+
+
+        } catch (error) {
+
+          alert(
+            error.message
+          );
+
+
+          if (boton) {
+
+            boton.disabled =
+              false;
+
+            boton.textContent =
+              textoOriginal;
+
+          }
+
+        }
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
+      /* AGREGAR CANDIDATOS                                   */
+      /* ==================================================== */
+
+      if (
+        formulario.id
+        ===
+        "form-agregar-candidatos"
+      ) {
+
+        event.preventDefault();
+
+
+        const submitter =
+          event.submitter;
+
+
+        const datos =
+          new FormData(
+            formulario
+          );
+
+
+        /*
+         * Debemos enviar el botón que originó el submit:
+         *
+         * es_reserva=1
+         * o
+         * es_reserva=0
+         */
+
+        if (
+          submitter
+          &&
+          submitter.name
+        ) {
+
+          datos.set(
+            submitter.name,
+            submitter.value
+          );
+
+        }
+
+
+        const botones =
+          formulario.querySelectorAll(
+            'button[type="submit"]'
+          );
+
+
+        botones.forEach(
+          function (boton) {
+
+            boton.disabled =
+              true;
 
           }
         );
 
+
+        try {
+
+          const response =
+            await fetch(
+              formulario.action,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "X-CSRFToken":
+                    obtenerCsrfToken(),
+
+                  "X-Requested-With":
+                    "XMLHttpRequest"
+                },
+
+                credentials:
+                  "same-origin",
+
+                body:
+                  datos
+              }
+            );
+
+
+          let data = {};
+
+
+          try {
+
+            data =
+              await response.json();
+
+          } catch (error) {
+
+            throw new Error(
+              "El servidor devolvió una respuesta inválida."
+            );
+
+          }
+
+
+          if (
+            !response.ok
+            ||
+            !data.ok
+          ) {
+
+            throw new Error(
+              data.error
+              ||
+              "No fue posible agregar los sitios."
+            );
+
+          }
+
+
+          /*
+           * Usamos la URL actual para conservar cualquier
+           * filtro aplicado.
+           *
+           * Como el sitio ahora está activo en el batch,
+           * detalle_planificacion_semanal lo excluirá de la
+           * tabla inferior.
+           */
+
+          await actualizarContenidoBatch(
+            window.location.href
+          );
+
+
+        } catch (error) {
+
+          alert(
+            error.message
+          );
+
+
+        } finally {
+
+          document
+            .querySelectorAll(
+              '#form-agregar-candidatos button[type="submit"]'
+            )
+            .forEach(
+              function (boton) {
+
+                boton.disabled =
+                  false;
+
+              }
+            );
+
+        }
+
+
+        return;
+
       }
-    );
+
+
+      /* ==================================================== */
+      /* QUITAR SITIO                                         */
+      /* ==================================================== */
+
+      if (
+        formulario.classList.contains(
+          "quitar-sitio-form"
+        )
+      ) {
+
+        event.preventDefault();
+
+
+        const datos =
+          new FormData(
+            formulario
+          );
+
+
+        try {
+
+          const response =
+            await fetch(
+              formulario.action,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "X-CSRFToken":
+                    obtenerCsrfToken(),
+
+                  "X-Requested-With":
+                    "XMLHttpRequest"
+                },
+
+                credentials:
+                  "same-origin",
+
+                body:
+                  datos
+              }
+            );
+
+
+          let data = {};
+
+
+          try {
+
+            data =
+              await response.json();
+
+          } catch (error) {
+
+            throw new Error(
+              "El servidor devolvió una respuesta inválida."
+            );
+
+          }
+
+
+          if (
+            !response.ok
+            ||
+            !data.ok
+          ) {
+
+            throw new Error(
+              data.error
+              ||
+              "No fue posible quitar el sitio."
+            );
+
+          }
+
+
+          /*
+           * El backend ya dejó el SitioBatchSemanal como
+           * excluido.
+           *
+           * Volvemos a consultar el detalle usando la URL
+           * actual:
+           *
+           * - desaparece de arriba como activo;
+           * - queda visible abajo como candidato;
+           * - se conservan los filtros actuales;
+           * - no existe recarga del navegador.
+           */
+
+          await actualizarContenidoBatch(
+            window.location.href
+          );
+
+
+        } catch (error) {
+
+          alert(
+            error.message
+          );
+
+        }
+
+
+        return;
+
+      }
+
+    }
+  );
+
+
+  /* ======================================================== */
+  /* ESTADO INICIAL                                           */
+  /* ======================================================== */
+
+  actualizarSeleccionBatch();
 
 })();
 </script>
-
 {% endblock %}
