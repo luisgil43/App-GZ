@@ -1711,6 +1711,33 @@ def detalle_planificacion_semanal(
         incluir_excluidos_batch=True,
     )
 
+    # La tabla inferior representa sitios que el usuario puede
+    # agregar al batch. Los sitios que ya están activos en esta
+    # semana se muestran arriba y no deben aparecer nuevamente
+    # como candidatos.
+    #
+    # Los excluidos/reemplazados sí permanecen disponibles aquí
+    # para permitir una reactivación manual explícita.
+    ids_activos_batch = (
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    candidatos_base = candidatos_base.exclude(
+        pk__in=ids_activos_batch,
+    )
+
     # ========================================================
     # FILTROS
     # ========================================================
