@@ -136,6 +136,61 @@ def analizar_batch_semanal(
         universo,
     )
 
+    # ========================================================
+    # SITIOS FIJOS DEL BATCH ACTUAL
+    # ========================================================
+    #
+    # Una decisión manual existente debe ser respetada por
+    # los análisis posteriores de ESTA misma semana.
+    #
+    # Son fijos:
+    #
+    # - sitios confirmados;
+    # - sitios agregados manualmente que continúan activos.
+    #
+    # Los excluidos/reemplazados no pertenecen al universo
+    # de este batch, pero continúan disponibles para otras
+    # semanas si no están comprometidos en ellas.
+    # ========================================================
+
+    ids_fijos = set(
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .filter(
+            agregado_manualmente=True,
+        )
+        .values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    ids_fijos.update(
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+            estado="confirmado",
+        ).values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    ids_universo = {
+        sitio.sitio_planificado_id
+        for sitio in universo
+    }
+
+    ids_fijos.intersection_update(
+        ids_universo,
+    )
+
     if not universo:
         return {
             "version": ANALISIS_BATCH_VERSION,
@@ -244,8 +299,14 @@ def analizar_batch_semanal(
     # sitios que los disponibles, pero el servicio también se
     # protege por si existen batches históricos.
 
+    # Los sitios fijados manualmente/confirmados son decisiones
+    # ya tomadas dentro del batch y nunca deben ser descartados
+    # porque el objetivo haya sido reducido posteriormente.
     objetivo_motor = min(
-        objetivo,
+        max(
+            objetivo,
+            len(ids_fijos),
+        ),
         universo_total,
     )
 
@@ -270,6 +331,7 @@ def analizar_batch_semanal(
         cantidad_reserva=0,
         disponibilidades=disponibilidades,
         cantidad_propuestas=3,
+        ids_fijos=ids_fijos,
     )
 
     if disponibilidades and not propuestas:
@@ -653,12 +715,63 @@ def aplicar_propuesta_batch(
     )
 
     # ========================================================
-    # REEMPLAZAR BORRADOR ACTUAL
+    # SINCRONIZAR BORRADOR ACTUAL
+    # ========================================================
+    #
+    # Una nueva propuesta NO debe borrar indiscriminadamente
+    # la historia del batch.
+    #
+    # Conservamos:
+    #
+    # - excluidos/reemplazados, como decisión de ESTA semana;
+    # - sitios agregados manualmente;
+    # - sitios confirmados.
+    #
+    # Los elementos automáticos anteriores que ya no formen
+    # parte de la nueva propuesta sí pueden desaparecer.
     # ========================================================
 
-    SitioBatchSemanal.objects.filter(
-        batch=batch,
-    ).delete()
+    ids_principales = set(principales)
+
+    items_actuales = {
+        item.sitio_planificado_id: item
+        for item in (
+            SitioBatchSemanal.objects.select_for_update()
+            .filter(
+                batch=batch,
+            )
+        )
+    }
+
+    # ========================================================
+    # RETIRAR ÚNICAMENTE AUTOMÁTICOS OBSOLETOS
+    # ========================================================
+
+    ids_automaticos_obsoletos = [
+        item.pk
+        for item in items_actuales.values()
+        if (
+            item.sitio_planificado_id not in ids_principales
+            and item.estado not in {
+                "excluido",
+                "reemplazado",
+            }
+            and not item.agregado_manualmente
+            and item.estado != "confirmado"
+        )
+    ]
+
+    if ids_automaticos_obsoletos:
+
+        SitioBatchSemanal.objects.filter(
+            pk__in=ids_automaticos_obsoletos,
+        ).delete()
+
+        items_actuales = {
+            sitio_id: item
+            for sitio_id, item in items_actuales.items()
+            if item.pk not in ids_automaticos_obsoletos
+        }
 
     score_total = propuesta_serializada.get(
         "score_total",
@@ -675,23 +788,104 @@ def aplicar_propuesta_batch(
         "",
     )
 
+    motivo_motor = (
+        f"{codigo}. {motivo_general}"
+    ).strip()
+
     creados_principales = 0
 
     # ========================================================
-    # CREAR PRINCIPALES
+    # SINCRONIZAR PRINCIPALES
     # ========================================================
 
     for sitio_id in principales:
 
         sitio_planificado = sitios[sitio_id]
 
-        SitioBatchSemanal.objects.create(
+        item_existente = items_actuales.get(
+            sitio_id,
+        )
+
+        # ====================================================
+        # YA EXISTE EN EL BATCH
+        # ====================================================
+
+        if item_existente is not None:
+
+            # Un excluido/reemplazado nunca debería aparecer
+            # nuevamente en la propuesta de ESTA semana.
+            #
+            # Si una propuesta antigua guardada en sesión lo
+            # contiene, rechazamos su aplicación en lugar de
+            # reactivarlo silenciosamente.
+
+            if item_existente.estado in {
+                "excluido",
+                "reemplazado",
+            }:
+
+                raise ValueError(
+                    "La propuesta contiene un sitio que fue "
+                    "excluido o reemplazado manualmente en "
+                    "esta semana. Recalcula el análisis antes "
+                    "de aplicar la propuesta."
+                )
+
+            # Los confirmados conservan su estado.
+            #
+            # Los agregados manualmente conservan además su
+            # origen y trazabilidad manual.
+
+            if item_existente.estado != "confirmado":
+                item_existente.estado = "seleccionado"
+
+            if not item_existente.agregado_manualmente:
+                item_existente.origen = "motor"
+
+            item_existente.puntaje_motor = score_total
+
+            item_existente.motivo_recomendacion = motivo_motor
+
+            item_existente.es_reserva = False
+
+            item_existente.cluster_codigo = (
+                clusters_por_sitio.get(
+                    sitio_id,
+                    "",
+                )
+            )
+
+            if item_existente.agregado_por_id is None:
+                item_existente.agregado_por = usuario
+
+            item_existente.save(
+                update_fields=[
+                    "estado",
+                    "origen",
+                    "puntaje_motor",
+                    "motivo_recomendacion",
+                    "es_reserva",
+                    "cluster_codigo",
+                    "agregado_por",
+                    "actualizado_en",
+                ]
+            )
+
+            creados_principales += 1
+
+            continue
+
+        # ====================================================
+        # NUEVO SITIO DEL MOTOR
+        # ====================================================
+
+        item_nuevo = SitioBatchSemanal.objects.create(
             batch=batch,
             sitio_planificado=sitio_planificado,
             estado="seleccionado",
             origen="motor",
             puntaje_motor=score_total,
-            motivo_recomendacion=(f"{codigo}. {motivo_general}").strip(),
+            motivo_recomendacion=motivo_motor,
             agregado_manualmente=False,
             bloqueado_en_batch=False,
             es_reserva=False,
@@ -703,6 +897,8 @@ def aplicar_propuesta_batch(
             ),
             agregado_por=usuario,
         )
+
+        items_actuales[sitio_id] = item_nuevo
 
         creados_principales += 1
 

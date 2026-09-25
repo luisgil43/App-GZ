@@ -1002,6 +1002,26 @@ def obtener_candidatos_batch(
     ids_planificados_mismo_batch = set(
         SitioBatchSemanal.objects.filter(
             batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    ids_planificados_excluidos_batch = set(
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
         ).values_list(
             "sitio_planificado_id",
             flat=True,
@@ -1066,6 +1086,9 @@ def obtener_candidatos_batch(
 
     for candidato in candidatos:
 
+        if candidato.pk in ids_planificados_excluidos_batch:
+            continue
+
         if candidato.pk not in ids_planificados_mismo_batch:
             continue
 
@@ -1081,6 +1104,9 @@ def obtener_candidatos_batch(
     # ========================================================
 
     for candidato in candidatos:
+
+        if candidato.pk in ids_planificados_excluidos_batch:
+            continue
 
         if candidato.pk in ids_planificados_mismo_batch:
             continue

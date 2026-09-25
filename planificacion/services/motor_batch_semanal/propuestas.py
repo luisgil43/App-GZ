@@ -801,6 +801,7 @@ def _reparar_seleccion_operacional(
     objetivo,
     disponibilidades,
     estrategia,
+    ids_fijos=None,
 ):
     """
     Corrige una selección territorial que no consigue cubrir
@@ -861,6 +862,8 @@ def _reparar_seleccion_operacional(
     """
 
     universo = list(universo or [])
+
+    ids_fijos = set(ids_fijos or [])
 
     objetivo = min(
         int(objetivo),
@@ -1034,7 +1037,10 @@ def _reparar_seleccion_operacional(
         sitios_problematicos = [
             sitio
             for sitio in seleccion
-            if (sitio.sitio_planificado_id not in ids_planificados)
+            if (
+                sitio.sitio_planificado_id not in ids_planificados
+                and sitio.sitio_planificado_id not in ids_fijos
+            )
         ]
 
         # ====================================================
@@ -1079,7 +1085,10 @@ def _reparar_seleccion_operacional(
             sitios_problematicos = [
                 sitio
                 for sitio in seleccion
-                if (sitio.sitio_planificado_id in ids_unitarios)
+                if (
+                    sitio.sitio_planificado_id in ids_unitarios
+                    and sitio.sitio_planificado_id not in ids_fijos
+                )
             ]
 
         if not sitios_problematicos:
@@ -1773,10 +1782,19 @@ def generar_propuestas(
     disponibilidades=None,
     capacidades=None,
     cantidad_propuestas=3,
+    ids_fijos=None,
 ):
     disponibilidades = list(disponibilidades or [])
 
     universo = list(universo or [])
+
+    ids_fijos = set(ids_fijos or [])
+
+    sitios_fijos = [
+        sitio
+        for sitio in universo
+        if sitio.sitio_planificado_id in ids_fijos
+    ]
 
     # ========================================================
     # VALIDACIONES BÁSICAS
@@ -2017,6 +2035,55 @@ def generar_propuestas(
             or []
         )
 
+        # ====================================================
+        # INCORPORAR SITIOS FIJOS
+        # ====================================================
+
+        ids_iniciales = {
+            sitio.sitio_planificado_id
+            for sitio in principales_iniciales
+        }
+
+        for sitio_fijo in sitios_fijos:
+
+            if sitio_fijo.sitio_planificado_id in ids_iniciales:
+                continue
+
+            principales_iniciales.append(
+                sitio_fijo,
+            )
+
+            ids_iniciales.add(
+                sitio_fijo.sitio_planificado_id,
+            )
+
+        # Si al añadir los fijos superamos el objetivo,
+        # solamente pueden salir sitios escogidos por el motor.
+
+        if len(principales_iniciales) > objetivo:
+
+            fijos_seleccion = [
+                sitio
+                for sitio in principales_iniciales
+                if sitio.sitio_planificado_id in ids_fijos
+            ]
+
+            no_fijos_seleccion = [
+                sitio
+                for sitio in principales_iniciales
+                if sitio.sitio_planificado_id not in ids_fijos
+            ]
+
+            principales_iniciales = (
+                fijos_seleccion
+                + no_fijos_seleccion[
+                    : max(
+                        objetivo - len(fijos_seleccion),
+                        0,
+                    )
+                ]
+            )
+
         if not principales_iniciales:
             continue
 
@@ -2064,6 +2131,7 @@ def generar_propuestas(
             objetivo=objetivo,
             disponibilidades=(disponibilidades),
             estrategia=estrategia,
+            ids_fijos=ids_fijos,
         )
 
         principales = list(
