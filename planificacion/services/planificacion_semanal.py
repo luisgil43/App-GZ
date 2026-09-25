@@ -943,6 +943,8 @@ def ids_sitios_comprometidos_en_otros_batches(
 
 def obtener_candidatos_batch(
     batch,
+    *,
+    incluir_excluidos_batch=False,
 ):
     """
     Devuelve el universo disponible de una semana operacional.
@@ -1086,10 +1088,16 @@ def obtener_candidatos_batch(
 
     for candidato in candidatos:
 
-        if candidato.pk in ids_planificados_excluidos_batch:
+        if (
+            candidato.pk in ids_planificados_excluidos_batch
+            and not incluir_excluidos_batch
+        ):
             continue
 
-        if candidato.pk not in ids_planificados_mismo_batch:
+        if (
+            candidato.pk not in ids_planificados_mismo_batch
+            and candidato.pk not in ids_planificados_excluidos_batch
+        ):
             continue
 
         if candidato.sitio_id in sitios_fisicos_usados:
@@ -1105,10 +1113,16 @@ def obtener_candidatos_batch(
 
     for candidato in candidatos:
 
-        if candidato.pk in ids_planificados_excluidos_batch:
+        if (
+            candidato.pk in ids_planificados_excluidos_batch
+            and not incluir_excluidos_batch
+        ):
             continue
 
-        if candidato.pk in ids_planificados_mismo_batch:
+        if (
+            candidato.pk in ids_planificados_mismo_batch
+            or candidato.pk in ids_planificados_excluidos_batch
+        ):
             continue
 
         if candidato.sitio_id in sitios_fisicos_usados:
@@ -1337,7 +1351,10 @@ def agregar_sitios_al_batch(
     usuario,
     es_reserva=False,
 ):
-    candidatos = obtener_candidatos_batch(batch).filter(
+    candidatos = obtener_candidatos_batch(
+        batch,
+        incluir_excluidos_batch=True,
+    ).filter(
         id__in=sitio_ids,
     )
 

@@ -1706,7 +1706,10 @@ def detalle_planificacion_semanal(
         )
     )
 
-    candidatos_base = obtener_candidatos_batch(batch)
+    candidatos_base = obtener_candidatos_batch(
+        batch,
+        incluir_excluidos_batch=True,
+    )
 
     # ========================================================
     # FILTROS
