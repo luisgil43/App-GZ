@@ -38,8 +38,8 @@ from planificacion.views.planificacion_diaria import (
 from planificacion.views.planificacion_diaria_manual import \
     programar_sitio_manual_planificacion_diaria
 from planificacion.views.planificacion_semanal import (
-    actualizar_permiso_sitio_batch, agregar_sitios_batch,
-    cerrar_propuesta_semanal, confirmar_sitios_batch,
+    actualizar_permiso_masivo_sitios_batch, actualizar_permiso_sitio_batch,
+    agregar_sitios_batch, cerrar_propuesta_semanal, confirmar_sitios_batch,
     crear_planificacion_semanal, descargar_excel_batch,
     detalle_planificacion_semanal, editar_planificacion_semanal,
     eliminar_planificacion_semanal, enviar_gestion_permisos_batch,
@@ -419,5 +419,10 @@ urlpatterns = [
         "mensual/<int:pk>/continuidad/<int:batch_id>/descartar/",
         descartar_continuidad_semanal,
         name="descartar_continuidad_semanal",
+    ),
+    path(
+        "semanal/<int:batch_id>/permiso-masivo/",
+        actualizar_permiso_masivo_sitios_batch,
+        name="actualizar_permiso_masivo_sitios_batch",
     ),
 ]

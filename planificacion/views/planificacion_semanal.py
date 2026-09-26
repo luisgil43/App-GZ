@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery
 from django.db.models.deletion import ProtectedError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,7 +17,7 @@ from planificacion.forms.planificacion_semanal import (CrearBatchSemanalForm,
                                                        EditarBatchSemanalForm)
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
-from planificacion.models import (BatchPlanificacionSemanal,
+from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
                                   PlanificacionMensual, SitioBatchSemanal,
                                   SitioPlanificado)
 from planificacion.services.planificacion_diaria import \
@@ -1690,6 +1690,50 @@ def detalle_planificacion_semanal(
 
         mensual = mensuales_origen[0]
 
+    # ========================================================
+    # OBSERVACIÓN DE BASE DE CONTACTOS
+    # ========================================================
+    #
+    # Para cada sitio incluido en el batch buscamos la primera
+    # observación no vacía perteneciente a un contacto activo.
+    #
+    # Si existen varios contactos activos:
+    #
+    #   1. prioridad_contacto
+    #   2. id
+    #
+    # determinan cuál observación se muestra primero.
+    #
+    # Esto NO modifica los contactos ni duplica información.
+    # Únicamente expone la observación en el queryset mediante:
+    #
+    #     item.observacion_contacto
+    #
+    # ========================================================
+
+    observacion_contacto = (
+        ContactoSitio.objects.filter(
+            sitio_id=OuterRef(
+                "sitio_planificado__sitio_id",
+            ),
+            activo=True,
+        )
+        .exclude(
+            observaciones="",
+        )
+        .order_by(
+            "prioridad_contacto",
+            "id",
+        )
+        .values(
+            "observaciones",
+        )[:1]
+    )
+
+    # ========================================================
+    # SITIOS INCLUIDOS EN EL BATCH
+    # ========================================================
+
     incluidos = (
         SitioBatchSemanal.objects.filter(
             batch=batch,
@@ -1698,6 +1742,11 @@ def detalle_planificacion_semanal(
             "sitio_planificado",
             "sitio_planificado__sitio",
             "sitio_planificado__planificacion",
+        )
+        .annotate(
+            observacion_contacto=Subquery(
+                observacion_contacto,
+            ),
         )
         .order_by(
             "es_reserva",
@@ -2235,6 +2284,150 @@ def actualizar_permiso_sitio_batch(
             "estado_batch": item.estado,
             "estado_batch_display": (item.get_estado_display()),
         }
+    )
+
+
+# ============================================================
+# ACTUALIZAR PERMISO MASIVO DE SITIOS DEL BATCH
+# ============================================================
+
+
+@require_POST
+@rol_requerido(*ROLES_PLANIFICACION)
+@transaction.atomic
+def actualizar_permiso_masivo_sitios_batch(
+    request,
+    batch_id,
+):
+    batch = get_object_or_404(
+        BatchPlanificacionSemanal.objects.select_for_update(),
+        pk=batch_id,
+    )
+
+    item_ids = request.POST.getlist(
+        "item_ids",
+    )
+
+    if not item_ids:
+
+        messages.warning(
+            request,
+            "Debes seleccionar al menos un sitio.",
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    nuevo_permiso = (
+        request.POST.get(
+            "nuevo_estado_permiso",
+            "",
+        )
+        or ""
+    ).strip()
+
+    estados_validos = {valor for valor, _ in SitioPlanificado.ESTADOS_PERMISO}
+
+    if nuevo_permiso not in estados_validos:
+
+        messages.error(
+            request,
+            "El estado de permiso seleccionado no es válido.",
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    items = list(
+        SitioBatchSemanal.objects.select_for_update()
+        .filter(
+            batch=batch,
+            id__in=item_ids,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+        .select_related(
+            "sitio_planificado",
+        )
+        .order_by(
+            "id",
+        )
+    )
+
+    if not items:
+
+        messages.warning(
+            request,
+            "No se encontraron sitios válidos para actualizar.",
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    actualizados = 0
+    errores = []
+
+    for item in items:
+
+        try:
+
+            actualizar_permiso_desde_batch(
+                item=item,
+                nuevo_permiso=nuevo_permiso,
+                usuario=request.user,
+            )
+
+        except ValueError as exc:
+
+            errores.append(
+                str(exc),
+            )
+
+            continue
+
+        actualizados += 1
+
+    if actualizados:
+
+        messages.success(
+            request,
+            (f"{actualizados} sitio(s) actualizaron " "su permiso correctamente."),
+        )
+
+    if errores:
+
+        messages.warning(
+            request,
+            (f"{len(errores)} sitio(s) no pudieron " "actualizar su permiso."),
+        )
+
+    for error in errores[:10]:
+
+        messages.warning(
+            request,
+            error,
+        )
+
+    if len(errores) > 10:
+
+        messages.warning(
+            request,
+            (f"Existen {len(errores) - 10} " "advertencia(s) adicionales."),
+        )
+
+    return redirect(
+        "planificacion:detalle_planificacion_semanal",
+        batch_id=batch.pk,
     )
 
 
