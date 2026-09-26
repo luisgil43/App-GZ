@@ -821,6 +821,61 @@ Detalle Batch Semanal
             </button>
 
 
+            <select
+              id="permiso-batch-masivo"
+              name="nuevo_estado_permiso"
+              class="
+                min-w-[200px]
+                rounded-xl
+                border
+                border-slate-300
+                bg-white
+                px-3
+                py-2.5
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              <option value="">
+                Cambiar permiso
+              </option>
+
+              {% for valor, etiqueta in estados_permiso %}
+
+                <option value="{{ valor }}">
+                  {{ etiqueta }}
+                </option>
+
+              {% endfor %}
+
+            </select>
+
+
+            <button
+              id="boton-permiso-batch-masivo"
+              type="submit"
+              formaction="{% url 'planificacion:actualizar_permiso_masivo_sitios_batch' batch.id %}"
+              formmethod="post"
+              disabled
+              class="
+                rounded-xl
+                bg-amber-500
+                px-4
+                py-2.5
+                text-sm
+                font-bold
+                text-white
+                transition
+                hover:bg-amber-600
+                disabled:cursor-not-allowed
+                disabled:opacity-40
+              "
+            >
+              Aplicar permiso
+            </button>
+
+
             <button
               id="limpiar-seleccion-batch"
               type="button"
@@ -853,7 +908,11 @@ Detalle Batch Semanal
 
           <table class="min-w-full divide-y divide-slate-200 text-sm">
 
-            <thead class="bg-slate-50">
+                        <thead class="bg-slate-50">
+
+              <!-- =========================================== -->
+              <!-- ENCABEZADOS                                 -->
+              <!-- =========================================== -->
 
               <tr
                 class="
@@ -905,6 +964,10 @@ Detalle Batch Semanal
                 </th>
 
                 <th class="px-3 py-3">
+                  Observación
+                </th>
+
+                <th class="px-3 py-3">
                   Permiso
                 </th>
 
@@ -926,8 +989,395 @@ Detalle Batch Semanal
 
               </tr>
 
-            </thead>
 
+              <!-- =========================================== -->
+              <!-- FILTROS POR COLUMNA                         -->
+              <!-- =========================================== -->
+
+              <tr
+                id="filtros-sitios-batch"
+                class="
+                  border-t
+                  border-slate-200
+                  bg-white
+                "
+              >
+
+                <th class="px-2 py-2">
+
+                  <button
+                    id="limpiar-filtros-sitios-batch"
+                    type="button"
+                    title="Limpiar filtros"
+                    class="
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-[10px]
+                      font-bold
+                      text-slate-500
+                      transition
+                      hover:bg-slate-100
+                    "
+                  >
+                    Limpiar
+                  </button>
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    data-filtro-batch="id_claro"
+                    placeholder="ID Claro"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[90px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    data-filtro-batch="nombre"
+                    placeholder="Nombre"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[150px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    data-filtro-batch="comuna"
+                    placeholder="Comuna"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[120px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <select
+                    data-filtro-batch="zona"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[110px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+                    <option value="">
+                      Todas
+                    </option>
+
+                    <option value="urbano">
+                      Urbano
+                    </option>
+
+                    <option value="rural">
+                      Rural
+                    </option>
+
+                  </select>
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    data-filtro-batch="acceso"
+                    placeholder="Acceso"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[150px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    data-filtro-batch="observacion"
+                    placeholder="Observación"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[170px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <select
+                    data-filtro-batch="permiso"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[130px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+                    <option value="">
+                      Todos
+                    </option>
+
+                    {% for valor, etiqueta in estados_permiso %}
+
+                      <option value="{{ valor }}">
+                        {{ etiqueta }}
+                      </option>
+
+                    {% endfor %}
+
+                  </select>
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <select
+                    data-filtro-batch="estado_batch"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[130px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+                    <option value="">
+                      Todos
+                    </option>
+
+                    <option value="candidato">
+                      Candidato
+                    </option>
+
+                    <option value="seleccionado">
+                      Seleccionado
+                    </option>
+
+                    <option value="gestion_permiso">
+                      Gestión de permiso
+                    </option>
+
+                    <option value="disponible">
+                      Disponible
+                    </option>
+
+                    <option value="confirmado">
+                      Confirmado
+                    </option>
+
+                    <option value="rechazado">
+                      Rechazado
+                    </option>
+
+                    <option value="sin_respuesta">
+                      Sin respuesta
+                    </option>
+
+                    <option value="excluido">
+                      Excluido
+                    </option>
+
+                    <option value="reemplazado">
+                      Reemplazado
+                    </option>
+
+                  </select>
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <select
+                    data-filtro-batch="tipo"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[105px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+                    <option value="">
+                      Todos
+                    </option>
+
+                    <option value="principal">
+                      Principal
+                    </option>
+
+                    <option value="reserva">
+                      Reserva
+                    </option>
+
+                  </select>
+
+                </th>
+
+
+                <th class="px-2 py-2">
+
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    data-filtro-batch="puntaje"
+                    placeholder="Puntaje"
+                    class="
+                      filtro-columna-batch
+                      w-full
+                      min-w-[85px]
+                      rounded-lg
+                      border
+                      border-slate-300
+                      bg-white
+                      px-2
+                      py-1.5
+                      text-xs
+                      font-normal
+                      normal-case
+                      tracking-normal
+                      text-slate-700
+                    "
+                  >
+
+                </th>
+
+
+                <th class="px-2 py-2">
+                </th>
+
+              </tr>
+
+            </thead>
 
             <tbody class="divide-y divide-slate-100">
 
@@ -942,6 +1392,16 @@ Detalle Batch Semanal
                     {% endif %}
                   "
                   data-item-row
+                  data-id-claro="{{ item.sitio_planificado.sitio.id_claro|default:'' }}"
+                  data-nombre="{{ item.sitio_planificado.sitio.nombre|default:'' }}"
+                  data-comuna="{{ item.sitio_planificado.sitio.comuna|default:'' }}"
+                  data-zona="{{ item.sitio_planificado.sitio.tipo_zona|default:'' }}"
+                  data-acceso="{{ item.sitio_planificado.sitio.condiciones_acceso|default:'' }}"
+                  data-observacion="{{ item.observacion_contacto|default:'' }}"
+                  data-permiso="{{ item.sitio_planificado.estado_permiso }}"
+                  data-estado-batch="{{ item.estado }}"
+                  data-tipo="{% if item.es_reserva %}reserva{% else %}principal{% endif %}"
+                  data-puntaje="{{ item.puntaje_motor|default:'' }}"
                 >
 
                   <td class="px-3 py-3">
@@ -1040,6 +1500,11 @@ Detalle Batch Semanal
 
                   <td class="min-w-[180px] px-3 py-3">
                     {{ item.sitio_planificado.sitio.condiciones_acceso|default:"Sin información" }}
+                  </td>
+
+
+                  <td class="min-w-[260px] px-3 py-3 text-slate-600">
+                    {{ item.observacion_contacto|default:"Sin observación" }}
                   </td>
 
 
@@ -2137,7 +2602,160 @@ Detalle Batch Semanal
 
   }
 
+    /* ======================================================== */
+  /* FILTROS DE SITIOS INCLUIDOS                              */
+  /* ======================================================== */
 
+  function normalizarTextoFiltro(
+    valor
+  ) {
+
+    return String(
+      valor
+      ||
+      ""
+    )
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+      .toLowerCase()
+      .trim();
+
+  }
+
+
+  function obtenerFilasBatchVisibles() {
+
+    return Array.from(
+      document.querySelectorAll(
+        "[data-item-row]"
+      )
+    ).filter(
+      function (fila) {
+
+        return !fila.hidden;
+
+      }
+    );
+
+  }
+
+
+  function aplicarFiltrosSitiosBatch() {
+
+    const filtros =
+      Array.from(
+        document.querySelectorAll(
+          ".filtro-columna-batch"
+        )
+      );
+
+
+    const filas =
+      Array.from(
+        document.querySelectorAll(
+          "[data-item-row]"
+        )
+      );
+
+
+    filas.forEach(
+      function (fila) {
+
+        let visible =
+          true;
+
+
+        filtros.forEach(
+          function (filtro) {
+
+            if (!visible) {
+
+              return;
+
+            }
+
+
+            const campo =
+              filtro.dataset.filtroBatch;
+
+
+            const valorFiltro =
+              normalizarTextoFiltro(
+                filtro.value
+              );
+
+
+            if (!valorFiltro) {
+
+              return;
+
+            }
+
+
+            const valorFila =
+              normalizarTextoFiltro(
+                fila.dataset[
+                  campo.replace(
+                    /_([a-z])/g,
+                    function (_, letra) {
+
+                      return letra.toUpperCase();
+
+                    }
+                  )
+                ]
+              );
+
+
+            if (
+              !valorFila.includes(
+                valorFiltro
+              )
+            ) {
+
+              visible =
+                false;
+
+            }
+
+          }
+        );
+
+
+        fila.hidden =
+          !visible;
+
+      }
+    );
+
+
+    actualizarSeleccionBatch();
+
+  }
+
+
+  function limpiarFiltrosSitiosBatch() {
+
+    document
+      .querySelectorAll(
+        ".filtro-columna-batch"
+      )
+      .forEach(
+        function (filtro) {
+
+          filtro.value =
+            "";
+
+        }
+      );
+
+
+    aplicarFiltrosSitiosBatch();
+
+  }
   /* ======================================================== */
   /* SELECCIÓN MASIVA DE SITIOS DEL BATCH                     */
   /* ======================================================== */
@@ -2150,13 +2768,30 @@ Detalle Batch Semanal
       );
 
 
-    const checkboxesBatch =
-      Array.from(
-        document.querySelectorAll(
-          ".item-batch-checkbox"
-        )
-      );
+        const filasVisibles =
+      obtenerFilasBatchVisibles();
 
+
+    const checkboxesBatch =
+      filasVisibles
+        .map(
+          function (fila) {
+
+            return fila.querySelector(
+              ".item-batch-checkbox"
+            );
+
+          }
+        )
+        .filter(
+          function (checkbox) {
+
+            return Boolean(
+              checkbox
+            );
+
+          }
+        );
 
     const contadorSeleccionados =
       document.getElementById(
@@ -2171,9 +2806,21 @@ Detalle Batch Semanal
 
 
     const botonEstadoMasivo =
-      document.getElementById(
-        "boton-estado-batch-masivo"
-      );
+        document.getElementById(
+          "boton-estado-batch-masivo"
+        );
+
+
+    const selectorPermisoBatch =
+        document.getElementById(
+          "permiso-batch-masivo"
+        );
+
+
+    const botonPermisoMasivo =
+        document.getElementById(
+          "boton-permiso-batch-masivo"
+        );
 
 
     const botonLimpiar =
@@ -2214,19 +2861,33 @@ Detalle Batch Semanal
 
     if (botonEstadoMasivo) {
 
-      botonEstadoMasivo.disabled =
-        (
-          cantidad === 0
-          ||
-          !selectorEstadoBatch
-          ||
-          !selectorEstadoBatch.value
-        );
+        botonEstadoMasivo.disabled =
+          (
+            cantidad === 0
+            ||
+            !selectorEstadoBatch
+            ||
+            !selectorEstadoBatch.value
+          );
 
-    }
+      }
 
 
-    if (seleccionarTodosIncluidos) {
+      if (botonPermisoMasivo) {
+
+        botonPermisoMasivo.disabled =
+          (
+            cantidad === 0
+            ||
+            !selectorPermisoBatch
+            ||
+            !selectorPermisoBatch.value
+          );
+
+      }
+
+
+      if (seleccionarTodosIncluidos) {
 
       if (
         checkboxesBatch.length > 0
@@ -2274,6 +2935,22 @@ Detalle Batch Semanal
       const target =
         event.target;
 
+      /* ==================================================== */
+      /* FILTROS DE SITIOS INCLUIDOS                          */
+      /* ==================================================== */
+
+      if (
+        target.classList.contains(
+          "filtro-columna-batch"
+        )
+      ) {
+
+        aplicarFiltrosSitiosBatch();
+
+
+        return;
+
+      }
 
       /* ==================================================== */
       /* SELECCIONAR TODOS CANDIDATOS                         */
@@ -2314,15 +2991,22 @@ Detalle Batch Semanal
         "seleccionar-todos-incluidos"
       ) {
 
-        document
-          .querySelectorAll(
-            ".item-batch-checkbox"
-          )
+        obtenerFilasBatchVisibles()
           .forEach(
-            function (checkbox) {
+            function (fila) {
 
-              checkbox.checked =
-                target.checked;
+              const checkbox =
+                fila.querySelector(
+                  ".item-batch-checkbox"
+                );
+
+
+              if (checkbox) {
+
+                checkbox.checked =
+                  target.checked;
+
+              }
 
             }
           );
@@ -2362,6 +3046,24 @@ Detalle Batch Semanal
         target.id
         ===
         "estado-batch-masivo"
+      ) {
+
+        actualizarSeleccionBatch();
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
+      /* SELECT PERMISO MASIVO                                */
+      /* ==================================================== */
+
+      if (
+        target.id
+        ===
+        "permiso-batch-masivo"
       ) {
 
         actualizarSeleccionBatch();
@@ -2506,6 +3208,34 @@ Detalle Batch Semanal
     }
   );
 
+  /* ======================================================== */
+  /* INPUT GLOBAL - FILTROS DE TEXTO                          */
+  /* ======================================================== */
+
+  document.addEventListener(
+    "input",
+    function (event) {
+
+      const target =
+        event.target;
+
+
+      if (
+        target.classList.contains(
+          "filtro-columna-batch"
+        )
+        &&
+        target.tagName
+        ===
+        "INPUT"
+      ) {
+
+        aplicarFiltrosSitiosBatch();
+
+      }
+
+    }
+  );
 
   /* ======================================================== */
   /* CLICK GLOBAL                                             */
@@ -2514,7 +3244,28 @@ Detalle Batch Semanal
   document.addEventListener(
     "click",
     async function (event) {
+  
+      /* ==================================================== */
+      /* LIMPIAR FILTROS DE SITIOS INCLUIDOS                  */
+      /* ==================================================== */
 
+      const botonLimpiarFiltrosBatch =
+        event.target.closest(
+          "#limpiar-filtros-sitios-batch"
+        );
+
+
+      if (botonLimpiarFiltrosBatch) {
+
+        event.preventDefault();
+
+
+        limpiarFiltrosSitiosBatch();
+
+
+        return;
+
+      }
       /* ==================================================== */
       /* LIMPIAR SELECCIÓN DEL BATCH                          */
       /* ==================================================== */
@@ -2553,6 +3304,20 @@ Detalle Batch Semanal
         if (selectorEstadoBatch) {
 
           selectorEstadoBatch.value =
+            "";
+
+        }
+
+
+        const selectorPermisoBatch =
+          document.getElementById(
+            "permiso-batch-masivo"
+          );
+
+
+        if (selectorPermisoBatch) {
+
+          selectorPermisoBatch.value =
             "";
 
         }
