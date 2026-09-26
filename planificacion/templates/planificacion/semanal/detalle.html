@@ -2726,7 +2726,25 @@ Detalle Batch Semanal
 
 
         fila.hidden =
-          !visible;
+            !visible;
+
+
+          if (!visible) {
+
+            const checkbox =
+              fila.querySelector(
+                ".item-batch-checkbox"
+              );
+
+
+            if (checkbox) {
+
+              checkbox.checked =
+                false;
+
+            }
+
+          }
 
       }
     );
@@ -3384,6 +3402,286 @@ Detalle Batch Semanal
 
 
       /* ==================================================== */
+      /* ACCIÓN MASIVA DEL BATCH                              */
+      /* ==================================================== */
+
+      if (
+        formulario.id
+        ===
+        "form-sitios-batch"
+        &&
+        (
+          event.submitter?.id
+          ===
+          "boton-estado-batch-masivo"
+          ||
+          event.submitter?.id
+          ===
+          "boton-permiso-batch-masivo"
+        )
+      ) {
+
+        event.preventDefault();
+
+
+        const submitter =
+          event.submitter;
+
+
+        const checkboxesSeleccionados =
+          Array.from(
+            formulario.querySelectorAll(
+              ".item-batch-checkbox:checked"
+            )
+          );
+
+
+        if (
+          checkboxesSeleccionados.length
+          ===
+          0
+        ) {
+
+          alert(
+            "Selecciona al menos un sitio."
+          );
+
+
+          return;
+
+        }
+
+
+        let selector = null;
+
+
+        if (
+          submitter.id
+          ===
+          "boton-estado-batch-masivo"
+        ) {
+
+          selector =
+            document.getElementById(
+              "estado-batch-masivo"
+            );
+
+        } else {
+
+          selector =
+            document.getElementById(
+              "permiso-batch-masivo"
+            );
+
+        }
+
+
+        if (
+          !selector
+          ||
+          !selector.value
+        ) {
+
+          return;
+
+        }
+
+
+        const datos =
+          new FormData();
+
+
+        checkboxesSeleccionados.forEach(
+          function (checkbox) {
+
+            datos.append(
+              "item_ids",
+              checkbox.value
+            );
+
+          }
+        );
+
+
+        datos.append(
+          selector.name,
+          selector.value
+        );
+
+
+        submitter.disabled =
+          true;
+
+
+        const textoOriginal =
+          submitter.textContent;
+
+
+        submitter.textContent =
+          "Aplicando...";
+
+
+        try {
+
+          const response =
+            await fetch(
+              submitter.formAction,
+              {
+                method:
+                  "POST",
+
+                headers: {
+                  "X-CSRFToken":
+                    obtenerCsrfToken(),
+
+                  "X-Requested-With":
+                    "XMLHttpRequest"
+                },
+
+                credentials:
+                  "same-origin",
+
+                body:
+                  datos
+              }
+            );
+
+
+          if (!response.ok) {
+
+            let mensaje =
+              "No fue posible aplicar el cambio.";
+
+
+            try {
+
+              const data =
+                await response.json();
+
+
+              mensaje =
+                data.error
+                ||
+                mensaje;
+
+            } catch (error) {
+
+            }
+
+
+            throw new Error(
+              mensaje
+            );
+
+          }
+
+
+          /*
+           * Guardamos exactamente los filtros locales
+           * que están aplicados antes de actualizar
+           * el contenido del batch.
+           */
+
+          const filtrosBatch = {};
+
+
+          document
+            .querySelectorAll(
+              ".filtro-columna-batch"
+            )
+            .forEach(
+              function (filtro) {
+
+                filtrosBatch[
+                  filtro.dataset.filtroBatch
+                ] =
+                  filtro.value;
+
+              }
+            );
+
+
+          /*
+           * Actualizamos el contenido sin recargar
+           * el navegador.
+           */
+
+          await actualizarContenidoBatch(
+            window.location.href
+          );
+
+
+          /*
+           * Restauramos exactamente los filtros
+           * que tenía el usuario.
+           */
+
+          document
+            .querySelectorAll(
+              ".filtro-columna-batch"
+            )
+            .forEach(
+              function (filtro) {
+
+                const campo =
+                  filtro.dataset.filtroBatch;
+
+
+                if (
+                  Object.prototype.hasOwnProperty.call(
+                    filtrosBatch,
+                    campo
+                  )
+                ) {
+
+                  filtro.value =
+                    filtrosBatch[
+                      campo
+                    ];
+
+                }
+
+              }
+            );
+
+
+          aplicarFiltrosSitiosBatch();
+
+
+        } catch (error) {
+
+          alert(
+            error.message
+          );
+
+
+        } finally {
+
+          const botonActual =
+            document.getElementById(
+              submitter.id
+            );
+
+
+          if (botonActual) {
+
+            botonActual.textContent =
+              textoOriginal;
+
+          }
+
+
+          actualizarSeleccionBatch();
+
+        }
+
+
+        return;
+
+      }
+
+
+      /* ==================================================== */
       /* FILTROS                                              */
       /* ==================================================== */
 
@@ -3767,7 +4065,6 @@ Detalle Batch Semanal
 
     }
   );
-
 
   /* ======================================================== */
   /* ESTADO INICIAL                                           */
