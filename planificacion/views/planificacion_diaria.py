@@ -14,7 +14,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
-from planificacion.models import BatchPlanificacionSemanal, ContactoSitio
+from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
+                                  SitioPlanificado)
 from planificacion.services.motor_batch_semanal.cuadrillas import \
     construir_configuracion_cuadrilla
 from planificacion.services.motor_batch_semanal.salidas import \
