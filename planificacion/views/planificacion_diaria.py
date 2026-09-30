@@ -25,8 +25,6 @@ from planificacion.services.planificacion_diaria import (
     guardar_plan_diario_batch, obtener_estado_operacional_sitio,
     obtener_resumen_planificacion_diaria,
     obtener_sitios_pendientes_planificacion_diaria, sincronizar_estado_salida)
-from planificacion.services.traslado_mes_siguiente import (
-    obtener_planificacion_mes_siguiente, trasladar_sitio_mes_siguiente)
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
@@ -2345,83 +2343,41 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
     batch_id,
 ):
     """
-    Traslada al mes siguiente los sitios aprobados que
-    actualmente están pendientes de programación diaria.
+    Libera sitios pendientes de la semana actual para que
+    puedan volver a participar en una planificación semanal
+    posterior.
 
-    REGLA FUNDAMENTAL
-    ==========================================================
+    Esta acción NO cambia el mes y NO asigna inmediatamente
+    otra semana.
 
-    El sitio trasladado NO conserva posición, cluster,
-    salida, fecha ni memoria operacional del mes anterior.
+    El SitioPlanificado conserva su planificación mensual,
+    prioridad mensual, SitioMovil y relaciones operacionales.
 
-    En el mes siguiente entra nuevamente al universo mensual
-    como un sitio disponible común.
+    La condición semanal se reinicia:
 
-    SE CONSERVA
-    ----------------------------------------------------------
+        estado_permiso = sin_gestion
+        estado = pendiente
 
-    - SitioMovil maestro;
-    - permiso aprobado / no requiere;
-    - información territorial del sitio;
-    - información de contacto aplicable;
-    - prioridad mensual propia del SitioPlanificado si existe.
+    El SitioBatchSemanal de origen se conserva como histórico
+    en estado reemplazado.
 
-    NO SE CONSERVA
-    ----------------------------------------------------------
-
-    - fecha_planificada;
-    - orden_dia;
-    - salida diaria;
-    - cluster semanal;
-    - ubicación anterior dentro del batch;
-    - bloqueo del motor;
-    - programación manual anterior.
-
-    Además se retira el SitioBatchSemanal del batch actual
-    para que el sitio no siga apareciendo como pendiente en
-    la semana de origen.
+    NO modifica ServicioCotizado.
+    NO elimina fotografías.
+    NO modifica técnicos.
+    NO crea otra planificación mensual.
     """
 
     batch = (
         BatchPlanificacionSemanal.objects.select_for_update(
             of=("self",),
         )
-        .select_related(
-            "planificacion",
-        )
         .get(
             pk=batch_id,
         )
     )
 
-    planificacion_origen = batch.planificacion
-
-    planificacion_destino = obtener_planificacion_mes_siguiente(
-        planificacion_origen,
-    )
-
     # ========================================================
-    # DEBE EXISTIR MES SIGUIENTE
-    # ========================================================
-
-    if planificacion_destino is None:
-
-        messages.error(
-            request,
-            (
-                "No existe todavía una planificación mensual "
-                "creada para el mes siguiente. Créala antes "
-                "de trasladar los sitios pendientes."
-            ),
-        )
-
-        return redirect(
-            "planificacion:detalle_planificacion_diaria",
-            batch_id=batch.pk,
-        )
-
-        # ========================================================
-    # SITIOS SELECCIONADOS POR EL USUARIO
+    # SITIOS SELECCIONADOS
     # ========================================================
 
     ids_seleccionados_raw = request.POST.getlist(
@@ -2447,15 +2403,11 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
 
             continue
 
-    # ========================================================
-    # DEBE EXISTIR AL MENOS UNA SELECCIÓN
-    # ========================================================
-
     if not ids_seleccionados:
 
         messages.warning(
             request,
-            ("No seleccionaste ningún sitio " "para trasladar al mes siguiente."),
+            "No seleccionaste ningún sitio para pasar de semana.",
         )
 
         return redirect(
@@ -2464,16 +2416,7 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         )
 
     # ========================================================
-    # PENDIENTES REALES ACTUALES
-    # ========================================================
-    #
-    # Primero obtenemos el universo REAL de pendientes.
-    #
-    # Después lo limitamos exclusivamente a los IDs enviados
-    # por el formulario.
-    #
-    # De esta forma un usuario jamás puede trasladar mediante
-    # POST un sitio que no sea realmente pendiente del batch.
+    # VALIDAR CONTRA LOS PENDIENTES REALES DEL BATCH
     # ========================================================
 
     pendientes_reales = list(
@@ -2482,7 +2425,10 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         )
     )
 
-    ids_pendientes_reales = {item.pk for item in pendientes_reales}
+    ids_pendientes_reales = {
+        item.pk
+        for item in pendientes_reales
+    }
 
     ids_validos = {
         sitio_batch_id
@@ -2490,15 +2436,11 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         if sitio_batch_id in ids_pendientes_reales
     }
 
-    # ========================================================
-    # CONSTRUIR EXCLUSIVAMENTE LA SELECCIÓN VÁLIDA
-    # ========================================================
-
-    pendientes = [item for item in pendientes_reales if item.pk in ids_validos]
-
-    # ========================================================
-    # NINGUNO DE LOS SELECCIONADOS ES TRASLADABLE
-    # ========================================================
+    pendientes = [
+        item
+        for item in pendientes_reales
+        if item.pk in ids_validos
+    ]
 
     if not pendientes:
 
@@ -2507,7 +2449,7 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
             (
                 "Ninguno de los sitios seleccionados "
                 "se encuentra actualmente disponible "
-                "para ser trasladado."
+                "para pasar de semana."
             ),
         )
 
@@ -2516,8 +2458,7 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
             batch_id=batch.pk,
         )
 
-    trasladados = []
-
+    liberados = []
     omitidos = []
 
     # ========================================================
@@ -2528,24 +2469,30 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
 
         item_batch = (
             type(item_batch)
-            .objects.select_for_update()
-            .select_related(
-                "sitio_planificado",
-                "sitio_planificado__sitio",
+            .objects.select_for_update(
+                of=("self",),
             )
             .get(
                 pk=item_batch.pk,
             )
         )
 
-        sitio_planificado = item_batch.sitio_planificado
+        sitio_planificado = (
+            SitioPlanificado.objects.select_for_update()
+            .select_related(
+                "sitio",
+            )
+            .get(
+                pk=item_batch.sitio_planificado_id,
+            )
+        )
 
         identificador = _identificador_sitio_planificacion(
             sitio_planificado,
         )
 
         # ====================================================
-        # SEGURIDAD: NO DEBE TENER PARTICIPACIÓN ACTIVA
+        # NO LIBERAR SI YA TIENE PARTICIPACIÓN DIARIA ACTIVA
         # ====================================================
 
         tiene_salida_activa = (
@@ -2565,84 +2512,127 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         if tiene_salida_activa:
 
             omitidos.append(
-                (f"{identificador}: ya posee una " "participación diaria activa.")
+                (
+                    f"{identificador}: ya posee una "
+                    "participación diaria activa."
+                )
             )
 
             continue
 
         # ====================================================
-        # TRASLADAR SITIO PLANIFICADO
+        # REINICIAR CONDICIÓN SEMANAL
         # ====================================================
 
-        try:
+        sitio_planificado.fecha_planificada = None
+        sitio_planificado.orden_dia = 0
 
-            resultado = trasladar_sitio_mes_siguiente(
-                sitio_planificado=sitio_planificado,
-                usuario=request.user,
+        # Todavía no existe una nueva semana.
+        #
+        # Por eso queda SIN GESTIÓN y no POR SOLICITAR.
+        sitio_planificado.estado_permiso = "sin_gestion"
+        sitio_planificado.estado = "pendiente"
+
+        sitio_planificado.bloqueado_motor = False
+        sitio_planificado.planificado_manualmente = False
+        sitio_planificado.motivo_bloqueo = ""
+        sitio_planificado.alerta_motor = ""
+        sitio_planificado.actualizado_por = request.user
+
+        sitio_planificado.save(
+            update_fields=[
+                "fecha_planificada",
+                "orden_dia",
+                "estado_permiso",
+                "estado",
+                "bloqueado_motor",
+                "planificado_manualmente",
+                "motivo_bloqueo",
+                "alerta_motor",
+                "actualizado_por",
+                "actualizado_en",
+            ]
+        )
+
+        # ====================================================
+        # CONSERVAR W40/WXX COMO HISTÓRICO
+        # ====================================================
+
+        item_batch.estado = "reemplazado"
+
+        item_batch.motivo_exclusion = (
+            "Liberado manualmente para planificación "
+            "en una semana posterior."
+        )
+
+        item_batch.bloqueado_en_batch = False
+        item_batch.es_reserva = False
+        item_batch.agregado_por = request.user
+
+        item_batch.save(
+            update_fields=[
+                "estado",
+                "motivo_exclusion",
+                "bloqueado_en_batch",
+                "es_reserva",
+                "agregado_por",
+                "actualizado_en",
+            ]
+        )
+
+        liberados.append(
+            identificador,
+        )
+
+    # ========================================================
+    # SINCRONIZAR BATCH DE ORIGEN
+    # ========================================================
+
+    if liberados:
+
+        batch_bloqueado = (
+            BatchPlanificacionSemanal.objects.select_for_update()
+            .get(
+                pk=batch.pk,
             )
+        )
 
-        except ValidationError as exc:
-
-            mensaje = "; ".join(exc.messages)
-
-            omitidos.append(f"{identificador}: {mensaje}")
-
-            continue
-
-        # ====================================================
-        # RETIRAR DEL BATCH DE ORIGEN
-        # ====================================================
-        #
-        # Este registro representa pertenencia a W35.
-        #
-        # Una vez trasladado a septiembre ya no debe
-        # participar en ningún nuevo cálculo de agosto.
-        # ====================================================
-
-        item_batch.delete()
-
-        trasladados.append(
-            {
-                "identificador": identificador,
-                "resultado": resultado,
-            }
+        sincronizar_estado_batch_desde_planificacion_diaria(
+            batch=batch_bloqueado,
+            usuario=request.user,
         )
 
     # ========================================================
     # RESULTADO
     # ========================================================
 
-    if trasladados:
-
-        nombre_destino = (
-            f"{planificacion_destino.mes:02d}/" f"{planificacion_destino.anio}"
-        )
+    if liberados:
 
         messages.success(
             request,
             (
-                f"Se trasladaron {len(trasladados)} "
-                f"sitio(s) al mes {nombre_destino}. "
-                "Los sitios fueron retirados del batch actual "
-                "y quedarán disponibles para mezclarse con el "
-                "universo normal del mes siguiente."
+                f"Se liberaron {len(liberados)} sitio(s) "
+                "de la semana actual. Quedaron sin gestión "
+                "de permiso y disponibles para una futura "
+                "planificación semanal."
             ),
         )
 
-    if omitidos:
-
-        for motivo in omitidos:
-
-            messages.warning(
-                request,
-                motivo,
-            )
-
-    if not trasladados:
+    for motivo in omitidos:
 
         messages.warning(
             request,
-            ("No fue posible trasladar ninguno " "de los sitios pendientes."),
+            motivo,
+        )
+
+    if not liberados:
+
+        messages.warning(
+            request,
+            (
+                "No fue posible liberar ninguno de los "
+                "sitios seleccionados."
+            ),
         )
 
     return redirect(

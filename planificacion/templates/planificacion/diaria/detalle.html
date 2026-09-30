@@ -730,9 +730,9 @@ Planificación Diaria
             >
               Estos sitios ya están habilitados para trabajo,
               pero todavía no pertenecen a una salida diaria.
-              Puedes mantenerlos en este mes, programarlos
+              Puedes mantenerlos en esta semana, programarlos
               manualmente o seleccionar únicamente los que
-              deseas trasladar al mes siguiente.
+              deseas liberar para una semana posterior.
             </p>
 
           </div>
@@ -967,7 +967,7 @@ Planificación Diaria
                     hover:border-blue-300
                     hover:bg-blue-100
                   "
-                  title="Seleccionar para trasladar al mes siguiente"
+                  title="Seleccionar para pasar de semana"
                 >
 
                   <input
@@ -3430,7 +3430,7 @@ Planificación Diaria
               text-slate-900
             "
           >
-            Pasar al mes siguiente
+            Pasar de semana
           </h3>
 
           <p
@@ -4079,11 +4079,11 @@ Planificación Diaria
     else {
 
       titulo.textContent =
-        "Pasar al mes siguiente";
+        "Pasar de semana";
 
 
       texto.textContent =
-        "Los sitios seleccionados serán retirados de esta semana y pasarán al mes siguiente para ser reevaluados desde cero dentro de la nueva planificación.";
+        "Los sitios seleccionados serán retirados de esta semana, perderán su condición actual de permiso y quedarán disponibles para una futura planificación semanal.";
 
 
       resumen.classList.remove(
