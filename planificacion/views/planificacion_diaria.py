@@ -25,7 +25,9 @@ from planificacion.services.planificacion_diaria import (
     _restaurar_sitio_planificado_si_corresponde, _sitio_batch_a_motor,
     guardar_plan_diario_batch, obtener_estado_operacional_sitio,
     obtener_resumen_planificacion_diaria,
-    obtener_sitios_pendientes_planificacion_diaria, sincronizar_estado_salida)
+    obtener_sitios_pendientes_planificacion_diaria,
+    sincronizar_estado_batch_desde_planificacion_diaria,
+    sincronizar_estado_salida)
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
