@@ -2383,7 +2383,9 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
     """
 
     batch = (
-        BatchPlanificacionSemanal.objects.select_for_update()
+        BatchPlanificacionSemanal.objects.select_for_update(
+            of=("self",),
+        )
         .select_related(
             "planificacion",
         )
