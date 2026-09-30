@@ -1755,6 +1755,51 @@ def detalle_planificacion_semanal(
         )
     )
 
+    # ========================================================
+    # ESTADOS DE PLANIFICACIÓN Y OPERACIÓN
+    # ========================================================
+    #
+    # Exponemos en cada item incluido dos estados independientes:
+    #
+    #   1. Estado de planificación del SitioPlanificado.
+    #   2. Estado operacional real del ServicioCotizado vinculado
+    #      exactamente a ese SitioPlanificado.
+    #
+    # No se modifica ningún estado persistido.
+    # Estos atributos se utilizan únicamente para presentación
+    # y filtrado en la tabla del batch semanal.
+    # ========================================================
+
+    for item in incluidos:
+
+        sitio_planificado = item.sitio_planificado
+
+        item.estado_planificacion_codigo = (
+            sitio_planificado.estado or ""
+        )
+
+        item.estado_planificacion_display = (
+            sitio_planificado.get_estado_display()
+        )
+
+        estado_operacional = obtener_estado_operacional_sitio(
+            sitio_planificado,
+        )
+
+        item.estado_operativo_codigo = (
+            estado_operacional.get(
+                "estado_operaciones",
+            )
+            or "sin_servicio"
+        )
+
+        item.estado_operativo_display = (
+            estado_operacional.get(
+                "estado_operaciones_display",
+            )
+            or "Sin servicio operacional"
+        )
+
     candidatos_base = obtener_candidatos_batch(
         batch,
         incluir_excluidos_batch=True,
