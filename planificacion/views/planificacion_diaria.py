@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_POST
 from planificacion.modelos import (SalidaPlanificacionDiaria,
                                    SitioSalidaPlanificacionDiaria)
 from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
-                                  SitioPlanificado)
+                                  SitioBatchSemanal, SitioPlanificado)
 from planificacion.services.motor_batch_semanal.cuadrillas import \
     construir_configuracion_cuadrilla
 from planificacion.services.motor_batch_semanal.salidas import \
@@ -2419,31 +2419,40 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         )
 
     # ========================================================
-    # VALIDAR CONTRA LOS PENDIENTES REALES DEL BATCH
+    # VALIDAR CONTRA LOS SITIOS ACTIVOS DEL BATCH
+    # ========================================================
+    #
+    # "Pasar de semana" tiene un universo distinto al motor
+    # diario.
+    #
+    # Debe poder liberar un sitio de esta semana aunque:
+    #
+    #   - todavía esté gestionando permiso;
+    #   - ya haya sido incorporado a una jornada diaria.
+    #
+    # La protección contra duplicidad operacional se realiza
+    # posteriormente mediante obtener_estado_operacional_sitio.
     # ========================================================
 
-    pendientes_reales = list(
-        obtener_sitios_pendientes_planificacion_diaria(
-            batch,
+    pendientes = list(
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+            pk__in=ids_seleccionados,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ]
+        )
+        .select_related(
+            "sitio_planificado",
+            "sitio_planificado__sitio",
+        )
+        .order_by(
+            "id",
         )
     )
-
-    ids_pendientes_reales = {
-        item.pk
-        for item in pendientes_reales
-    }
-
-    ids_validos = {
-        sitio_batch_id
-        for sitio_batch_id in ids_seleccionados
-        if sitio_batch_id in ids_pendientes_reales
-    }
-
-    pendientes = [
-        item
-        for item in pendientes_reales
-        if item.pk in ids_validos
-    ]
 
     if not pendientes:
 
@@ -2495,11 +2504,82 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
         )
 
         # ====================================================
-        # NO LIBERAR SI YA TIENE PARTICIPACIÓN DIARIA ACTIVA
+        # ESTADO OPERACIONAL REAL
+        # ====================================================
+        #
+        # Una participación en Planificación Diaria NO debe,
+        # por sí sola, impedir pasar el sitio de semana.
+        #
+        # La protección depende del compromiso real existente
+        # en Operaciones.
+        #
+        # Si Operaciones ya está:
+        #
+        #   asignado
+        #   en ejecución
+        #   revisión
+        #   finalizado
+        #
+        # el sitio NO puede volver al pool porque podría
+        # duplicarse operacionalmente.
+        #
+        # Si todavía no existe ese compromiso operacional,
+        # cualquier participación diaria activa se retira de
+        # Planificación Diaria sin modificar ServicioCotizado,
+        # técnicos, fotografías ni evidencias.
         # ====================================================
 
-        tiene_salida_activa = (
-            SitioSalidaPlanificacionDiaria.objects.filter(
+        estado_operacional = obtener_estado_operacional_sitio(
+            sitio_planificado,
+        )
+
+        estado_planificacion_operacional = (
+            estado_operacional.get(
+                "estado_planificacion",
+            )
+        )
+
+        existe_compromiso_operacional = (
+            estado_planificacion_operacional
+            in {
+                "asignado",
+                "en_ejecucion",
+                "revision",
+                "finalizado",
+            }
+        )
+
+        if existe_compromiso_operacional:
+
+            estado_operativo_display = (
+                estado_operacional.get(
+                    "estado_operaciones_display",
+                )
+                or "estado operacional activo"
+            )
+
+            omitidos.append(
+                (
+                    f"{identificador}: posee un compromiso "
+                    "activo en Operaciones "
+                    f"({estado_operativo_display})."
+                )
+            )
+
+            continue
+
+        # ====================================================
+        # RETIRAR PARTICIPACIONES DIARIAS ACTIVAS
+        # ====================================================
+        #
+        # Conservamos el histórico exactamente mediante el
+        # estado "retirado". No eliminamos la participación
+        # ni modificamos Operaciones.
+        # ====================================================
+
+        participaciones_activas = list(
+            SitioSalidaPlanificacionDiaria.objects.select_for_update()
+            .filter(
                 sitio_batch=item_batch,
             )
             .exclude(
@@ -2509,19 +2589,27 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
                     "reprogramado",
                 ]
             )
-            .exists()
         )
 
-        if tiene_salida_activa:
+        for participacion in participaciones_activas:
 
-            omitidos.append(
-                (
-                    f"{identificador}: ya posee una "
-                    "participación diaria activa."
-                )
+            participacion.estado = "retirado"
+
+            participacion.motivo_reprogramacion = (
+                "Retirado de la jornada al liberar el sitio "
+                "para una semana posterior."
             )
 
-            continue
+            participacion.actualizado_por = request.user
+
+            participacion.save(
+                update_fields=[
+                    "estado",
+                    "motivo_reprogramacion",
+                    "actualizado_por",
+                    "actualizado_en",
+                ]
+            )
 
         # ====================================================
         # REINICIAR CONDICIÓN SEMANAL
