@@ -1880,22 +1880,69 @@ def generar_propuestas(
     # ========================================================
 
     if (
+        modo_planificacion == "manual"
+        and sitios_fijos
+    ):
+        # ====================================================
+        # MODO MANUAL
+        # ====================================================
+        # La selección del usuario es autoritativa.
+        # El motor solamente analiza su viabilidad operacional.
+        # ====================================================
+
+        seleccion_manual = list(
+            sitios_fijos
+        )
+
+        if len(seleccion_manual) > objetivo:
+            return []
+
+        zonas = [
+            {
+                "sitios": seleccion_manual,
+                "score": 0.0,
+                "score_concentracion": 0.0,
+                "score_restante": 0.0,
+                "score_bases": 0.0,
+                "score_exterior": None,
+                "prioridad_exterior": {},
+                "metricas": calcular_metricas_zona(
+                    seleccion_manual,
+                ),
+                "semilla_id": None,
+                "objetivo": objetivo,
+                "cantidad_propuesta": len(
+                    seleccion_manual,
+                ),
+                "cobertura_objetivo": round(
+                    (
+                        len(seleccion_manual)
+                        / max(objetivo, 1)
+                    )
+                    * 100,
+                    2,
+                ),
+                "accesibilidad_bases": {},
+                "impacto_restante": {},
+                "fallback_multibloque": False,
+                "fallback_global": False,
+                "bloques_semanales": [],
+            }
+        ]
+
+    elif (
         modo_planificacion == "mixto"
         and sitios_fijos
     ):
         # ====================================================
         # MODO MIXTO
         # ====================================================
-        #
-        # Los sitios seleccionados manualmente son anclas
-        # territoriales obligatorias.
-        #
-        # El motor parte directamente desde esas anclas y
-        # completa el objetivo alrededor de ellas.
-        #
-        # La exterioridad respecto de las bases no participa
-        # en esta expansión territorial.
+        # Los sitios manuales son anclas obligatorias.
+        # El motor completa alrededor sin superar el objetivo.
         # ====================================================
+
+        if len(sitios_fijos) > objetivo:
+            return []
 
         seleccion_mixta = _completar_zona_hasta_objetivo(
             zona=sitios_fijos,
@@ -1906,9 +1953,14 @@ def generar_propuestas(
         )
 
         if seleccion_mixta:
+
+            seleccion_mixta = list(
+                seleccion_mixta
+            )[:objetivo]
+
             zonas = [
                 {
-                    "sitios": list(seleccion_mixta),
+                    "sitios": seleccion_mixta,
                     "score": 0.0,
                     "score_concentracion": 0.0,
                     "score_restante": 0.0,
@@ -1938,10 +1990,15 @@ def generar_propuestas(
                     "bloques_semanales": [],
                 }
             ]
+
         else:
             zonas = []
 
     else:
+        # ====================================================
+        # MODO AUTOMATICO
+        # ====================================================
+
         zonas = generar_zonas_semanales(
             universo=universo,
             objetivo=objetivo,
@@ -2238,7 +2295,11 @@ def generar_propuestas(
             estrategia=estrategia,
             ids_fijos=ids_fijos,
             proteger_territorio=(
-                modo_planificacion == "mixto"
+                modo_planificacion
+                in {
+                    "manual",
+                    "mixto",
+                }
             ),
         )
 
@@ -2249,6 +2310,38 @@ def generar_propuestas(
             )
             or []
         )
+
+        # ====================================================
+        # INVARIANTES DURAS DE PLANIFICACION
+        # ====================================================
+
+        ids_principales_finales = {
+            sitio.sitio_planificado_id
+            for sitio in principales
+        }
+
+        if len(principales) > objetivo:
+            continue
+
+        if modo_planificacion == "manual":
+
+            ids_fijos_presentes = {
+                sitio.sitio_planificado_id
+                for sitio in sitios_fijos
+            }
+
+            if (
+                ids_principales_finales
+                != ids_fijos_presentes
+            ):
+                continue
+
+        elif modo_planificacion == "mixto":
+
+            if not ids_fijos.issubset(
+                ids_principales_finales
+            ):
+                continue
 
         clusters_operacionales = list(
             reparacion.get(

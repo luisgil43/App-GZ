@@ -303,7 +303,23 @@ Seleccionar sitios · {{ batch.codigo_semana }}
     ...candidatosSinCoordenadas
   ];
 
-  const seleccionados = new Set();
+  const seleccionados = new Set(
+    candidatos
+      .filter(
+        function (candidato) {
+          return Boolean(
+            candidato.seleccionado
+          );
+        }
+      )
+      .map(
+        function (candidato) {
+          return String(
+            candidato.sitio_planificado_id
+          );
+        }
+      )
+  );
 
   const marcadores = new Map();
 

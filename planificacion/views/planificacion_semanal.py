@@ -3065,6 +3065,30 @@ def seleccionar_sitios_creacion_batch(
         )
 
     # ========================================================
+    # SELECCION MANUAL ACTUAL
+    # ========================================================
+
+    items_manuales_actuales = (
+        SitioBatchSemanal.objects.filter(
+            batch=batch,
+            agregado_manualmente=True,
+        )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
+    )
+
+    ids_manuales_actuales = set(
+        items_manuales_actuales.values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    # ========================================================
     # POST: CONFIRMAR SELECCIÓN
     # ========================================================
 
@@ -3090,6 +3114,10 @@ def seleccionar_sitios_creacion_batch(
                 "pk",
                 flat=True,
             )
+        )
+
+        candidatos_validos_ids.update(
+            ids_manuales_actuales
         )
 
         sitio_ids = [
@@ -3126,6 +3154,41 @@ def seleccionar_sitios_creacion_batch(
 
             with transaction.atomic():
 
+                ids_seleccionados = {
+                    int(sitio_id)
+                    for sitio_id in sitio_ids
+                }
+
+                items_a_retirar = (
+                    SitioBatchSemanal.objects.select_for_update()
+                    .filter(
+                        batch=batch,
+                        agregado_manualmente=True,
+                    )
+                    .exclude(
+                        estado__in=[
+                            "excluido",
+                            "reemplazado",
+                            "confirmado",
+                        ],
+                    )
+                    .exclude(
+                        sitio_planificado_id__in=(
+                            ids_seleccionados
+                        ),
+                    )
+                )
+
+                items_a_retirar.update(
+                    estado="excluido",
+                    motivo_exclusion=(
+                        "Retirado de la selección manual "
+                        "del batch."
+                    ),
+                    bloqueado_en_batch=False,
+                    es_reserva=False,
+                )
+
                 cantidad = agregar_sitios_al_batch(
                     batch=batch,
                     sitio_ids=sitio_ids,
@@ -3153,60 +3216,63 @@ def seleccionar_sitios_creacion_batch(
                     agregado_por=request.user,
                 )
 
-            if cantidad:
+            cantidad_seleccionada = len(
+                sitio_ids
+            )
 
-                if batch.modo_planificacion == "manual":
+            if batch.modo_planificacion == "manual":
 
-                    messages.success(
-                        request,
-                        (
-                            f"{cantidad} sitio(s) seleccionado(s) "
-                            "manualmente y fijados en el batch."
-                        ),
-                    )
-
-                else:
-
-                    messages.success(
-                        request,
-                        (
-                            f"{cantidad} sitio(s) seleccionado(s) "
-                            "y fijados como obligatorios. "
-                            "El motor podrá completar posteriormente "
-                            "los cupos restantes."
-                        ),
-                    )
-
-                return redirect(
-                    "planificacion:detalle_planificacion_semanal",
-                    batch_id=batch.pk,
+                messages.success(
+                    request,
+                    (
+                        f"Selección manual actualizada: "
+                        f"{cantidad_seleccionada} sitio(s). "
+                        "El motor analizará únicamente estos "
+                        "sitios."
+                    ),
                 )
 
-            messages.warning(
-                request,
-                (
-                    "No se agregó ningún sitio nuevo. "
-                    "Los sitios seleccionados pueden pertenecer "
-                    "ya al batch."
-                ),
+            else:
+
+                messages.success(
+                    request,
+                    (
+                        f"Selección mixta actualizada: "
+                        f"{cantidad_seleccionada} sitio(s) "
+                        "fijados como anclas obligatorias."
+                    ),
+                )
+
+            return redirect(
+                "planificacion:detalle_planificacion_semanal",
+                batch_id=batch.pk,
             )
 
     # ========================================================
     # UNIVERSO OFICIAL DE CANDIDATOS
     # ========================================================
 
-    candidatos = (
+    candidatos_disponibles = (
         obtener_candidatos_batch(
             batch,
             incluir_excluidos_batch=True,
         )
-        .select_related(
-            "sitio",
+    )
+
+    candidatos_manuales = (
+        SitioPlanificado.objects.filter(
+            pk__in=ids_manuales_actuales,
         )
-        .order_by(
-            "sitio__id_claro",
-            "id",
-        )
+    )
+
+    candidatos = (
+        candidatos_disponibles
+        | candidatos_manuales
+    ).select_related(
+        "sitio",
+    ).distinct().order_by(
+        "sitio__id_claro",
+        "id",
     )
 
     candidatos_mapa = []
@@ -3254,6 +3320,10 @@ def seleccionar_sitios_creacion_batch(
 
         candidato = {
             "sitio_planificado_id": sitio_planificado.pk,
+            "seleccionado": (
+                sitio_planificado.pk
+                in ids_manuales_actuales
+            ),
             "id_claro": id_claro,
             "nombre": sitio.nombre or "",
             "comuna": sitio.comuna or "",

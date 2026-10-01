@@ -371,6 +371,25 @@ def analizar_batch_semanal(
                 "advertencias": advertencias,
             }
 
+        if len(ids_fijos) > objetivo:
+
+            advertencias.append(
+                (
+                    f"El batch posee {len(ids_fijos)} sitio(s) "
+                    f"manuales activos, pero el objetivo semanal "
+                    f"es {objetivo}. Ajusta la selección manual "
+                    "antes de ejecutar el análisis."
+                )
+            )
+
+            return {
+                "version": ANALISIS_BATCH_VERSION,
+                "universo": universo,
+                "propuestas": [],
+                "cantidad_reserva": 0,
+                "advertencias": advertencias,
+            }
+
         objetivo_motor = min(
             len(ids_fijos),
             universo_total,
@@ -378,15 +397,30 @@ def analizar_batch_semanal(
 
     else:
 
-        # Automático y Mixto trabajan contra el objetivo
-        # semanal configurado.
-        #
-        # En Mixto, ids_fijos protege las decisiones manuales.
+        if (
+            modo_planificacion == "mixto"
+            and len(ids_fijos) > objetivo
+        ):
+
+            advertencias.append(
+                (
+                    f"El batch posee {len(ids_fijos)} sitio(s) "
+                    f"manuales fijados, pero el objetivo semanal "
+                    f"es {objetivo}. Ajusta la selección antes "
+                    "de ejecutar el análisis."
+                )
+            )
+
+            return {
+                "version": ANALISIS_BATCH_VERSION,
+                "universo": universo,
+                "propuestas": [],
+                "cantidad_reserva": 0,
+                "advertencias": advertencias,
+            }
+
         objetivo_motor = min(
-            max(
-                objetivo,
-                len(ids_fijos),
-            ),
+            objetivo,
             universo_total,
         )
 
@@ -776,6 +810,34 @@ def aplicar_propuesta_batch(
         raise ValueError("La propuesta seleccionada no contiene " "sitios principales.")
 
     principales = list(dict.fromkeys(principales))
+
+    # ========================================================
+    # INVARIANTE FINAL DEL OBJETIVO
+    # ========================================================
+
+    try:
+        objetivo_batch = int(
+            batch.objetivo_sitios
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        objetivo_batch = 0
+
+    if objetivo_batch <= 0:
+        raise ValueError(
+            "El batch no posee un objetivo semanal válido."
+        )
+
+    if len(principales) > objetivo_batch:
+        raise ValueError(
+            (
+                f"La propuesta contiene {len(principales)} "
+                f"sitios principales y el objetivo del batch "
+                f"es {objetivo_batch}. Recalcula la propuesta."
+            )
+        )
 
     todos_ids = set(principales)
 

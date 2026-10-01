@@ -13,6 +13,58 @@ VECINOS_DENSIDAD = 5
 
 
 # ============================================================
+# POLITICA TERRITORIAL SEGUN BASE OPERACIONAL
+# ============================================================
+#
+# La estrategia histórica exterior -> interior se conserva
+# para operaciones cuyas bases se encuentran en la Región
+# Metropolitana.
+#
+# Para operaciones regionales, la expansión parte desde las
+# bases efectivas y avanza progresivamente hacia afuera.
+#
+# No se utilizan nombres de ciudades, comunas ni prefijos.
+# La clasificación se realiza exclusivamente por coordenadas.
+#
+# El centro/radio se utiliza como clasificación operacional
+# aproximada de la RM, no como límite administrativo.
+# ============================================================
+
+CENTRO_RM_LATITUD = -33.4489
+CENTRO_RM_LONGITUD = -70.6693
+RADIO_OPERACIONAL_RM_KM = 70.0
+
+
+def _bases_operacionales_en_rm(
+    disponibilidades,
+):
+    bases = _normalizar_bases_operacionales(
+        disponibilidades
+    )
+
+    if not bases:
+        return False
+
+    for base in bases:
+
+        distancia = distancia_haversine_km(
+            CENTRO_RM_LATITUD,
+            CENTRO_RM_LONGITUD,
+            base["latitud"],
+            base["longitud"],
+        )
+
+        if (
+            distancia is not None
+            and distancia
+            <= RADIO_OPERACIONAL_RM_KM
+        ):
+            return True
+
+    return False
+
+
+# ============================================================
 # RADIO MÁXIMO DE UNA PROPUESTA SEMANAL
 # ============================================================
 
@@ -2153,14 +2205,40 @@ def _score_candidato_zona(
     # - una buena zona exterior recibe una pequeña prioridad.
     # ========================================================
 
-    score_total = (
-        score_concentracion
-        * PESO_CONCENTRACION_ACTUAL
-        + score_restante
-        * PESO_RESTO_MENSUAL
-        + score_exterior
-        * PESO_PRIORIDAD_EXTERIOR
+    bases_en_rm = (
+        _bases_operacionales_en_rm(
+            disponibilidades
+        )
     )
+
+    if bases_en_rm:
+
+        # Política histórica RM:
+        # concentración + salud del resto + exterioridad.
+        score_total = (
+            score_concentracion
+            * PESO_CONCENTRACION_ACTUAL
+            + score_restante
+            * PESO_RESTO_MENSUAL
+            + score_exterior
+            * PESO_PRIORIDAD_EXTERIOR
+        )
+
+    else:
+
+        # Política regional:
+        # concentración + cercanía operacional a las bases.
+        #
+        # La salud del resto continúa participando, pero ya
+        # no puede empujar la semana lejos de su base.
+        score_total = (
+            score_concentracion
+            * 0.52
+            + accesibilidad["score"]
+            * 0.30
+            + score_restante
+            * 0.18
+        )
 
     return {
         "score_total": round(
@@ -2277,6 +2355,18 @@ def _construir_semillas_estrategicas(
         ),
     )
 
+    bases_en_rm = (
+        _bases_operacionales_en_rm(
+            disponibilidades
+        )
+    )
+
+    # En RM conservamos la estrategia histórica:
+    # sitios exteriores primero.
+    #
+    # Fuera de RM hacemos exactamente lo contrario:
+    # las semillas nacen cerca de las bases operacionales
+    # y progresan territorialmente hacia afuera.
     por_exterioridad = sorted(
         universo,
         key=lambda sitio: (
@@ -2287,7 +2377,7 @@ def _construir_semillas_estrategicas(
                 ),
             )
         ),
-        reverse=True,
+        reverse=bases_en_rm,
     )
 
     limite_total = min(
@@ -2465,6 +2555,12 @@ def generar_zonas_semanales(
         )
     )
 
+    bases_en_rm = (
+        _bases_operacionales_en_rm(
+            disponibilidades
+        )
+    )
+
     # ========================================================
     # SEMILLAS ESTRATÉGICAS
     # ========================================================
@@ -2522,6 +2618,9 @@ def generar_zonas_semanales(
                     disponibilidades=(
                         disponibilidades
                     ),
+                    priorizar_exterioridad=(
+                        bases_en_rm
+                    ),
                 )
             )
 
@@ -2538,16 +2637,18 @@ def generar_zonas_semanales(
         # interiores más fáciles de dejar para después.
         # ====================================================
 
-        zona = (
-            _refinar_zona_con_bloques_exteriores(
-                zona=zona,
-                universo=universo,
-                objetivo=objetivo,
-                disponibilidades=(
-                    disponibilidades
-                ),
+        if bases_en_rm:
+
+            zona = (
+                _refinar_zona_con_bloques_exteriores(
+                    zona=zona,
+                    universo=universo,
+                    objetivo=objetivo,
+                    disponibilidades=(
+                        disponibilidades
+                    ),
+                )
             )
-        )
 
         # ====================================================
         # COBERTURA MÍNIMA
@@ -2735,38 +2836,69 @@ def generar_zonas_semanales(
     # ORDENAR
     # ========================================================
 
-    candidatos.sort(
-        key=lambda candidato: (
-            # El objetivo pedido por el usuario sigue
-            # siendo la primera obligación.
-            candidato[
-                "cobertura_objetivo"
-            ],
-            # Después evaluamos la estrategia mensual completa.
-            candidato[
-                "score"
-            ],
-            # Ante resultados similares preferimos dejar
-            # mejor territorio para las semanas futuras.
-            candidato[
-                "score_restante"
-            ],
-            # Después concentración.
-            candidato[
-                "score_concentracion"
-            ],
-            # Y finalmente consumimos primero la más exterior.
-            candidato[
-                "score_exterior"
-            ],
-            -candidato[
-                "metricas"
-            ][
-                "radio_km"
-            ],
-        ),
-        reverse=True,
-    )
+    if bases_en_rm:
+
+        candidatos.sort(
+            key=lambda candidato: (
+                candidato[
+                    "cobertura_objetivo"
+                ],
+                candidato[
+                    "score"
+                ],
+                candidato[
+                    "score_restante"
+                ],
+                candidato[
+                    "score_concentracion"
+                ],
+                candidato[
+                    "score_exterior"
+                ],
+                -candidato[
+                    "metricas"
+                ][
+                    "radio_km"
+                ],
+            ),
+            reverse=True,
+        )
+
+    else:
+
+        candidatos.sort(
+            key=lambda candidato: (
+                # El objetivo sigue siendo la obligación
+                # principal.
+                candidato[
+                    "cobertura_objetivo"
+                ],
+
+                # Ranking territorial/operacional regional.
+                candidato[
+                    "score"
+                ],
+
+                # Ante alternativas similares preferimos
+                # acceso favorable desde las bases.
+                candidato[
+                    "score_bases"
+                ],
+
+                # Después concentración.
+                candidato[
+                    "score_concentracion"
+                ],
+
+                # Finalmente preferimos menor radio.
+                -candidato[
+                    "metricas"
+                ][
+                    "radio_km"
+                ],
+            ),
+            reverse=True,
+        )
 
     # ========================================================
     # QUITAR DUPLICADAS
