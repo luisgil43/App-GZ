@@ -2509,15 +2509,17 @@ def _construir_zona_regional_desde_base(
     Construye la selección territorial para Automático cuando
     las bases operacionales están fuera de RM.
 
-    Regla:
-        base -> territorio cercano -> expansión progresiva.
+    Política regional:
+        base -> candidatos más cercanos -> exterior.
 
-    A diferencia del flujo histórico RM, aquí una concentración
-    remota no puede convertirse en el origen territorial solo
-    por tener mayor densidad.
+    La distancia a la base efectiva es la regla territorial
+    primaria. La concentración no puede desplazar el origen
+    hacia una zona remota mientras existan candidatos
+    elegibles más próximos a la base.
 
-    La distancia a la base define el punto de partida.
-    Después la expansión mantiene continuidad territorial.
+    Esta política es exclusiva del flujo Automático regional.
+    RM conserva su estrategia histórica y Manual/Mixto usan
+    sus propios flujos.
     """
 
     universo = [
@@ -2554,6 +2556,7 @@ def _construir_zona_regional_desde_base(
         ranking_base.append(
             (
                 distancia_base,
+                str(_id_sitio(sitio)),
                 sitio,
             )
         )
@@ -2564,41 +2567,24 @@ def _construir_zona_regional_desde_base(
     ranking_base.sort(
         key=lambda elemento: (
             elemento[0],
-            str(_id_sitio(elemento[1])),
+            elemento[1],
         )
     )
 
-    # El candidato disponible más cercano a cualquiera de las
-    # bases efectivas es el origen territorial obligatorio.
-    semilla_base = ranking_base[0][1]
-
-    zona = _construir_zona_desde_semilla(
-        semilla=semilla_base,
-        universo=universo,
-        objetivo=objetivo,
-    )
-
-    if not zona:
-        zona = [semilla_base]
-
-    # IMPORTANTE:
-    # No recentramos esta zona.
+    # Automático regional:
     #
-    # El recentrado histórico puede desplazar el origen hacia
-    # una concentración remota. En regional la base debe seguir
-    # gobernando el avance territorial.
-    if len(zona) < objetivo:
-
-        zona = _completar_zona_hasta_objetivo(
-            zona=zona,
-            universo=universo,
-            objetivo=objetivo,
-            disponibilidades=disponibilidades,
-            priorizar_exterioridad=False,
-        )
-
-    if len(zona) > objetivo:
-        zona = zona[:objetivo]
+    # consumimos el territorio desde la base hacia afuera
+    # hasta alcanzar el objetivo semanal.
+    #
+    # No recentramos y no usamos el completador histórico RM,
+    # porque sus límites de contacto pueden bloquear el salto
+    # natural entre núcleos regionales consecutivos.
+    zona = [
+        elemento[2]
+        for elemento in ranking_base[
+            :objetivo
+        ]
+    ]
 
     return zona
 
