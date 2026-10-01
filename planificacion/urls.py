@@ -43,7 +43,8 @@ from planificacion.views.planificacion_semanal import (
     crear_planificacion_semanal, descargar_excel_batch,
     detalle_planificacion_semanal, editar_planificacion_semanal,
     eliminar_planificacion_semanal, enviar_gestion_permisos_batch,
-    lista_planificacion_semanal, mapa_batches_mensuales, quitar_sitio_batch)
+    lista_planificacion_semanal, mapa_batches_mensuales, quitar_sitio_batch,
+    seleccionar_sitios_creacion_batch)
 from planificacion.views.prioridades_diarias import (
     cancelar_prioridad_diaria, crear_prioridad_diaria, editar_prioridad_diaria,
     quitar_prioridad_planificacion_diaria, reactivar_prioridad_diaria)
@@ -194,6 +195,11 @@ urlpatterns = [
         "semanal/<int:batch_id>/mapa/",
         mapa_batch_semanal,
         name="mapa_batch_semanal",
+    ),
+    path(
+        "semanal/<int:batch_id>/seleccionar-sitios/",
+        seleccionar_sitios_creacion_batch,
+        name="seleccionar_sitios_creacion_batch",
     ),
     path(
         "semanal/<int:batch_id>/eliminar/",

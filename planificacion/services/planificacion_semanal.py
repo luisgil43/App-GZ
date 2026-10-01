@@ -281,6 +281,7 @@ def obtener_disponibilidades_semana(
 def actualizar_configuracion_batch_semanal(
     *,
     batch,
+    modo_planificacion,
     objetivo_sitios,
     observaciones,
     disponibilidades,
@@ -553,6 +554,19 @@ def actualizar_configuracion_batch_semanal(
     # BATCH
     # ========================================================
 
+    modos_validos = {
+        valor
+        for valor, _etiqueta
+        in BatchPlanificacionSemanal.MODOS_PLANIFICACION
+    }
+
+    if modo_planificacion not in modos_validos:
+        raise ValueError(
+            "El modo de planificación seleccionado no es válido."
+        )
+
+    batch.modo_planificacion = modo_planificacion
+
     batch.objetivo_sitios = objetivo_sitios
 
     batch.observaciones = str(observaciones or "").strip()
@@ -561,6 +575,7 @@ def actualizar_configuracion_batch_semanal(
 
     batch.save(
         update_fields=[
+            "modo_planificacion",
             "objetivo_sitios",
             "observaciones",
             "actualizado_por",
@@ -704,6 +719,7 @@ def crear_batch_semanal(
     objetivo_sitios,
     nombre="",
     observaciones="",
+    modo_planificacion="automatico",
     disponibilidades=None,
     usuario=None,
 ):
@@ -896,6 +912,7 @@ def crear_batch_semanal(
         nombre=nombre,
         objetivo_sitios=objetivo_sitios,
         generado_por_motor=False,
+        modo_planificacion=modo_planificacion,
         observaciones=observaciones,
         creado_por=usuario,
         actualizado_por=usuario,

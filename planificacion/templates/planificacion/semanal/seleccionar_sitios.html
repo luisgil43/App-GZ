@@ -1,0 +1,1141 @@
+{% extends "dashboard_admin/base.html" %}
+
+{% block title %}
+Seleccionar sitios · {{ batch.codigo_semana }}
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
+<div class="mx-auto max-w-[1800px]">
+
+  <!-- ====================================================== -->
+  <!-- CABECERA                                               -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+
+    <div>
+      <p class="text-sm font-semibold text-slate-500">
+        {{ mensual }}
+      </p>
+
+      <div class="mt-1 flex flex-wrap items-center gap-3">
+
+        <h1 class="text-2xl font-black text-slate-900">
+          Seleccionar sitios · {{ batch.codigo_semana }}
+        </h1>
+
+        {% if batch.modo_planificacion == "manual" %}
+          <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+            MODO MANUAL
+          </span>
+        {% else %}
+          <span class="rounded-full bg-violet-100 px-3 py-1 text-xs font-black text-violet-700">
+            MODO MIXTO
+          </span>
+        {% endif %}
+
+      </div>
+
+      <p class="mt-2 max-w-4xl text-sm text-slate-600">
+        {% if batch.modo_planificacion == "manual" %}
+          Selecciona directamente los sitios que formarán parte de esta semana.
+        {% else %}
+          Selecciona los sitios obligatorios. Quedarán fijados en el batch
+          y el motor podrá completar posteriormente los cupos restantes.
+        {% endif %}
+      </p>
+    </div>
+
+    <a
+      href="{% url 'planificacion:detalle_planificacion_semanal' batch.id %}"
+      class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+    >
+      Volver al batch
+    </a>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- RESUMEN                                                -->
+  <!-- ====================================================== -->
+
+  <div class="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p class="text-xs font-black uppercase text-slate-500">
+        Objetivo
+      </p>
+      <p class="mt-1 text-2xl font-black text-slate-900">
+        {{ batch.objetivo_sitios }}
+      </p>
+    </div>
+
+    <div class="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <p class="text-xs font-black uppercase text-blue-600">
+        Seleccionados
+      </p>
+      <p
+        id="contador-seleccionados"
+        class="mt-1 text-2xl font-black text-blue-900"
+      >
+        0
+      </p>
+    </div>
+
+    <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p class="text-xs font-black uppercase text-slate-500">
+        Candidatos disponibles
+      </p>
+      <p class="mt-1 text-2xl font-black text-slate-900">
+        {{ total_candidatos }}
+      </p>
+    </div>
+
+    <div class="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+      <p class="text-xs font-black uppercase text-violet-700">
+        Prefijos detectados
+      </p>
+      <p
+        id="contador-prefijos"
+        class="mt-1 text-2xl font-black text-violet-900"
+      >
+        0
+      </p>
+    </div>
+
+  </div>
+
+
+  <form method="post" id="form-seleccion-sitios">
+    {% csrf_token %}
+
+    <div
+      id="inputs-seleccionados"
+      class="hidden"
+    ></div>
+
+
+    <!-- ==================================================== -->
+    <!-- BARRA DE HERRAMIENTAS                                -->
+    <!-- ==================================================== -->
+
+    <div class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+
+        <div class="flex flex-1 flex-col gap-3 sm:flex-row">
+
+          <input
+            id="buscar-candidato"
+            type="search"
+            placeholder="Buscar por ID Claro, nombre o comuna..."
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:max-w-xl"
+          >
+
+          <div
+            id="filtros-prefijos"
+            class="flex flex-wrap items-center gap-2"
+          ></div>
+
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+
+          <button
+            type="button"
+            id="seleccionar-visibles"
+            class="rounded-xl border border-blue-300 bg-blue-50 px-4 py-2.5 text-sm font-black text-blue-800 hover:bg-blue-100"
+          >
+            Seleccionar visibles
+          </button>
+
+          <button
+            type="button"
+            id="limpiar-seleccion"
+            class="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50"
+          >
+            Limpiar selección
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- MAPA + PANEL                                         -->
+    <!-- ==================================================== -->
+
+    <div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+
+      <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+        {% if google_maps_api_key %}
+
+          <div
+            id="mapa-seleccion"
+            style="width:100%;height:720px;"
+          ></div>
+
+        {% else %}
+
+          <div class="flex h-[720px] items-center justify-center p-10 text-center">
+            <div>
+              <p class="font-black text-amber-700">
+                Google Maps no está configurado.
+              </p>
+              <p class="mt-2 text-sm text-slate-500">
+                Puedes seleccionar los sitios desde el listado lateral.
+              </p>
+            </div>
+          </div>
+
+        {% endif %}
+
+      </div>
+
+
+      <!-- PANEL LATERAL -->
+
+      <div class="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
+        <div class="border-b border-slate-200 p-4">
+
+          <div class="flex items-center justify-between gap-3">
+
+            <div>
+              <p class="font-black text-slate-900">
+                Sitios disponibles
+              </p>
+              <p class="mt-1 text-xs text-slate-500">
+                Haz clic en un sitio o en su marcador.
+              </p>
+            </div>
+
+            <span
+              id="contador-visibles"
+              class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700"
+            >
+              {{ total_candidatos }}
+            </span>
+
+          </div>
+
+        </div>
+
+        <div
+          id="lista-candidatos"
+          class="max-h-[655px] overflow-y-auto"
+        ></div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- CONFIRMACIÓN                                         -->
+    <!-- ==================================================== -->
+
+    <div class="sticky bottom-3 z-30 mt-5">
+
+      <div class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+          <p class="text-sm font-black text-slate-900">
+            <span id="resumen-seleccion">0 sitios seleccionados</span>
+          </p>
+
+          <p class="mt-1 text-xs text-slate-500">
+            {% if batch.modo_planificacion == "mixto" %}
+              Los seleccionados quedarán bloqueados; el motor no podrá reemplazarlos.
+            {% else %}
+              Los seleccionados quedarán fijados como selección manual.
+            {% endif %}
+          </p>
+        </div>
+
+        <button
+          id="confirmar-seleccion"
+          type="submit"
+          disabled
+          class="rounded-xl bg-blue-600 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          Confirmar selección
+        </button>
+
+      </div>
+
+    </div>
+
+  </form>
+
+</div>
+</div>
+
+
+{{ candidatos_mapa|json_script:"candidatos-mapa-data" }}
+{{ candidatos_sin_coordenadas|json_script:"candidatos-sin-coordenadas-data" }}
+
+
+<script>
+(function () {
+
+  const candidatosMapa = JSON.parse(
+    document.getElementById(
+      "candidatos-mapa-data"
+    )?.textContent || "[]"
+  );
+
+  const candidatosSinCoordenadas = JSON.parse(
+    document.getElementById(
+      "candidatos-sin-coordenadas-data"
+    )?.textContent || "[]"
+  );
+
+  const candidatos = [
+    ...candidatosMapa,
+    ...candidatosSinCoordenadas
+  ];
+
+  const seleccionados = new Set();
+
+  const marcadores = new Map();
+
+  let mapa = null;
+
+  let AdvancedMarkerElement = null;
+
+  let PinElement = null;
+
+
+  const lista =
+    document.getElementById(
+      "lista-candidatos"
+    );
+
+  const buscador =
+    document.getElementById(
+      "buscar-candidato"
+    );
+
+  const filtrosPrefijos =
+    document.getElementById(
+      "filtros-prefijos"
+    );
+
+  const prefijosActivos =
+    new Set();
+
+  const inputs =
+    document.getElementById(
+      "inputs-seleccionados"
+    );
+
+  const contador =
+    document.getElementById(
+      "contador-seleccionados"
+    );
+
+  const contadorPrefijos =
+    document.getElementById(
+      "contador-prefijos"
+    );
+
+  const contadorVisibles =
+    document.getElementById(
+      "contador-visibles"
+    );
+
+  const resumen =
+    document.getElementById(
+      "resumen-seleccion"
+    );
+
+  const confirmar =
+    document.getElementById(
+      "confirmar-seleccion"
+    );
+
+
+  function escaparHtml(valor) {
+
+    const div =
+      document.createElement("div");
+
+    div.textContent =
+      valor == null
+        ? ""
+        : String(valor);
+
+    return div.innerHTML;
+  }
+
+
+  function idCandidato(candidato) {
+
+    return String(
+      candidato.sitio_planificado_id
+    );
+  }
+
+
+  function candidatoSeleccionado(candidato) {
+
+    return seleccionados.has(
+      idCandidato(candidato)
+    );
+  }
+
+
+  function obtenerCandidatosVisibles() {
+
+    const texto =
+      (buscador.value || "")
+      .trim()
+      .toLowerCase();
+
+    return candidatos.filter(
+      function (candidato) {
+
+        if (
+          prefijosActivos.size
+          &&
+          !prefijosActivos.has(
+            candidato.prefijo
+          )
+        ) {
+          return false;
+        }
+
+        if (!texto) {
+          return true;
+        }
+
+        const contenido = [
+          candidato.id_claro,
+          candidato.nombre,
+          candidato.comuna,
+          candidato.tipo_zona,
+          candidato.direccion
+        ]
+        .join(" ")
+        .toLowerCase();
+
+        return contenido.includes(
+          texto
+        );
+      }
+    );
+  }
+
+
+  function actualizarInputs() {
+
+    inputs.innerHTML = "";
+
+    seleccionados.forEach(
+      function (id) {
+
+        const input =
+          document.createElement(
+            "input"
+          );
+
+        input.type = "hidden";
+        input.name = "sitio_ids";
+        input.value = id;
+
+        inputs.appendChild(
+          input
+        );
+      }
+    );
+  }
+
+
+  function actualizarResumen() {
+
+    const cantidad =
+      seleccionados.size;
+
+    contador.textContent =
+      `${cantidad} / {{ batch.objetivo_sitios }}`;
+
+    resumen.textContent =
+      cantidad === 1
+        ? "1 sitio seleccionado"
+        : `${cantidad} sitios seleccionados`;
+
+    confirmar.disabled =
+      cantidad === 0;
+
+    actualizarInputs();
+  }
+
+
+  function actualizarMarcador(candidato) {
+
+    const registro =
+      marcadores.get(
+        idCandidato(candidato)
+      );
+
+    if (
+      !registro
+      ||
+      !PinElement
+    ) {
+      return;
+    }
+
+    const seleccionado =
+      candidatoSeleccionado(
+        candidato
+      );
+
+    registro.marker.content =
+      construirContenidoMarcador(
+        candidato,
+        seleccionado
+      );
+  }
+
+
+  function alternarSeleccion(candidato) {
+
+    const id =
+      idCandidato(candidato);
+
+    if (
+      seleccionados.has(id)
+    ) {
+      seleccionados.delete(id);
+    } else {
+
+      const objetivo =
+        Number(
+          "{{ batch.objetivo_sitios }}"
+        ) || 0;
+
+      if (
+        objetivo > 0
+        &&
+        seleccionados.size >= objetivo
+      ) {
+        alert(
+          `El objetivo del batch es de ${objetivo} sitios.`
+        );
+        return;
+      }
+
+      seleccionados.add(id);
+    }
+
+    actualizarMarcador(
+      candidato
+    );
+
+    renderizarLista();
+
+    actualizarResumen();
+  }
+
+
+  function renderizarLista() {
+
+    const visibles =
+      obtenerCandidatosVisibles();
+
+    contadorVisibles.textContent =
+      String(visibles.length);
+
+    if (!visibles.length) {
+
+      lista.innerHTML = `
+        <div class="p-8 text-center text-sm text-slate-500">
+          No hay candidatos para estos filtros.
+        </div>
+      `;
+
+      return;
+    }
+
+    lista.innerHTML =
+      visibles.map(
+        function (candidato) {
+
+          const seleccionado =
+            candidatoSeleccionado(
+              candidato
+            );
+
+          const sinCoordenadas =
+            (
+              candidato.latitud == null
+              ||
+              candidato.longitud == null
+            );
+
+          return `
+            <button
+              type="button"
+              data-sitio-id="${escaparHtml(idCandidato(candidato))}"
+              class="
+                candidato-lista
+                block
+                w-full
+                border-b
+                border-slate-100
+                p-4
+                text-left
+                transition
+                ${
+                  seleccionado
+                    ? "bg-blue-50"
+                    : "bg-white hover:bg-slate-50"
+                }
+              "
+            >
+
+              <div class="flex items-start justify-between gap-3">
+
+                <div class="min-w-0">
+
+                  <div class="flex flex-wrap items-center gap-2">
+
+                    <span class="font-black text-slate-900">
+                      ${escaparHtml(candidato.id_claro)}
+                    </span>
+
+
+                    ${
+                      sinCoordenadas
+                        ? `
+                          <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                            Sin coordenadas
+                          </span>
+                        `
+                        : ""
+                    }
+
+                  </div>
+
+                  <p class="mt-1 truncate text-sm font-semibold text-slate-700">
+                    ${escaparHtml(candidato.nombre)}
+                  </p>
+
+                  <p class="mt-1 text-xs text-slate-500">
+                    ${escaparHtml(candidato.comuna || "Sin comuna")}
+                    ·
+                    ${escaparHtml(candidato.tipo_zona || "Sin zona")}
+                  </p>
+
+                  <p class="mt-1 text-xs text-slate-400">
+                    Permiso:
+                    ${escaparHtml(candidato.estado_permiso || "—")}
+                  </p>
+
+                </div>
+
+                <span
+                  class="
+                    flex
+                    h-6
+                    w-6
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-full
+                    border-2
+                    ${
+                      seleccionado
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-slate-300 bg-white"
+                    }
+                  "
+                >
+                  ${seleccionado ? "✓" : ""}
+                </span>
+
+              </div>
+
+            </button>
+          `;
+        }
+      ).join("");
+
+    document.querySelectorAll(
+      ".candidato-lista"
+    ).forEach(
+      function (boton) {
+
+        boton.addEventListener(
+          "click",
+          function () {
+
+            const candidato =
+              candidatos.find(
+                function (item) {
+                  return (
+                    idCandidato(item)
+                    ===
+                    boton.dataset.sitioId
+                  );
+                }
+              );
+
+            if (candidato) {
+              alternarSeleccion(
+                candidato
+              );
+            }
+          }
+        );
+      }
+    );
+  }
+
+
+  function obtenerPrefijos() {
+
+    const conteos = new Map();
+
+    candidatos.forEach(
+      function (candidato) {
+
+        const prefijo =
+          candidato.prefijo || "SIN_PREFIJO";
+
+        conteos.set(
+          prefijo,
+          (conteos.get(prefijo) || 0) + 1
+        );
+      }
+    );
+
+    return [...conteos.entries()]
+      .sort(
+        function (a, b) {
+          return a[0].localeCompare(b[0]);
+        }
+      );
+  }
+
+
+  function renderizarFiltrosPrefijos() {
+
+    const prefijos =
+      obtenerPrefijos();
+
+    contadorPrefijos.textContent =
+      String(prefijos.length);
+
+    filtrosPrefijos.innerHTML =
+      prefijos.map(
+        function ([prefijo, cantidad]) {
+
+          const activo =
+            prefijosActivos.has(
+              prefijo
+            );
+
+          return `
+            <button
+              type="button"
+              data-prefijo="${escaparHtml(prefijo)}"
+              class="
+                filtro-prefijo
+                rounded-xl
+                border
+                px-3
+                py-2
+                text-xs
+                font-black
+                ${
+                  activo
+                    ? "border-blue-600 bg-blue-600 text-white"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }
+              "
+            >
+              ${escaparHtml(prefijo)}
+              (${cantidad})
+            </button>
+          `;
+        }
+      ).join("");
+
+    document.querySelectorAll(
+      ".filtro-prefijo"
+    ).forEach(
+      function (boton) {
+
+        boton.addEventListener(
+          "click",
+          function () {
+
+            const prefijo =
+              boton.dataset.prefijo;
+
+            if (
+              prefijosActivos.has(prefijo)
+            ) {
+              prefijosActivos.delete(
+                prefijo
+              );
+            } else {
+              prefijosActivos.add(
+                prefijo
+              );
+            }
+
+            renderizarFiltrosPrefijos();
+            renderizarLista();
+          }
+        );
+      }
+    );
+  }
+
+
+  function construirContenidoMarcador(
+    candidato,
+    seleccionado
+  ) {
+
+    const contenedor =
+      document.createElement("div");
+
+    contenedor.style.display =
+      "flex";
+
+    contenedor.style.flexDirection =
+      "column";
+
+    contenedor.style.alignItems =
+      "center";
+
+    contenedor.style.cursor =
+      "pointer";
+
+    const etiqueta =
+      document.createElement("div");
+
+    etiqueta.textContent =
+      candidato.id_claro || "";
+
+    etiqueta.style.background =
+      seleccionado
+        ? "#2563eb"
+        : "#ffffff";
+
+    etiqueta.style.color =
+      seleccionado
+        ? "#ffffff"
+        : "#0f172a";
+
+    etiqueta.style.border =
+      seleccionado
+        ? "1px solid #1d4ed8"
+        : "1px solid #cbd5e1";
+
+    etiqueta.style.borderRadius =
+      "6px";
+
+    etiqueta.style.padding =
+      "2px 5px";
+
+    etiqueta.style.marginBottom =
+      "2px";
+
+    etiqueta.style.fontSize =
+      "11px";
+
+    etiqueta.style.fontWeight =
+      "800";
+
+    etiqueta.style.lineHeight =
+      "1.2";
+
+    etiqueta.style.whiteSpace =
+      "nowrap";
+
+    etiqueta.style.boxShadow =
+      "0 1px 3px rgba(0,0,0,.18)";
+
+    const pin =
+      new PinElement({
+        background:
+          seleccionado
+            ? "#2563eb"
+            : "#64748b",
+
+        borderColor:
+          seleccionado
+            ? "#1d4ed8"
+            : "#475569",
+
+        glyphColor:
+          "#ffffff",
+
+        glyph:
+          seleccionado
+            ? "✓"
+            : "",
+
+        scale:
+          seleccionado
+            ? 1.15
+            : 1
+      });
+
+    contenedor.appendChild(
+      etiqueta
+    );
+
+    contenedor.appendChild(
+      pin.element
+    );
+
+    return contenedor;
+  }
+
+
+  async function inicializarMapaSeleccion() {
+
+    const nodo =
+      document.getElementById(
+        "mapa-seleccion"
+      );
+
+    if (
+      !nodo
+      ||
+      !window.google
+      ||
+      !google.maps
+    ) {
+      return;
+    }
+
+    const libreria =
+      await google.maps.importLibrary(
+        "marker"
+      );
+
+    AdvancedMarkerElement =
+      libreria.AdvancedMarkerElement;
+
+    PinElement =
+      libreria.PinElement;
+
+    mapa =
+      new google.maps.Map(
+        nodo,
+        {
+          center: {
+            lat: -33.45,
+            lng: -70.66
+          },
+          zoom: 7,
+          mapId: "DEMO_MAP_ID",
+          streetViewControl: false,
+          fullscreenControl: true,
+          mapTypeControl: true
+        }
+      );
+
+    const bounds =
+      new google.maps.LatLngBounds();
+
+    candidatosMapa.forEach(
+      function (candidato) {
+
+        const posicion = {
+          lat: Number(
+            candidato.latitud
+          ),
+          lng: Number(
+            candidato.longitud
+          )
+        };
+
+        const marker =
+          new AdvancedMarkerElement({
+            map: mapa,
+            position: posicion,
+            content:
+              construirContenidoMarcador(
+                candidato,
+                false
+              ),
+            title:
+              candidato.id_claro
+              + " - "
+              + candidato.nombre
+          });
+
+        marcadores.set(
+          idCandidato(candidato),
+          {
+            marker: marker,
+            candidato: candidato
+          }
+        );
+
+        marker.addListener(
+          "click",
+          function () {
+
+            alternarSeleccion(
+              candidato
+            );
+          }
+        );
+
+        bounds.extend(
+          posicion
+        );
+      }
+    );
+
+    if (!bounds.isEmpty()) {
+      mapa.fitBounds(
+        bounds,
+        40
+      );
+    }
+  }
+
+
+  buscador.addEventListener(
+    "input",
+    renderizarLista
+  );
+
+
+  document.getElementById(
+    "seleccionar-visibles"
+  ).addEventListener(
+    "click",
+    function () {
+
+      const objetivo =
+        Number(
+          "{{ batch.objetivo_sitios }}"
+        ) || 0;
+
+      const visibles =
+        obtenerCandidatosVisibles();
+
+      for (
+        const candidato of visibles
+      ) {
+
+        if (
+          objetivo > 0
+          &&
+          seleccionados.size >= objetivo
+        ) {
+          break;
+        }
+
+        seleccionados.add(
+          idCandidato(candidato)
+        );
+
+        actualizarMarcador(
+          candidato
+        );
+      }
+
+      renderizarLista();
+      actualizarResumen();
+    }
+  );
+
+
+  document.getElementById(
+    "limpiar-seleccion"
+  ).addEventListener(
+    "click",
+    function () {
+
+      const anteriores =
+        [...seleccionados];
+
+      seleccionados.clear();
+
+      anteriores.forEach(
+        function (id) {
+
+          const candidato =
+            candidatos.find(
+              function (item) {
+                return (
+                  idCandidato(item)
+                  ===
+                  id
+                );
+              }
+            );
+
+          if (candidato) {
+            actualizarMarcador(
+              candidato
+            );
+          }
+        }
+      );
+
+      renderizarLista();
+      actualizarResumen();
+    }
+  );
+
+
+  document.getElementById(
+    "form-seleccion-sitios"
+  ).addEventListener(
+    "submit",
+    function (event) {
+
+      if (!seleccionados.size) {
+        event.preventDefault();
+        return;
+      }
+
+      confirmar.disabled = true;
+      confirmar.textContent =
+        "Guardando selección...";
+    }
+  );
+
+
+  renderizarFiltrosPrefijos();
+  renderizarLista();
+  actualizarResumen();
+
+  window.initMapaSeleccion =
+    inicializarMapaSeleccion;
+
+})();
+</script>
+
+
+{% if google_maps_api_key %}
+
+<script
+  async
+  src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key|urlencode }}&loading=async&callback=initMapaSeleccion"
+></script>
+
+{% endif %}
+
+{% endblock %}

@@ -400,12 +400,14 @@ class CrearBatchSemanalForm(forms.ModelForm):
         fields = [
             "fecha_inicio",
             "objetivo_sitios",
+            "modo_planificacion",
             "observaciones",
         ]
 
         labels = {
             "fecha_inicio": "Semana objetivo",
             "objetivo_sitios": "Cantidad de sitios a proponer",
+            "modo_planificacion": "Modo de planificación",
             "observaciones": "Observaciones",
         }
 
@@ -433,6 +435,9 @@ class CrearBatchSemanalForm(forms.ModelForm):
                         "focus:ring-blue-100"
                     ),
                 }
+            ),
+            "modo_planificacion": forms.RadioSelect(
+                choices=BatchPlanificacionSemanal.MODOS_PLANIFICACION,
             ),
             "observaciones": forms.Textarea(
                 attrs={
@@ -483,6 +488,7 @@ class CrearBatchSemanalForm(forms.ModelForm):
         # ====================================================
 
         self.fields["objetivo_sitios"].initial = 40
+        self.fields["modo_planificacion"].initial = "automatico"
 
         # ====================================================
         # SEMANAS
@@ -1128,6 +1134,16 @@ class EditarBatchSemanalForm(forms.Form):
     maestra.
     """
 
+    modo_planificacion = forms.ChoiceField(
+        choices=BatchPlanificacionSemanal.MODOS_PLANIFICACION,
+        label="Modo de planificación",
+        widget=forms.RadioSelect(
+            attrs={
+                "class": "modo-planificacion-radio sr-only",
+            }
+        ),
+    )
+
     objetivo_sitios = forms.IntegerField(
         min_value=1,
         label="Cantidad de sitios a proponer",
@@ -1190,6 +1206,11 @@ class EditarBatchSemanalForm(forms.Form):
         # ====================================================
         # VALORES GENERALES
         # ====================================================
+
+        self.fields["modo_planificacion"].initial = (
+            batch.modo_planificacion
+            or "automatico"
+        )
 
         self.fields["objetivo_sitios"].initial = batch.objetivo_sitios
 

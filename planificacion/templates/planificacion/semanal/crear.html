@@ -681,6 +681,379 @@ Nuevo Batch Semanal
 
 
           <!-- ==================================================== -->
+          <!-- MODO DE PLANIFICACIÓN                                 -->
+          <!-- ==================================================== -->
+
+          <div class="md:col-span-2">
+
+            <div
+              class="
+                rounded-2xl
+                border border-slate-200
+                bg-white
+                p-4
+              "
+            >
+
+              <div class="mb-4">
+
+                <p
+                  class="
+                    text-sm
+                    font-black
+                    text-slate-800
+                  "
+                >
+                  ¿Cómo quieres preparar esta semana?
+                </p>
+
+                <p
+                  class="
+                    mt-1
+                    text-xs
+                    leading-relaxed
+                    text-slate-500
+                  "
+                >
+                  Puedes dejar que el motor prepare la propuesta,
+                  seleccionar los sitios directamente en el mapa,
+                  o fijar sitios manualmente y permitir que el motor
+                  complete los cupos restantes.
+                </p>
+
+              </div>
+
+
+              <div
+                class="
+                  grid
+                  grid-cols-1
+                  gap-3
+                  lg:grid-cols-3
+                "
+              >
+
+                <!-- AUTOMÁTICO -->
+
+                <label
+                  class="
+                    modo-planificacion-card
+                    relative
+                    cursor-pointer
+                    rounded-xl
+                    border-2
+                    border-slate-200
+                    bg-white
+                    p-4
+                    transition
+                    hover:border-blue-300
+                    hover:bg-blue-50/30
+                  "
+                  data-modo-card="automatico"
+                >
+
+                  <input
+                    type="radio"
+                    name="modo_planificacion"
+                    value="automatico"
+                    class="sr-only modo-planificacion-radio"
+                    {% if form.modo_planificacion.value == "automatico" or not form.modo_planificacion.value %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <div
+                    class="
+                      flex
+                      items-start
+                      justify-between
+                      gap-3
+                    "
+                  >
+
+                    <div>
+
+                      <div
+                        class="
+                          text-xs
+                          font-black
+                          uppercase
+                          tracking-wide
+                          text-blue-600
+                        "
+                      >
+                        Automático
+                      </div>
+
+                      <div
+                        class="
+                          mt-1
+                          text-sm
+                          font-bold
+                          text-slate-800
+                        "
+                      >
+                        El motor decide
+                      </div>
+
+                    </div>
+
+                    <div
+                      class="
+                        modo-check
+                        flex
+                        h-5
+                        w-5
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        border-2
+                        border-slate-300
+                      "
+                    ></div>
+
+                  </div>
+
+                  <p
+                    class="
+                      mt-3
+                      text-xs
+                      leading-relaxed
+                      text-slate-500
+                    "
+                  >
+                    El motor analiza candidatos, bases, capacidad,
+                    distancias y demás reglas para preparar la semana.
+                  </p>
+
+                </label>
+
+
+                <!-- MANUAL -->
+
+                <label
+                  class="
+                    modo-planificacion-card
+                    relative
+                    cursor-pointer
+                    rounded-xl
+                    border-2
+                    border-slate-200
+                    bg-white
+                    p-4
+                    transition
+                    hover:border-emerald-300
+                    hover:bg-emerald-50/30
+                  "
+                  data-modo-card="manual"
+                >
+
+                  <input
+                    type="radio"
+                    name="modo_planificacion"
+                    value="manual"
+                    class="sr-only modo-planificacion-radio"
+                    {% if form.modo_planificacion.value == "manual" %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <div
+                    class="
+                      flex
+                      items-start
+                      justify-between
+                      gap-3
+                    "
+                  >
+
+                    <div>
+
+                      <div
+                        class="
+                          text-xs
+                          font-black
+                          uppercase
+                          tracking-wide
+                          text-emerald-600
+                        "
+                      >
+                        Manual
+                      </div>
+
+                      <div
+                        class="
+                          mt-1
+                          text-sm
+                          font-bold
+                          text-slate-800
+                        "
+                      >
+                        Seleccionar en mapa
+                      </div>
+
+                    </div>
+
+                    <div
+                      class="
+                        modo-check
+                        flex
+                        h-5
+                        w-5
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        border-2
+                        border-slate-300
+                      "
+                    ></div>
+
+                  </div>
+
+                  <p
+                    class="
+                      mt-3
+                      text-xs
+                      leading-relaxed
+                      text-slate-500
+                    "
+                  >
+                    Después de crear la semana se abrirá el mapa con
+                    los candidatos disponibles para seleccionar
+                    exactamente los sitios que quieres trabajar.
+                  </p>
+
+                </label>
+
+
+                <!-- MIXTO -->
+
+                <label
+                  class="
+                    modo-planificacion-card
+                    relative
+                    cursor-pointer
+                    rounded-xl
+                    border-2
+                    border-slate-200
+                    bg-white
+                    p-4
+                    transition
+                    hover:border-violet-300
+                    hover:bg-violet-50/30
+                  "
+                  data-modo-card="mixto"
+                >
+
+                  <input
+                    type="radio"
+                    name="modo_planificacion"
+                    value="mixto"
+                    class="sr-only modo-planificacion-radio"
+                    {% if form.modo_planificacion.value == "mixto" %}
+                      checked
+                    {% endif %}
+                  >
+
+                  <div
+                    class="
+                      flex
+                      items-start
+                      justify-between
+                      gap-3
+                    "
+                  >
+
+                    <div>
+
+                      <div
+                        class="
+                          text-xs
+                          font-black
+                          uppercase
+                          tracking-wide
+                          text-violet-600
+                        "
+                      >
+                        Mixto
+                      </div>
+
+                      <div
+                        class="
+                          mt-1
+                          text-sm
+                          font-bold
+                          text-slate-800
+                        "
+                      >
+                        Selección + motor
+                      </div>
+
+                    </div>
+
+                    <div
+                      class="
+                        modo-check
+                        flex
+                        h-5
+                        w-5
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        border-2
+                        border-slate-300
+                      "
+                    ></div>
+
+                  </div>
+
+                  <p
+                    class="
+                      mt-3
+                      text-xs
+                      leading-relaxed
+                      text-slate-500
+                    "
+                  >
+                    Selecciona primero los sitios obligatorios en el
+                    mapa. Esos sitios quedan fijados y el motor
+                    completa los cupos restantes.
+                  </p>
+
+                </label>
+
+              </div>
+
+
+              {% for error in form.modo_planificacion.errors %}
+
+                <div
+                  class="
+                    mt-3
+                    rounded-lg
+                    border border-red-200
+                    bg-red-50
+                    px-3
+                    py-2
+                    text-xs
+                    font-semibold
+                    text-red-700
+                  "
+                >
+                  {{ error }}
+                </div>
+
+              {% endfor %}
+
+            </div>
+
+          </div>
+
+
+          <!-- ==================================================== -->
           <!-- IDENTIFICACIÓN AUTOMÁTICA                             -->
           <!-- ==================================================== -->
 
@@ -1714,6 +2087,147 @@ Nuevo Batch Semanal
 
 <script>
 (function () {
+
+  // ========================================================
+  // MODO DE PLANIFICACIÓN
+  // ========================================================
+
+  const tarjetasModo =
+    document.querySelectorAll(
+      ".modo-planificacion-card"
+    );
+
+  const radiosModo =
+    document.querySelectorAll(
+      ".modo-planificacion-radio"
+    );
+
+
+  function actualizarModoPlanificacion() {
+
+    tarjetasModo.forEach(
+      function (tarjeta) {
+
+        const radio =
+          tarjeta.querySelector(
+            ".modo-planificacion-radio"
+          );
+
+        const check =
+          tarjeta.querySelector(
+            ".modo-check"
+          );
+
+        const modo =
+          tarjeta.dataset.modoCard;
+
+        const seleccionado =
+          Boolean(
+            radio &&
+            radio.checked
+          );
+
+        tarjeta.classList.remove(
+          "border-blue-500",
+          "bg-blue-50",
+          "border-emerald-500",
+          "bg-emerald-50",
+          "border-violet-500",
+          "bg-violet-50"
+        );
+
+        if (check) {
+
+          check.classList.remove(
+            "border-blue-600",
+            "bg-blue-600",
+            "border-emerald-600",
+            "bg-emerald-600",
+            "border-violet-600",
+            "bg-violet-600"
+          );
+
+          check.innerHTML = "";
+
+        }
+
+        if (!seleccionado) {
+          return;
+        }
+
+        if (modo === "manual") {
+
+          tarjeta.classList.add(
+            "border-emerald-500",
+            "bg-emerald-50"
+          );
+
+          if (check) {
+            check.classList.add(
+              "border-emerald-600",
+              "bg-emerald-600"
+            );
+          }
+
+        } else if (modo === "mixto") {
+
+          tarjeta.classList.add(
+            "border-violet-500",
+            "bg-violet-50"
+          );
+
+          if (check) {
+            check.classList.add(
+              "border-violet-600",
+              "bg-violet-600"
+            );
+          }
+
+        } else {
+
+          tarjeta.classList.add(
+            "border-blue-500",
+            "bg-blue-50"
+          );
+
+          if (check) {
+            check.classList.add(
+              "border-blue-600",
+              "bg-blue-600"
+            );
+          }
+
+        }
+
+        if (check) {
+
+          check.innerHTML =
+            '<span class="' +
+            'block h-2 w-2 rounded-full bg-white' +
+            '"></span>';
+
+        }
+
+      }
+    );
+
+  }
+
+
+  radiosModo.forEach(
+    function (radio) {
+
+      radio.addEventListener(
+        "change",
+        actualizarModoPlanificacion
+      );
+
+    }
+  );
+
+
+  actualizarModoPlanificacion();
+
 
   function obtenerElementosFila(row) {
 

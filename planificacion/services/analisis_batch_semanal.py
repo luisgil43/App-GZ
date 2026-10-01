@@ -125,18 +125,6 @@ def analizar_batch_semanal(
     """
 
     # ========================================================
-    # UNIVERSO
-    # ========================================================
-
-    universo = construir_universo_batch(
-        batch,
-    )
-
-    universo_total = len(
-        universo,
-    )
-
-    # ========================================================
     # SITIOS FIJOS DEL BATCH ACTUAL
     # ========================================================
     #
@@ -148,30 +136,51 @@ def analizar_batch_semanal(
     # - sitios confirmados;
     # - sitios agregados manualmente que continúan activos.
     #
-    # Los excluidos/reemplazados no pertenecen al universo
-    # de este batch, pero continúan disponibles para otras
-    # semanas si no están comprometidos en ellas.
+    # Estos sitios pueden haber dejado de aparecer en
+    # obtener_candidatos_batch() precisamente porque ya
+    # pertenecen activamente al batch. Por eso se identifican
+    # ANTES de construir el universo del motor.
     # ========================================================
 
-    ids_fijos = set(
-        SitioBatchSemanal.objects.filter(
-            batch=batch,
-        )
-        .exclude(
-            estado__in=[
-                "excluido",
-                "reemplazado",
-            ],
-        )
-        .filter(
-            agregado_manualmente=True,
-        )
-        .values_list(
-            "sitio_planificado_id",
-            flat=True,
-        )
+    modo_planificacion = (
+        batch.modo_planificacion
+        or "automatico"
     )
 
+    ids_fijos = set()
+
+    # En Manual y Mixto, las selecciones realizadas
+    # explícitamente por el usuario son decisiones fijas.
+    #
+    # En Automático dejan de condicionar al motor:
+    # permanecen físicamente en el batch hasta que se aplique
+    # una nueva propuesta, pero no forman parte de ids_fijos.
+    if modo_planificacion in {
+        "manual",
+        "mixto",
+    }:
+
+        ids_fijos.update(
+            SitioBatchSemanal.objects.filter(
+                batch=batch,
+            )
+            .exclude(
+                estado__in=[
+                    "excluido",
+                    "reemplazado",
+                ],
+            )
+            .filter(
+                agregado_manualmente=True,
+            )
+            .values_list(
+                "sitio_planificado_id",
+                flat=True,
+            )
+        )
+
+    # Los sitios ya confirmados representan una decisión
+    # consolidada de la semana y se protegen en cualquier modo.
     ids_fijos.update(
         SitioBatchSemanal.objects.filter(
             batch=batch,
@@ -180,6 +189,28 @@ def analizar_batch_semanal(
             "sitio_planificado_id",
             flat=True,
         )
+    )
+
+    # ========================================================
+    # UNIVERSO
+    # ========================================================
+    #
+    # Universo oficial:
+    #
+    # - candidatos todavía disponibles;
+    # - más decisiones fijas del batch actual.
+    #
+    # No convierte los sitios fijos en candidatos globales.
+    # Solamente los reincorpora al análisis de ESTE batch.
+    # ========================================================
+
+    universo = construir_universo_batch(
+        batch,
+        incluir_ids=ids_fijos,
+    )
+
+    universo_total = len(
+        universo,
     )
 
     ids_universo = {
@@ -198,7 +229,10 @@ def analizar_batch_semanal(
             "propuestas": [],
             "cantidad_reserva": 0,
             "advertencias": [
-                "No existen sitios disponibles para " "analizar dentro de este batch."
+                (
+                    "No existen sitios disponibles para "
+                    "analizar dentro de este batch."
+                )
             ],
         }
 
@@ -293,24 +327,73 @@ def analizar_batch_semanal(
             "advertencias": advertencias,
         }
 
-    # Protección adicional.
+    # ========================================================
+    # OBJETIVO SEGÚN MODO DE PLANIFICACIÓN
+    # ========================================================
     #
-    # Normalmente la vista de creación ya impide solicitar más
-    # sitios que los disponibles, pero el servicio también se
-    # protege por si existen batches históricos.
+    # AUTOMÁTICO
+    # --------------------------------------------------------
+    # El motor decide la selección hasta alcanzar el objetivo.
+    #
+    # MANUAL
+    # --------------------------------------------------------
+    # Los sitios elegidos por el usuario constituyen la
+    # selección completa. El motor solamente analiza y organiza
+    # esos sitios; nunca agrega candidatos adicionales.
+    #
+    # MIXTO
+    # --------------------------------------------------------
+    # Los sitios elegidos manualmente permanecen fijos y el
+    # motor completa los cupos restantes hasta el objetivo.
+    # ========================================================
 
-    # Los sitios fijados manualmente/confirmados son decisiones
-    # ya tomadas dentro del batch y nunca deben ser descartados
-    # porque el objetivo haya sido reducido posteriormente.
-    objetivo_motor = min(
-        max(
-            objetivo,
-            len(ids_fijos),
-        ),
-        universo_total,
+    modo_planificacion = (
+        batch.modo_planificacion
+        or "automatico"
     )
 
-    if objetivo > universo_total:
+    if modo_planificacion == "manual":
+
+        if not ids_fijos:
+
+            advertencias.append(
+                (
+                    "El batch está en modo manual, pero no "
+                    "posee sitios seleccionados para analizar."
+                )
+            )
+
+            return {
+                "version": ANALISIS_BATCH_VERSION,
+                "universo": universo,
+                "propuestas": [],
+                "cantidad_reserva": 0,
+                "advertencias": advertencias,
+            }
+
+        objetivo_motor = min(
+            len(ids_fijos),
+            universo_total,
+        )
+
+    else:
+
+        # Automático y Mixto trabajan contra el objetivo
+        # semanal configurado.
+        #
+        # En Mixto, ids_fijos protege las decisiones manuales.
+        objetivo_motor = min(
+            max(
+                objetivo,
+                len(ids_fijos),
+            ),
+            universo_total,
+        )
+
+    if (
+        modo_planificacion != "manual"
+        and objetivo > universo_total
+    ):
 
         advertencias.append(
             (
@@ -493,6 +576,77 @@ def serializar_propuesta(
 
 
 # ============================================================
+# FIRMA OPERACIONAL DE PROPUESTA
+# ============================================================
+
+
+def _firma_operacional_propuesta(
+    propuesta,
+):
+    """
+    Identifica propuestas que producen exactamente el mismo
+    plan ejecutable.
+
+    No se consideran diferencias puramente analíticas como:
+
+    - estrategia de origen;
+    - score;
+    - métricas del remanente;
+    - orden en que el motor generó las salidas.
+
+    Dos propuestas son operacionalmente distintas cuando
+    cambia al menos una asignación real de sitios a una
+    cuadrilla o cambia el orden de ejecución dentro de una
+    salida.
+    """
+
+    salidas = (
+        propuesta.metricas.get(
+            "salidas",
+            [],
+        )
+        or []
+    )
+
+    firma_salidas = []
+
+    for salida in salidas:
+
+        cuadrilla = (
+            salida.get(
+                "cuadrilla",
+                "",
+            )
+            or ""
+        )
+
+        sitio_ids = tuple(
+            salida.get(
+                "sitio_ids",
+                [],
+            )
+            or []
+        )
+
+        firma_salidas.append(
+            (
+                cuadrilla,
+                sitio_ids,
+            )
+        )
+
+    # El orden global de las salidas no convierte por sí solo
+    # una propuesta en una alternativa operacional distinta.
+    firma_salidas.sort(
+        key=repr,
+    )
+
+    return tuple(
+        firma_salidas
+    )
+
+
+# ============================================================
 # RESULTADO SERIALIZABLE
 # ============================================================
 
@@ -517,10 +671,22 @@ def construir_resultado_serializable(
 
     propuestas = []
 
-    for posicion, propuesta in enumerate(
-        resultado["propuestas"],
-        start=1,
-    ):
+    firmas_operacionales = set()
+
+    for propuesta in resultado["propuestas"]:
+
+        firma = _firma_operacional_propuesta(
+            propuesta,
+        )
+
+        if firma in firmas_operacionales:
+            continue
+
+        firmas_operacionales.add(
+            firma,
+        )
+
+        posicion = len(propuestas) + 1
 
         propuestas.append(
             serializar_propuesta(
@@ -744,22 +910,82 @@ def aplicar_propuesta_batch(
     }
 
     # ========================================================
-    # RETIRAR ÚNICAMENTE AUTOMÁTICOS OBSOLETOS
+    # SINCRONIZAR SELECCIÓN ANTERIOR SEGÚN EL MODO
+    # ========================================================
+    #
+    # AUTOMÁTICO:
+    #
+    # La nueva propuesta del motor pasa a ser la selección
+    # autoritativa del batch.
+    #
+    # Los sitios manuales heredados de un modo anterior:
+    #
+    # - si pertenecen a la nueva propuesta, serán convertidos
+    #   más abajo a selección del motor;
+    # - si no pertenecen, quedan como reemplazados para
+    #   conservar la trazabilidad histórica.
+    #
+    # MANUAL / MIXTO:
+    #
+    # Las decisiones manuales continúan protegidas.
+    #
+    # En todos los modos los confirmados permanecen
+    # protegidos.
     # ========================================================
 
-    ids_automaticos_obsoletos = [
-        item.pk
-        for item in items_actuales.values()
+    modo_planificacion = (
+        batch.modo_planificacion
+        or "automatico"
+    )
+
+    ids_automaticos_obsoletos = []
+
+    ids_manuales_reemplazados = []
+
+    for item in items_actuales.values():
+
         if (
-            item.sitio_planificado_id not in ids_principales
-            and item.estado not in {
-                "excluido",
-                "reemplazado",
-            }
-            and not item.agregado_manualmente
-            and item.estado != "confirmado"
+            item.sitio_planificado_id
+            in ids_principales
+        ):
+            continue
+
+        if item.estado in {
+            "excluido",
+            "reemplazado",
+        }:
+            continue
+
+        if item.estado == "confirmado":
+            continue
+
+        if item.agregado_manualmente:
+
+            if modo_planificacion == "automatico":
+
+                ids_manuales_reemplazados.append(
+                    item.pk
+                )
+
+            continue
+
+        ids_automaticos_obsoletos.append(
+            item.pk
         )
-    ]
+
+    if ids_manuales_reemplazados:
+
+        SitioBatchSemanal.objects.filter(
+            pk__in=ids_manuales_reemplazados,
+        ).update(
+            estado="reemplazado",
+            motivo_exclusion=(
+                "Reemplazado al aplicar una nueva propuesta "
+                "en modo automático."
+            ),
+            bloqueado_en_batch=False,
+            es_reserva=False,
+        )
 
     if ids_automaticos_obsoletos:
 
@@ -767,10 +993,19 @@ def aplicar_propuesta_batch(
             pk__in=ids_automaticos_obsoletos,
         ).delete()
 
+    ids_retirados = set(
+        ids_automaticos_obsoletos
+    ) | set(
+        ids_manuales_reemplazados
+    )
+
+    if ids_retirados:
+
         items_actuales = {
             sitio_id: item
-            for sitio_id, item in items_actuales.items()
-            if item.pk not in ids_automaticos_obsoletos
+            for sitio_id, item
+            in items_actuales.items()
+            if item.pk not in ids_retirados
         }
 
     score_total = propuesta_serializada.get(
@@ -839,7 +1074,16 @@ def aplicar_propuesta_batch(
             if item_existente.estado != "confirmado":
                 item_existente.estado = "seleccionado"
 
-            if not item_existente.agregado_manualmente:
+            if modo_planificacion == "automatico":
+
+                item_existente.origen = "motor"
+
+                item_existente.agregado_manualmente = False
+
+                item_existente.bloqueado_en_batch = False
+
+            elif not item_existente.agregado_manualmente:
+
                 item_existente.origen = "motor"
 
             item_existente.puntaje_motor = score_total
@@ -862,6 +1106,8 @@ def aplicar_propuesta_batch(
                 update_fields=[
                     "estado",
                     "origen",
+                    "agregado_manualmente",
+                    "bloqueado_en_batch",
                     "puntaje_motor",
                     "motivo_recomendacion",
                     "es_reserva",

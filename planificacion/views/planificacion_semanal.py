@@ -1403,6 +1403,9 @@ def crear_planificacion_semanal(
                                 fecha_inicio=fecha_inicio,
                                 objetivo_sitios=(objetivo_solicitado),
                                 nombre=nombre_batch,
+                                modo_planificacion=(
+                                    datos["modo_planificacion"]
+                                ),
                                 observaciones=(
                                     datos.get(
                                         "observaciones",
@@ -1472,6 +1475,20 @@ def crear_planificacion_semanal(
                                 "Se vinculó esta planificación "
                                 "mensual a la semana existente."
                             ),
+                        )
+
+                    if (
+                        creada
+                        and batch.modo_planificacion
+                        in [
+                            "manual",
+                            "mixto",
+                        ]
+                    ):
+                        return redirect(
+                            "planificacion:"
+                            "seleccionar_sitios_creacion_batch",
+                            batch_id=batch.pk,
                         )
 
                     return redirect(
@@ -1587,6 +1604,9 @@ def editar_planificacion_semanal(
 
                 actualizar_configuracion_batch_semanal(
                     batch=batch,
+                    modo_planificacion=(
+                        form.cleaned_data["modo_planificacion"]
+                    ),
                     objetivo_sitios=(form.cleaned_data["objetivo_sitios"]),
                     observaciones=(
                         form.cleaned_data.get(
@@ -1617,6 +1637,22 @@ def editar_planificacion_semanal(
                         "las salidas existentes."
                     ),
                 )
+
+                modo_planificacion = (
+                    form.cleaned_data[
+                        "modo_planificacion"
+                    ]
+                )
+
+                if modo_planificacion in {
+                    "manual",
+                    "mixto",
+                }:
+
+                    return redirect(
+                        "planificacion:seleccionar_sitios_creacion_batch",
+                        batch_id=batch.pk,
+                    )
 
                 return redirect(
                     "planificacion:detalle_planificacion_semanal",
@@ -2958,4 +2994,325 @@ def actualizar_estado_masivo_sitios_batch(
     return redirect(
         "planificacion:detalle_planificacion_semanal",
         batch_id=batch.pk,
+    )
+
+
+# ============================================================
+# SELECCIONAR SITIOS AL CREAR BATCH
+# ============================================================
+
+
+@rol_requerido(*ROLES_PLANIFICACION)
+def seleccionar_sitios_creacion_batch(
+    request,
+    batch_id,
+):
+    """
+    Selección visual de sitios para batches creados en modo
+    manual o mixto.
+
+    Utiliza exactamente el mismo universo oficial de candidatos
+    que el resto de la planificación semanal.
+    """
+
+    batch = get_object_or_404(
+        BatchPlanificacionSemanal.objects.select_related(
+            "planificacion",
+            "configuracion_semana",
+        ),
+        pk=batch_id,
+    )
+
+    # ========================================================
+    # SEGURIDAD DEL FLUJO
+    # ========================================================
+
+    if batch.modo_planificacion not in [
+        "manual",
+        "mixto",
+    ]:
+
+        messages.info(
+            request,
+            (
+                "Este batch utiliza planificación automática "
+                "y no requiere selección manual inicial."
+            ),
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    if batch.estado not in [
+        "borrador",
+        "propuesto",
+        "gestion_permisos",
+    ]:
+
+        messages.warning(
+            request,
+            (
+                "La etapa actual del batch ya no permite "
+                "realizar esta selección inicial."
+            ),
+        )
+
+        return redirect(
+            "planificacion:detalle_planificacion_semanal",
+            batch_id=batch.pk,
+        )
+
+    # ========================================================
+    # POST: CONFIRMAR SELECCIÓN
+    # ========================================================
+
+    if request.method == "POST":
+
+        sitio_ids = list(
+            dict.fromkeys(
+                request.POST.getlist(
+                    "sitio_ids",
+                )
+            )
+        )
+
+        candidatos_validos_ids = set(
+            obtener_candidatos_batch(
+                batch,
+                incluir_excluidos_batch=True,
+            )
+            .filter(
+                pk__in=sitio_ids,
+            )
+            .values_list(
+                "pk",
+                flat=True,
+            )
+        )
+
+        sitio_ids = [
+            str(sitio_id)
+            for sitio_id in sitio_ids
+            if str(sitio_id).isdigit()
+            and int(sitio_id)
+            in candidatos_validos_ids
+        ]
+
+        if not sitio_ids:
+
+            messages.warning(
+                request,
+                "Debes seleccionar al menos un sitio válido.",
+            )
+
+        elif (
+            batch.objetivo_sitios
+            and len(sitio_ids)
+            > batch.objetivo_sitios
+        ):
+
+            messages.error(
+                request,
+                (
+                    "La selección supera el objetivo del batch. "
+                    f"Objetivo: {batch.objetivo_sitios}. "
+                    f"Seleccionados: {len(sitio_ids)}."
+                ),
+            )
+
+        else:
+
+            with transaction.atomic():
+
+                cantidad = agregar_sitios_al_batch(
+                    batch=batch,
+                    sitio_ids=sitio_ids,
+                    usuario=request.user,
+                    es_reserva=False,
+                )
+
+                # ============================================
+                # FIJAR ÚNICAMENTE LOS SITIOS ELEGIDOS EN
+                # ESTE FLUJO MANUAL / MIXTO
+                # ============================================
+
+                SitioBatchSemanal.objects.filter(
+                    batch=batch,
+                    sitio_planificado_id__in=sitio_ids,
+                ).exclude(
+                    estado__in=[
+                        "excluido",
+                        "reemplazado",
+                    ],
+                ).update(
+                    origen="manual",
+                    agregado_manualmente=True,
+                    bloqueado_en_batch=True,
+                    agregado_por=request.user,
+                )
+
+            if cantidad:
+
+                if batch.modo_planificacion == "manual":
+
+                    messages.success(
+                        request,
+                        (
+                            f"{cantidad} sitio(s) seleccionado(s) "
+                            "manualmente y fijados en el batch."
+                        ),
+                    )
+
+                else:
+
+                    messages.success(
+                        request,
+                        (
+                            f"{cantidad} sitio(s) seleccionado(s) "
+                            "y fijados como obligatorios. "
+                            "El motor podrá completar posteriormente "
+                            "los cupos restantes."
+                        ),
+                    )
+
+                return redirect(
+                    "planificacion:detalle_planificacion_semanal",
+                    batch_id=batch.pk,
+                )
+
+            messages.warning(
+                request,
+                (
+                    "No se agregó ningún sitio nuevo. "
+                    "Los sitios seleccionados pueden pertenecer "
+                    "ya al batch."
+                ),
+            )
+
+    # ========================================================
+    # UNIVERSO OFICIAL DE CANDIDATOS
+    # ========================================================
+
+    candidatos = (
+        obtener_candidatos_batch(
+            batch,
+            incluir_excluidos_batch=True,
+        )
+        .select_related(
+            "sitio",
+        )
+        .order_by(
+            "sitio__id_claro",
+            "id",
+        )
+    )
+
+    candidatos_mapa = []
+    candidatos_sin_coordenadas = []
+
+    for sitio_planificado in candidatos:
+
+        sitio = sitio_planificado.sitio
+
+        try:
+            latitud = (
+                float(sitio.latitud)
+                if sitio.latitud not in [
+                    None,
+                    "",
+                ]
+                else None
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            latitud = None
+
+        try:
+            longitud = (
+                float(sitio.longitud)
+                if sitio.longitud not in [
+                    None,
+                    "",
+                ]
+                else None
+            )
+        except (
+            TypeError,
+            ValueError,
+        ):
+            longitud = None
+
+        id_claro = (
+            sitio.id_claro
+            or sitio.id_sites
+            or ""
+        )
+
+        candidato = {
+            "sitio_planificado_id": sitio_planificado.pk,
+            "id_claro": id_claro,
+            "nombre": sitio.nombre or "",
+            "comuna": sitio.comuna or "",
+            "tipo_zona": sitio.tipo_zona or "",
+            "direccion": (
+                getattr(
+                    sitio,
+                    "direccion_proyecto",
+                    "",
+                )
+                or sitio.direccion
+                or ""
+            ),
+            "condicion_acceso": (
+                sitio.condiciones_acceso
+                or ""
+            ),
+            "estado_permiso": (
+                sitio_planificado.get_estado_permiso_display()
+            ),
+            "latitud": latitud,
+            "longitud": longitud,
+            "prefijo": (
+                str(id_claro).split("_", 1)[0] + "_"
+                if "_" in str(id_claro)
+                else str(id_claro)
+            ),
+        }
+
+        if (
+            latitud is not None
+            and longitud is not None
+        ):
+            candidatos_mapa.append(
+                candidato
+            )
+        else:
+            candidatos_sin_coordenadas.append(
+                candidato
+            )
+
+    return render(
+        request,
+        "planificacion/semanal/seleccionar_sitios.html",
+        {
+            "batch": batch,
+            "mensual": batch.planificacion,
+            "candidatos_mapa": candidatos_mapa,
+            "candidatos_sin_coordenadas": (
+                candidatos_sin_coordenadas
+            ),
+            "total_candidatos": (
+                len(candidatos_mapa)
+                + len(candidatos_sin_coordenadas)
+            ),
+            "google_maps_api_key": getattr(
+                settings,
+                "GOOGLE_MAPS_API_KEY",
+                "",
+            ),
+        },
     )

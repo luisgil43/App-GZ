@@ -288,6 +288,112 @@ Editar Semana
           </div>
 
 
+          <!-- MODO DE PLANIFICACIÓN -->
+
+          <div class="md:col-span-2">
+
+            <label
+              class="
+                mb-2
+                block
+                text-sm
+                font-semibold
+                text-slate-700
+              "
+            >
+              Modo de planificación
+            </label>
+
+            <div class="grid gap-3 md:grid-cols-3">
+
+              {% for radio in form.modo_planificacion %}
+
+                <label
+                  class="
+                    modo-planificacion-card
+                    relative
+                    cursor-pointer
+                    rounded-2xl
+                    border border-slate-200
+                    bg-white
+                    p-4
+                    transition
+                    hover:border-blue-300
+                    hover:bg-blue-50/40
+                  "
+                >
+
+                  {{ radio.tag }}
+
+                  <div class="flex items-start gap-3">
+
+                    <div
+                      class="
+                        modo-planificacion-indicador
+                        mt-0.5
+                        flex h-5 w-5
+                        shrink-0
+                        items-center
+                        justify-center
+                        rounded-full
+                        border-2
+                        border-slate-300
+                      "
+                    >
+                      <div
+                        class="
+                          modo-planificacion-punto
+                          hidden
+                          h-2.5 w-2.5
+                          rounded-full
+                          bg-blue-600
+                        "
+                      ></div>
+                    </div>
+
+                    <div>
+
+                      <div class="font-black text-slate-900">
+                        {% if radio.data.value == "automatico" %}
+                          Automático
+                        {% elif radio.data.value == "manual" %}
+                          Manual
+                        {% else %}
+                          Mixto
+                        {% endif %}
+                      </div>
+
+                      <div class="mt-1 text-xs leading-5 text-slate-500">
+                        {% if radio.data.value == "automatico" %}
+                          El motor decide los sitios de la semana.
+                        {% elif radio.data.value == "manual" %}
+                          Seleccionas los sitios y el motor analiza
+                          únicamente esa selección.
+                        {% else %}
+                          Seleccionas sitios obligatorios y el motor
+                          completa hasta el objetivo.
+                        {% endif %}
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                </label>
+
+              {% endfor %}
+
+            </div>
+
+            {% for error in form.modo_planificacion.errors %}
+              <div class="mt-1 text-xs font-semibold text-red-600">
+                {{ error }}
+              </div>
+            {% endfor %}
+
+          </div>
+
+
           <!-- OBJETIVO -->
 
           <div>
@@ -1049,6 +1155,130 @@ Editar Semana
       }
     );
 
+
+  // ========================================================
+  // MODO DE PLANIFICACIÓN
+  // ========================================================
+
+  function actualizarModoPlanificacion() {
+
+    document
+      .querySelectorAll(
+        '.modo-planificacion-card'
+      )
+      .forEach(
+        function (
+          card
+        ) {
+
+          const radio =
+            card.querySelector(
+              'input[name="modo_planificacion"]'
+            );
+
+          const indicador =
+            card.querySelector(
+              '.modo-planificacion-indicador'
+            );
+
+          const punto =
+            card.querySelector(
+              '.modo-planificacion-punto'
+            );
+
+
+          if (!radio) {
+            return;
+          }
+
+
+          if (radio.checked) {
+
+            card.classList.add(
+              'border-blue-500',
+              'bg-blue-50'
+            );
+
+            card.classList.remove(
+              'border-slate-200',
+              'bg-white'
+            );
+
+
+            if (indicador) {
+
+              indicador.classList.add(
+                'border-blue-600'
+              );
+
+              indicador.classList.remove(
+                'border-slate-300'
+              );
+            }
+
+
+            if (punto) {
+
+              punto.classList.remove(
+                'hidden'
+              );
+            }
+
+          } else {
+
+            card.classList.remove(
+              'border-blue-500',
+              'bg-blue-50'
+            );
+
+            card.classList.add(
+              'border-slate-200',
+              'bg-white'
+            );
+
+
+            if (indicador) {
+
+              indicador.classList.remove(
+                'border-blue-600'
+              );
+
+              indicador.classList.add(
+                'border-slate-300'
+              );
+            }
+
+
+            if (punto) {
+
+              punto.classList.add(
+                'hidden'
+              );
+            }
+          }
+        }
+      );
+  }
+
+
+  document
+    .querySelectorAll(
+      'input[name="modo_planificacion"]'
+    )
+    .forEach(
+      function (
+        radio
+      ) {
+
+        radio.addEventListener(
+          'change',
+          actualizarModoPlanificacion
+        );
+      }
+    );
+
+
+  actualizarModoPlanificacion();
 
   recalcularCapacidad();
 

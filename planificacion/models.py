@@ -1862,6 +1862,12 @@ class BatchPlanificacionSemanal(models.Model):
         ("cancelado", "Cancelado"),
     ]
 
+    MODOS_PLANIFICACION = [
+        ("automatico", "Automático"),
+        ("manual", "Manual"),
+        ("mixto", "Mixto"),
+    ]
+
     # ========================================================
     # MES DE CREACIÓN HISTÓRICO
     # ========================================================
@@ -1948,6 +1954,17 @@ class BatchPlanificacionSemanal(models.Model):
 
     generado_por_motor = models.BooleanField(
         default=False,
+    )
+
+    modo_planificacion = models.CharField(
+        max_length=20,
+        choices=MODOS_PLANIFICACION,
+        default="automatico",
+        db_index=True,
+        help_text=(
+            "Define si la semana se prepara automáticamente, "
+            "manualmente o combinando selección manual y motor."
+        ),
     )
 
     observaciones = models.TextField(
