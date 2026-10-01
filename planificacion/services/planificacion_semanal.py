@@ -565,11 +565,73 @@ def actualizar_configuracion_batch_semanal(
             "El modo de planificación seleccionado no es válido."
         )
 
+    # ========================================================
+    # INVALIDAR PROPUESTA ANTERIOR
+    # ========================================================
+    #
+    # Editar modo, objetivo o configuración operacional cambia
+    # las condiciones que utilizó el análisis anterior.
+    #
+    # Por tanto:
+    #
+    # - la propuesta previa deja de ser válida;
+    # - los sitios generados automáticamente desaparecen del
+    #   batch mientras se vuelve a analizar;
+    # - NO se convierten en excluidos;
+    # - NO se modifica SitioPlanificado;
+    # - las anclas manuales se conservan únicamente cuando el
+    #   nuevo modo sigue siendo Manual/Mixto;
+    # - en Automático tampoco deben quedar anclas heredadas de
+    #   un modo anterior.
+    #
+    # Confirmados y exclusiones explícitas se conservan.
+    # ========================================================
+
+    items_editables = (
+        SitioBatchSemanal.objects.select_for_update()
+        .filter(
+            batch=batch,
+        )
+        .exclude(
+            estado__in=[
+                "confirmado",
+                "excluido",
+                "reemplazado",
+            ],
+        )
+    )
+
+    # Toda selección producida por el motor anterior queda
+    # invalidada.
+    items_editables.filter(
+        agregado_manualmente=False,
+    ).delete()
+
+    # Si el nuevo modo es Automático, tampoco deben sobrevivir
+    # anclas manuales de una configuración anterior.
+    if modo_planificacion == "automatico":
+
+        items_editables.filter(
+            agregado_manualmente=True,
+        ).delete()
+
     batch.modo_planificacion = modo_planificacion
 
     batch.objetivo_sitios = objetivo_sitios
 
     batch.observaciones = str(observaciones or "").strip()
+
+    # Una edición invalida siempre el análisis aplicado.
+    batch.generado_por_motor = False
+
+    # El análisis/aplicación de propuestas trabaja sobre
+    # borrador. Después de editar debe analizarse nuevamente.
+    if batch.estado in {
+        "borrador",
+        "propuesto",
+        "gestion_permisos",
+    }:
+        batch.estado = "borrador"
 
     batch.actualizado_por = usuario
 
@@ -578,6 +640,8 @@ def actualizar_configuracion_batch_semanal(
             "modo_planificacion",
             "objetivo_sitios",
             "observaciones",
+            "generado_por_motor",
+            "estado",
             "actualizado_por",
             "actualizado_en",
         ]

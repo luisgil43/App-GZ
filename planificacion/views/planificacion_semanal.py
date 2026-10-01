@@ -1627,6 +1627,14 @@ def editar_planificacion_semanal(
 
             else:
 
+                # Cualquier análisis almacenado antes de editar
+                # la configuración ya no representa el estado
+                # actual del batch.
+                request.session.pop(
+                    f"analisis_batch_semanal_{batch.pk}",
+                    None,
+                )
+
                 messages.success(
                     request,
                     (
@@ -3179,15 +3187,17 @@ def seleccionar_sitios_creacion_batch(
                     )
                 )
 
-                items_a_retirar.update(
-                    estado="excluido",
-                    motivo_exclusion=(
-                        "Retirado de la selección manual "
-                        "del batch."
-                    ),
-                    bloqueado_en_batch=False,
-                    es_reserva=False,
-                )
+                # Una deselección dentro del editor
+                # Manual/Mixto NO es una exclusión del sitio.
+                #
+                # La fila se elimina de la preselección del
+                # batch y el SitioPlanificado vuelve a formar
+                # parte del universo normal de candidatos.
+                #
+                # La exclusión persistente queda reservada para
+                # la acción explícita "Quitar sitio" del
+                # detalle semanal.
+                items_a_retirar.delete()
 
                 cantidad = agregar_sitios_al_batch(
                     batch=batch,
@@ -3215,6 +3225,13 @@ def seleccionar_sitios_creacion_batch(
                     bloqueado_en_batch=True,
                     agregado_por=request.user,
                 )
+
+            # La selección Manual/Mixta cambió. Cualquier
+            # análisis anterior del mismo batch queda obsoleto.
+            request.session.pop(
+                f"analisis_batch_semanal_{batch.pk}",
+                None,
+            )
 
             cantidad_seleccionada = len(
                 sitio_ids
