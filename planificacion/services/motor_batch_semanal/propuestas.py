@@ -1944,13 +1944,108 @@ def generar_propuestas(
         if len(sitios_fijos) > objetivo:
             return []
 
-        seleccion_mixta = _completar_zona_hasta_objetivo(
-            zona=sitios_fijos,
-            universo=universo,
-            objetivo=objetivo,
-            disponibilidades=disponibilidades,
-            priorizar_exterioridad=False,
+        # ====================================================
+        # EXPANSION PROGRESIVA DESDE LAS ANCLAS
+        # ====================================================
+        #
+        # En modo Mixto los sitios elegidos manualmente son
+        # anclas territoriales obligatorias.
+        #
+        # A partir de ellas expandimos progresivamente la
+        # frontera:
+        #
+        #   anclas
+        #       -> vecino más cercano
+        #       -> nueva frontera
+        #       -> siguiente vecino más cercano
+        #       -> ...
+        #       -> objetivo
+        #
+        # Cada sitio incorporado pasa a formar parte de la
+        # frontera para el siguiente paso.
+        #
+        # Esto evita que el completador histórico se detenga
+        # cuando existe un salto territorial natural entre
+        # grupos de sitios.
+        #
+        # Esta lógica es EXCLUSIVA de modo Mixto.
+        # Automático y Manual no pasan por este bloque.
+        # ====================================================
+
+        seleccion_mixta = list(
+            sitios_fijos
         )
+
+        ids_seleccion_mixta = {
+            sitio.sitio_planificado_id
+            for sitio in seleccion_mixta
+        }
+
+        while (
+            len(seleccion_mixta) < objetivo
+        ):
+
+            mejor_candidato = None
+
+            for candidato in universo:
+
+                if (
+                    candidato.sitio_planificado_id
+                    in ids_seleccion_mixta
+                ):
+                    continue
+
+                distancias_frontera = []
+
+                for origen in seleccion_mixta:
+
+                    distancia = distancia_haversine_km(
+                        candidato.latitud,
+                        candidato.longitud,
+                        origen.latitud,
+                        origen.longitud,
+                    )
+
+                    if distancia is not None:
+
+                        distancias_frontera.append(
+                            distancia
+                        )
+
+                if not distancias_frontera:
+                    continue
+
+                distancia_frontera = min(
+                    distancias_frontera
+                )
+
+                clave = (
+                    distancia_frontera,
+                    str(_id_sitio(candidato)),
+                )
+
+                if (
+                    mejor_candidato is None
+                    or clave < mejor_candidato[0]
+                ):
+
+                    mejor_candidato = (
+                        clave,
+                        candidato,
+                    )
+
+            if mejor_candidato is None:
+                break
+
+            candidato = mejor_candidato[1]
+
+            seleccion_mixta.append(
+                candidato
+            )
+
+            ids_seleccion_mixta.add(
+                candidato.sitio_planificado_id
+            )
 
         if seleccion_mixta:
 
