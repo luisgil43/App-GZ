@@ -587,33 +587,36 @@ def actualizar_configuracion_batch_semanal(
     # Confirmados y exclusiones explícitas se conservan.
     # ========================================================
 
-    items_editables = (
+    # ========================================================
+    # REINICIAR SELECCION DEL BORRADOR
+    # ========================================================
+    #
+    # Al editar una semana, la selección anterior deja de ser
+    # válida completamente.
+    #
+    # Esto incluye:
+    #
+    # - sitios generados por el motor;
+    # - anclas manuales anteriores;
+    # - exclusiones creadas durante ediciones anteriores;
+    # - reemplazos pertenecientes al borrador.
+    #
+    # Ninguno debe contaminar el siguiente análisis.
+    #
+    # Los sitios confirmados se conservan por seguridad porque
+    # ya representan una decisión consolidada.
+    # ========================================================
+
+    (
         SitioBatchSemanal.objects.select_for_update()
         .filter(
             batch=batch,
         )
         .exclude(
-            estado__in=[
-                "confirmado",
-                "excluido",
-                "reemplazado",
-            ],
+            estado="confirmado",
         )
+        .delete()
     )
-
-    # Toda selección producida por el motor anterior queda
-    # invalidada.
-    items_editables.filter(
-        agregado_manualmente=False,
-    ).delete()
-
-    # Si el nuevo modo es Automático, tampoco deben sobrevivir
-    # anclas manuales de una configuración anterior.
-    if modo_planificacion == "automatico":
-
-        items_editables.filter(
-            agregado_manualmente=True,
-        ).delete()
 
     batch.modo_planificacion = modo_planificacion
 

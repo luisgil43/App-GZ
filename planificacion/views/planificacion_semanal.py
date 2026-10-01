@@ -1782,6 +1782,12 @@ def detalle_planificacion_semanal(
         SitioBatchSemanal.objects.filter(
             batch=batch,
         )
+        .exclude(
+            estado__in=[
+                "excluido",
+                "reemplazado",
+            ],
+        )
         .select_related(
             "sitio_planificado",
             "sitio_planificado__sitio",
