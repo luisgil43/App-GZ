@@ -1269,7 +1269,6 @@ def _completar_zona_hasta_objetivo(
     objetivo,
     disponibilidades=None,
     priorizar_exterioridad=True,
-    priorizar_cercania_base=False,
 ):
     """
     Completa la MACROZONA semanal.
@@ -1534,29 +1533,18 @@ def _completar_zona_hasta_objetivo(
             # Mixto:
             #     no usamos esta penalización porque sus anclas
             #     manuales gobiernan la expansión territorial.
-            penalizacion_cercania_base = (
-                distancia_base * 0.35
-                if priorizar_cercania_base
-                else 0.0
-            )
-
             score_candidato = (
                 distancia_minima * 0.46
                 + distancia_centro * 0.22
                 + radio_resultante * 0.17
                 - distancia_base * peso_exterioridad
-                + penalizacion_cercania_base
                 - bonificacion_bloque
             )
 
             desempate_exterioridad = (
                 -distancia_base
                 if priorizar_exterioridad
-                else (
-                    distancia_base
-                    if priorizar_cercania_base
-                    else 0.0
-                )
+                else 0.0
             )
 
             ranking.append(
@@ -2507,6 +2495,115 @@ def _construir_semillas_estrategicas(
 
 
 # ============================================================
+# CONSTRUIR ZONA AUTOMÁTICA REGIONAL DESDE BASE
+# ============================================================
+
+
+def _construir_zona_regional_desde_base(
+    *,
+    universo,
+    objetivo,
+    disponibilidades,
+):
+    """
+    Construye la selección territorial para Automático cuando
+    las bases operacionales están fuera de RM.
+
+    Regla:
+        base -> territorio cercano -> expansión progresiva.
+
+    A diferencia del flujo histórico RM, aquí una concentración
+    remota no puede convertirse en el origen territorial solo
+    por tener mayor densidad.
+
+    La distancia a la base define el punto de partida.
+    Después la expansión mantiene continuidad territorial.
+    """
+
+    universo = [
+        sitio
+        for sitio in universo
+        if _sitio_tiene_coordenadas(sitio)
+    ]
+
+    if not universo:
+        return []
+
+    objetivo = min(
+        int(objetivo),
+        len(universo),
+    )
+
+    if objetivo <= 0:
+        return []
+
+    ranking_base = []
+
+    for sitio in universo:
+
+        distancia_base = (
+            _distancia_sitio_base_mas_cercana(
+                sitio=sitio,
+                disponibilidades=disponibilidades,
+            )
+        )
+
+        if distancia_base is None:
+            continue
+
+        ranking_base.append(
+            (
+                distancia_base,
+                sitio,
+            )
+        )
+
+    if not ranking_base:
+        return []
+
+    ranking_base.sort(
+        key=lambda elemento: (
+            elemento[0],
+            str(_id_sitio(elemento[1])),
+        )
+    )
+
+    # El candidato disponible más cercano a cualquiera de las
+    # bases efectivas es el origen territorial obligatorio.
+    semilla_base = ranking_base[0][1]
+
+    zona = _construir_zona_desde_semilla(
+        semilla=semilla_base,
+        universo=universo,
+        objetivo=objetivo,
+    )
+
+    if not zona:
+        zona = [semilla_base]
+
+    # IMPORTANTE:
+    # No recentramos esta zona.
+    #
+    # El recentrado histórico puede desplazar el origen hacia
+    # una concentración remota. En regional la base debe seguir
+    # gobernando el avance territorial.
+    if len(zona) < objetivo:
+
+        zona = _completar_zona_hasta_objetivo(
+            zona=zona,
+            universo=universo,
+            objetivo=objetivo,
+            disponibilidades=disponibilidades,
+            priorizar_exterioridad=False,
+        )
+
+    if len(zona) > objetivo:
+        zona = zona[:objetivo]
+
+    return zona
+
+
+# ============================================================
 # GENERAR ZONAS SEMANALES
 # ============================================================
 
@@ -2588,6 +2685,163 @@ def generar_zonas_semanales(
     )
 
     # ========================================================
+    # AUTOMÁTICO REGIONAL
+    # ========================================================
+    #
+    # Fuera de RM no competimos entre semillas de densidad.
+    # La base operacional es el origen territorial.
+    #
+    # Esto evita que una concentración remota, por ejemplo
+    # Talca, desplace a candidatos disponibles próximos a una
+    # base regional, por ejemplo Chillán.
+    # ========================================================
+
+    if (
+        not bases_en_rm
+        and _normalizar_bases_operacionales(
+            disponibilidades
+        )
+    ):
+
+        zona_regional = (
+            _construir_zona_regional_desde_base(
+                universo=universo,
+                objetivo=objetivo,
+                disponibilidades=disponibilidades,
+            )
+        )
+
+        if (
+            len(zona_regional)
+            < minimo_aceptable
+        ):
+            return []
+
+        metricas = calcular_metricas_zona(
+            zona_regional
+        )
+
+        evaluacion = _score_candidato_zona(
+            universo=universo,
+            zona=zona_regional,
+            objetivo=objetivo,
+            disponibilidades=disponibilidades,
+        )
+
+        impacto_restante = (
+            evaluacion[
+                "impacto_restante"
+            ][
+                "analisis"
+            ]
+        )
+
+        accesibilidad = evaluacion[
+            "accesibilidad_bases"
+        ]
+
+        prioridad_exterior = evaluacion[
+            "prioridad_exterior"
+        ]
+
+        return [
+            {
+                "sitios": zona_regional,
+                "score": evaluacion[
+                    "score_total"
+                ],
+                "score_concentracion": evaluacion[
+                    "score_concentracion"
+                ],
+                "score_restante": evaluacion[
+                    "score_restante"
+                ],
+                "score_bases": evaluacion[
+                    "score_bases"
+                ],
+                "score_exterior": evaluacion[
+                    "score_exterior"
+                ],
+                "prioridad_exterior": (
+                    prioridad_exterior
+                ),
+                "metricas": metricas,
+                "semilla_id": (
+                    zona_regional[0]
+                    .sitio_planificado_id
+                ),
+                "objetivo": objetivo,
+                "cantidad_propuesta": len(
+                    zona_regional
+                ),
+                "cobertura_objetivo": round(
+                    (
+                        len(zona_regional)
+                        / max(objetivo, 1)
+                    )
+                    * 100,
+                    2,
+                ),
+                "accesibilidad_bases": (
+                    accesibilidad
+                ),
+                "impacto_restante": {
+                    "cantidad_restante": (
+                        impacto_restante[
+                            "cantidad_restante"
+                        ]
+                    ),
+                    "urbanos": impacto_restante[
+                        "urbanos"
+                    ],
+                    "rurales": impacto_restante[
+                        "rurales"
+                    ],
+                    "aislados_total": (
+                        impacto_restante[
+                            "aislados_total"
+                        ]
+                    ),
+                    "aislados_lejanos": (
+                        impacto_restante[
+                            "aislados_lejanos"
+                        ]
+                    ),
+                    "peor_distancia_base_km": (
+                        impacto_restante[
+                            "peor_distancia_base_km"
+                        ]
+                    ),
+                    "distancia_media_base_restante_km": (
+                        impacto_restante.get(
+                            "distancia_media_base_restante_km"
+                        )
+                    ),
+                    "distancia_p75_base_restante_km": (
+                        impacto_restante.get(
+                            "distancia_p75_base_restante_km"
+                        )
+                    ),
+                    "distancia_maxima_base_restante_km": (
+                        impacto_restante.get(
+                            "distancia_maxima_base_restante_km"
+                        )
+                    ),
+                    "peor_distancia_santiago_km": (
+                        impacto_restante[
+                            "peor_distancia_base_km"
+                        ]
+                    ),
+                    "score_balance": (
+                        impacto_restante[
+                            "score_total"
+                        ]
+                    ),
+                },
+            }
+        ]
+
+    # ========================================================
     # SEMILLAS ESTRATÉGICAS
     # ========================================================
 
@@ -2646,9 +2900,6 @@ def generar_zonas_semanales(
                     ),
                     priorizar_exterioridad=(
                         bases_en_rm
-                    ),
-                    priorizar_cercania_base=(
-                        not bases_en_rm
                     ),
                 )
             )
