@@ -1269,6 +1269,7 @@ def _completar_zona_hasta_objetivo(
     objetivo,
     disponibilidades=None,
     priorizar_exterioridad=True,
+    priorizar_cercania_base=False,
 ):
     """
     Completa la MACROZONA semanal.
@@ -1519,18 +1520,43 @@ def _completar_zona_hasta_objetivo(
                 else 0.0
             )
 
+            # Política territorial de bases:
+            #
+            # RM:
+            #     conservamos la estrategia histórica y
+            #     favorecemos avanzar desde afuera hacia adentro.
+            #
+            # Regional:
+            #     la distancia a la base efectiva es un costo.
+            #     La zona nace cerca de la base y avanza
+            #     progresivamente hacia afuera.
+            #
+            # Mixto:
+            #     no usamos esta penalización porque sus anclas
+            #     manuales gobiernan la expansión territorial.
+            penalizacion_cercania_base = (
+                distancia_base * 0.35
+                if priorizar_cercania_base
+                else 0.0
+            )
+
             score_candidato = (
                 distancia_minima * 0.46
                 + distancia_centro * 0.22
                 + radio_resultante * 0.17
                 - distancia_base * peso_exterioridad
+                + penalizacion_cercania_base
                 - bonificacion_bloque
             )
 
             desempate_exterioridad = (
                 -distancia_base
                 if priorizar_exterioridad
-                else 0.0
+                else (
+                    distancia_base
+                    if priorizar_cercania_base
+                    else 0.0
+                )
             )
 
             ranking.append(
@@ -2620,6 +2646,9 @@ def generar_zonas_semanales(
                     ),
                     priorizar_exterioridad=(
                         bases_en_rm
+                    ),
+                    priorizar_cercania_base=(
+                        not bases_en_rm
                     ),
                 )
             )
