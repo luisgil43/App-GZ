@@ -1944,19 +1944,99 @@ def generar_propuestas(
         if len(sitios_fijos) > objetivo:
             return []
 
-        seleccion_mixta = _completar_zona_hasta_objetivo(
-            zona=sitios_fijos,
-            universo=universo,
-            objetivo=objetivo,
-            disponibilidades=disponibilidades,
-            priorizar_exterioridad=False,
+        # ====================================================
+        # EXPANSIÓN MIXTA DESDE LAS ANCLAS
+        # ====================================================
+        #
+        # En Mixto las selecciones manuales son el origen
+        # territorial obligatorio.
+        #
+        # No utilizamos _completar_zona_hasta_objetivo() aquí,
+        # porque sus límites de contacto pueden detener la
+        # expansión cuando existe un salto natural entre las
+        # anclas y el siguiente grupo de candidatos.
+        #
+        # En su lugar:
+        #
+        #   1. conservamos todas las anclas;
+        #   2. medimos cada candidato contra su ancla manual
+        #      más cercana;
+        #   3. avanzamos progresivamente hacia afuera;
+        #   4. paramos exactamente en el objetivo.
+        #
+        # Automático y Manual no utilizan esta lógica.
+        # ====================================================
+
+        seleccion_mixta = list(
+            sitios_fijos
+        )
+
+        ids_seleccionados_mixto = {
+            sitio.sitio_planificado_id
+            for sitio in seleccion_mixta
+        }
+
+        ranking_mixto = []
+
+        for candidato in universo:
+
+            if (
+                candidato.sitio_planificado_id
+                in ids_seleccionados_mixto
+            ):
+                continue
+
+            distancias_anclas = []
+
+            for ancla in sitios_fijos:
+
+                distancia = distancia_haversine_km(
+                    candidato.latitud,
+                    candidato.longitud,
+                    ancla.latitud,
+                    ancla.longitud,
+                )
+
+                if distancia is not None:
+                    distancias_anclas.append(
+                        distancia
+                    )
+
+            if not distancias_anclas:
+                continue
+
+            ranking_mixto.append(
+                (
+                    min(distancias_anclas),
+                    str(_id_sitio(candidato)),
+                    candidato,
+                )
+            )
+
+        ranking_mixto.sort(
+            key=lambda elemento: (
+                elemento[0],
+                elemento[1],
+            )
+        )
+
+        faltantes_mixto = max(
+            objetivo - len(seleccion_mixta),
+            0,
+        )
+
+        seleccion_mixta.extend(
+            elemento[2]
+            for elemento in ranking_mixto[
+                :faltantes_mixto
+            ]
+        )
+
+        seleccion_mixta = (
+            seleccion_mixta[:objetivo]
         )
 
         if seleccion_mixta:
-
-            seleccion_mixta = list(
-                seleccion_mixta
-            )[:objetivo]
 
             zonas = [
                 {
