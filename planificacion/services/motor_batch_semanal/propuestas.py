@@ -802,6 +802,7 @@ def _reparar_seleccion_operacional(
     disponibilidades,
     estrategia,
     ids_fijos=None,
+    proteger_territorio=False,
 ):
     """
     Corrige una selección territorial que no consigue cubrir
@@ -871,6 +872,30 @@ def _reparar_seleccion_operacional(
     )
 
     # ========================================================
+    # OBJETIVO OPERACIONAL DEL TERRITORIO YA CONSTRUIDO
+    # ========================================================
+    #
+    # En modo Mixto la selección territorial puede quedar por
+    # debajo del objetivo solicitado cuando ya no existen
+    # candidatos con continuidad territorial suficiente.
+    #
+    # En ese caso NO rellenamos con sitios globales alejados.
+    # La reparación operacional trabaja únicamente con la
+    # cantidad territorial realmente conseguida.
+    # ========================================================
+
+    if proteger_territorio:
+        objetivo = min(
+            objetivo,
+            len(
+                list(
+                    seleccion_inicial
+                    or []
+                )
+            ),
+        )
+
+    # ========================================================
     # NORMALIZAR SELECCIÓN INICIAL
     # ========================================================
 
@@ -896,7 +921,10 @@ def _reparar_seleccion_operacional(
     # SI LA SELECCIÓN VINO CORTA, COMPLETAR HASTA OBJETIVO
     # ========================================================
 
-    if len(seleccion) < objetivo:
+    if (
+        len(seleccion) < objetivo
+        and not proteger_territorio
+    ):
 
         faltantes = [
             sitio
@@ -1101,6 +1129,19 @@ def _reparar_seleccion_operacional(
             for sitio in universo
             if (sitio.sitio_planificado_id not in ids_seleccionados)
         ]
+
+        if proteger_territorio:
+            candidatos_externos = [
+                sitio
+                for sitio in candidatos_externos
+                if (
+                    _distancia_candidato_a_seleccion(
+                        candidato=sitio,
+                        seleccion=seleccion,
+                    )
+                    <= 24.0
+                )
+            ]
 
         if not candidatos_externos:
             break
@@ -1783,6 +1824,7 @@ def generar_propuestas(
     capacidades=None,
     cantidad_propuestas=3,
     ids_fijos=None,
+    modo_planificacion="automatico",
 ):
     disponibilidades = list(disponibilidades or [])
 
@@ -1837,15 +1879,78 @@ def generar_propuestas(
     # MOTOR TERRITORIAL PRINCIPAL
     # ========================================================
 
-    zonas = generar_zonas_semanales(
-        universo=universo,
-        objetivo=objetivo,
-        cantidad=max(
-            cantidad_propuestas,
-            3,
-        ),
-        disponibilidades=disponibilidades,
-    )
+    if (
+        modo_planificacion == "mixto"
+        and sitios_fijos
+    ):
+        # ====================================================
+        # MODO MIXTO
+        # ====================================================
+        #
+        # Los sitios seleccionados manualmente son anclas
+        # territoriales obligatorias.
+        #
+        # El motor parte directamente desde esas anclas y
+        # completa el objetivo alrededor de ellas.
+        #
+        # La exterioridad respecto de las bases no participa
+        # en esta expansión territorial.
+        # ====================================================
+
+        seleccion_mixta = _completar_zona_hasta_objetivo(
+            zona=sitios_fijos,
+            universo=universo,
+            objetivo=objetivo,
+            disponibilidades=disponibilidades,
+            priorizar_exterioridad=False,
+        )
+
+        if seleccion_mixta:
+            zonas = [
+                {
+                    "sitios": list(seleccion_mixta),
+                    "score": 0.0,
+                    "score_concentracion": 0.0,
+                    "score_restante": 0.0,
+                    "score_bases": 0.0,
+                    "score_exterior": None,
+                    "prioridad_exterior": {},
+                    "metricas": calcular_metricas_zona(
+                        seleccion_mixta,
+                    ),
+                    "semilla_id": None,
+                    "objetivo": objetivo,
+                    "cantidad_propuesta": len(
+                        seleccion_mixta,
+                    ),
+                    "cobertura_objetivo": round(
+                        (
+                            len(seleccion_mixta)
+                            / max(objetivo, 1)
+                        )
+                        * 100,
+                        2,
+                    ),
+                    "accesibilidad_bases": {},
+                    "impacto_restante": {},
+                    "fallback_multibloque": False,
+                    "fallback_global": False,
+                    "bloques_semanales": [],
+                }
+            ]
+        else:
+            zonas = []
+
+    else:
+        zonas = generar_zonas_semanales(
+            universo=universo,
+            objetivo=objetivo,
+            cantidad=max(
+                cantidad_propuestas,
+                3,
+            ),
+            disponibilidades=disponibilidades,
+        )
 
     modo_cierre_mensual = False
 
@@ -2132,6 +2237,9 @@ def generar_propuestas(
             disponibilidades=(disponibilidades),
             estrategia=estrategia,
             ids_fijos=ids_fijos,
+            proteger_territorio=(
+                modo_planificacion == "mixto"
+            ),
         )
 
         principales = list(

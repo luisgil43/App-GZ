@@ -415,6 +415,7 @@ def analizar_batch_semanal(
         disponibilidades=disponibilidades,
         cantidad_propuestas=3,
         ids_fijos=ids_fijos,
+        modo_planificacion=modo_planificacion,
     )
 
     if disponibilidades and not propuestas:

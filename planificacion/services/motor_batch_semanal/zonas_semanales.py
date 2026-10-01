@@ -1216,6 +1216,7 @@ def _completar_zona_hasta_objetivo(
     universo,
     objetivo,
     disponibilidades=None,
+    priorizar_exterioridad=True,
 ):
     """
     Completa la MACROZONA semanal.
@@ -1404,7 +1405,31 @@ def _completar_zona_hasta_objetivo(
 
                     radio_expansion_maximo = radio_base + MARGEN_EXPANSION_FRONTERA_KM
 
-            if radio_resultante > radio_expansion_maximo:
+            # =================================================
+            # VALIDACIÓN DEL RADIO GLOBAL
+            # =================================================
+            #
+            # En el flujo automático conservamos exactamente
+            # la protección histórica de macrozona.
+            #
+            # En modo Mixto, priorizar_exterioridad=False.
+            # En ese caso la selección manual puede contener
+            # varias anclas o núcleos territoriales separados.
+            #
+            # No exigimos que todas esas anclas formen una
+            # única macrozona compacta. La coherencia de cada
+            # nuevo candidato ya está protegida por:
+            #
+            #     distancia_minima
+            #
+            # respecto de la selección actual y por los límites
+            # de contacto normal/bloque aplicados arriba.
+            # =================================================
+
+            if (
+                priorizar_exterioridad
+                and radio_resultante > radio_expansion_maximo
+            ):
                 continue
 
             # =================================================
@@ -1436,12 +1461,24 @@ def _completar_zona_hasta_objetivo(
 
             bonificacion_bloque = 4.0 if es_bloque else 0.0
 
+            peso_exterioridad = (
+                PESO_EXTERIORIDAD_FRONTERA
+                if priorizar_exterioridad
+                else 0.0
+            )
+
             score_candidato = (
                 distancia_minima * 0.46
                 + distancia_centro * 0.22
                 + radio_resultante * 0.17
-                - distancia_base * PESO_EXTERIORIDAD_FRONTERA
+                - distancia_base * peso_exterioridad
                 - bonificacion_bloque
+            )
+
+            desempate_exterioridad = (
+                -distancia_base
+                if priorizar_exterioridad
+                else 0.0
             )
 
             ranking.append(
@@ -1450,7 +1487,7 @@ def _completar_zona_hasta_objetivo(
                     not es_bloque,
                     distancia_minima,
                     distancia_centro,
-                    -distancia_base,
+                    desempate_exterioridad,
                     candidato,
                 )
             )
