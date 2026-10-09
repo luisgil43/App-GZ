@@ -207,9 +207,7 @@ class ProgramarSitioManualPlanificacionDiariaForm(forms.Form):
 
         inicio = batch.fecha_inicio
 
-        fin = inicio + timedelta(
-            days=5,
-        )
+        fin = self.batch.fecha_fin
 
         self.fields["fecha"].widget.attrs["min"] = inicio.strftime("%Y-%m-%d")
 

@@ -1494,9 +1494,7 @@ def generar_planificacion_diaria(
 
     hoy = timezone.localdate()
 
-    fecha_fin_operacional = batch.fecha_inicio + timedelta(
-        days=5,
-    )
+    fecha_fin_operacional = batch.fecha_fin
 
     batch_es_semana_actual = batch.fecha_inicio <= hoy <= fecha_fin_operacional
 

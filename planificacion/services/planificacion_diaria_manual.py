@@ -521,6 +521,27 @@ def analizar_programacion_manual(
         )
 
     # ========================================================
+    # VALIDAR FECHA Y MODALIDAD OPERACIONAL
+    # ========================================================
+
+    if fecha < batch.fecha_inicio or fecha > batch.fecha_fin:
+        errores.append(
+            "La fecha seleccionada está fuera de la semana operacional."
+        )
+
+    if fecha.weekday() == 5 and not disponibilidad_cuadrilla.trabaja_sabado:
+        errores.append(
+            f"{disponibilidad_cuadrilla.nombre_cuadrilla} "
+            "no trabaja los sábados."
+        )
+
+    if fecha.weekday() == 6 and not disponibilidad_cuadrilla.trabaja_domingo:
+        errores.append(
+            f"{disponibilidad_cuadrilla.nombre_cuadrilla} "
+            "no trabaja los domingos."
+        )
+
+    # ========================================================
     # RURAL
     # ========================================================
 
