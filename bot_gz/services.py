@@ -161,6 +161,20 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     if not norm:
         return False
 
+    # Solicitudes explícitas sobre documentos propios.
+    # No omitir las comprobaciones posteriores si se menciona
+    # también a otra persona.
+    tokens_propios = set(_tokenize(texto_original))
+    if {"mi", "mis"} & tokens_propios:
+        patron_tercero = re.search(
+            r"\b(?:de|del|para)\s+"
+            r"(?!mi\b|mis\b|la\b|el\b|los\b|las\b)"
+            r"[a-záéíóúñ]{3,}",
+            norm,
+        )
+        if not patron_tercero:
+            return False
+
     NO_NOMBRES = {
         "cual",
         "que",
@@ -1557,6 +1571,85 @@ def _handler_mis_liquidaciones(usuario: CustomUser, texto_usuario: str) -> str:
     return "\n".join(lineas)
 
 
+
+def _tipo_documento_telegram(contrato):
+    """Clasificación conservadora para entrega por Telegram."""
+    tipo = getattr(contrato, "tipo_documento_laboral", None)
+
+    if tipo is None:
+        return None
+
+    nombre = _normalize(str(tipo.nombre or ""))
+    archivo = _normalize(
+        str(contrato.archivo.name or "") if contrato.archivo else ""
+    )
+
+    # La clasificación del modelo es obligatoria.
+    # El nombre del archivo se usa para detectar contradicciones.
+    if "finiquito" in nombre or getattr(tipo, "cierra_relacion_laboral", False):
+        return "finiquito"
+
+    if "anexo" in nombre or "extension" in nombre:
+        if "finiquito" in archivo:
+            return None
+        return "anexo"
+
+    if "contrato" in nombre:
+        if any(x in archivo for x in ("finiquito", "anexo", "extension")):
+            return None
+        return "contrato"
+
+    return None
+
+
+
+def _contratos_telegram_usuario(usuario):
+    """Contratos propios, correctamente clasificados y ordenados."""
+    qs = ContratoTrabajo.objects.filter(
+        tecnico=usuario,
+    ).select_related(
+        "tipo_documento_laboral",
+    ).order_by("-fecha_inicio", "-pk")
+
+    return [
+        c for c in qs
+        if _tipo_documento_telegram(c) == "contrato"
+    ]
+
+
+def _contrato_vigente_telegram(usuario):
+    """No presenta documentos vencidos o inactivos como vigentes."""
+    hoy = timezone.localdate()
+
+    for c in _contratos_telegram_usuario(usuario):
+        if not c.activo:
+            continue
+        if c.fecha_inicio > hoy:
+            continue
+        if c.fecha_termino and c.fecha_termino < hoy:
+            continue
+        if c.reemplazado_por_id or c.cerrado_por_id:
+            continue
+        return c
+
+    return None
+
+
+
+def _anexos_telegram_usuario(usuario):
+    """Anexos clasificados en ContratoTrabajo."""
+    qs = ContratoTrabajo.objects.filter(
+        tecnico=usuario,
+    ).select_related(
+        "tipo_documento_laboral",
+    ).order_by("-fecha_inicio", "-pk")
+
+    return [
+        c for c in qs
+        if _tipo_documento_telegram(c) == "anexo"
+    ]
+
+
 def _get_contrato_actual_y_extensiones(qs):
     """
     qs: ContratoTrabajo queryset order_by('-fecha_inicio')
@@ -1606,97 +1699,80 @@ def _buscar_anexos_rrhh(usuario: CustomUser):
     ).select_related("tipo_documento").order_by("-creado")
 
 
+
 def _handler_mi_contrato(usuario: CustomUser, texto_usuario: str) -> str:
     if _menciona_otra_persona(texto_usuario, usuario):
         return (
-            "Por seguridad solo puedo mostrarte *tu propio contrato de trabajo*.\n"
-            "No tengo permiso para mostrar contratos de otros compañeros."
+            "Por seguridad solo puedo mostrarte tus propios "
+            "documentos laborales."
         )
 
     tokens = set(_tokenize(texto_usuario))
 
-    quiere_extensiones = bool({"extension", "extensiones", "anteriores", "vencidos", "historial"} & tokens)
     quiere_anexos = bool({"anexo", "anexos"} & tokens)
-    quiere_todos = bool({"todos", "todas"} & tokens) or ("contratos" in tokens)
+    quiere_contratos = bool({"contrato", "contratos"} & tokens)
+    quiere_todos = bool({"todos", "todas", "contratos"} & tokens)
+    quiere_extensiones = bool(
+        {"extension", "extensiones", "anteriores", "vencidos", "historial"} & tokens
+    )
 
-    qs = ContratoTrabajo.objects.filter(tecnico=usuario).order_by("-fecha_inicio")
-    if not qs.exists():
-        return "No tengo registrado ningún contrato de trabajo asociado a tu usuario."
+    contratos = _contratos_telegram_usuario(usuario)
+    anexos_laborales = _anexos_telegram_usuario(usuario)
+    anexos_rrhh = list(_buscar_anexos_rrhh(usuario)[:10])
+
+    if quiere_anexos and not quiere_contratos and not quiere_extensiones:
+        if not anexos_laborales and not anexos_rrhh:
+            return "No tienes anexos de contrato registrados."
+
+        return (
+            "📎 Tus anexos registrados están disponibles. "
+            "Puedes solicitarlos como archivos PDF."
+        )
+
+    if not contratos:
+        if quiere_anexos and (anexos_laborales or anexos_rrhh):
+            return (
+                "No encontré un contrato de trabajo válido para enviar, "
+                "pero tienes anexos registrados."
+            )
+
+        return (
+            "No encontré un contrato de trabajo correctamente "
+            "clasificado para entrega automática. "
+            "Comunícate con Recursos Humanos."
+        )
 
     if quiere_todos:
-        contratos = list(qs[:20])
-        msg = "📄 Tus contratos registrados:\n\n"
-        for c in contratos:
-            termino = "Indefinido" if not c.fecha_termino else c.fecha_termino.strftime("%d-%m-%Y")
-            msg += f"• Inicio: {c.fecha_inicio.strftime('%d-%m-%Y')} | Término: {termino} | Estado: {c.status_label}\n"
-            if c.archivo:
-                msg += f"  {c.archivo.url}\n"
-            else:
-                msg += "  (Sin PDF asociado)\n"
-
-        if qs.count() > len(contratos):
-            msg += f"\nMostrando {len(contratos)} de {qs.count()}."
-        msg += (
-            "\n\nSi quieres solo el vigente, dime: `mi contrato vigente`.\n"
-            "Si quieres el vigente + extensiones vencidas: `mi contrato y sus extensiones`."
-        )
-        return msg
-
-    contrato_actual, extensiones_vencidas, otros_activos = _get_contrato_actual_y_extensiones(qs)
-
-    termino = "Indefinido" if not contrato_actual.fecha_termino else contrato_actual.fecha_termino.strftime("%d-%m-%Y")
-
-    msg = "📄 Tu contrato más reciente (vigente):\n\n"
-    msg += f"• Estado: {contrato_actual.status_label}\n"
-    msg += f"• Fecha de inicio: {contrato_actual.fecha_inicio.strftime('%d-%m-%Y')}\n"
-    msg += f"• Fecha de término: {termino}\n"
-
-    if contrato_actual.archivo:
-        msg += f"\n🔗 Archivo del contrato:\n{contrato_actual.archivo.url}"
+        seleccion = contratos[:20]
+    elif quiere_extensiones:
+        seleccion = contratos[:10]
     else:
-        msg += "\n(No tengo un archivo PDF/subido para este contrato)."
-
-    if otros_activos:
-        msg += "\n\n⚠️ Nota: veo más de un contrato marcado como vigente/activo en el sistema."
-
-    if quiere_extensiones or ({"extension", "extensiones"} & tokens):
-        if not extensiones_vencidas:
-            msg += (
-                "\n\n📎 Extensiones / contratos anteriores:\n"
-                "No tienes extensiones vencidas registradas como contratos separados en el sistema."
+        vigente = _contrato_vigente_telegram(usuario)
+        if vigente is None:
+            return (
+                "No encontré un contrato vigente validado para entrega "
+                "automática. Puedes solicitar tus contratos anteriores "
+                "o consultar con Recursos Humanos."
             )
-        else:
-            msg += "\n\n📎 Extensiones / contratos anteriores (vencidos):\n"
-            for c in extensiones_vencidas[:10]:
-                termino2 = "Indefinido" if not c.fecha_termino else c.fecha_termino.strftime("%d-%m-%Y")
-                msg += f"• Inicio: {c.fecha_inicio.strftime('%d-%m-%Y')} | Término: {termino2} | Estado: {c.status_label}\n"
-                if c.archivo:
-                    msg += f"  {c.archivo.url}\n"
-                else:
-                    msg += "  (Sin PDF asociado)\n"
+        seleccion = [vigente]
+
+    msg = "📄 Tus contratos registrados:\n\n"
+
+    for c in seleccion:
+        termino = (
+            c.fecha_termino.strftime("%d-%m-%Y")
+            if c.fecha_termino
+            else "Indefinido"
+        )
+        msg += (
+            f"• Inicio: {c.fecha_inicio:%d-%m-%Y} "
+            f"| Término: {termino} "
+            f"| Estado: {c.status_label}\n"
+        )
 
     if quiere_anexos:
-        anexos = list(_buscar_anexos_rrhh(usuario)[:10])
-        if not anexos:
-            msg += (
-                "\n\n📎 Anexos:\n"
-                "Usted no posee anexos cargados en el sistema.\n"
-                "Comunícate con *Recursos Humanos* para que puedan cargarte tus anexos.\n"
-                "Te estoy compartiendo el contrato más reciente."
-            )
-        else:
-            msg += "\n\n📎 Anexos (RRHH):\n"
-            for a in anexos:
-                nombre = a.tipo_documento.nombre if a.tipo_documento else "Anexo"
-                msg += f"• {nombre}\n"
-                msg += f"  {a.archivo.url}\n"
-
-    if (not quiere_extensiones) and (not quiere_anexos) and extensiones_vencidas:
-        msg += (
-            f"\n\nTengo además *{len(extensiones_vencidas)}* contrato(s) anterior(es) vencido(s) (extensiones).\n"
-            "¿Quieres que te los envíe también?\n"
-            "Ejemplo: `mi contrato y sus extensiones`"
-        )
+        total = len(anexos_laborales) + len(anexos_rrhh)
+        msg += f"\n📎 Anexos registrados: {total}.\n"
 
     return msg
 
@@ -4179,8 +4255,16 @@ def _enviar_documentos_pdf_solicitados(
     """
     from .telegram_api import send_pdf_telegram
 
+    enviados = 0
+
+    def enviar_pdf(*args):
+        nonlocal enviados
+        if send_pdf_telegram(*args):
+            enviados += 1
+
+
     if usuario is None:
-        return
+        return enviados
 
     if not CustomUser.objects.filter(
         pk=usuario.pk,
@@ -4188,10 +4272,10 @@ def _enviar_documentos_pdf_solicitados(
         telegram_activo=True,
         is_active=True,
     ).exists():
-        return
+        return enviados
 
     if _menciona_otra_persona(texto_usuario, usuario):
-        return
+        return enviados
 
     tokens = set(_tokenize(texto_usuario))
     norm = _normalize(texto_usuario)
@@ -4204,7 +4288,7 @@ def _enviar_documentos_pdf_solicitados(
          "quiero", "necesito", "dame", "mostrar", "muestrame",
          "mi", "mis", "ultima", "ultimas"} & tokens
     ):
-        return
+        return enviados
 
     if (
         "por seguridad" in respuesta
@@ -4217,7 +4301,7 @@ def _enviar_documentos_pdf_solicitados(
         or "sin pdf asociado" in respuesta
         or "opciones disponibles" in respuesta
     ):
-        return
+        return enviados
 
     if {"liquidacion", "liquidaciones", "sueldo"} & tokens:
 
@@ -4226,14 +4310,14 @@ def _enviar_documentos_pdf_solicitados(
             or "tus ultimas" in respuesta
             or "aqui tienes tus liquidaciones solicitadas" in respuesta
         ):
-            return
+            return enviados
 
         qs = Liquidacion.objects.filter(
             tecnico=usuario
         ).order_by("-año", "-mes")
 
         if not qs.exists():
-            return
+            return enviados
 
         n = _parse_ultimas_n_desde_texto(texto_usuario)
         meses = _parse_meses_multi(texto_usuario)
@@ -4251,7 +4335,7 @@ def _enviar_documentos_pdf_solicitados(
                 if anio is not None:
                     candidatos = candidatos.filter(año=anio)
                 elif candidatos.values("año").distinct().count() != 1:
-                    return
+                    return enviados
 
                 obj = candidatos.first()
                 if obj:
@@ -4288,7 +4372,7 @@ def _enviar_documentos_pdf_solicitados(
                 if anio is not None:
                     candidatos = candidatos.filter(año=anio)
                 elif candidatos.values("año").distinct().count() != 1:
-                    return
+                    return enviados
 
                 obj = candidatos.first()
                 if obj:
@@ -4307,30 +4391,28 @@ def _enviar_documentos_pdf_solicitados(
             if not liq.firmada or not liq.pdf_firmado:
                 continue
 
-            send_pdf_telegram(
+            enviar_pdf(
                 chat_id,
                 liq.pdf_firmado,
                 f"liquidacion_{liq.año}_{liq.mes:02d}.pdf",
                 f"Liquidación firmada {liq.mes:02d}/{liq.año}",
             )
 
-        return
+        return enviados
+
 
     if not (
         {"contrato", "contratos", "anexo", "anexos",
          "extension", "extensiones"} & tokens
     ):
-        return
+        return enviados
 
     if not (
-        "tu contrato mas reciente" in respuesta
-        or "tus contratos registrados" in respuesta
+        "tus contratos registrados" in respuesta
+        or "tus anexos registrados" in respuesta
+        or "pero tienes anexos registrados" in respuesta
     ):
-        return
-
-    qs = ContratoTrabajo.objects.filter(
-        tecnico=usuario
-    ).order_by("-fecha_inicio")
+        return enviados
 
     quiere_anexos = bool({"anexo", "anexos"} & tokens)
     quiere_contratos = bool({"contrato", "contratos"} & tokens)
@@ -4340,6 +4422,19 @@ def _enviar_documentos_pdf_solicitados(
     )
 
     if quiere_anexos:
+        # Anexos laborales.
+        for anexo in _anexos_telegram_usuario(usuario)[:10]:
+            if not anexo.archivo:
+                continue
+
+            enviar_pdf(
+                chat_id,
+                anexo.archivo,
+                f"anexo_contrato_{anexo.pk}.pdf",
+                "Anexo de contrato",
+            )
+
+        # Anexos registrados en RRHH.
         for anexo in _buscar_anexos_rrhh(usuario)[:10]:
             if not anexo.archivo:
                 continue
@@ -4350,49 +4445,39 @@ def _enviar_documentos_pdf_solicitados(
                 else "Anexo"
             )
 
-            send_pdf_telegram(
+            enviar_pdf(
                 chat_id,
                 anexo.archivo,
-                f"anexo_{anexo.pk}.pdf",
+                f"anexo_rrhh_{anexo.pk}.pdf",
                 nombre_tipo,
             )
 
-    if not qs.exists():
-        return
-
-    # "Mis anexos" no debe adjuntar contratos innecesariamente.
+    # Solicitar solo anexos no debe adjuntar contratos.
     if quiere_anexos and not quiere_contratos and not quiere_extensiones:
-        return
+        return enviados
 
-    actual, extensiones, otros_activos = (
-        _get_contrato_actual_y_extensiones(qs)
-    )
+    contratos = _contratos_telegram_usuario(usuario)
 
     if "contratos" in tokens or {"todos", "todas"} & tokens:
-        seleccion = list(qs[:20])
+        seleccion = contratos[:20]
     elif quiere_extensiones:
-        seleccion = [actual] + extensiones[:10]
+        seleccion = contratos[:10]
     else:
-        seleccion = [actual]
-
-    vistos = set()
+        vigente = _contrato_vigente_telegram(usuario)
+        seleccion = [vigente] if vigente is not None else []
 
     for contrato in seleccion:
-        if not contrato or contrato.pk in vistos:
+        if not contrato or not contrato.archivo:
             continue
 
-        vistos.add(contrato.pk)
-
-        if not contrato.archivo:
-            continue
-
-        send_pdf_telegram(
+        enviar_pdf(
             chat_id,
             contrato.archivo,
             f"contrato_{contrato.pk}.pdf",
             "Contrato de trabajo",
         )
 
+    return enviados
 
 def handle_telegram_update(update: dict) -> None:
     """
@@ -4734,32 +4819,46 @@ def handle_telegram_update(update: dict) -> None:
 
     marcar_train_out = False
 
-    send_telegram_message(
-        chat_id,
-        reply_text,
-        sesion=sesion,
-        usuario=usuario,
-        intent=intent,
-        meta={
-            "from_update_id": update.get("update_id"),
-            **ai_meta,
-            **humanizer_meta,
-        },
-        marcar_para_entrenamiento=marcar_train_out,
-    )
+    # Enviar primero los documentos solicitados.
+    pdf_enviados = 0
 
-    # Enviar documentos PDF después de la respuesta de texto.
     try:
         if usuario is not None:
-            _enviar_documentos_pdf_solicitados(
-                chat_id,
-                usuario,
-                text,
-                respuesta_original_pdf,
+            pdf_enviados = (
+                _enviar_documentos_pdf_solicitados(
+                    chat_id,
+                    usuario,
+                    text,
+                    respuesta_original_pdf,
+                ) or 0
             )
     except Exception:
         logger.exception(
             "Error procesando envío PDF solicitado por Telegram"
+        )
+
+    if pdf_enviados:
+        # Los PDF ya llegaron como archivos adjuntos.
+        # No enviar la respuesta antigua con enlaces de Cloudinary.
+        logger.info(
+            "Telegram: %s PDF enviados al chat %s",
+            pdf_enviados,
+            chat_id,
+        )
+    else:
+        # Mantener respuestas normales y consultas informativas.
+        send_telegram_message(
+            chat_id,
+            reply_text,
+            sesion=sesion,
+            usuario=usuario,
+            intent=intent,
+            meta={
+                "from_update_id": update.get("update_id"),
+                **ai_meta,
+                **humanizer_meta,
+            },
+            marcar_para_entrenamiento=marcar_train_out,
         )
 
 
