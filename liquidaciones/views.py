@@ -1,3 +1,4 @@
+from django.http import Http404
 import base64
 import calendar
 import logging
@@ -189,7 +190,16 @@ def ver_pdf_liquidacion(request, pk):
 
     if archivo and archivo.name:
         try:
-            return FileResponse(archivo.open('rb'), content_type='application/pdf')
+            nombre_pdf = Path(archivo.name).name
+            if not nombre_pdf.lower().endswith(".pdf"):
+                nombre_pdf += ".pdf"
+
+            return FileResponse(
+                archivo.open("rb"),
+                content_type="application/pdf",
+                as_attachment=False,
+                filename=nombre_pdf,
+            )
         except Exception as e:
             logger.error(f"[ver_pdf_liquidacion] Error al abrir PDF: {e}")
             messages.error(request, "No se pudo abrir el archivo PDF.")
@@ -455,7 +465,7 @@ def descargar_pdf(request, pk):
             return FileResponse(
                 archivo.open('rb'),
                 content_type='application/pdf',
-                as_attachment=False,
+                as_attachment=True,
                 filename=nombre_archivo
             )
         except Exception as e:
@@ -1051,29 +1061,23 @@ def ver_pdf_firmado_admin(request, pk):
     try:
         liquidacion = Liquidacion.objects.get(pk=pk)
     except Liquidacion.DoesNotExist:
-        messages.error(request, "La liquidación no existe.")
+        messages.error(request, 'La liquidación no existe.')
         return redirect('liquidaciones:admin_lista')
-
     archivo = liquidacion.pdf_firmado
-
     if archivo and archivo.name:
         try:
-            apellido = liquidacion.tecnico.last_name or "tecnico"
+            apellido = liquidacion.tecnico.last_name or 'tecnico'
             año = liquidacion.año
-            mes = f"{liquidacion.mes:02d}"
-            nombre_archivo = f"liquidacion_{apellido}_{año}_{mes}.pdf"
-
-            return FileResponse(
-                archivo.open('rb'),
-                content_type='application/pdf'
-            )
+            mes = f'{liquidacion.mes:02d}'
+            nombre_archivo = f'liquidacion_{apellido}_{año}_{mes}.pdf'
+            _archivo_pdf = archivo.open('rb')
+            return FileResponse(_archivo_pdf, content_type='application/pdf', filename=_nombre_pdf_descarga(_archivo_pdf.name))
         except Exception as e:
-            logger.error(
-                f"[ver_pdf_firmado_admin] Error al abrir PDF firmado: {e}")
-            messages.error(request, "No se pudo abrir el archivo firmado.")
+            logger.error(f'[ver_pdf_firmado_admin] Error al abrir PDF firmado: {e}')
+            messages.error(request, 'No se pudo abrir el archivo firmado.')
             return redirect('liquidaciones:admin_lista')
     else:
-        messages.error(request, "El archivo firmado ya no está disponible.")
+        messages.error(request, 'El archivo firmado ya no está disponible.')
         return redirect('liquidaciones:admin_lista')
 
 
@@ -1083,28 +1087,23 @@ def ver_pdf_admin(request, pk):
     try:
         liquidacion = Liquidacion.objects.get(pk=pk)
     except Liquidacion.DoesNotExist:
-        messages.error(request, "La liquidación no existe.")
+        messages.error(request, 'La liquidación no existe.')
         return redirect('liquidaciones:admin_lista')
-
     archivo = liquidacion.archivo_pdf_liquidacion
-
     if archivo and archivo.name:
         try:
-            apellido = liquidacion.tecnico.last_name or "tecnico"
+            apellido = liquidacion.tecnico.last_name or 'tecnico'
             año = liquidacion.año
-            mes = f"{liquidacion.mes:02d}"
-            nombre_archivo = f"liquidacion_{apellido}_{año}_{mes}_sin_firma.pdf"
-
-            return FileResponse(
-                archivo.open('rb'),
-                content_type='application/pdf'
-            )
+            mes = f'{liquidacion.mes:02d}'
+            nombre_archivo = f'liquidacion_{apellido}_{año}_{mes}_sin_firma.pdf'
+            _archivo_pdf = archivo.open('rb')
+            return FileResponse(_archivo_pdf, content_type='application/pdf', filename=_nombre_pdf_descarga(_archivo_pdf.name))
         except Exception as e:
-            logger.error(f"[ver_pdf_admin] Error al abrir archivo PDF: {e}")
-            messages.error(request, "No se pudo abrir el archivo.")
+            logger.error(f'[ver_pdf_admin] Error al abrir archivo PDF: {e}')
+            messages.error(request, 'No se pudo abrir el archivo.')
             return redirect('liquidaciones:admin_lista')
     else:
-        messages.error(request, "El archivo ya no está disponible.")
+        messages.error(request, 'El archivo ya no está disponible.')
         return redirect('liquidaciones:admin_lista')
 
 
@@ -1113,3 +1112,45 @@ def verificar_storage(request):
         "USE_CLOUDINARY": getattr(settings, 'USE_CLOUDINARY', False),
         "STORAGE_BACKEND": getattr(settings, 'DEFAULT_FILE_STORAGE', 'No definido')
     })
+
+
+def _nombre_pdf_descarga(nombre):
+    """Garantiza extensión PDF sin modificar el archivo almacenado."""
+    nombre = Path(str(nombre or "documento")).name
+    if not nombre.lower().endswith(".pdf"):
+        nombre += ".pdf"
+    return nombre
+
+
+
+@staff_member_required
+@rol_requerido('admin', 'pm', 'rrhh')
+def descargar_pdf_firmado_admin(request, pk):
+    """Descarga directa del PDF firmado desde el panel administrativo."""
+    liquidacion = get_object_or_404(Liquidacion, pk=pk)
+
+    archivo = liquidacion.pdf_firmado
+
+    if not archivo or not archivo.name:
+        raise Http404("El PDF firmado no está disponible.")
+
+    apellido = liquidacion.tecnico.last_name or "tecnico"
+    nombre_archivo = (
+        f"liquidacion_{apellido}_{liquidacion.año}_"
+        f"{liquidacion.mes:02d}.pdf"
+    )
+
+    try:
+        archivo_abierto = archivo.open("rb")
+    except Exception:
+        logger.exception(
+            "Error al abrir liquidación firmada %s", pk
+        )
+        raise Http404("No se pudo abrir el PDF firmado.")
+
+    return FileResponse(
+        archivo_abierto,
+        content_type="application/pdf",
+        as_attachment=True,
+        filename=nombre_archivo,
+    )

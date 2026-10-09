@@ -737,6 +737,44 @@ def ver_contrato(request, contrato_id):
         return redirect('rrhh:contratos_trabajo')
 
 
+
+@login_required
+def descargar_contrato(request, contrato_id):
+    from pathlib import Path
+
+    queryset = ContratoTrabajo.objects.all()
+
+    # Los trabajadores solo acceden a sus propios documentos.
+    # El personal administrativo mantiene el acceso existente.
+    if not request.user.is_staff:
+        queryset = queryset.filter(tecnico=request.user)
+
+    contrato = get_object_or_404(queryset, id=contrato_id)
+
+    if not contrato.archivo:
+        raise Http404("Documento no disponible")
+
+    try:
+        archivo = contrato.archivo.open("rb")
+    except Exception:
+        logger.exception(
+            "Error abriendo contrato %s para descarga",
+            contrato_id,
+        )
+        raise Http404("Documento no disponible")
+
+    nombre = Path(contrato.archivo.name).name
+
+    if not nombre.lower().endswith(".pdf"):
+        nombre += ".pdf"
+
+    return FileResponse(
+        archivo,
+        content_type="application/pdf",
+        as_attachment=True,
+        filename=nombre,
+    )
+
 @login_required
 def listar_fichas_ingreso_usuario(request):
     fichas = FichaIngreso.objects.filter(usuario=request.user)

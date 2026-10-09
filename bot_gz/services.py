@@ -1178,7 +1178,7 @@ def send_telegram_message(
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
     def _split_text(raw: str, limit: int = 3800) -> list[str]:
-        raw = (raw or "").replace("\r\n", "\n").strip()
+        raw = (raw or "").replace("\n", "\n").strip()
         if not raw:
             return [""]
 
@@ -1238,7 +1238,7 @@ def send_telegram_message(
         return re.sub(r"\*(.+?)\*", r"<b>\1</b>", escaped_text)
 
     def _markdownish_to_html(raw: str) -> str:
-        raw = (raw or "").replace("\r\n", "\n")
+        raw = (raw or "").replace("\n", "\n")
 
         if raw.count("`") % 2 == 1:
             return _bold_to_html(_html.escape(raw))
@@ -1254,7 +1254,7 @@ def send_telegram_message(
 
     def _to_html(raw: str) -> str:
         if _looks_like_html(raw):
-            return (raw or "").replace("\r\n", "\n")
+            return (raw or "").replace("\n", "\n")
         return _markdownish_to_html(raw)
 
     chunks = _split_text(text, limit=3800)
@@ -4169,6 +4169,231 @@ def run_intent(
 # ===================== Entry point: manejar update de Telegram =====================
 
 
+
+def _enviar_documentos_pdf_solicitados(
+    chat_id, usuario, texto_usuario, respuesta_original=""
+):
+    """
+    Entrega PDF solamente ante solicitudes explícitas y autorizadas.
+    La respuesta original del handler se usa como control adicional.
+    """
+    from .telegram_api import send_pdf_telegram
+
+    if usuario is None:
+        return
+
+    if not CustomUser.objects.filter(
+        pk=usuario.pk,
+        telegram_chat_id=str(chat_id),
+        telegram_activo=True,
+        is_active=True,
+    ).exists():
+        return
+
+    if _menciona_otra_persona(texto_usuario, usuario):
+        return
+
+    tokens = set(_tokenize(texto_usuario))
+    norm = _normalize(texto_usuario)
+    respuesta = _normalize(respuesta_original or "")
+
+    # Evitar menús, preguntas informativas y respuestas negativas.
+    if not (
+        {"enviar", "enviame", "mandar", "mandame", "descargar",
+         "descarga", "pasame", "adjuntar", "adjuntame",
+         "quiero", "necesito", "dame", "mostrar", "muestrame",
+         "mi", "mis", "ultima", "ultimas"} & tokens
+    ):
+        return
+
+    if (
+        "por seguridad" in respuesta
+        or "no encontre" in respuesta
+        or "no tengo registrado" in respuesta
+        or "no tengo liquidaciones" in respuesta
+        or "de que ano" in respuesta
+        or "de cual ano" in respuesta
+        or "mas de un ano" in respuesta
+        or "sin pdf asociado" in respuesta
+        or "opciones disponibles" in respuesta
+    ):
+        return
+
+    if {"liquidacion", "liquidaciones", "sueldo"} & tokens:
+
+        if not (
+            "tu liquidacion de sueldo" in respuesta
+            or "tus ultimas" in respuesta
+            or "aqui tienes tus liquidaciones solicitadas" in respuesta
+        ):
+            return
+
+        qs = Liquidacion.objects.filter(
+            tecnico=usuario
+        ).order_by("-año", "-mes")
+
+        if not qs.exists():
+            return
+
+        n = _parse_ultimas_n_desde_texto(texto_usuario)
+        meses = _parse_meses_multi(texto_usuario)
+        anio = _parse_anio_explicito(texto_usuario)
+
+        seleccion = []
+
+        if n:
+            seleccion = list(qs[:min(n, 10)])
+
+        elif meses:
+            for mes in meses:
+                candidatos = qs.filter(mes=mes)
+
+                if anio is not None:
+                    candidatos = candidatos.filter(año=anio)
+                elif candidatos.values("año").distinct().count() != 1:
+                    return
+
+                obj = candidatos.first()
+                if obj:
+                    seleccion.append(obj)
+
+        else:
+            fecha = re.search(
+                r"\b(0?[1-9]|1[0-2])[-/](20\d{2})\b",
+                norm,
+            )
+
+            mes = None
+
+            if fecha:
+                mes = int(fecha.group(1))
+                anio = int(fecha.group(2))
+            else:
+                for token in tokens:
+                    if token in _MESES:
+                        mes = _MESES[token]
+                        break
+
+                if mes is None:
+                    numero = re.search(
+                        r"\b(0?[1-9]|1[0-2])\b",
+                        norm,
+                    )
+                    if numero:
+                        mes = int(numero.group(1))
+
+            if mes is not None:
+                candidatos = qs.filter(mes=mes)
+
+                if anio is not None:
+                    candidatos = candidatos.filter(año=anio)
+                elif candidatos.values("año").distinct().count() != 1:
+                    return
+
+                obj = candidatos.first()
+                if obj:
+                    seleccion = [obj]
+
+        vistos = set()
+
+        for liq in seleccion:
+            if liq.pk in vistos:
+                continue
+
+            vistos.add(liq.pk)
+
+            # Solo entregar liquidaciones firmadas.
+            # Las pendientes conservan su flujo de firma.
+            if not liq.firmada or not liq.pdf_firmado:
+                continue
+
+            send_pdf_telegram(
+                chat_id,
+                liq.pdf_firmado,
+                f"liquidacion_{liq.año}_{liq.mes:02d}.pdf",
+                f"Liquidación firmada {liq.mes:02d}/{liq.año}",
+            )
+
+        return
+
+    if not (
+        {"contrato", "contratos", "anexo", "anexos",
+         "extension", "extensiones"} & tokens
+    ):
+        return
+
+    if not (
+        "tu contrato mas reciente" in respuesta
+        or "tus contratos registrados" in respuesta
+    ):
+        return
+
+    qs = ContratoTrabajo.objects.filter(
+        tecnico=usuario
+    ).order_by("-fecha_inicio")
+
+    quiere_anexos = bool({"anexo", "anexos"} & tokens)
+    quiere_contratos = bool({"contrato", "contratos"} & tokens)
+    quiere_extensiones = bool(
+        {"extension", "extensiones", "anteriores",
+         "vencidos", "historial"} & tokens
+    )
+
+    if quiere_anexos:
+        for anexo in _buscar_anexos_rrhh(usuario)[:10]:
+            if not anexo.archivo:
+                continue
+
+            nombre_tipo = (
+                anexo.tipo_documento.nombre
+                if anexo.tipo_documento
+                else "Anexo"
+            )
+
+            send_pdf_telegram(
+                chat_id,
+                anexo.archivo,
+                f"anexo_{anexo.pk}.pdf",
+                nombre_tipo,
+            )
+
+    if not qs.exists():
+        return
+
+    # "Mis anexos" no debe adjuntar contratos innecesariamente.
+    if quiere_anexos and not quiere_contratos and not quiere_extensiones:
+        return
+
+    actual, extensiones, otros_activos = (
+        _get_contrato_actual_y_extensiones(qs)
+    )
+
+    if "contratos" in tokens or {"todos", "todas"} & tokens:
+        seleccion = list(qs[:20])
+    elif quiere_extensiones:
+        seleccion = [actual] + extensiones[:10]
+    else:
+        seleccion = [actual]
+
+    vistos = set()
+
+    for contrato in seleccion:
+        if not contrato or contrato.pk in vistos:
+            continue
+
+        vistos.add(contrato.pk)
+
+        if not contrato.archivo:
+            continue
+
+        send_pdf_telegram(
+            chat_id,
+            contrato.archivo,
+            f"contrato_{contrato.pk}.pdf",
+            "Contrato de trabajo",
+        )
+
+
 def handle_telegram_update(update: dict) -> None:
     """
     Punto de entrada para el webhook de Telegram.
@@ -4471,6 +4696,7 @@ def handle_telegram_update(update: dict) -> None:
     # Ejecutar handler Django
     # =========================
     reply_text = run_intent(intent, text, sesion, usuario, inbound_log)
+    respuesta_original_pdf = reply_text
 
     # =========================
     # Humanizer IA seguro
@@ -4521,6 +4747,20 @@ def handle_telegram_update(update: dict) -> None:
         },
         marcar_para_entrenamiento=marcar_train_out,
     )
+
+    # Enviar documentos PDF después de la respuesta de texto.
+    try:
+        if usuario is not None:
+            _enviar_documentos_pdf_solicitados(
+                chat_id,
+                usuario,
+                text,
+                respuesta_original_pdf,
+            )
+    except Exception:
+        logger.exception(
+            "Error procesando envío PDF solicitado por Telegram"
+        )
 
 
 # ===================== WIZARD: Crear rendición (gasto) =====================

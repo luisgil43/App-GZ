@@ -6,6 +6,12 @@ from .views import UsuarioAutocomplete, verificar_storage
 app_name = 'liquidaciones'
 
 urlpatterns = [
+    path(
+        "admin/descargar-firmado/<int:pk>/",
+        views.descargar_pdf_firmado_admin,
+        name="descargar_pdf_firmado_admin",
+    ),
+
     path('', views.listar_liquidaciones, name='listar'),
     path('admin/', views.admin_lista_liquidaciones, name='admin_lista'),
     path('pdf/<int:pk>/', views.ver_pdf_liquidacion, name='ver_pdf'),

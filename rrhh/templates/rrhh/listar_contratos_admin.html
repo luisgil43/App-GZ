@@ -312,10 +312,9 @@
                 <!-- Documento -->
                 <td class="px-4 py-3">
                   {% if contrato.archivo %}
-                    <a href="{% url 'rrhh:ver_contrato' contrato.id %}"
-                       class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-bold"
-                       target="_blank">
-                      📄 Ver PDF
+                    <a href="{% url 'rrhh:descargar_contrato' contrato.id %}"
+                       class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-bold">
+                      ⬇️ Descargar PDF
                     </a>
                   {% else %}
                     <span class="text-slate-400 italic">No disponible</span>
@@ -463,11 +462,17 @@
 
                               <td class="px-4 py-3">
                                 {% if doc.archivo %}
-                                  <a href="{% url 'rrhh:ver_contrato' doc.id %}"
+                                  <div class="flex flex-wrap items-center gap-3">
+<a href="{% url 'rrhh:ver_contrato' doc.id %}"
                                      class="text-blue-600 hover:text-blue-700 font-bold"
                                      target="_blank">
                                     📄 Ver PDF
                                   </a>
+                    <a href="{% url 'rrhh:descargar_contrato' doc.id %}"
+                       class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-bold">
+                      ⬇️ Descargar PDF
+                    </a>
+                  </div>
                                 {% else %}
                                   <span class="text-slate-400 italic">No disponible</span>
                                 {% endif %}

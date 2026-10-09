@@ -150,7 +150,7 @@
           <!-- PDF firmado -->
           <td class="px-4 py-3">
             {% if l.pdf_firmado %}
-              <a href="{% url 'liquidaciones:ver_pdf_firmado_admin' l.id %}"
+              <a href="{% url 'liquidaciones:descargar_pdf_firmado_admin' l.id %}"
                  target="_blank"
                  class="text-blue-600 hover:underline">
                 ⬇️ Descargar

@@ -6,6 +6,12 @@ app_name = 'rrhh'
 
 urlpatterns = [
     # Contratos de trabajo
+    path(
+        "contratos-trabajo/descargar/<int:contrato_id>/",
+        views.descargar_contrato,
+        name="descargar_contrato",
+    ),
+
     path("contratos-trabajo/", views.listar_contratos_admin, name="contratos_trabajo"),
     path("mis-contratos/", views.listar_contratos_usuario, name="mis_contratos"),
     path("contratos-trabajo/crear/", views.crear_contrato, name="crear_contrato"),

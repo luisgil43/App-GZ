@@ -66,3 +66,73 @@ def send_message_telegram(chat_id: Union[str, int], text: str) -> bool:
     except Exception:
         logger.exception("Excepción al enviar mensaje Telegram")
         return False
+
+def send_pdf_telegram(chat_id, archivo, nombre_archivo, caption=""):
+    """
+    Envía un archivo PDF real a Telegram mediante sendDocument.
+
+    archivo: FileField de Django.
+    No modifica el archivo original.
+    """
+    import io
+
+    token = _get_bot_token()
+    if not token:
+        return False
+
+    if not archivo or not archivo.name:
+        logger.error("Telegram PDF: archivo no disponible")
+        return False
+
+    try:
+        with archivo.open("rb") as fuente:
+            contenido = fuente.read()
+
+        if not contenido.startswith(b"%PDF-"):
+            logger.error(
+                "Telegram PDF: el archivo no contiene un PDF válido"
+            )
+            return False
+
+        nombre = str(nombre_archivo)
+
+        if not nombre.lower().endswith(".pdf"):
+            nombre += ".pdf"
+
+        api_url = f"https://api.telegram.org/bot{token}/sendDocument"
+
+        payload = {
+            "chat_id": str(chat_id),
+            "caption": caption[:1024],
+        }
+
+        files = {
+            "document": (
+                nombre,
+                io.BytesIO(contenido),
+                "application/pdf",
+            )
+        }
+
+        respuesta = requests.post(
+            api_url,
+            data=payload,
+            files=files,
+            timeout=60,
+        )
+
+        data = respuesta.json()
+
+        if respuesta.status_code == 200 and data.get("ok"):
+            return True
+
+        logger.error(
+            "Telegram PDF: error HTTP %s: %s",
+            respuesta.status_code,
+            data.get("description", "Sin descripción"),
+        )
+        return False
+
+    except Exception:
+        logger.exception("Error enviando PDF por Telegram")
+        return False
