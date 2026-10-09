@@ -161,21 +161,29 @@ def _menciona_otra_persona(texto_original: str, usuario: CustomUser) -> bool:
     if not norm:
         return False
 
-    # Solicitudes explícitas sobre documentos propios.
-    # No omitir las comprobaciones posteriores si se menciona
-    # también a otra persona.
-    tokens_propios = set(_tokenize(texto_original))
-    if {"mi", "mis"} & tokens_propios:
-        patron_tercero = re.search(
-            r"\b(?:de|del|para)\s+"
-            r"(?!mi\b|mis\b|la\b|el\b|los\b|las\b)"
-            r"[a-záéíóúñ]{3,}",
-            norm,
-        )
-        if not patron_tercero:
-            return False
-
     NO_NOMBRES = {
+        "envia",
+        "enviar",
+        "enviame",
+        "descarga",
+        "descargar",
+        "mandame",
+        "mandar",
+        "adjuntame",
+        "adjuntar",
+        "necesito",
+        "solicito",
+        "solicitar",
+        "quiero",
+        "dame",
+        "muestra",
+        "mostrar",
+        "muestrame",
+        "pdf",
+        "anexo",
+        "anexos",
+        "extension",
+        "extensiones",
         "cual",
         "que",
         "quien",
