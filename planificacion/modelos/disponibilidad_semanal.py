@@ -50,10 +50,12 @@ class DisponibilidadCuadrillaSemana(models.Model):
 
     LUNES_VIERNES = "lunes_viernes"
     LUNES_SABADO = "lunes_sabado"
+    LUNES_DOMINGO = "lunes_domingo"
 
     MODALIDADES = [
         (LUNES_VIERNES, "Lunes a viernes"),
         (LUNES_SABADO, "Lunes a sábado"),
+        (LUNES_DOMINGO, "Lunes a domingo"),
     ]
 
     # ========================================================
@@ -357,6 +359,9 @@ class DisponibilidadCuadrillaSemana(models.Model):
         if not self.activa:
             return 0
 
+        if self.modalidad == self.LUNES_DOMINGO:
+            return 7
+
         if self.modalidad == self.LUNES_SABADO:
             return 6
 
@@ -364,7 +369,20 @@ class DisponibilidadCuadrillaSemana(models.Model):
 
     @property
     def trabaja_sabado(self):
-        return self.activa and self.modalidad == self.LUNES_SABADO
+        return (
+            self.activa
+            and self.modalidad in {
+                self.LUNES_SABADO,
+                self.LUNES_DOMINGO,
+            }
+        )
+
+    @property
+    def trabaja_domingo(self):
+        return (
+            self.activa
+            and self.modalidad == self.LUNES_DOMINGO
+        )
 
     # ========================================================
     # CAPACIDAD

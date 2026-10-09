@@ -286,9 +286,7 @@ def preview_asignacion_dia(
     # VALIDAR QUE PERTENEZCA A LA SEMANA
     # ========================================================
 
-    fecha_fin = batch.fecha_inicio + timedelta(
-        days=5,
-    )
+    fecha_fin = batch.fecha_fin
 
     if not (batch.fecha_inicio <= fecha_objeto <= fecha_fin):
 
@@ -381,9 +379,7 @@ def confirmar_asignacion_dia(
     # VALIDAR QUE PERTENEZCA A LA SEMANA
     # ========================================================
 
-    fecha_fin = batch.fecha_inicio + timedelta(
-        days=5,
-    )
+    fecha_fin = batch.fecha_fin
 
     if not (batch.fecha_inicio <= fecha_objeto <= fecha_fin):
 

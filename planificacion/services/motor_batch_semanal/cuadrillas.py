@@ -138,6 +138,7 @@ def construir_configuracion_cuadrilla(
         "modalidad": (disponibilidad.modalidad),
         "modalidad_display": (disponibilidad.get_modalidad_display()),
         "trabaja_sabado": (disponibilidad.trabaja_sabado),
+        "trabaja_domingo": (disponibilidad.trabaja_domingo),
         "dias_disponibles": (disponibilidad.dias_disponibles),
         # ====================================================
         # VEHÍCULO / COBERTURA

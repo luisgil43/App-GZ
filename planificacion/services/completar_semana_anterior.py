@@ -500,61 +500,57 @@ def obtener_dias_operativos_semana(
     batch,
 ):
     """
-    Devuelve todos los días operativos definidos para el batch.
+    Devuelve los días operativos definidos para el batch.
 
-    Domingo nunca se considera operativo.
+    Lunes a viernes:
+        5 días.
 
-    El sábado solamente se considera cuando la configuración
-    semanal indica que la operación trabaja sábado.
+    Lunes a sábado:
+        6 días.
+
+    Lunes a domingo:
+        7 días.
+
+    El domingo requiere al menos una cuadrilla activa
+    con modalidad lunes_domingo.
     """
 
     dias = []
 
     fecha = batch.fecha_inicio
-
     fin = batch.fecha_fin
+
+    trabaja_sabado = False
+    trabaja_domingo = False
+
+    if batch.configuracion_semana_id:
+
+        configuracion = batch.configuracion_semana
+
+        trabaja_sabado = bool(
+            configuracion.trabaja_sabado
+        )
+
+        trabaja_domingo = (
+            configuracion.disponibilidades_cuadrillas.filter(
+                activa=True,
+                modalidad="lunes_domingo",
+            ).exists()
+        )
 
     while fecha <= fin:
 
-        # ====================================================
-        # DOMINGO
-        # ====================================================
-
-        if fecha.weekday() == 6:
-
-            fecha += timedelta(
-                days=1,
-            )
-
+        if fecha.weekday() == 6 and not trabaja_domingo:
+            fecha += timedelta(days=1)
             continue
 
-        # ====================================================
-        # SÁBADO
-        # ====================================================
+        if fecha.weekday() == 5 and not trabaja_sabado:
+            fecha += timedelta(days=1)
+            continue
 
-        if fecha.weekday() == 5:
+        dias.append(fecha)
 
-            trabaja_sabado = False
-
-            if batch.configuracion_semana_id:
-
-                trabaja_sabado = bool(batch.configuracion_semana.trabaja_sabado)
-
-            if not trabaja_sabado:
-
-                fecha += timedelta(
-                    days=1,
-                )
-
-                continue
-
-        dias.append(
-            fecha,
-        )
-
-        fecha += timedelta(
-            days=1,
-        )
+        fecha += timedelta(days=1)
 
     return dias
 

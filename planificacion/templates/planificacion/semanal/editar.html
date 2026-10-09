@@ -987,6 +987,7 @@ Editar Semana
 
     let capacidadLV = 0;
     let capacidadSabado = 0;
+    let capacidadDomingo = 0;
 
     document
       .querySelectorAll(
@@ -1049,11 +1050,19 @@ Editar Semana
             elementos.modalidad
             &&
             elementos.modalidad.value
-            === 'lunes_sabado'
+            === 'lunes_sabado' || elementos.modalidad.value === 'lunes_domingo'
           ) {
 
             capacidadSabado +=
               capacidadDiaria;
+
+            if (
+              elementos.modalidad
+              && elementos.modalidad.value === 'lunes_domingo'
+            ) {
+              capacidadDomingo += capacidadDiaria;
+            }
+
           }
 
         }
@@ -1100,7 +1109,7 @@ Editar Semana
         String(
           capacidadLV
           +
-          capacidadSabado
+          capacidadSabado + capacidadDomingo
         );
     }
   }

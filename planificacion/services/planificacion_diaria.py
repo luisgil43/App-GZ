@@ -590,13 +590,13 @@ def obtener_fechas_operacionales_batch(
         + timedelta(
             days=indice,
         )
-        for indice in range(6)
+        for indice in range(7)
     ]
 
     hoy = timezone.localdate()
 
     fecha_fin = inicio + timedelta(
-        days=5,
+        days=6,
     )
 
     # ========================================================
@@ -651,7 +651,7 @@ def _fechas_validas_disponibilidad(
 
     for fecha in fechas:
 
-        if fecha.weekday() == 6:
+        if fecha.weekday() == 6 and not disponibilidad.trabaja_domingo:
             continue
 
         if fecha.weekday() == 5 and not disponibilidad.trabaja_sabado:

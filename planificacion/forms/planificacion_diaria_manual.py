@@ -303,7 +303,7 @@ class ProgramarSitioManualPlanificacionDiariaForm(forms.Form):
             inicio = self.batch.fecha_inicio
 
             fin = inicio + timedelta(
-                days=5,
+                days=6,
             )
 
             if not (inicio <= fecha <= fin):
@@ -317,12 +317,6 @@ class ProgramarSitioManualPlanificacionDiariaForm(forms.Form):
                     ),
                 )
 
-            if fecha.weekday() == 6:
-
-                self.add_error(
-                    "fecha",
-                    "El domingo no es un día operacional.",
-                )
 
         # ====================================================
         # CUADRILLA DEL BATCH
@@ -368,6 +362,21 @@ class ProgramarSitioManualPlanificacionDiariaForm(forms.Form):
             self.add_error(
                 "fecha",
                 (f"{disponibilidad.nombre_cuadrilla} " "no trabaja los sábados."),
+            )
+
+        # DOMINGO: únicamente cuadrillas de lunes a domingo.
+        if (
+            fecha is not None
+            and disponibilidad is not None
+            and fecha.weekday() == 6
+            and not disponibilidad.trabaja_domingo
+        ):
+            self.add_error(
+                "fecha",
+                (
+                    f"{disponibilidad.nombre_cuadrilla} "
+                    "no trabaja los domingos."
+                ),
             )
 
         return cleaned_data

@@ -466,33 +466,44 @@ def actualizar_configuracion_batch_semanal(
             )
 
         # ====================================================
-        # NO QUITAR SÁBADO SI EXISTE SALIDA EL SÁBADO
+        # VALIDAR DÍAS CONTRA SALIDAS EXISTENTES
         # ====================================================
 
-        if (
-            nueva_activa
-            and nueva_modalidad == DisponibilidadCuadrillaSemana.LUNES_VIERNES
-        ):
+        dias_permitidos = {
+            DisponibilidadCuadrillaSemana.LUNES_VIERNES: 5,
+            DisponibilidadCuadrillaSemana.LUNES_SABADO: 6,
+            DisponibilidadCuadrillaSemana.LUNES_DOMINGO: 7,
+        }
 
-            existe_salida_sabado = any(
-                salida.fecha.weekday() == 5
-                for salida
-                in salidas_existentes.only(
-                    "id",
-                    "fecha",
-                )
+        if nueva_modalidad not in dias_permitidos:
+            raise ValueError(
+                "La modalidad semanal seleccionada no es válida."
             )
 
-            if existe_salida_sabado:
+        if nueva_activa:
+            cantidad_dias = dias_permitidos[nueva_modalidad]
 
-                raise ValueError(
-                    (
-                        f"{disponibilidad_actual.nombre_cuadrilla} "
-                        "ya posee una salida programada el "
-                        "sábado y no puede cambiarse a "
-                        "Lunes a viernes."
+            for salida in salidas_existentes.only(
+                "id",
+                "fecha",
+            ):
+                dia_semana = salida.fecha.weekday()
+
+                if dia_semana >= cantidad_dias:
+                    nombre_dia = (
+                        "sábado"
+                        if dia_semana == 5
+                        else "domingo"
                     )
-                )
+
+                    raise ValueError(
+                        (
+                            f"{disponibilidad_actual.nombre_cuadrilla} "
+                            f"ya posee una salida programada el "
+                            f"{nombre_dia} y no puede cambiarse "
+                            f"a {dict(DisponibilidadCuadrillaSemana.MODALIDADES)[nueva_modalidad]}."
+                        )
+                    )
 
     # ========================================================
     # GUARDAR DISPONIBILIDADES
@@ -530,7 +541,10 @@ def actualizar_configuracion_batch_semanal(
             usuario=usuario,
         )
 
-        if activa and modalidad == DisponibilidadCuadrillaSemana.LUNES_SABADO:
+        if activa and modalidad in {
+            DisponibilidadCuadrillaSemana.LUNES_SABADO,
+            DisponibilidadCuadrillaSemana.LUNES_DOMINGO,
+        }:
 
             alguna_trabaja_sabado = True
 
@@ -607,16 +621,16 @@ def actualizar_configuracion_batch_semanal(
     # ya representan una decisión consolidada.
     # ========================================================
 
-    (
-        SitioBatchSemanal.objects.select_for_update()
-        .filter(
-            batch=batch,
-        )
-        .exclude(
-            estado="confirmado",
-        )
-        .delete()
-    )
+    # La edición de configuración NO elimina sitios del batch.
+    #
+    # Los sitios pueden estar vinculados a salidas diarias,
+    # permisos y otros registros operacionales.
+    #
+    # Sus identificadores y relaciones deben conservarse.
+    #
+    # Una eventual regeneración de propuestas debe realizarse
+    # mediante un proceso independiente que respete los sitios
+    # protegidos y las decisiones ya consolidadas.
 
     batch.modo_planificacion = modo_planificacion
 
@@ -624,17 +638,11 @@ def actualizar_configuracion_batch_semanal(
 
     batch.observaciones = str(observaciones or "").strip()
 
-    # Una edición invalida siempre el análisis aplicado.
-    batch.generado_por_motor = False
-
-    # El análisis/aplicación de propuestas trabaja sobre
-    # borrador. Después de editar debe analizarse nuevamente.
-    if batch.estado in {
-        "borrador",
-        "propuesto",
-        "gestion_permisos",
-    }:
-        batch.estado = "borrador"
+    # La edición de configuración conserva el estado del batch
+    # y su indicador de generación por motor.
+    #
+    # No se ejecuta una regeneración ni se alteran salidas,
+    # permisos o sitios existentes.
 
     batch.actualizado_por = usuario
 
@@ -643,8 +651,6 @@ def actualizar_configuracion_batch_semanal(
             "modo_planificacion",
             "objetivo_sitios",
             "observaciones",
-            "generado_por_motor",
-            "estado",
             "actualizado_por",
             "actualizado_en",
         ]
@@ -691,6 +697,7 @@ def calcular_capacidad_configuracion(
 
     capacidad_lv = 0
     capacidad_sabado = 0
+    capacidad_domingo = 0
 
     detalle = []
 
@@ -701,6 +708,7 @@ def calcular_capacidad_configuracion(
         capacidad_cuadrilla_lv = capacidad_diaria * 5
 
         capacidad_cuadrilla_sabado = 0
+        capacidad_cuadrilla_domingo = 0
 
         capacidad_lv += capacidad_cuadrilla_lv
 
@@ -709,6 +717,10 @@ def calcular_capacidad_configuracion(
             capacidad_cuadrilla_sabado = capacidad_diaria
 
             capacidad_sabado += capacidad_diaria
+
+        if disponibilidad.trabaja_domingo:
+            capacidad_cuadrilla_domingo = capacidad_diaria
+            capacidad_domingo += capacidad_diaria
 
         cuadrilla_operativa = disponibilidad.cuadrilla_operativa
 
@@ -759,8 +771,11 @@ def calcular_capacidad_configuracion(
                 "capacidad_diaria": (capacidad_diaria),
                 "capacidad_lv": (capacidad_cuadrilla_lv),
                 "capacidad_sabado": (capacidad_cuadrilla_sabado),
+                "capacidad_domingo": (capacidad_cuadrilla_domingo),
                 "capacidad_total": (
-                    capacidad_cuadrilla_lv + capacidad_cuadrilla_sabado
+                    capacidad_cuadrilla_lv
+                    + capacidad_cuadrilla_sabado
+                    + capacidad_cuadrilla_domingo
                 ),
             }
         )
@@ -768,7 +783,8 @@ def calcular_capacidad_configuracion(
     return {
         "lunes_viernes": capacidad_lv,
         "sabado": capacidad_sabado,
-        "total": (capacidad_lv + capacidad_sabado),
+        "domingo": capacidad_domingo,
+        "total": (capacidad_lv + capacidad_sabado + capacidad_domingo),
         "detalle": detalle,
     }
 
@@ -948,7 +964,10 @@ def crear_batch_semanal(
             usuario=usuario,
         )
 
-        if activa and modalidad == DisponibilidadCuadrillaSemana.LUNES_SABADO:
+        if activa and modalidad in {
+            DisponibilidadCuadrillaSemana.LUNES_SABADO,
+            DisponibilidadCuadrillaSemana.LUNES_DOMINGO,
+        }:
             alguna_trabaja_sabado = True
 
     # ========================================================
