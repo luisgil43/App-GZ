@@ -238,8 +238,8 @@ Mapa Semanal
       </p>
 
       <p class="mt-1 text-sm text-amber-700">
-        Esto puede ocurrir con sitios agregados manualmente después
-        de aplicar la propuesta del motor.
+        Estos sitios se muestran en el mapa con marcadores naranjas,
+        sin modificar los clusters existentes.
       </p>
 
     </div>
@@ -558,6 +558,143 @@ async function inicializarMapaBatch() {
         cluster.codigo
       ] = boundsCluster;
 
+    }
+  );
+
+
+  // =========================================================
+  // SITIOS SIN CLUSTER: VISIBLES SIN ALTERAR AGRUPACIONES
+  // =========================================================
+
+  (mapaData.sin_cluster || []).forEach(
+    function (sitio) {
+
+      if (
+        sitio.latitud == null ||
+        sitio.longitud == null
+      ) {
+        return;
+      }
+
+      const posicion = {
+        lat: Number(sitio.latitud),
+        lng: Number(sitio.longitud)
+      };
+
+      if (
+        !Number.isFinite(posicion.lat) ||
+        !Number.isFinite(posicion.lng)
+      ) {
+        return;
+      }
+
+      const pin = new PinElement({
+        background: "#f59e0b",
+        borderColor: "#b45309",
+        glyphColor: "#ffffff",
+        glyph: "S",
+        scale: 1.05
+      });
+
+      const marker = new AdvancedMarkerElement({
+        map: mapaBatch,
+        position: posicion,
+        content: pin.element,
+        title:
+          sitio.id_claro + " - " + sitio.nombre
+      });
+
+      const contenido = `
+        <div
+          style="
+            min-width:250px;
+            max-width:330px;
+            font-family:Arial,sans-serif;
+          "
+        >
+          <div
+            style="
+              font-weight:bold;
+              color:#b45309;
+              margin-bottom:8px;
+            "
+          >
+            Sitio sin cluster
+          </div>
+
+          <strong>
+            ${escaparHtml(sitio.id_claro)}
+          </strong>
+
+          <div style="margin-top:3px;">
+            ${escaparHtml(sitio.nombre)}
+          </div>
+
+          <hr
+            style="
+              border:0;
+              border-top:1px solid #e5e7eb;
+              margin:10px 0;
+            "
+          >
+
+          <div>
+            <strong>Comuna:</strong>
+            ${escaparHtml(sitio.comuna || "—")}
+          </div>
+
+          <div>
+            <strong>Zona:</strong>
+            ${escaparHtml(sitio.tipo_zona || "—")}
+          </div>
+
+          <div>
+            <strong>Permiso:</strong>
+            ${escaparHtml(sitio.estado_permiso || "—")}
+          </div>
+
+          <div>
+            <strong>Acceso:</strong>
+            ${escaparHtml(
+              sitio.condicion_acceso || "Sin información"
+            )}
+          </div>
+
+          <div
+            style="
+              margin-top:10px;
+              font-size:12px;
+              color:#475569;
+            "
+          >
+            ${escaparHtml(sitio.direccion || "")}
+          </div>
+
+          <div style="margin-top:12px;">
+            <a
+              href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(posicion.lat + ',' + posicion.lng)}"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Abrir sitio en Google Maps
+            </a>
+          </div>
+        </div>
+      `;
+
+      const infoWindow = new google.maps.InfoWindow({
+        content: contenido
+      });
+
+      marker.addListener("click", function () {
+        infoWindow.open({
+          map: mapaBatch,
+          anchor: marker
+        });
+      });
+
+      boundsGlobal.extend(posicion);
+      objetosMapa.push(marker);
     }
   );
 

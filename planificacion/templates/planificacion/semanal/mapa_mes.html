@@ -117,12 +117,35 @@ Mapa mensual de batches
       "
     >
 
-      <div class="flex flex-wrap gap-3">
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-sm font-bold text-slate-800">
+            Filtrar sitios del mapa
+          </p>
+          <p class="text-xs text-slate-500">
+            Selecciona una o varias semanas para visualizar sus sitios.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          id="mostrar-todos-mapa"
+          class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+        >
+          Ver todos
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-3" id="filtros-mapa-mensual">
 
         {% for fila in resumen_batches %}
 
-          <div
+          <button
+            type="button"
+            data-filtro-batch="{{ fila.batch.id }}"
+            aria-pressed="true"
             class="
+              filtro-mapa-mensual
               flex
               items-center
               gap-2
@@ -130,6 +153,9 @@ Mapa mensual de batches
               border border-slate-200
               bg-slate-50
               px-3 py-2
+              text-left
+              transition
+              hover:border-blue-400
             "
           >
 
@@ -157,9 +183,27 @@ Mapa mensual de batches
 
             </div>
 
-          </div>
+          </button>
 
         {% endfor %}
+
+        <button
+          type="button"
+          data-filtro-batch="pendientes"
+          aria-pressed="true"
+          class="filtro-mapa-mensual flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-left transition hover:border-orange-400"
+        >
+          <span class="h-3 w-3 rounded-full bg-orange-500"></span>
+          <div>
+            <div class="text-xs font-black text-orange-900">
+              Disponibles para batch
+            </div>
+            <div class="text-[11px] text-orange-700">
+              {{ total_disponibles }} sitio(s) pendientes
+              · {{ disponibles_con_coordenadas }} en el mapa
+            </div>
+          </div>
+        </button>
 
       </div>
 
@@ -276,6 +320,113 @@ Mapa mensual de batches
       const bounds =
         new google.maps.LatLngBounds();
 
+      const marcadoresPorCategoria = new Map();
+
+      const filtros = document.querySelectorAll(
+        ".filtro-mapa-mensual"
+      );
+
+      const botonTodos = document.getElementById(
+        "mostrar-todos-mapa"
+      );
+
+      const categoriasSeleccionadas = new Set(
+        Array.from(filtros).map(
+          boton => boton.dataset.filtroBatch
+        )
+      );
+
+      function categoriaDePunto(punto) {
+        return punto.pendiente_batch
+          ? "pendientes"
+          : String(punto.batch_id);
+      }
+
+      function actualizarFiltros() {
+        filtros.forEach(function (boton) {
+          const activo = categoriasSeleccionadas.has(
+            boton.dataset.filtroBatch
+          );
+
+          boton.setAttribute(
+            "aria-pressed",
+            activo ? "true" : "false"
+          );
+
+          boton.style.opacity = activo ? "1" : "0.45";
+          boton.style.outline = activo
+            ? "2px solid #2563eb"
+            : "none";
+          boton.style.outlineOffset = "2px";
+        });
+
+        const nuevosBounds = new google.maps.LatLngBounds();
+        let visibles = 0;
+
+        marcadoresPorCategoria.forEach(
+          function (marcadores, categoria) {
+            const mostrar = categoriasSeleccionadas.has(
+              categoria
+            );
+
+            marcadores.forEach(function (marker) {
+              marker.setVisible(mostrar);
+
+              if (mostrar) {
+                nuevosBounds.extend(
+                  marker.getPosition()
+                );
+                visibles++;
+              }
+            });
+          }
+        );
+
+        if (visibles > 0) {
+          mapa.fitBounds(nuevosBounds);
+
+          if (visibles === 1) {
+            mapa.setZoom(13);
+          }
+        }
+      }
+
+      filtros.forEach(function (boton) {
+        boton.addEventListener("click", function () {
+          const categoria = boton.dataset.filtroBatch;
+
+          // Primera selección: mostrar solo esa categoría.
+          if (
+            categoriasSeleccionadas.size === filtros.length
+          ) {
+            categoriasSeleccionadas.clear();
+            categoriasSeleccionadas.add(categoria);
+          } else if (
+            categoriasSeleccionadas.has(categoria)
+          ) {
+            categoriasSeleccionadas.delete(categoria);
+          } else {
+            categoriasSeleccionadas.add(categoria);
+          }
+
+          actualizarFiltros();
+        });
+      });
+
+      if (botonTodos) {
+        botonTodos.addEventListener("click", function () {
+          categoriasSeleccionadas.clear();
+
+          filtros.forEach(function (boton) {
+            categoriasSeleccionadas.add(
+              boton.dataset.filtroBatch
+            );
+          });
+
+          actualizarFiltros();
+        });
+      }
+
 
       const batchesIds = [];
 
@@ -283,9 +434,8 @@ Mapa mensual de batches
         function (punto) {
 
           if (
-            !batchesIds.includes(
-              punto.batch_id
-            )
+            punto.batch_id !== null &&
+            !batchesIds.includes(punto.batch_id)
           ) {
             batchesIds.push(
               punto.batch_id
@@ -305,10 +455,9 @@ Mapa mensual de batches
             );
 
           const color =
-            COLORES[
-              indiceBatch
-              % COLORES.length
-            ];
+            punto.pendiente_batch
+            ? "#f97316"
+            : COLORES[indiceBatch % COLORES.length];
 
 
           const posicion = {
@@ -325,9 +474,9 @@ Mapa mensual de batches
                 title: punto.id_claro,
                 label: {
                   text:
-                    String(
-                      indiceBatch + 1
-                    ),
+                    punto.pendiente_batch
+                    ? "P"
+                    : String(indiceBatch + 1),
                   color: "#ffffff",
                   fontWeight: "700"
                 },
@@ -371,13 +520,19 @@ Mapa mensual de batches
                       font-size:12px;
                       line-height:1.6;
                     ">
-                      <strong>Batch:</strong>
-                      ${punto.batch_nombre}
-                      <br>
+                      <strong>Estado:</strong>
+                       ${punto.pendiente_batch
+                         ? "Pendiente de planificación"
+                         : "Planificado"}
+                       <br>
 
-                      <strong>Semana:</strong>
-                      ${punto.fecha}
-                      <br>
+                       <strong>Batch:</strong>
+                       ${punto.batch_nombre}
+                       <br>
+
+                       ${punto.pendiente_batch
+                         ? ""
+                         : `<strong>Semana:</strong> ${punto.fecha}<br>`}
 
                       <strong>Nombre:</strong>
                       ${punto.nombre || "-"}
@@ -419,6 +574,14 @@ Mapa mensual de batches
             posicion
           );
 
+          const categoria = categoriaDePunto(punto);
+
+          if (!marcadoresPorCategoria.has(categoria)) {
+            marcadoresPorCategoria.set(categoria, []);
+          }
+
+          marcadoresPorCategoria.get(categoria).push(marker);
+
         }
       );
 
@@ -426,6 +589,8 @@ Mapa mensual de batches
       mapa.fitBounds(
         bounds
       );
+
+      actualizarFiltros();
 
 
       google.maps.event.addListenerOnce(

@@ -101,7 +101,7 @@ Detalle Batch Semanal
         Volver a semanas
       </a>
 
-      {% if batch.generado_por_motor %}
+
 
         <a
           href="{% url 'planificacion:mapa_batch_semanal' batch.id %}"
@@ -124,7 +124,7 @@ Detalle Batch Semanal
           Ver mapa semanal
         </a>
 
-      {% endif %}
+
 
       {% if batch.estado == "borrador" %}
 
@@ -2217,22 +2217,7 @@ Detalle Batch Semanal
 
           <div class="flex gap-2">
 
-            <button
-              type="submit"
-              class="
-                flex-1
-                rounded-xl
-                bg-slate-800
-                px-3 py-2
-                text-sm
-                font-semibold
-                text-white
-                transition
-                hover:bg-slate-900
-              "
-            >
-              Filtrar
-            </button>
+
 
             <a
               id="limpiar-filtros-candidatos"
@@ -2707,10 +2692,15 @@ Detalle Batch Semanal
   /* ACTUALIZAR SECCIÓN DE CANDIDATOS                         */
   /* ======================================================== */
 
+  let versionFiltroCandidatos = 0;
+
   async function actualizarCandidatos(
     url,
     actualizarUrl = false
   ) {
+
+    const versionSolicitud =
+      ++versionFiltroCandidatos;
 
     const estadoVista =
       obtenerEstadoVista();
@@ -2721,6 +2711,12 @@ Detalle Batch Semanal
         url
       );
 
+
+    if (
+      versionSolicitud !== versionFiltroCandidatos
+    ) {
+      return;
+    }
 
     const detailsNuevo =
       documentoNuevo.getElementById(
@@ -2747,8 +2743,34 @@ Detalle Batch Semanal
     }
 
 
-    detailsActual.innerHTML =
-      detailsNuevo.innerHTML;
+    /*
+     * Actualizar solamente el formulario de candidatos.
+     * Los filtros permanecen en el DOM para no perder
+     * el cursor ni los valores mientras se escribe.
+     */
+
+    const candidatosNuevos =
+      detailsNuevo.querySelector(
+        "#form-agregar-candidatos"
+      );
+
+    const candidatosActuales =
+      detailsActual.querySelector(
+        "#form-agregar-candidatos"
+      );
+
+    if (
+      !candidatosNuevos
+      ||
+      !candidatosActuales
+    ) {
+      throw new Error(
+        "No fue posible actualizar la tabla de candidatos."
+      );
+    }
+
+    candidatosActuales.innerHTML =
+      candidatosNuevos.innerHTML;
 
 
     /*
@@ -3455,6 +3477,117 @@ Detalle Batch Semanal
         return;
 
       }
+
+    }
+  );
+
+  /* ======================================================== */
+  /* FILTROS AUTOMÁTICOS DE CANDIDATOS                        */
+  /* ======================================================== */
+
+  let temporizadorFiltroCandidatos = null;
+
+  function solicitarFiltroCandidatos() {
+
+    clearTimeout(
+      temporizadorFiltroCandidatos
+    );
+
+    const formulario =
+      document.getElementById(
+        "form-filtros-candidatos"
+      );
+
+    if (!formulario) {
+      return;
+    }
+
+    const parametros =
+      new URLSearchParams(
+        new FormData(formulario)
+      );
+
+    const url =
+      new URL(
+        formulario.action ||
+        window.location.pathname,
+        window.location.origin
+      );
+
+    url.search = "";
+
+    parametros.forEach(
+      function (valor, clave) {
+
+        const limpio =
+          String(valor).trim();
+
+        if (limpio) {
+          url.searchParams.set(
+            clave,
+            limpio
+          );
+        }
+
+      }
+    );
+
+    actualizarCandidatos(
+      url.toString(),
+      true
+    ).catch(
+      function (error) {
+        alert(error.message);
+      }
+    );
+  }
+
+  document.addEventListener(
+    "change",
+    function (event) {
+
+      const formulario =
+        event.target.closest(
+          "#form-filtros-candidatos"
+        );
+
+      if (
+        !formulario ||
+        event.target.tagName !== "SELECT"
+      ) {
+        return;
+      }
+
+      solicitarFiltroCandidatos();
+
+    }
+  );
+
+  document.addEventListener(
+    "input",
+    function (event) {
+
+      const formulario =
+        event.target.closest(
+          "#form-filtros-candidatos"
+        );
+
+      if (
+        !formulario ||
+        event.target.name !== "q"
+      ) {
+        return;
+      }
+
+      clearTimeout(
+        temporizadorFiltroCandidatos
+      );
+
+      temporizadorFiltroCandidatos =
+        setTimeout(
+          solicitarFiltroCandidatos,
+          350
+        );
 
     }
   );

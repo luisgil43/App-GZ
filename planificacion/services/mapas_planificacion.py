@@ -305,14 +305,25 @@ def construir_mapa_batch_semanal(
     # RESUMEN GENERAL
     # ========================================================
 
-    total_sitios = sum(cluster["cantidad"] for cluster in clusters)
+    total_sitios = sum(cluster["cantidad"] for cluster in clusters) + len(sin_cluster)
 
-    total_con_coordenadas = sum(
-        cluster["cantidad_con_coordenadas"] for cluster in clusters
+    sin_cluster_con_coordenadas = sum(
+        1
+        for sitio in sin_cluster
+        if sitio["latitud"] is not None
+        and sitio["longitud"] is not None
     )
 
-    total_sin_coordenadas = sum(
-        cluster["cantidad_sin_coordenadas"] for cluster in clusters
+    total_con_coordenadas = (
+        sum(
+            cluster["cantidad_con_coordenadas"]
+            for cluster in clusters
+        )
+        + sin_cluster_con_coordenadas
+    )
+
+    total_sin_coordenadas = (
+        total_sitios - total_con_coordenadas
     )
 
     return {

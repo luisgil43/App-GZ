@@ -388,10 +388,19 @@ Planificación Semanal
                       {{ fila.resumen.capacidad.total }}
                     </div>
 
-                    {% if fila.resumen.capacidad.sabado %}
+                    {% if fila.resumen.capacidad.sabado or fila.resumen.capacidad.domingo %}
 
                       <div class="text-xs text-slate-500">
-                        +{{ fila.resumen.capacidad.sabado }} sábado
+
+                        {% if fila.resumen.capacidad.sabado %}
+                          +{{ fila.resumen.capacidad.sabado }} sábado
+                        {% endif %}
+
+                        {% if fila.resumen.capacidad.domingo %}
+                          {% if fila.resumen.capacidad.sabado %} · {% endif %}
+                          +{{ fila.resumen.capacidad.domingo }} domingo
+                        {% endif %}
+
                       </div>
 
                     {% endif %}
