@@ -29,6 +29,7 @@ from planificacion.services.planificacion_semanal import (
     marcar_gestion_permisos_enviada, obtener_candidatos_batch,
     obtener_resumen_batch, obtener_resumen_planificacion_mensual,
     quitar_sitio_del_batch)
+from planificacion.services.planificacion_semanal import ESTADOS_BATCH_ACTIVOS_SITIO
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
@@ -1123,6 +1124,79 @@ def mapa_batches_mensuales(
             }
         )
 
+
+    # ========================================================
+    # SITIOS DISPONIBLES PARA NUEVOS BATCHES
+    # ========================================================
+
+    sitios_comprometidos = (
+        SitioBatchSemanal.objects.filter(
+            estado__in=ESTADOS_BATCH_ACTIVOS_SITIO,
+        )
+        .values_list(
+            "sitio_planificado__sitio_id",
+            flat=True,
+        )
+        .distinct()
+    )
+
+    sitios_disponibles = (
+        SitioPlanificado.objects.filter(
+            planificacion=mensual,
+        )
+        .exclude(
+            estado__in=[
+                "completado",
+                "cancelado",
+            ],
+        )
+        .exclude(
+            sitio_id__in=sitios_comprometidos,
+        )
+        .select_related(
+            "sitio",
+            "planificacion",
+        )
+    )
+
+    total_disponibles = sitios_disponibles.count()
+    disponibles_con_coordenadas = 0
+
+    for sitio_planificado in sitios_disponibles:
+
+        sitio = sitio_planificado.sitio
+
+        if sitio.latitud is None or sitio.longitud is None:
+            continue
+
+        try:
+            latitud = float(sitio.latitud)
+            longitud = float(sitio.longitud)
+        except (TypeError, ValueError):
+            continue
+
+        puntos.append(
+            {
+                "batch_id": None,
+                "batch_nombre": "Disponible para batch",
+                "fecha": "",
+                "id_claro": sitio.id_claro or "",
+                "nombre": sitio.nombre or "",
+                "comuna": sitio.comuna or "",
+                "tipo_zona": sitio.tipo_zona or "",
+                "lat": latitud,
+                "lng": longitud,
+                "es_reserva": False,
+                "cluster": "",
+                "planificacion_origen": str(
+                    sitio_planificado.planificacion
+                ),
+                "pendiente_batch": True,
+            }
+        )
+
+        disponibles_con_coordenadas += 1
+
     return render(
         request,
         "planificacion/semanal/mapa_mes.html",
@@ -1130,6 +1204,8 @@ def mapa_batches_mensuales(
             "mensual": mensual,
             "puntos_mapa": puntos,
             "resumen_batches": resumen_batches,
+            "total_disponibles": total_disponibles,
+            "disponibles_con_coordenadas": disponibles_con_coordenadas,
             "GOOGLE_MAPS_API_KEY": (settings.GOOGLE_MAPS_API_KEY),
         },
     )
