@@ -4289,8 +4289,32 @@ def _enviar_documentos_pdf_solicitados(
     norm = _normalize(texto_usuario)
     respuesta = _normalize(respuesta_original or "")
 
+    # Solicitudes directas de contrato: no exigir verbos adicionales.
+    # Mantener las comprobaciones de identidad y las respuestas negativas.
+    # Solicitud de contrato propio, no pregunta informativa.
+    pregunta_informativa = bool(
+        {"que", "como", "cuando", "donde", "porque",
+         "significa", "diferencia", "explica",
+         "explicame", "definicion"} & tokens
+    ) or bool(
+        re.search(
+            r"\b(que es|que significa|como funciona|"
+            r"como se|cuando|donde|por que|porque|"
+            r"cual es la diferencia)\b",
+            norm,
+        )
+    )
+
+    solicitud_contrato_directa = (
+        bool({"contrato", "contratos"} & tokens)
+        and not bool(
+            {"liquidacion", "liquidaciones", "sueldo"} & tokens
+        )
+        and not pregunta_informativa
+    )
+
     # Evitar menús, preguntas informativas y respuestas negativas.
-    if not (
+    if not solicitud_contrato_directa and not (
         {"enviar", "enviame", "mandar", "mandame", "descargar",
          "descarga", "pasame", "adjuntar", "adjuntame",
          "quiero", "necesito", "dame", "mostrar", "muestrame",
@@ -4409,13 +4433,16 @@ def _enviar_documentos_pdf_solicitados(
         return enviados
 
 
+    if pregunta_informativa:
+        return enviados
+
     if not (
         {"contrato", "contratos", "anexo", "anexos",
          "extension", "extensiones"} & tokens
     ):
         return enviados
 
-    if not (
+    if not solicitud_contrato_directa and not (
         "tus contratos registrados" in respuesta
         or "tus anexos registrados" in respuesta
         or "pero tienes anexos registrados" in respuesta
