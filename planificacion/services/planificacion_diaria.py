@@ -2348,36 +2348,46 @@ def generar_plan_diario_batch(
         or []
     )
 
+    from planificacion.services.motor_batch_semanal.distancias import (
+        distancia_haversine_km,
+    )
+
+    configuraciones_por_disponibilidad = {
+        disponibilidad.pk: construir_configuracion_cuadrilla(disponibilidad)
+        for disponibilidad in disponibilidades
+    }
+
+    def distancia_grupo_a_base(sitios, disponibilidad):
+        configuracion = configuraciones_por_disponibilidad[disponibilidad.pk]
+        lat_base = configuracion.get("base_latitud")
+        lon_base = configuracion.get("base_longitud")
+
+        if lat_base is None or lon_base is None:
+            return float("inf")
+
+        distancias = []
+
+        for sitio in sitios:
+            distancia = distancia_haversine_km(
+                lat_base,
+                lon_base,
+                getattr(sitio, "latitud", None),
+                getattr(sitio, "longitud", None),
+            )
+
+            if distancia is None:
+                return float("inf")
+
+            distancias.append(distancia)
+
+        return max(distancias) if distancias else float("inf")
+
     salidas_motor.sort(
         key=lambda salida: (
-            -int(
-                salida.get(
-                    "cantidad_sitios",
-                    0,
-                )
-                or 0
-            ),
-            -float(
-                salida.get(
-                    "score_salida",
-                    0,
-                )
-                or 0
-            ),
-            int(
-                salida.get(
-                    "minutos_viaje",
-                    0,
-                )
-                or 0
-            ),
-            int(
-                salida.get(
-                    "minutos_total",
-                    0,
-                )
-                or 0
-            ),
+            -int(salida.get("cantidad_sitios", 0) or 0),
+            -float(salida.get("score_salida", 0) or 0),
+            int(salida.get("minutos_viaje", 0) or 0),
+            int(salida.get("minutos_total", 0) or 0),
         )
     )
 
@@ -2385,16 +2395,138 @@ def generar_plan_diario_batch(
     # DISTRIBUIR GRUPOS EN CALENDARIO REAL
     # ========================================================
 
-    for salida_motor in salidas_motor:
+    salidas_pendientes = list(salidas_motor)
+
+    while salidas_pendientes:
+        candidatos = []
+        salidas_invalidas = []
+
+        for indice_salida, salida_candidata in enumerate(salidas_pendientes):
+            sitios_candidatos = list(salida_candidata.get("sitios", []) or [])
+
+            if not sitios_candidatos:
+                salidas_invalidas.append(indice_salida)
+                continue
+
+            sitios_validos = []
+
+            for sitio_motor in sitios_candidatos:
+                item_batch = mapa_items_regular.get(
+                    sitio_motor.sitio_planificado_id
+                )
+
+                if item_batch is None:
+                    continue
+
+                if item_batch.pk in ids_planificados:
+                    continue
+
+                if item_batch.pk in ids_reservados_prioridades:
+                    continue
+
+                sitios_validos.append(sitio_motor)
+
+            if len(sitios_validos) != len(sitios_candidatos):
+                salidas_invalidas.append(indice_salida)
+                continue
+
+            for disponibilidad_candidata in disponibilidades:
+                seleccion_candidata = _seleccionar_asignacion_regular_mas_temprana(
+                    batch=batch,
+                    salida_motor=salida_candidata,
+                    disponibilidades=[disponibilidad_candidata],
+                    fechas_ocupadas=fechas_ocupadas,
+                    incluir_hoy=incluir_hoy,
+                )
+
+                opcion_candidata = seleccion_candidata.get("opcion")
+
+                if opcion_candidata is None:
+                    continue
+
+                distancia_candidata = distancia_grupo_a_base(
+                    sitios_validos,
+                    disponibilidad_candidata,
+                )
+
+                clave = (
+                    -len(sitios_validos),
+                    distancia_candidata,
+                    opcion_candidata["fecha"],
+                    -float(salida_candidata.get("score_salida", 0) or 0),
+                    indice_salida,
+                    disponibilidad_candidata.pk,
+                )
+
+                candidatos.append(
+                    (clave, indice_salida, opcion_candidata)
+                )
+
+        if not candidatos:
+            for salida_pendiente in salidas_pendientes:
+                seleccion_pendiente = _seleccionar_asignacion_regular_mas_temprana(
+                    batch=batch,
+                    salida_motor=salida_pendiente,
+                    disponibilidades=disponibilidades,
+                    fechas_ocupadas=fechas_ocupadas,
+                    incluir_hoy=incluir_hoy,
+                )
+
+                motivo = seleccion_pendiente.get("motivo")
+
+                if motivo:
+                    advertencias.append(motivo)
+
+            break
+
+        # Seleccionar primero la siguiente fecha operacional.
+        # Para cada cuadrilla, conservar su grupo viable mas cercano.
+        fecha_minima = min(
+            candidato[2]["fecha"]
+            for candidato in candidatos
+        )
+
+        candidatos_fecha = [
+            candidato
+            for candidato in candidatos
+            if candidato[2]["fecha"] == fecha_minima
+        ]
+
+        mejores_por_cuadrilla = {}
+
+        for candidato in candidatos_fecha:
+            clave, indice, opcion = candidato
+            disponibilidad_id = opcion["disponibilidad"].pk
+
+            actual = mejores_por_cuadrilla.get(disponibilidad_id)
+
+            if actual is None or clave < actual[0]:
+                mejores_por_cuadrilla[disponibilidad_id] = candidato
+
+        candidatos_finales = list(mejores_por_cuadrilla.values())
+
+        # Resolver conflictos entre cuadrillas conservando
+        # primero los grupos completos y luego la cercania.
+        candidatos_finales.sort(
+            key=lambda candidato: (
+                candidato[0][0],
+                candidato[0][1],
+                candidato[0][3],
+                candidato[0][4],
+                candidato[0][5],
+            )
+        )
+
+        _, indice_elegido, opcion_preseleccionada = candidatos_finales[0]
+
+        salida_motor = salidas_pendientes.pop(indice_elegido)
 
         motores_disponibles = []
 
-        for sitio_motor in salida_motor.get(
-            "sitios",
-            [],
-        ):
-
-            item_batch = mapa_items_regular.get(sitio_motor.sitio_planificado_id)
+        for sitio_motor in salida_motor.get("sitios", []):
+            item_batch = mapa_items_regular.get(
+                sitio_motor.sitio_planificado_id
+            )
 
             if item_batch is None:
                 continue
@@ -2406,9 +2538,6 @@ def generar_plan_diario_batch(
                 continue
 
             motores_disponibles.append(sitio_motor)
-
-        if not motores_disponibles:
-            continue
 
         cantidad_original = int(
             salida_motor.get(
@@ -2432,24 +2561,7 @@ def generar_plan_diario_batch(
 
         salida_para_distribuir["cantidad_sitios"] = len(motores_disponibles)
 
-        seleccion = _seleccionar_asignacion_regular_mas_temprana(
-            batch=batch,
-            salida_motor=(salida_para_distribuir),
-            disponibilidades=(disponibilidades),
-            fechas_ocupadas=(fechas_ocupadas),
-            incluir_hoy=incluir_hoy,
-        )
-
-        opcion = seleccion.get("opcion")
-
-        if opcion is None:
-
-            motivo = seleccion.get("motivo")
-
-            if motivo:
-                advertencias.append(motivo)
-
-            continue
+        opcion = opcion_preseleccionada
 
         fecha = opcion["fecha"]
 
