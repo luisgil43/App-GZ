@@ -155,11 +155,12 @@ def analizar_batch_semanal(
     # En Automático dejan de condicionar al motor:
     # permanecen físicamente en el batch hasta que se aplique
     # una nueva propuesta, pero no forman parte de ids_fijos.
-    if modo_planificacion in {
-        "manual",
-        "mixto",
-    }:
+    if modo_planificacion == "manual":
 
+        # En modo manual, todos los sitios activos del batch
+        # son parte de la selección que debe analizar el motor.
+        # agregado_manualmente indica el origen del registro,
+        # no determina su pertenencia al batch.
         ids_fijos.update(
             SitioBatchSemanal.objects.filter(
                 batch=batch,
@@ -170,8 +171,25 @@ def analizar_batch_semanal(
                     "reemplazado",
                 ],
             )
-            .filter(
+            .values_list(
+                "sitio_planificado_id",
+                flat=True,
+            )
+        )
+
+    elif modo_planificacion == "mixto":
+
+        # Conservar la selección explícita del modo mixto.
+        ids_fijos.update(
+            SitioBatchSemanal.objects.filter(
+                batch=batch,
                 agregado_manualmente=True,
+            )
+            .exclude(
+                estado__in=[
+                    "excluido",
+                    "reemplazado",
+                ],
             )
             .values_list(
                 "sitio_planificado_id",
