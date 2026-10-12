@@ -2450,8 +2450,8 @@ def generar_plan_diario_batch(
                 )
 
                 clave = (
-                    -len(sitios_validos),
                     distancia_candidata,
+                    -len(sitios_validos),
                     opcion_candidata["fecha"],
                     -float(salida_candidata.get("score_salida", 0) or 0),
                     indice_salida,
