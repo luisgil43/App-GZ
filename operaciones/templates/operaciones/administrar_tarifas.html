@@ -1,0 +1,3684 @@
+{% extends "dashboard_admin/base.html" %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block title %}
+  Tarifas de Técnicos | MILTEL
+{% endblock %}
+
+{% block dashboard_content %}
+
+<div class="mx-auto max-w-7xl space-y-6">
+
+  <!-- ====================================================== -->
+  <!-- ENCABEZADO -->
+  <!-- ====================================================== -->
+
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+    <div>
+
+      <div class="mb-2 flex items-center gap-2 text-sm text-slate-500">
+        <span>Operaciones</span>
+        <span>/</span>
+        <span class="font-semibold text-blue-700">Tarifas</span>
+      </div>
+
+      <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
+        Tarifas de Técnicos
+      </h1>
+
+      <p class="mt-2 text-sm text-slate-500">
+        Administración de tarifas individuales por proyecto, actividad y trabajador.
+      </p>
+
+    </div>
+
+    <span class="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">
+      <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+      Vigencia desde octubre 2026
+    </span>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- INFORMACIÓN -->
+  <!-- ====================================================== -->
+
+  <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+
+    <div class="flex items-start gap-3">
+
+      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl">
+        💰
+      </div>
+
+      <div>
+
+        <h3 class="text-sm font-bold text-blue-900">
+          Tarifas por actividad y trabajador
+        </h3>
+
+        <p class="mt-1 text-sm leading-relaxed text-blue-800">
+          Configura actividades por proyecto y establece tarifas individuales
+          para los trabajadores seleccionados.
+
+          Puedes editar el nombre de una actividad, el monto y el mes de
+          vigencia desde una misma fila.
+
+          Los cambios de tarifa se registran sin sobrescribir los importes anteriores.
+        </p>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- ====================================================== -->
+  <!-- CONFIGURAR TARIFAS POR ACTIVIDAD -->
+  <!-- ====================================================== -->
+
+  <section
+    id="seccionTarifasActividad"
+    class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+  >
+
+    <div class="border-b border-slate-100 px-6 py-5">
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+        <div class="flex items-center gap-3">
+
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-2xl">
+            🛠️
+          </div>
+
+          <div>
+
+            <h2 class="text-lg font-bold text-slate-900">
+              Configurar tarifas por actividad
+            </h2>
+
+            <p class="mt-1 text-xs text-slate-500">
+              Crea actividades y asigna una tarifa inicial a varios técnicos.
+            </p>
+
+          </div>
+
+        </div>
+
+        <span class="w-fit rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+          Tarifas por proyecto
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <form
+      id="formTarifasActividad"
+      method="post"
+      action="{% url 'operaciones:administrar_tarifas' %}"
+      class="space-y-6 p-6"
+    >
+
+      {% csrf_token %}
+
+      <input
+        type="hidden"
+        name="tipo_formulario"
+        value="actividad"
+      >
+
+
+      <!-- PROYECTO Y ACCIÓN -->
+
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+        <div>
+
+          <label
+            for="proyectoActividad"
+            class="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Proyecto <span class="text-red-500">*</span>
+          </label>
+
+          <select
+            id="proyectoActividad"
+            name="proyecto"
+            required
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+
+            <option value="">Seleccionar proyecto</option>
+
+            {% for proyecto in proyectos %}
+
+              <option value="{{ proyecto.pk }}">
+                {{ proyecto.nombre }}
+              </option>
+
+            {% empty %}
+
+              <option value="" disabled>
+                No hay proyectos registrados
+              </option>
+
+            {% endfor %}
+
+          </select>
+
+          <p class="mt-2 text-xs text-slate-400">
+            Las actividades estarán asociadas al proyecto seleccionado.
+          </p>
+
+        </div>
+
+
+        <div>
+
+          <label
+            for="modoActividad"
+            class="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Acción <span class="text-red-500">*</span>
+          </label>
+
+          <select
+            id="modoActividad"
+            class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+
+            <option value="nueva">
+              Crear nueva actividad
+            </option>
+
+            <option value="existente">
+              Configurar actividad existente
+            </option>
+
+          </select>
+
+          <p class="mt-2 text-xs text-slate-400">
+            Puedes registrar nuevas tarifas sin duplicar actividades.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- NUEVA ACTIVIDAD -->
+
+      <div id="contenedorNuevaActividad">
+
+        <label
+          for="nombreActividad"
+          class="mb-2 block text-sm font-semibold text-slate-700"
+        >
+          Nombre de la actividad <span class="text-red-500">*</span>
+        </label>
+
+        <input
+          id="nombreActividad"
+          type="text"
+          name="nombre_actividad"
+          maxlength="255"
+          placeholder="Ejemplo: Mantenimiento mayor"
+          required
+          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        >
+
+        <p class="mt-2 text-xs text-slate-400">
+          Ejemplos: Mantenimiento mayor, Mantenimiento y desmalezado, Desmalezado.
+        </p>
+
+      </div>
+
+
+      <!-- ACTIVIDAD EXISTENTE -->
+
+      <div
+        id="contenedorActividadExistente"
+        class="hidden"
+      >
+
+        <label
+          for="actividadExistente"
+          class="mb-2 block text-sm font-semibold text-slate-700"
+        >
+          Actividad registrada <span class="text-red-500">*</span>
+        </label>
+
+        <select
+          id="actividadExistente"
+          name="actividad_id"
+          disabled
+          class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+        >
+
+          <option value="">
+            Seleccionar actividad
+          </option>
+
+          {% for actividad in actividades %}
+
+            <option
+              value="{{ actividad.pk }}"
+              data-proyecto-id="{{ actividad.proyecto_id }}"
+              data-precio-referencia="{{ actividad.precio_referencia|default_if_none:'' }}"
+            >
+              {{ actividad.nombre }}
+            </option>
+
+          {% endfor %}
+
+        </select>
+
+        <p
+          id="mensajeActividadesDisponibles"
+          class="mt-2 text-xs text-slate-400"
+        >
+          Selecciona primero un proyecto.
+        </p>
+
+      </div>
+
+
+      <!-- PRECIO Y VIGENCIA -->
+
+      <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
+
+        <div>
+
+          <label
+            for="precioReferencia"
+            class="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Precio de referencia <span class="text-red-500">*</span>
+          </label>
+
+          <div class="relative">
+
+            <span class="pointer-events-none absolute left-4 top-3 text-base font-bold text-slate-500">
+              $
+            </span>
+
+            <input
+              id="precioReferencia"
+              type="number"
+              name="precio_referencia"
+              min="1"
+              max="9999999999"
+              step="1"
+              placeholder="35000"
+              required
+              class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-9 pr-4 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+          <p class="mt-2 text-xs text-slate-400">
+            Valor inicial para los técnicos.
+            Los importes personalizados no se modificarán automáticamente.
+          </p>
+
+        </div>
+
+
+        <!-- ================================================== -->
+        <!-- CALENDARIO MES / AÑO -->
+        <!-- ================================================== -->
+
+        <div>
+
+          <label
+            for="mesVigenciaActividad"
+            class="mb-2 block text-sm font-semibold text-slate-700"
+          >
+            Mes de vigencia <span class="text-red-500">*</span>
+          </label>
+
+          <div class="relative">
+
+            <input
+              id="mesVigenciaActividad"
+              type="month"
+              name="mes_vigencia"
+              min="2026-10"
+              value="{{ mes_actual_tarifas|default:'2026-10' }}"
+              required
+              class="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 pr-12 text-sm font-semibold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+          <p class="mt-2 text-xs text-slate-400">
+            Selecciona el mes y año de vigencia.
+            Las tarifas conservarán su vigencia hasta configurar una nueva.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- TRABAJADORES -->
+
+      <div class="overflow-hidden rounded-2xl border border-slate-200">
+
+        <div class="border-b border-slate-200 bg-slate-50 px-5 py-4">
+
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+            <div>
+
+              <h3 class="text-sm font-bold text-slate-900">
+                Trabajadores y tarifas individuales
+              </h3>
+
+              <p class="mt-1 text-xs text-slate-500">
+                Selecciona los trabajadores que tendrán una tarifa para esta actividad.
+              </p>
+
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+
+              <span
+                id="contadorTecnicosSeleccionados"
+                class="rounded-full bg-blue-100 px-3 py-1.5 text-xs font-bold text-blue-700"
+              >
+                0 seleccionados
+              </span>
+
+              <label class="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-700">
+
+                <input
+                  id="seleccionarTodosTecnicos"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                >
+
+                Seleccionar todos
+
+              </label>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="overflow-x-auto">
+
+          <table class="w-full min-w-[580px] text-left text-sm">
+
+            <thead class="border-b border-slate-200 bg-white">
+
+              <tr class="text-xs uppercase tracking-wide text-slate-500">
+
+                <th class="w-20 px-5 py-4 text-center font-bold">
+                  Incluir
+                </th>
+
+                <th class="px-5 py-4 font-bold">
+                  Trabajador
+                </th>
+
+                <th class="px-5 py-4 font-bold">
+                  Tarifa individual (CLP)
+                </th>
+
+                <th class="px-5 py-4 font-bold">
+                  Tipo
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody class="divide-y divide-slate-100">
+
+              {% for tecnico in tecnicos %}
+
+                <tr
+                  class="filaTecnicoActividad transition hover:bg-slate-50"
+                  data-tecnico-id="{{ tecnico.pk }}"
+                >
+
+                  <td class="px-5 py-4 text-center">
+
+                    <input
+                      type="checkbox"
+                      name="tecnicos_seleccionados"
+                      value="{{ tecnico.pk }}"
+                      class="checkboxTecnicoActividad h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      aria-label="Seleccionar {{ tecnico.get_full_name|default:tecnico.username }}"
+                    >
+
+                  </td>
+
+
+                  <td class="px-5 py-4">
+
+                    <div class="flex items-center gap-3">
+
+                      <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700">
+                        {{ tecnico.first_name|default:tecnico.username|first|upper }}
+                      </div>
+
+                      <div>
+
+                        <p class="font-semibold text-slate-800">
+                          {{ tecnico.get_full_name|default:tecnico.username }}
+                        </p>
+
+                        <p class="text-xs text-slate-400">
+                          Técnico activo
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </td>
+
+
+                  <td class="px-5 py-4">
+
+                    <div class="relative max-w-[200px]">
+
+                      <span class="pointer-events-none absolute left-3 top-2.5 font-bold text-slate-400">
+                        $
+                      </span>
+
+                      <input
+                        type="number"
+                        name="monto_tecnico_{{ tecnico.pk }}"
+                        min="1"
+                        max="9999999999"
+                        step="1"
+                        placeholder="0"
+                        disabled
+                        data-personalizado="false"
+                        class="montoTecnicoActividad w-full rounded-lg border border-slate-300 bg-slate-100 py-2 pl-8 pr-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+
+                    </div>
+
+                  </td>
+
+
+                  <td class="px-5 py-4">
+
+                    <span class="estadoMontoTecnico rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                      No incluido
+                    </span>
+
+                  </td>
+
+                </tr>
+
+              {% empty %}
+
+                <tr>
+
+                  <td colspan="4" class="px-5 py-12 text-center text-slate-400">
+                    No hay trabajadores activos disponibles.
+                  </td>
+
+                </tr>
+
+              {% endfor %}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+
+        <div class="border-t border-slate-100 bg-slate-50 px-5 py-4">
+
+          <p class="text-xs leading-relaxed text-slate-500">
+            <strong>Importante:</strong>
+            solo se registrarán tarifas para los trabajadores seleccionados.
+            Puedes cambiar cualquier monto directamente en su fila.
+            Los importes personalizados se conservarán aunque cambies
+            el precio de referencia.
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- RESUMEN -->
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+          <p class="text-xs font-semibold text-slate-500">
+            Trabajadores seleccionados
+          </p>
+
+          <p
+            id="resumenCantidadTecnicos"
+            class="mt-2 text-2xl font-extrabold text-slate-900"
+          >
+            0
+          </p>
+
+        </div>
+
+
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+
+          <p class="text-xs font-semibold text-slate-500">
+            Precio de referencia
+          </p>
+
+          <p
+            id="resumenPrecioReferencia"
+            class="mt-2 text-2xl font-extrabold text-blue-700"
+          >
+            $0
+          </p>
+
+        </div>
+
+
+        <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+
+          <p class="text-xs font-semibold text-emerald-700">
+            Total de tarifas seleccionadas
+          </p>
+
+          <p
+            id="resumenTotalTarifas"
+            class="mt-2 text-2xl font-extrabold text-emerald-700"
+          >
+            $0
+          </p>
+
+        </div>
+
+      </div>
+
+
+      <!-- GUARDAR -->
+
+      <div class="flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+
+        <p class="max-w-xl text-xs leading-relaxed text-slate-500">
+          Al guardar se registrará la actividad y una tarifa individual
+          por cada trabajador seleccionado.
+
+          Los registros anteriores permanecerán en el historial.
+        </p>
+
+        <button
+          type="submit"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+        >
+          <span>💾</span>
+          <span>Guardar actividad y tarifas</span>
+        </button>
+
+      </div>
+
+    </form>
+
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- TARIFAS REGISTRADAS -->
+  <!-- ====================================================== -->
+
+  <section
+    id="tarifasRegistradasActividad"
+    class="scroll-mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+  >
+
+    <div class="flex flex-col gap-3 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+
+      <div>
+
+        <h2 class="text-lg font-bold text-slate-900">
+          Tarifas registradas por actividad
+        </h2>
+
+        <p class="mt-1 text-xs text-slate-500">
+          Edita actividad, tarifa y vigencia directamente en la fila.
+          Enter para guardar · Esc para cancelar.
+        </p>
+
+      </div>
+
+      <span
+        id="contadorTarifasRegistradas"
+        class="w-fit rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600"
+      >
+        {{ tarifas_actividad_vigentes|length }} tarifas
+      </span>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- FILTROS TARIFAS REGISTRADAS -->
+    <!-- ==================================================== -->
+
+    <div class="border-b border-slate-100 bg-slate-50/60 px-6 py-5">
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
+
+        <div>
+
+          <label
+            for="filtroActividadTarifas"
+            class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
+          >
+            Buscar por actividad
+          </label>
+
+          <div class="relative">
+
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              🔎
+            </span>
+
+            <input
+              id="filtroActividadTarifas"
+              type="search"
+              placeholder="Nombre de la actividad..."
+              autocomplete="off"
+              class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+        </div>
+
+
+        <div>
+
+          <label
+            for="filtroTrabajadorTarifas"
+            class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
+          >
+            Buscar por trabajador
+          </label>
+
+          <div class="relative">
+
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              👤
+            </span>
+
+            <input
+              id="filtroTrabajadorTarifas"
+              type="search"
+              placeholder="Nombre del trabajador..."
+              autocomplete="off"
+              class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+        </div>
+
+
+        <button
+          id="limpiarFiltrosTarifas"
+          type="button"
+          class="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+        >
+          Limpiar filtros
+        </button>
+
+      </div>
+
+      <p
+        id="resultadoFiltrosTarifas"
+        class="mt-3 text-xs font-medium text-slate-500"
+      ></p>
+
+    </div>
+
+
+    <div class="overflow-x-auto">
+
+      <table class="w-full min-w-[1150px] text-left text-sm">
+
+        <thead class="border-b border-slate-200 bg-slate-50">
+
+          <tr class="text-xs uppercase tracking-wide text-slate-500">
+
+            <th class="px-6 py-4 font-bold">
+              Proyecto
+            </th>
+
+            <th class="px-6 py-4 font-bold">
+              Actividad
+            </th>
+
+            <th class="px-6 py-4 font-bold">
+              Trabajador
+            </th>
+
+            <th class="px-6 py-4 font-bold">
+              Tarifa
+            </th>
+
+            <th class="px-6 py-4 font-bold">
+              Vigencia
+            </th>
+
+            <th class="px-6 py-4 text-right font-bold">
+              Acciones
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody class="divide-y divide-slate-100">
+
+          {% for tarifa in tarifas_actividad_vigentes %}
+
+            <tr
+              id="filaTarifaActividad{{ tarifa.pk }}"
+              class="filaTarifaRegistrada transition hover:bg-slate-50"
+              data-tarifa-id="{{ tarifa.pk }}"
+              data-actividad-id="{{ tarifa.actividad.pk }}"
+              data-eliminar-url="{% url 'operaciones:eliminar_tarifa_actividad' tarifa.pk %}"
+              data-nombre-actividad="{{ tarifa.actividad.nombre }}"
+              data-nombre-trabajador="{{ tarifa.tecnico.get_full_name|default:tarifa.tecnico.username }}"
+            >
+
+              <!-- PROYECTO -->
+
+              <td class="px-6 py-4 font-semibold text-slate-800">
+                {{ tarifa.actividad.proyecto.nombre }}
+              </td>
+
+
+              <!-- ACTIVIDAD -->
+
+              <td class="px-6 py-4">
+
+                <div id="actividadVista{{ tarifa.pk }}">
+
+                  <span class="nombreActividadVista inline-flex rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                    {{ tarifa.actividad.nombre }}
+                  </span>
+
+                </div>
+
+                <div
+                  id="actividadEdicion{{ tarifa.pk }}"
+                  class="hidden"
+                >
+
+                  <input
+                    id="inputActividad{{ tarifa.pk }}"
+                    type="text"
+                    maxlength="255"
+                    value="{{ tarifa.actividad.nombre }}"
+                    class="w-full min-w-[180px] rounded-lg border border-blue-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    aria-label="Editar nombre de actividad"
+                  >
+
+                </div>
+
+              </td>
+
+
+              <!-- TRABAJADOR -->
+
+              <td class="px-6 py-4 font-semibold text-slate-800">
+                {{ tarifa.tecnico.get_full_name|default:tarifa.tecnico.username }}
+              </td>
+
+
+              <!-- TARIFA -->
+
+              <td class="px-6 py-4">
+
+                <div id="tarifaVista{{ tarifa.pk }}">
+
+                  <span class="text-base font-extrabold text-emerald-700">
+                    ${{ tarifa.monto|floatformat:0|formato_clp }}
+                  </span>
+
+                  {% if tarifa.activa %}
+
+                    <span class="mt-2 block w-fit rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                      ● Activa
+                    </span>
+
+                  {% else %}
+
+                    <span class="mt-2 block w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+                      ● Desactivada
+                    </span>
+
+                  {% endif %}
+
+                </div>
+
+                <div
+                  id="tarifaEdicion{{ tarifa.pk }}"
+                  class="hidden"
+                >
+
+                  <div class="relative max-w-[180px]">
+
+                    <span class="pointer-events-none absolute left-3 top-2.5 font-bold text-slate-400">
+                      $
+                    </span>
+
+                    <input
+                      id="inputTarifa{{ tarifa.pk }}"
+                      type="number"
+                      min="1"
+                      max="9999999999"
+                      step="1"
+                      value="{{ tarifa.monto|floatformat:0 }}"
+                      class="w-full rounded-lg border border-blue-300 bg-white py-2 pl-8 pr-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      aria-label="Editar tarifa individual"
+                    >
+
+                  </div>
+
+                </div>
+
+              </td>
+
+
+              <!-- VIGENCIA -->
+
+              <td class="px-6 py-4">
+
+                <div id="vigenciaVista{{ tarifa.pk }}">
+
+                  <span class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600">
+                    {{ tarifa.mes_vigencia }}
+                  </span>
+
+                </div>
+
+                <div
+                  id="vigenciaEdicion{{ tarifa.pk }}"
+                  class="hidden"
+                >
+
+                  <div class="relative min-w-[175px]">
+
+                    <input
+                      id="inputVigencia{{ tarifa.pk }}"
+                      type="month"
+                      min="2026-10"
+                      value="{{ tarifa.mes_vigencia }}"
+                      class="w-full rounded-lg border border-blue-300 bg-white py-2 pl-3 pr-10 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      aria-label="Editar mes de vigencia"
+                    >
+
+
+                  </div>
+
+                </div>
+
+              </td>
+
+
+              <!-- ACCIONES -->
+
+              <td class="px-6 py-4">
+
+                <div class="flex items-center justify-end gap-2">
+
+                  <div
+                    id="accionesNormales{{ tarifa.pk }}"
+                    class="flex items-center justify-end gap-2"
+                  >
+
+                    <button
+                      type="button"
+                      {% if tarifa.activa %}
+                        onclick="iniciarEdicionTarifaActividad('{{ tarifa.pk }}')"
+                      {% else %}
+                        disabled
+                        title="Activa la tarifa antes de editarla"
+                      {% endif %}
+                      class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:border-blue-300 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      ✏️ Editar
+                    </button>
+
+                    {% if es_admin_tarifas %}
+
+                    <form
+                      method="post"
+                      action="{% url 'operaciones:cambiar_estado_tarifa_actividad' tarifa.pk %}"
+                      class="inline-flex"
+                      onsubmit="guardarEstadoPaginaTarifas()"
+                    >
+
+                      {% csrf_token %}
+
+                      {% if tarifa.activa %}
+
+                        <input
+                          type="hidden"
+                          name="accion"
+                          value="desactivar"
+                        >
+
+                        <button
+                          type="submit"
+                          class="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:border-amber-300 hover:bg-amber-100"
+                        >
+                          ⏸️ Desactivar
+                        </button>
+
+                      {% else %}
+
+                        <input
+                          type="hidden"
+                          name="accion"
+                          value="activar"
+                        >
+
+                        <button
+                          type="submit"
+                          class="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                        >
+                          ▶️ Activar
+                        </button>
+
+                      {% endif %}
+
+                    </form>
+
+                    <button
+                      type="button"
+                      onclick="abrirModalEliminarTarifa('{{ tarifa.pk }}')"
+                      class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100"
+                    >
+                      🗑️ Eliminar
+                    </button>
+
+                  {% endif %}
+
+                  </div>
+
+
+                  <div
+                    id="accionesEdicionTarifa{{ tarifa.pk }}"
+                    class="hidden items-center justify-end gap-2"
+                  >
+
+                    <button
+                      type="button"
+                      onclick="cancelarEdicionTarifaActividad('{{ tarifa.pk }}')"
+                      class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="button"
+                      onclick="guardarEdicionTarifaActividad('{{ tarifa.pk }}')"
+                      class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700"
+                    >
+                      💾 Guardar
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </td>
+
+            </tr>
+
+          {% empty %}
+
+            <tr>
+
+              <td colspan="6" class="px-6 py-12 text-center">
+
+                <div class="text-3xl">
+                  🛠️
+                </div>
+
+                <p class="mt-3 font-semibold text-slate-600">
+                  Todavía no hay tarifas por actividad
+                </p>
+
+                <p class="mt-1 text-xs text-slate-400">
+                  Configura una actividad y selecciona los técnicos correspondientes.
+                </p>
+
+              </td>
+
+            </tr>
+
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+      <div
+        id="sinResultadosTarifas"
+        class="hidden px-6 py-12 text-center"
+      >
+
+        <div class="text-3xl">🔎</div>
+
+        <p class="mt-3 text-sm font-bold text-slate-700">
+          No se encontraron tarifas
+        </p>
+
+        <p class="mt-1 text-xs text-slate-500">
+          Prueba con otro nombre de actividad o trabajador.
+        </p>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+  <!-- ====================================================== -->
+  <!-- HISTORIAL DE CAMBIOS -->
+  <!-- ====================================================== -->
+
+  <section
+    id="historialTarifasActividad"
+    class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+  >
+
+    <div class="flex flex-col gap-3 border-b border-slate-100 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+
+      <div>
+
+        <h2 class="text-lg font-bold text-slate-900">
+          Historial de cambios de tarifas
+        </h2>
+
+        <p class="mt-1 text-xs text-slate-500">
+          Consulta cuándo se registró cada tarifa, su valor anterior,
+          el nuevo importe y quién realizó el registro.
+        </p>
+
+      </div>
+
+      <span class="w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+        Últimos 100 registros
+      </span>
+
+    </div>
+
+
+    <!-- ==================================================== -->
+    <!-- FILTROS HISTORIAL -->
+    <!-- ==================================================== -->
+
+    <div class="border-b border-slate-100 bg-slate-50/60 px-6 py-5">
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_auto] xl:items-end">
+
+        <div>
+
+          <label
+            for="filtroActividadHistorial"
+            class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
+          >
+            Buscar por actividad
+          </label>
+
+          <div class="relative">
+
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              🔎
+            </span>
+
+            <input
+              id="filtroActividadHistorial"
+              type="search"
+              placeholder="Nombre de la actividad..."
+              autocomplete="off"
+              class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+        </div>
+
+
+        <div>
+
+          <label
+            for="filtroTrabajadorHistorial"
+            class="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500"
+          >
+            Buscar por trabajador
+          </label>
+
+          <div class="relative">
+
+            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">
+              👤
+            </span>
+
+            <input
+              id="filtroTrabajadorHistorial"
+              type="search"
+              placeholder="Nombre del trabajador..."
+              autocomplete="off"
+              class="w-full rounded-xl border border-slate-300 bg-white py-3 pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            >
+
+          </div>
+
+        </div>
+
+
+        <button
+          id="limpiarFiltrosHistorial"
+          type="button"
+          class="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+        >
+          Limpiar filtros
+        </button>
+
+      </div>
+
+      <p
+        id="resultadoFiltrosHistorial"
+        class="mt-3 text-xs font-medium text-slate-500"
+      ></p>
+
+    </div>
+
+
+    <div class="overflow-x-auto">
+
+      <table class="w-full min-w-[1200px] text-left text-sm">
+
+        <thead class="border-b border-slate-200 bg-slate-50">
+
+          <tr class="text-xs uppercase tracking-wide text-slate-500">
+
+            <th class="px-5 py-4 font-bold">
+              Fecha
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Proyecto / Actividad
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Trabajador
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Operación
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Tarifa anterior
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Tarifa nueva
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Vigencia
+            </th>
+
+            <th class="px-5 py-4 font-bold">
+              Registrado por
+            </th>
+
+          </tr>
+
+        </thead>
+
+
+        <tbody class="divide-y divide-slate-100">
+
+          {% for cambio in historial_cambios %}
+
+            <tr
+              class="filaHistorialTarifa transition hover:bg-slate-50"
+              data-nombre-actividad="{{ cambio.tarifa.actividad.nombre }}"
+              data-nombre-trabajador="{{ cambio.tarifa.tecnico.get_full_name|default:cambio.tarifa.tecnico.username }}"
+            >
+
+              <!-- FECHA -->
+
+              <td class="whitespace-nowrap px-5 py-4 text-slate-600">
+                {{ cambio.tarifa.fecha_registro|date:"d/m/Y H:i" }}
+              </td>
+
+
+              <!-- PROYECTO Y ACTIVIDAD -->
+
+              <td class="px-5 py-4">
+
+                <p class="font-semibold text-slate-800">
+                  {{ cambio.tarifa.actividad.proyecto.nombre }}
+                </p>
+
+                <p class="mt-1 text-xs text-blue-700">
+                  {{ cambio.tarifa.actividad.nombre }}
+                </p>
+
+              </td>
+
+
+              <!-- TRABAJADOR -->
+
+              <td class="px-5 py-4 font-semibold text-slate-700">
+                {{ cambio.tarifa.tecnico.get_full_name|default:cambio.tarifa.tecnico.username }}
+              </td>
+
+
+              <!-- OPERACIÓN -->
+
+              <td class="px-5 py-4">
+
+                {% if cambio.tipo == "Inicial" %}
+
+                  <span class="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
+                    Registro inicial
+                  </span>
+
+                {% elif cambio.tipo == "Cambio de monto" %}
+
+                  <span class="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                    Cambio de monto
+                  </span>
+
+                {% elif cambio.tipo == "Cambio de vigencia" %}
+
+                  <span class="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
+                    Cambio de vigencia
+                  </span>
+
+                {% else %}
+
+                  <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+                    {{ cambio.tipo }}
+                  </span>
+
+                {% endif %}
+
+              </td>
+
+
+              <!-- TARIFA ANTERIOR -->
+
+              <td class="px-5 py-4">
+
+                {% if cambio.anterior %}
+
+                  <span class="font-semibold text-slate-500">
+                    ${{ cambio.anterior.monto|floatformat:0|formato_clp }}
+                  </span>
+
+                {% else %}
+
+                  <span class="text-xs text-slate-400">
+                    Sin tarifa anterior
+                  </span>
+
+                {% endif %}
+
+              </td>
+
+
+              <!-- TARIFA NUEVA -->
+
+              <td class="px-5 py-4">
+
+                <span class="text-base font-extrabold text-emerald-700">
+                  ${{ cambio.tarifa.monto|floatformat:0|formato_clp }}
+                </span>
+
+              </td>
+
+
+              <!-- VIGENCIA -->
+
+              <td class="px-5 py-4">
+
+                {% if cambio.anterior %}
+
+                  <div class="space-y-1">
+
+                    <p class="text-xs text-slate-400">
+                      Antes: {{ cambio.anterior.mes_vigencia }}
+                    </p>
+
+                    <p class="text-xs font-bold text-slate-700">
+                      Ahora: {{ cambio.tarifa.mes_vigencia }}
+                    </p>
+
+                  </div>
+
+                {% else %}
+
+                  <span class="text-xs font-semibold text-slate-700">
+                    {{ cambio.tarifa.mes_vigencia }}
+                  </span>
+
+                {% endif %}
+
+              </td>
+
+
+              <!-- REGISTRADO POR -->
+
+              <td class="px-5 py-4 text-slate-600">
+
+                {% if cambio.tarifa.registrado_por %}
+
+                  {{ cambio.tarifa.registrado_por.get_full_name|default:cambio.tarifa.registrado_por.username }}
+
+                {% else %}
+
+                  Sistema
+
+                {% endif %}
+
+              </td>
+
+            </tr>
+
+          {% empty %}
+
+            <tr>
+
+              <td colspan="8" class="px-5 py-12 text-center text-slate-400">
+                Todavía no existen registros históricos de tarifas por actividad.
+              </td>
+
+            </tr>
+
+          {% endfor %}
+
+        </tbody>
+
+      </table>
+
+      <div
+        id="sinResultadosHistorial"
+        class="hidden px-6 py-12 text-center"
+      >
+
+        <div class="text-3xl">🔎</div>
+
+        <p class="mt-3 text-sm font-bold text-slate-700">
+          No se encontraron registros
+        </p>
+
+        <p class="mt-1 text-xs text-slate-500">
+          Prueba con otra actividad o trabajador.
+        </p>
+
+      </div>
+
+    </div>
+
+    <div class="border-t border-slate-100 bg-slate-50 px-6 py-4">
+
+      <p class="text-xs leading-relaxed text-slate-500">
+        <strong>Nota:</strong>
+        este historial compara los registros de tarifas existentes.
+        Los cambios anteriores de nombre de actividad no pueden reconstruirse,
+        porque el modelo actual no guarda el nombre anterior.
+      </p>
+
+    </div>
+
+  </section>
+
+</div>
+
+
+<!-- ======================================================== -->
+<!-- FORMULARIO OCULTO: EDICIÓN CONJUNTA -->
+<!-- ======================================================== -->
+
+<form
+  id="formEditarTarifaActividad"
+  method="post"
+  action="{% url 'operaciones:administrar_tarifas' %}"
+  class="hidden"
+>
+
+  {% csrf_token %}
+
+  <input
+    type="hidden"
+    name="tipo_formulario"
+    value="editar_tarifa_actividad"
+  >
+
+  <input
+    id="editarTarifaActividadId"
+    type="hidden"
+    name="tarifa_actividad_id"
+  >
+
+  <input
+    id="editarTarifaActividadNombre"
+    type="hidden"
+    name="nuevo_nombre"
+  >
+
+  <input
+    id="editarTarifaActividadMonto"
+    type="hidden"
+    name="monto"
+  >
+
+  <input
+    id="editarTarifaActividadVigencia"
+    type="hidden"
+    name="mes_vigencia"
+  >
+
+</form>
+
+
+<!-- ======================================================== -->
+<!-- MODAL ELIMINAR TARIFA -->
+<!-- ======================================================== -->
+
+{% if es_admin_tarifas %}
+
+<div
+  id="modalEliminarTarifa"
+  class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="tituloModalEliminarTarifa"
+>
+
+  <div
+    id="contenidoModalEliminarTarifa"
+    class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+  >
+
+    <div class="px-7 pb-5 pt-7">
+
+      <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50 text-3xl">
+        🗑️
+      </div>
+
+      <h3
+        id="tituloModalEliminarTarifa"
+        class="mt-5 text-center text-xl font-extrabold text-slate-900"
+      >
+        ¿Eliminar tarifa?
+      </h3>
+
+      <p class="mt-3 text-center text-sm leading-relaxed text-slate-500">
+        Revisa la tarifa seleccionada antes de continuar.
+      </p>
+
+    </div>
+
+
+    <div class="mx-7 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+
+      <div>
+
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Proyecto
+        </p>
+
+        <p
+          id="modalEliminarProyecto"
+          class="mt-1 text-sm font-bold text-slate-800"
+        ></p>
+
+      </div>
+
+
+      <div>
+
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Actividad
+        </p>
+
+        <p
+          id="modalEliminarActividad"
+          class="mt-1 text-sm font-bold text-slate-800"
+        ></p>
+
+      </div>
+
+
+      <div>
+
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Trabajador
+        </p>
+
+        <p
+          id="modalEliminarTrabajador"
+          class="mt-1 text-sm font-bold text-slate-800"
+        ></p>
+
+      </div>
+
+
+      <div class="flex items-center justify-between border-t border-slate-200 pt-3">
+
+        <div>
+
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Vigencia
+          </p>
+
+          <p
+            id="modalEliminarVigencia"
+            class="mt-1 text-sm font-bold text-slate-700"
+          ></p>
+
+        </div>
+
+
+        <div class="text-right">
+
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Tarifa
+          </p>
+
+          <p
+            id="modalEliminarMonto"
+            class="mt-1 text-lg font-extrabold text-emerald-700"
+          ></p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="mx-7 mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+
+      <p class="text-xs leading-relaxed text-amber-800">
+        <strong>Protección de historial:</strong>
+        la eliminación está temporalmente bloqueada hasta implementar
+        una desactivación segura que no afecte los cálculos históricos.
+      </p>
+
+    </div>
+
+
+    <form
+      id="formEliminarTarifaActividad"
+      method="post"
+      action=""
+      class="flex gap-3 px-7 pb-7 pt-6"
+    >
+
+      {% csrf_token %}
+
+      <button
+        type="button"
+        onclick="cerrarModalEliminarTarifa()"
+        class="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="botonConfirmarEliminarTarifa"
+        disabled
+        class="flex-1 cursor-not-allowed rounded-xl bg-slate-300 px-4 py-3 text-sm font-bold text-slate-500"
+      >
+        Eliminación no disponible
+      </button>
+
+    </form>
+
+  </div>
+
+</div>
+
+{% endif %}
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+<script>
+
+  // ==========================================================
+// CALENDARIO PERSONALIZADO DE MES Y AÑO
+// ==========================================================
+
+const MESES_TARIFAS = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre"
+];
+
+const MES_MINIMO_TARIFAS = "2026-10";
+
+let calendarioTarifasActivo = null;
+let calendarioTarifasAnio = 2026;
+
+function formatearMesTarifas(valor) {
+  if (!/^\d{4}-\d{2}$/.test(valor || "")) {
+    return "Seleccionar mes";
+  }
+
+  const [anio, mes] = valor.split("-").map(Number);
+
+  if (mes < 1 || mes > 12) {
+    return "Seleccionar mes";
+  }
+
+  return MESES_TARIFAS[mes - 1] + " " + anio;
+}
+
+function actualizarTextoMesTarifas(input) {
+  const contenedor = input.closest(".selectorMesTarifas");
+
+  if (!contenedor) {
+    return;
+  }
+
+  const texto = contenedor.querySelector(".textoMesTarifas");
+
+  if (texto) {
+    texto.textContent = formatearMesTarifas(input.value);
+  }
+}
+
+function crearSelectorMesTarifas(input) {
+  if (!input || input.dataset.calendarioInicializado === "true") {
+    return;
+  }
+
+  input.dataset.calendarioInicializado = "true";
+
+  const contenedor = document.createElement("div");
+  contenedor.className = "selectorMesTarifas relative";
+
+  input.parentNode.insertBefore(contenedor, input);
+  contenedor.appendChild(input);
+
+  // Conservamos el input original para que Django reciba YYYY-MM.
+  input.type = "hidden";
+
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = [
+    "botonMesTarifas",
+    "flex w-full items-center gap-3",
+    "rounded-xl border border-slate-300",
+    "bg-white px-4 py-3 text-left",
+    "transition hover:border-cyan-400",
+    "focus:border-cyan-400 focus:outline-none",
+    "focus:ring-2 focus:ring-cyan-100"
+  ].join(" ");
+
+  boton.innerHTML = `
+    <span class="flex h-10 w-10 shrink-0 items-center
+                 justify-center rounded-xl bg-cyan-50 text-xl">
+      📅
+    </span>
+
+    <span class="min-w-0 flex-1">
+      <span class="textoMesTarifas block text-sm font-extrabold
+                   text-slate-800"></span>
+
+      <span class="block text-[11px] text-slate-400">
+        Mes y año de vigencia
+      </span>
+    </span>
+
+    <span class="text-xs text-slate-400">▼</span>
+  `;
+
+  contenedor.appendChild(boton);
+
+  const panel = document.createElement("div");
+  panel.className = [
+    "panelMesTarifas",
+    "absolute left-0 top-full z-[100]",
+    "mt-2 hidden w-[min(370px,calc(100vw-40px))]",
+    "rounded-2xl border border-slate-200",
+    "bg-white p-4 shadow-2xl"
+  ].join(" ");
+
+  panel.innerHTML = `
+    <div class="mb-4 flex items-center justify-between">
+      <button type="button"
+              class="anteriorAnioTarifas flex h-9 w-9
+                     items-center justify-center rounded-xl
+                     border border-slate-200 font-bold
+                     text-slate-600 hover:bg-slate-50">
+        ‹
+      </button>
+
+      <div class="text-center">
+        <p class="text-[10px] font-bold uppercase
+                  tracking-wider text-slate-400">
+          Año
+        </p>
+        <p class="anioCalendarioTarifas text-xl font-extrabold
+                  text-slate-900"></p>
+      </div>
+
+      <button type="button"
+              class="siguienteAnioTarifas flex h-9 w-9
+                     items-center justify-center rounded-xl
+                     border border-slate-200 font-bold
+                     text-slate-600 hover:bg-slate-50">
+        ›
+      </button>
+    </div>
+
+    <div class="mesesCalendarioTarifas grid grid-cols-3 gap-2"></div>
+  `;
+
+  contenedor.appendChild(panel);
+
+  boton.addEventListener("click", function(event) {
+    event.stopPropagation();
+    abrirCalendarioMes(input.id);
+  });
+
+  panel.querySelector(".anteriorAnioTarifas")
+    .addEventListener("click", function() {
+      if (calendarioTarifasAnio > 2026) {
+        calendarioTarifasAnio--;
+        renderizarCalendarioTarifas();
+      }
+    });
+
+  panel.querySelector(".siguienteAnioTarifas")
+    .addEventListener("click", function() {
+      calendarioTarifasAnio++;
+      renderizarCalendarioTarifas();
+    });
+
+  actualizarTextoMesTarifas(input);
+}
+
+function renderizarCalendarioTarifas() {
+  if (!calendarioTarifasActivo) {
+    return;
+  }
+
+  const input = calendarioTarifasActivo;
+  const panel = input.closest(".selectorMesTarifas")
+    .querySelector(".panelMesTarifas");
+
+  const titulo = panel.querySelector(".anioCalendarioTarifas");
+  const cuadricula = panel.querySelector(".mesesCalendarioTarifas");
+
+  titulo.textContent = calendarioTarifasAnio;
+  cuadricula.innerHTML = "";
+
+  MESES_TARIFAS.forEach(function(nombre, indice) {
+    const mes = String(indice + 1).padStart(2, "0");
+    const valor = calendarioTarifasAnio + "-" + mes;
+
+    const seleccionado = input.value === valor;
+    const deshabilitado = valor < MES_MINIMO_TARIFAS;
+
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.textContent = nombre;
+    boton.disabled = deshabilitado;
+
+    boton.className = seleccionado
+      ? "rounded-xl bg-cyan-600 px-2 py-3 text-xs font-extrabold text-white shadow-md"
+      : "rounded-xl border border-slate-200 bg-slate-50 px-2 py-3 text-xs font-semibold text-slate-600 transition hover:border-cyan-300 hover:bg-cyan-50";
+
+    if (deshabilitado) {
+      boton.className =
+        "cursor-not-allowed rounded-xl border border-slate-100 bg-slate-50 px-2 py-3 text-xs font-semibold text-slate-300";
+    }
+
+    boton.addEventListener("click", function() {
+      input.value = valor;
+
+      input.dispatchEvent(
+        new Event("change", { bubbles: true })
+      );
+
+      actualizarTextoMesTarifas(input);
+      cerrarCalendarioTarifas();
+    });
+
+    cuadricula.appendChild(boton);
+  });
+
+  panel.querySelector(".anteriorAnioTarifas").disabled =
+    calendarioTarifasAnio <= 2026;
+}
+
+function abrirCalendarioMes(inputId) {
+  const input = document.getElementById(inputId);
+
+  if (!input || input.disabled) {
+    return;
+  }
+
+  const contenedor = input.closest(".selectorMesTarifas");
+
+  if (!contenedor) {
+    return;
+  }
+
+  const panel = contenedor.querySelector(".panelMesTarifas");
+  const estabaAbierto = !panel.classList.contains("hidden");
+
+  cerrarCalendarioTarifas();
+
+  if (estabaAbierto) {
+    return;
+  }
+
+  calendarioTarifasActivo = input;
+
+  const anio = Number((input.value || "").slice(0, 4));
+  calendarioTarifasAnio = anio >= 2026 ? anio : 2026;
+
+  renderizarCalendarioTarifas();
+  panel.classList.remove("hidden");
+}
+
+function cerrarCalendarioTarifas() {
+  document.querySelectorAll(".panelMesTarifas").forEach(function(panel) {
+    panel.classList.add("hidden");
+  });
+
+  calendarioTarifasActivo = null;
+}
+
+document.addEventListener("click", function(event) {
+  if (!event.target.closest(".selectorMesTarifas")) {
+    cerrarCalendarioTarifas();
+  }
+});
+
+document.addEventListener("keydown", function(event) {
+  if (event.key === "Escape" && calendarioTarifasActivo) {
+    cerrarCalendarioTarifas();
+  }
+});
+
+document.addEventListener("DOMContentLoaded", function() {
+  document.querySelectorAll('input[type="month"]').forEach(function(input) {
+    crearSelectorMesTarifas(input);
+  });
+});
+
+
+  // ==========================================================
+  // FILTROS DE TARIFAS E HISTORIAL
+  // ==========================================================
+
+  const CLAVE_ESTADO_TARIFAS = "gz_tarifas_estado_pagina_v2";
+
+
+  function normalizarTextoFiltro(valor) {
+
+    return String(valor || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  }
+
+
+  function obtenerValorFiltro(id) {
+
+    const elemento = document.getElementById(id);
+
+    return elemento ? elemento.value : "";
+
+  }
+
+
+  function aplicarFiltrosTarifas() {
+
+    const filtroActividad = normalizarTextoFiltro(
+      obtenerValorFiltro("filtroActividadTarifas")
+    );
+
+    const filtroTrabajador = normalizarTextoFiltro(
+      obtenerValorFiltro("filtroTrabajadorTarifas")
+    );
+
+    const filas = Array.from(
+      document.querySelectorAll(".filaTarifaRegistrada")
+    );
+
+    let visibles = 0;
+
+    filas.forEach(function(fila) {
+
+      const actividad = normalizarTextoFiltro(
+        fila.dataset.nombreActividad
+      );
+
+      const trabajador = normalizarTextoFiltro(
+        fila.dataset.nombreTrabajador
+      );
+
+      const coincideActividad =
+        !filtroActividad ||
+        actividad.includes(filtroActividad);
+
+      const coincideTrabajador =
+        !filtroTrabajador ||
+        trabajador.includes(filtroTrabajador);
+
+      const visible =
+        coincideActividad && coincideTrabajador;
+
+      fila.classList.toggle("hidden", !visible);
+
+      if (visible) {
+        visibles += 1;
+      }
+
+    });
+
+    const resultado = document.getElementById(
+      "resultadoFiltrosTarifas"
+    );
+
+    if (resultado) {
+
+      resultado.textContent =
+        "Mostrando " + visibles + " de " +
+        filas.length + " tarifas registradas.";
+
+    }
+
+    const sinResultados = document.getElementById(
+      "sinResultadosTarifas"
+    );
+
+    if (sinResultados) {
+
+      sinResultados.classList.toggle(
+        "hidden",
+        visibles > 0 || filas.length === 0
+      );
+
+    }
+
+    const contador = document.getElementById(
+      "contadorTarifasRegistradas"
+    );
+
+    if (contador) {
+
+      contador.textContent =
+        visibles + " de " + filas.length + " tarifas";
+
+    }
+
+  }
+
+
+  function aplicarFiltrosHistorial() {
+
+    const filtroActividad = normalizarTextoFiltro(
+      obtenerValorFiltro("filtroActividadHistorial")
+    );
+
+    const filtroTrabajador = normalizarTextoFiltro(
+      obtenerValorFiltro("filtroTrabajadorHistorial")
+    );
+
+    const filas = Array.from(
+      document.querySelectorAll(".filaHistorialTarifa")
+    );
+
+    let visibles = 0;
+
+    filas.forEach(function(fila) {
+
+      const actividad = normalizarTextoFiltro(
+        fila.dataset.nombreActividad
+      );
+
+      const trabajador = normalizarTextoFiltro(
+        fila.dataset.nombreTrabajador
+      );
+
+      const coincideActividad =
+        !filtroActividad ||
+        actividad.includes(filtroActividad);
+
+      const coincideTrabajador =
+        !filtroTrabajador ||
+        trabajador.includes(filtroTrabajador);
+
+      const visible =
+        coincideActividad && coincideTrabajador;
+
+      fila.classList.toggle("hidden", !visible);
+
+      if (visible) {
+        visibles += 1;
+      }
+
+    });
+
+    const resultado = document.getElementById(
+      "resultadoFiltrosHistorial"
+    );
+
+    if (resultado) {
+
+      resultado.textContent =
+        "Mostrando " + visibles + " de " +
+        filas.length + " registros históricos.";
+
+    }
+
+    const sinResultados = document.getElementById(
+      "sinResultadosHistorial"
+    );
+
+    if (sinResultados) {
+
+      sinResultados.classList.toggle(
+        "hidden",
+        visibles > 0 || filas.length === 0
+      );
+
+    }
+
+  }
+
+
+  // ==========================================================
+  // GUARDAR POSICIÓN Y FILTROS
+  // ==========================================================
+
+  function guardarEstadoPaginaTarifas() {
+
+    const estado = {
+
+      pendiente: true,
+
+      ruta: window.location.pathname,
+
+      scrollX: window.scrollX,
+
+      scrollY: window.scrollY,
+
+      filtros: {
+
+        actividadTarifas: obtenerValorFiltro(
+          "filtroActividadTarifas"
+        ),
+
+        trabajadorTarifas: obtenerValorFiltro(
+          "filtroTrabajadorTarifas"
+        ),
+
+        actividadHistorial: obtenerValorFiltro(
+          "filtroActividadHistorial"
+        ),
+
+        trabajadorHistorial: obtenerValorFiltro(
+          "filtroTrabajadorHistorial"
+        )
+
+      }
+
+    };
+
+    sessionStorage.setItem(
+      CLAVE_ESTADO_TARIFAS,
+      JSON.stringify(estado)
+    );
+
+  }
+
+
+  function restaurarEstadoPaginaTarifas() {
+
+    const guardado = sessionStorage.getItem(
+      CLAVE_ESTADO_TARIFAS
+    );
+
+    if (!guardado) {
+      return;
+    }
+
+    let estado;
+
+    try {
+
+      estado = JSON.parse(guardado);
+
+    } catch (error) {
+
+      sessionStorage.removeItem(
+        CLAVE_ESTADO_TARIFAS
+      );
+
+      return;
+
+    }
+
+    if (
+      !estado ||
+      !estado.pendiente ||
+      estado.ruta !== window.location.pathname
+    ) {
+      return;
+    }
+
+    sessionStorage.removeItem(
+      CLAVE_ESTADO_TARIFAS
+    );
+
+    const filtros = estado.filtros || {};
+
+    const campos = {
+
+      filtroActividadTarifas:
+        filtros.actividadTarifas || "",
+
+      filtroTrabajadorTarifas:
+        filtros.trabajadorTarifas || "",
+
+      filtroActividadHistorial:
+        filtros.actividadHistorial || "",
+
+      filtroTrabajadorHistorial:
+        filtros.trabajadorHistorial || ""
+
+    };
+
+    Object.keys(campos).forEach(function(id) {
+
+      const elemento = document.getElementById(id);
+
+      if (elemento) {
+        elemento.value = campos[id];
+      }
+
+    });
+
+    aplicarFiltrosTarifas();
+    aplicarFiltrosHistorial();
+
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
+
+    const posicionX = Number(estado.scrollX) || 0;
+    const posicionY = Number(estado.scrollY) || 0;
+
+    function restaurarPosicion() {
+
+      window.scrollTo({
+        left: posicionX,
+        top: posicionY,
+        behavior: "instant"
+      });
+
+    }
+
+    // Se restaura tras renderizar y cuando los elementos
+    // terminan de ocupar su espacio en la página.
+
+    requestAnimationFrame(function() {
+
+      requestAnimationFrame(
+        restaurarPosicion
+      );
+
+    });
+
+    window.addEventListener(
+      "load",
+      restaurarPosicion,
+      { once: true }
+    );
+
+    setTimeout(
+      restaurarPosicion,
+      150
+    );
+
+  }
+
+
+  // ==========================================================
+  // INICIALIZAR FILTROS
+  // ==========================================================
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+      const camposTarifas = [
+        "filtroActividadTarifas",
+        "filtroTrabajadorTarifas"
+      ];
+
+      const camposHistorial = [
+        "filtroActividadHistorial",
+        "filtroTrabajadorHistorial"
+      ];
+
+      camposTarifas.forEach(function(id) {
+
+        const campo = document.getElementById(id);
+
+        if (campo) {
+
+          campo.addEventListener(
+            "input",
+            aplicarFiltrosTarifas
+          );
+
+        }
+
+      });
+
+      camposHistorial.forEach(function(id) {
+
+        const campo = document.getElementById(id);
+
+        if (campo) {
+
+          campo.addEventListener(
+            "input",
+            aplicarFiltrosHistorial
+          );
+
+        }
+
+      });
+
+
+      const limpiarTarifas = document.getElementById(
+        "limpiarFiltrosTarifas"
+      );
+
+      if (limpiarTarifas) {
+
+        limpiarTarifas.addEventListener(
+          "click",
+          function() {
+
+            camposTarifas.forEach(function(id) {
+
+              const campo = document.getElementById(id);
+
+              if (campo) {
+                campo.value = "";
+              }
+
+            });
+
+            aplicarFiltrosTarifas();
+
+          }
+        );
+
+      }
+
+
+      const limpiarHistorial = document.getElementById(
+        "limpiarFiltrosHistorial"
+      );
+
+      if (limpiarHistorial) {
+
+        limpiarHistorial.addEventListener(
+          "click",
+          function() {
+
+            camposHistorial.forEach(function(id) {
+
+              const campo = document.getElementById(id);
+
+              if (campo) {
+                campo.value = "";
+              }
+
+            });
+
+            aplicarFiltrosHistorial();
+
+          }
+        );
+
+      }
+
+      aplicarFiltrosTarifas();
+      aplicarFiltrosHistorial();
+
+      restaurarEstadoPaginaTarifas();
+
+    }
+  );
+
+
+  // ==========================================================
+  // CONFIGURACIÓN DE ACTIVIDADES
+  // ==========================================================
+
+  document.addEventListener("DOMContentLoaded", function() {
+
+    const formActividad = document.getElementById(
+      "formTarifasActividad"
+    );
+
+    if (!formActividad) {
+      return;
+    }
+
+    const proyectoSelect = document.getElementById(
+      "proyectoActividad"
+    );
+
+    const modoSelect = document.getElementById(
+      "modoActividad"
+    );
+
+    const contenedorNueva = document.getElementById(
+      "contenedorNuevaActividad"
+    );
+
+    const contenedorExistente = document.getElementById(
+      "contenedorActividadExistente"
+    );
+
+    const nombreActividadInput = document.getElementById(
+      "nombreActividad"
+    );
+
+    const actividadExistenteSelect = document.getElementById(
+      "actividadExistente"
+    );
+
+    const mensajeActividades = document.getElementById(
+      "mensajeActividadesDisponibles"
+    );
+
+    const precioReferenciaInput = document.getElementById(
+      "precioReferencia"
+    );
+
+    const seleccionarTodos = document.getElementById(
+      "seleccionarTodosTecnicos"
+    );
+
+    const checkboxes = Array.from(
+      document.querySelectorAll(
+        ".checkboxTecnicoActividad"
+      )
+    );
+
+    const filas = Array.from(
+      document.querySelectorAll(
+        ".filaTecnicoActividad"
+      )
+    );
+
+    const contador = document.getElementById(
+      "contadorTecnicosSeleccionados"
+    );
+
+    const resumenCantidad = document.getElementById(
+      "resumenCantidadTecnicos"
+    );
+
+    const resumenReferencia = document.getElementById(
+      "resumenPrecioReferencia"
+    );
+
+    const resumenTotal = document.getElementById(
+      "resumenTotalTarifas"
+    );
+
+
+    // ========================================================
+    // FORMATO CLP
+    // ========================================================
+
+    function formatoCLP(valor) {
+
+      const numero = Number(valor);
+
+      if (!Number.isFinite(numero)) {
+        return "$0";
+      }
+
+      return "$" + Math.round(numero).toLocaleString(
+        "es-CL"
+      );
+
+    }
+
+
+    // ========================================================
+    // ESTADO DE FILA
+    // ========================================================
+
+    function actualizarEstadoFila(fila) {
+
+      const checkbox = fila.querySelector(
+        ".checkboxTecnicoActividad"
+      );
+
+      const montoInput = fila.querySelector(
+        ".montoTecnicoActividad"
+      );
+
+      const estado = fila.querySelector(
+        ".estadoMontoTecnico"
+      );
+
+      if (!checkbox || !montoInput || !estado) {
+        return;
+      }
+
+      if (!checkbox.checked) {
+
+        montoInput.disabled = true;
+        montoInput.required = false;
+
+        montoInput.classList.add(
+          "bg-slate-100"
+        );
+
+        estado.textContent = "No incluido";
+
+        estado.className =
+          "estadoMontoTecnico rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500";
+
+        return;
+      }
+
+      montoInput.disabled = false;
+      montoInput.required = true;
+
+      montoInput.classList.remove(
+        "bg-slate-100"
+      );
+
+      if (
+        montoInput.dataset.personalizado === "true"
+      ) {
+
+        estado.textContent = "Personalizada";
+
+        estado.className =
+          "estadoMontoTecnico rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700";
+
+      } else {
+
+        estado.textContent = "Referencia";
+
+        estado.className =
+          "estadoMontoTecnico rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700";
+
+      }
+
+    }
+
+
+    // ========================================================
+    // RESUMEN
+    // ========================================================
+
+    function actualizarResumen() {
+
+      let cantidad = 0;
+      let total = 0;
+
+      filas.forEach(function(fila) {
+
+        const checkbox = fila.querySelector(
+          ".checkboxTecnicoActividad"
+        );
+
+        const montoInput = fila.querySelector(
+          ".montoTecnicoActividad"
+        );
+
+        if (
+          !checkbox ||
+          !montoInput ||
+          !checkbox.checked
+        ) {
+          return;
+        }
+
+        cantidad += 1;
+
+        const monto = Number(
+          montoInput.value
+        );
+
+        if (Number.isFinite(monto)) {
+          total += monto;
+        }
+
+      });
+
+      contador.textContent =
+        cantidad + " seleccionados";
+
+      resumenCantidad.textContent =
+        cantidad;
+
+      resumenReferencia.textContent =
+        formatoCLP(
+          precioReferenciaInput.value
+        );
+
+      resumenTotal.textContent =
+        formatoCLP(total);
+
+      seleccionarTodos.checked =
+        checkboxes.length > 0 &&
+        cantidad === checkboxes.length;
+
+      seleccionarTodos.indeterminate =
+        cantidad > 0 &&
+        cantidad < checkboxes.length;
+
+    }
+
+
+    // ========================================================
+    // PRECIO DE REFERENCIA
+    // ========================================================
+
+    function actualizarMontosReferencia() {
+
+      const referencia =
+        precioReferenciaInput.value;
+
+      filas.forEach(function(fila) {
+
+        const montoInput = fila.querySelector(
+          ".montoTecnicoActividad"
+        );
+
+        if (!montoInput) {
+          return;
+        }
+
+        if (
+          montoInput.dataset.personalizado !== "true"
+        ) {
+          montoInput.value = referencia;
+        }
+
+        actualizarEstadoFila(fila);
+
+      });
+
+      actualizarResumen();
+
+    }
+
+
+    precioReferenciaInput.addEventListener(
+      "input",
+      actualizarMontosReferencia
+    );
+
+
+    // ========================================================
+    // SELECCIÓN DE TÉCNICOS
+    // ========================================================
+
+    checkboxes.forEach(function(checkbox) {
+
+      checkbox.addEventListener(
+        "change",
+        function() {
+
+          const fila = checkbox.closest(
+            ".filaTecnicoActividad"
+          );
+
+          const montoInput = fila.querySelector(
+            ".montoTecnicoActividad"
+          );
+
+          if (
+            checkbox.checked &&
+            montoInput.dataset.personalizado !== "true"
+          ) {
+            montoInput.value =
+              precioReferenciaInput.value;
+          }
+
+          actualizarEstadoFila(fila);
+          actualizarResumen();
+
+        }
+      );
+
+    });
+
+
+    seleccionarTodos.addEventListener(
+      "change",
+      function() {
+
+        checkboxes.forEach(function(checkbox) {
+
+          checkbox.checked =
+            seleccionarTodos.checked;
+
+          const fila = checkbox.closest(
+            ".filaTecnicoActividad"
+          );
+
+          const montoInput = fila.querySelector(
+            ".montoTecnicoActividad"
+          );
+
+          if (
+            checkbox.checked &&
+            montoInput.dataset.personalizado !== "true"
+          ) {
+            montoInput.value =
+              precioReferenciaInput.value;
+          }
+
+          actualizarEstadoFila(fila);
+
+        });
+
+        actualizarResumen();
+
+      }
+    );
+
+
+    // ========================================================
+    // MONTOS PERSONALIZADOS
+    // ========================================================
+
+    filas.forEach(function(fila) {
+
+      const montoInput = fila.querySelector(
+        ".montoTecnicoActividad"
+      );
+
+      if (!montoInput) {
+        return;
+      }
+
+      montoInput.addEventListener(
+        "input",
+        function() {
+
+          montoInput.dataset.personalizado =
+            "true";
+
+          actualizarEstadoFila(fila);
+          actualizarResumen();
+
+        }
+      );
+
+    });
+
+
+    // ========================================================
+    // FILTRAR ACTIVIDADES
+    // ========================================================
+
+    function filtrarActividades() {
+
+      const proyectoId =
+        proyectoSelect.value;
+
+      let disponibles = 0;
+
+      actividadExistenteSelect.value = "";
+
+      Array.from(
+        actividadExistenteSelect.options
+      ).forEach(function(option) {
+
+        if (!option.value) {
+          return;
+        }
+
+        const coincide =
+          proyectoId &&
+          option.dataset.proyectoId === proyectoId;
+
+        option.hidden = !coincide;
+        option.disabled = !coincide;
+
+        if (coincide) {
+          disponibles += 1;
+        }
+
+      });
+
+      if (!proyectoId) {
+
+        mensajeActividades.textContent =
+          "Selecciona primero un proyecto.";
+
+      } else if (disponibles === 0) {
+
+        mensajeActividades.textContent =
+          "Este proyecto todavía no tiene actividades registradas.";
+
+      } else {
+
+        mensajeActividades.textContent =
+          disponibles +
+          " actividades disponibles para este proyecto.";
+
+      }
+
+    }
+
+
+    proyectoSelect.addEventListener(
+      "change",
+      filtrarActividades
+    );
+
+
+    // ========================================================
+    // ACTIVIDAD EXISTENTE
+    // ========================================================
+
+    actividadExistenteSelect.addEventListener(
+      "change",
+      function() {
+
+        const option =
+          actividadExistenteSelect.selectedOptions[0];
+
+        if (!option || !option.value) {
+          return;
+        }
+
+        const referencia =
+          option.dataset.precioReferencia;
+
+        if (referencia) {
+
+          precioReferenciaInput.value =
+            referencia;
+
+          actualizarMontosReferencia();
+
+        }
+
+      }
+    );
+
+
+    // ========================================================
+    // MODO NUEVA / EXISTENTE
+    // ========================================================
+
+    function actualizarModoActividad() {
+
+      const existente =
+        modoSelect.value === "existente";
+
+      contenedorNueva.classList.toggle(
+        "hidden",
+        existente
+      );
+
+      contenedorExistente.classList.toggle(
+        "hidden",
+        !existente
+      );
+
+      nombreActividadInput.disabled =
+        existente;
+
+      nombreActividadInput.required =
+        !existente;
+
+      actividadExistenteSelect.disabled =
+        !existente;
+
+      actividadExistenteSelect.required =
+        existente;
+
+      if (existente) {
+        filtrarActividades();
+      }
+
+    }
+
+
+    modoSelect.addEventListener(
+      "change",
+      actualizarModoActividad
+    );
+
+
+    // ========================================================
+    // VALIDAR FORMULARIO
+    // ========================================================
+
+    formActividad.addEventListener(
+      "submit",
+      function(event) {
+
+        const seleccionados = checkboxes.filter(
+          function(checkbox) {
+            return checkbox.checked;
+          }
+        );
+
+        if (seleccionados.length === 0) {
+
+          event.preventDefault();
+
+          alert(
+            "Selecciona al menos un trabajador para registrar sus tarifas."
+          );
+
+          return;
+        }
+
+        for (const checkbox of seleccionados) {
+
+          const fila = checkbox.closest(
+            ".filaTecnicoActividad"
+          );
+
+          const montoInput = fila.querySelector(
+            ".montoTecnicoActividad"
+          );
+
+          const monto = Number(
+            montoInput.value
+          );
+
+          if (
+            !Number.isFinite(monto) ||
+            !Number.isInteger(monto) ||
+            monto <= 0 ||
+            monto > 9999999999
+          ) {
+
+            event.preventDefault();
+
+            alert(
+              "Todos los trabajadores seleccionados deben tener una tarifa válida."
+            );
+
+            montoInput.focus();
+
+            return;
+          }
+
+        }
+
+        // Conservar posición también al crear/configurar tarifas.
+        guardarEstadoPaginaTarifas();
+
+      }
+    );
+
+
+    // ========================================================
+    // INICIALIZACIÓN
+    // ========================================================
+
+    actualizarModoActividad();
+    actualizarMontosReferencia();
+
+    filas.forEach(function(fila) {
+      actualizarEstadoFila(fila);
+    });
+
+    actualizarResumen();
+
+  });
+
+
+  // ==========================================================
+  // EDICIÓN EN LÍNEA
+  // ==========================================================
+
+  let tarifaActividadEnEdicion = null;
+  let guardandoTarifaActividad = false;
+
+
+  function obtenerElementosEdicion(tarifaId) {
+
+    return {
+
+      fila: document.getElementById(
+        "filaTarifaActividad" + tarifaId
+      ),
+
+      actividadVista: document.getElementById(
+        "actividadVista" + tarifaId
+      ),
+
+      actividadEdicion: document.getElementById(
+        "actividadEdicion" + tarifaId
+      ),
+
+      inputActividad: document.getElementById(
+        "inputActividad" + tarifaId
+      ),
+
+      tarifaVista: document.getElementById(
+        "tarifaVista" + tarifaId
+      ),
+
+      tarifaEdicion: document.getElementById(
+        "tarifaEdicion" + tarifaId
+      ),
+
+      inputTarifa: document.getElementById(
+        "inputTarifa" + tarifaId
+      ),
+
+      vigenciaVista: document.getElementById(
+        "vigenciaVista" + tarifaId
+      ),
+
+      vigenciaEdicion: document.getElementById(
+        "vigenciaEdicion" + tarifaId
+      ),
+
+      inputVigencia: document.getElementById(
+        "inputVigencia" + tarifaId
+      ),
+
+      accionesNormales: document.getElementById(
+        "accionesNormales" + tarifaId
+      ),
+
+      accionesEdicion: document.getElementById(
+        "accionesEdicionTarifa" + tarifaId
+      )
+
+    };
+
+  }
+
+
+  // ==========================================================
+  // INICIAR EDICIÓN
+  // ==========================================================
+
+  function iniciarEdicionTarifaActividad(tarifaId) {
+
+    if (guardandoTarifaActividad) {
+      return;
+    }
+
+    if (
+      tarifaActividadEnEdicion !== null &&
+      tarifaActividadEnEdicion !== tarifaId
+    ) {
+
+      cancelarEdicionTarifaActividad(
+        tarifaActividadEnEdicion
+      );
+
+    }
+
+    const elementos =
+      obtenerElementosEdicion(tarifaId);
+
+    if (
+      !elementos.fila ||
+      !elementos.inputActividad ||
+      !elementos.inputTarifa ||
+      !elementos.inputVigencia
+    ) {
+      return;
+    }
+
+    tarifaActividadEnEdicion = tarifaId;
+
+    elementos.inputActividad.dataset.valorOriginal =
+      elementos.inputActividad.value;
+
+    elementos.inputTarifa.dataset.valorOriginal =
+      elementos.inputTarifa.value;
+
+    elementos.inputVigencia.dataset.valorOriginal =
+      elementos.inputVigencia.value;
+
+    elementos.actividadVista.classList.add(
+      "hidden"
+    );
+
+    elementos.actividadEdicion.classList.remove(
+      "hidden"
+    );
+
+    elementos.tarifaVista.classList.add(
+      "hidden"
+    );
+
+    elementos.tarifaEdicion.classList.remove(
+      "hidden"
+    );
+
+    elementos.vigenciaVista.classList.add(
+      "hidden"
+    );
+
+    elementos.vigenciaEdicion.classList.remove(
+      "hidden"
+    );
+
+    elementos.accionesNormales.classList.add(
+      "hidden"
+    );
+
+    elementos.accionesEdicion.classList.remove(
+      "hidden"
+    );
+
+    elementos.accionesEdicion.classList.add(
+      "flex"
+    );
+
+    elementos.fila.classList.add(
+      "bg-blue-50/50"
+    );
+
+    elementos.inputActividad.focus();
+    elementos.inputActividad.select();
+
+  }
+
+
+  // ==========================================================
+  // CANCELAR EDICIÓN
+  // ==========================================================
+
+  function cancelarEdicionTarifaActividad(tarifaId) {
+
+    if (guardandoTarifaActividad) {
+      return;
+    }
+
+    const elementos =
+      obtenerElementosEdicion(tarifaId);
+
+    if (!elementos.fila) {
+      return;
+    }
+
+    const campos = [
+      elementos.inputActividad,
+      elementos.inputTarifa,
+      elementos.inputVigencia
+    ];
+
+    campos.forEach(function(campo) {
+
+      if (
+        campo &&
+        campo.dataset.valorOriginal !== undefined
+      ) {
+
+        campo.value =
+          campo.dataset.valorOriginal;
+
+        if (campo.closest(".selectorMesTarifas")) {
+          actualizarTextoMesTarifas(campo);
+        }
+
+      }
+
+    });
+
+    elementos.actividadVista.classList.remove(
+      "hidden"
+    );
+
+    elementos.actividadEdicion.classList.add(
+      "hidden"
+    );
+
+    elementos.tarifaVista.classList.remove(
+      "hidden"
+    );
+
+    elementos.tarifaEdicion.classList.add(
+      "hidden"
+    );
+
+    elementos.vigenciaVista.classList.remove(
+      "hidden"
+    );
+
+    elementos.vigenciaEdicion.classList.add(
+      "hidden"
+    );
+
+    elementos.accionesNormales.classList.remove(
+      "hidden"
+    );
+
+    elementos.accionesEdicion.classList.add(
+      "hidden"
+    );
+
+    elementos.accionesEdicion.classList.remove(
+      "flex"
+    );
+
+    elementos.fila.classList.remove(
+      "bg-blue-50/50"
+    );
+
+    if (
+      tarifaActividadEnEdicion === tarifaId
+    ) {
+      tarifaActividadEnEdicion = null;
+    }
+
+  }
+
+
+  // ==========================================================
+  // GUARDAR EDICIÓN CONJUNTA
+  // ==========================================================
+
+  function guardarEdicionTarifaActividad(tarifaId) {
+
+    if (guardandoTarifaActividad) {
+      return;
+    }
+
+    const elementos =
+      obtenerElementosEdicion(tarifaId);
+
+    if (
+      !elementos.fila ||
+      !elementos.inputActividad ||
+      !elementos.inputTarifa ||
+      !elementos.inputVigencia
+    ) {
+      return;
+    }
+
+    const nombre = elementos.inputActividad.value
+      .trim()
+      .replace(/\s+/g, " ");
+
+    const monto = Number(
+      elementos.inputTarifa.value
+    );
+
+    const vigencia =
+      elementos.inputVigencia.value;
+
+    const nombreOriginal =
+      elementos.inputActividad.dataset.valorOriginal || "";
+
+    const montoOriginal = Number(
+      elementos.inputTarifa.dataset.valorOriginal
+    );
+
+    const vigenciaOriginal =
+      elementos.inputVigencia.dataset.valorOriginal || "";
+
+    if (!nombre) {
+
+      alert(
+        "El nombre de la actividad no puede estar vacío."
+      );
+
+      elementos.inputActividad.focus();
+
+      return;
+    }
+
+    if (nombre.length > 255) {
+
+      alert(
+        "El nombre no puede superar los 255 caracteres."
+      );
+
+      elementos.inputActividad.focus();
+
+      return;
+    }
+
+    if (
+      !Number.isFinite(monto) ||
+      !Number.isInteger(monto) ||
+      monto <= 0 ||
+      monto > 9999999999
+    ) {
+
+      alert(
+        "Ingresa una tarifa válida en pesos chilenos."
+      );
+
+      elementos.inputTarifa.focus();
+
+      return;
+    }
+
+    if (
+      !/^\d{4}-\d{2}$/.test(vigencia) ||
+      vigencia < "2026-10"
+    ) {
+
+      alert(
+        "Selecciona una vigencia válida desde octubre de 2026."
+      );
+
+      elementos.inputVigencia.focus();
+
+      return;
+    }
+
+    const cambioNombre =
+      nombre !== nombreOriginal;
+
+    const cambioMonto =
+      monto !== montoOriginal;
+
+    const cambioVigencia =
+      vigencia !== vigenciaOriginal;
+
+    if (
+      !cambioNombre &&
+      !cambioMonto &&
+      !cambioVigencia
+    ) {
+
+      cancelarEdicionTarifaActividad(
+        tarifaId
+      );
+
+      return;
+    }
+
+    const formulario = document.getElementById(
+      "formEditarTarifaActividad"
+    );
+
+    if (!formulario) {
+      return;
+    }
+
+    document.getElementById(
+      "editarTarifaActividadId"
+    ).value = tarifaId;
+
+    document.getElementById(
+      "editarTarifaActividadNombre"
+    ).value = nombre;
+
+    document.getElementById(
+      "editarTarifaActividadMonto"
+    ).value = monto;
+
+    document.getElementById(
+      "editarTarifaActividadVigencia"
+    ).value = vigencia;
+
+    // ======================================================
+    // GUARDAR POSICIÓN EXACTA ANTES DE ENVIAR
+    // ======================================================
+
+    guardarEstadoPaginaTarifas();
+
+    guardandoTarifaActividad = true;
+
+    formulario.submit();
+
+  }
+
+
+  // ==========================================================
+  // ENTER Y ESC
+  // ==========================================================
+
+  document.addEventListener(
+    "keydown",
+    function(event) {
+
+      if (modalEliminarAbierto) {
+        return;
+      }
+
+      if (
+        tarifaActividadEnEdicion === null
+      ) {
+        return;
+      }
+
+      if (event.key === "Escape") {
+
+        event.preventDefault();
+
+        cancelarEdicionTarifaActividad(
+          tarifaActividadEnEdicion
+        );
+
+        return;
+      }
+
+      if (event.key !== "Enter") {
+        return;
+      }
+
+      const elementos = obtenerElementosEdicion(
+        tarifaActividadEnEdicion
+      );
+
+      const campos = [
+        elementos.inputActividad,
+        elementos.inputTarifa,
+        elementos.inputVigencia
+      ];
+
+      if (
+        campos.includes(
+          document.activeElement
+        )
+      ) {
+
+        event.preventDefault();
+
+        guardarEdicionTarifaActividad(
+          tarifaActividadEnEdicion
+        );
+
+      }
+
+    }
+  );
+
+
+  // ==========================================================
+  // MODAL ELIMINAR
+  // ==========================================================
+
+  let modalEliminarAbierto = false;
+  let elementoAnteriorModal = null;
+
+
+  function abrirModalEliminarTarifa(tarifaId) {
+
+    const modal = document.getElementById(
+      "modalEliminarTarifa"
+    );
+
+    const fila = document.getElementById(
+      "filaTarifaActividad" + tarifaId
+    );
+
+    const formulario = document.getElementById(
+      "formEliminarTarifaActividad"
+    );
+
+    if (!modal || !fila || !formulario) {
+      return;
+    }
+
+    const celdas = fila.querySelectorAll(
+      "td"
+    );
+
+    if (celdas.length < 5) {
+      return;
+    }
+
+    const actividadElemento = fila.querySelector(
+      ".nombreActividadVista"
+    );
+
+    const montoElemento = document.getElementById(
+      "tarifaVista" + tarifaId
+    );
+
+    if (
+      !actividadElemento ||
+      !montoElemento
+    ) {
+      return;
+    }
+
+    document.getElementById(
+      "modalEliminarProyecto"
+    ).textContent =
+      celdas[0].textContent.trim();
+
+    document.getElementById(
+      "modalEliminarActividad"
+    ).textContent =
+      actividadElemento.textContent.trim();
+
+    document.getElementById(
+      "modalEliminarTrabajador"
+    ).textContent =
+      celdas[2].textContent.trim();
+
+    document.getElementById(
+      "modalEliminarMonto"
+    ).textContent =
+      montoElemento.textContent.trim();
+
+    const vigenciaElemento = document.getElementById(
+      "vigenciaVista" + tarifaId
+    );
+
+    document.getElementById(
+      "modalEliminarVigencia"
+    ).textContent = vigenciaElemento
+      ? vigenciaElemento.textContent.trim()
+      : "";
+
+    formulario.action =
+      fila.dataset.eliminarUrl;
+
+    elementoAnteriorModal =
+      document.activeElement;
+
+    modal.classList.remove(
+      "hidden"
+    );
+
+    modal.classList.add(
+      "flex"
+    );
+
+    document.body.style.overflow =
+      "hidden";
+
+    modalEliminarAbierto = true;
+
+    const botonCancelar = formulario.querySelector(
+      'button[type="button"]'
+    );
+
+    if (botonCancelar) {
+      botonCancelar.focus();
+    }
+
+  }
+
+
+  // ==========================================================
+  // CERRAR MODAL
+  // ==========================================================
+
+  function cerrarModalEliminarTarifa() {
+
+    const modal = document.getElementById(
+      "modalEliminarTarifa"
+    );
+
+    if (!modal) {
+      return;
+    }
+
+    modal.classList.add(
+      "hidden"
+    );
+
+    modal.classList.remove(
+      "flex"
+    );
+
+    document.body.style.overflow =
+      "";
+
+    modalEliminarAbierto = false;
+
+    if (
+      elementoAnteriorModal &&
+      typeof elementoAnteriorModal.focus === "function"
+    ) {
+
+      elementoAnteriorModal.focus();
+
+    }
+
+  }
+
+
+  // ==========================================================
+  // CERRAR AL HACER CLIC FUERA
+  // ==========================================================
+
+  document.addEventListener(
+    "click",
+    function(event) {
+
+      const modal = document.getElementById(
+        "modalEliminarTarifa"
+      );
+
+      if (
+        !modal ||
+        !modalEliminarAbierto
+      ) {
+        return;
+      }
+
+      if (event.target === modal) {
+        cerrarModalEliminarTarifa();
+      }
+
+    }
+  );
+
+
+  // ==========================================================
+  // ESC PARA CERRAR MODAL
+  // ==========================================================
+
+  document.addEventListener(
+    "keydown",
+    function(event) {
+
+      if (
+        event.key === "Escape" &&
+        modalEliminarAbierto
+      ) {
+
+        event.preventDefault();
+
+        cerrarModalEliminarTarifa();
+
+      }
+
+    }
+  );
+
+
+  // ==========================================================
+  // CONSERVAR POSICIÓN AL CONFIRMAR ELIMINACIÓN
+  // ==========================================================
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+      const formulario = document.getElementById(
+        "formEliminarTarifaActividad"
+      );
+
+      if (formulario) {
+
+        formulario.addEventListener(
+          "submit",
+          guardarEstadoPaginaTarifas
+        );
+
+      }
+
+    }
+  );
+
+</script>
+
+{% endblock %}

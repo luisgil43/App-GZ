@@ -37,6 +37,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
+from operaciones.services.tarifas import obtener_monto_tecnico
 from usuarios.decoradores import rol_requerido
 
 from .models import MonthlyPayment  # <-- CAMBIA esto por tu modelo real
@@ -69,10 +70,14 @@ def _monto_firmado_por_estado(monto, estado: str) -> Decimal:
 def produccion_admin(request):
     """
     Producción aprobada (por técnico) + ajustes (bono/adelanto/descuento).
-    - Filas por técnico asignado; monto prorrateado: monto_mmoo / N_tecnicos
-    - Filtros: du, id_claro, id_new, mes_produccion, estado (opcional),
-               f_tecnico (nombre/usuario) y f_region (opcional).
+
+    - Hasta septiembre de 2026: cálculo histórico prorrateado.
+    - Desde octubre de 2026: tarifa individual de cada técnico.
+    - Los ajustes conservan su cálculo histórico.
+    - Filtros: du, id_claro, id_new, mes_produccion, estado,
+               f_tecnico y f_region.
     """
+
     def _month_token(dt) -> str:
         d = dt.date() if hasattr(dt, "date") else dt
         return f"{d.year:04d}-{d.month:02d}"
@@ -87,11 +92,15 @@ def produccion_admin(request):
         "mes_produccion": (request.GET.get("mes_produccion") or "").strip(),
         "estado": (request.GET.get("estado") or "").strip(),
     }
+
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
     f_region = (request.GET.get("f_region") or "").strip()
     cantidad = request.GET.get("cantidad", "10")
 
-    # ✅ incluir también los ajustes
+    # ============================================================
+    # ESTADOS DE PRODUCCIÓN Y AJUSTES
+    # ============================================================
+
     estados_ok = {
         "aprobado_supervisor",
         "aprobado_pm",
@@ -102,55 +111,118 @@ def produccion_admin(request):
     }
 
     qs = (
-        ServicioCotizado.objects
-        .filter(estado__in=estados_ok)
-        .prefetch_related('trabajadores_asignados')
-        .order_by('-fecha_aprobacion_supervisor', '-id')
+        ServicioCotizado.objects.filter(estado__in=estados_ok)
+        .prefetch_related("trabajadores_asignados")
+        .order_by("-fecha_aprobacion_supervisor", "-id")
     )
 
-    # ---------- Aplicar filtros de cabecera ----------
+    # ============================================================
+    # FILTROS
+    # ============================================================
+
     if filtros["du"]:
-        # Normaliza: "DU000062", "du 62", "62" -> "62"
         raw_du = filtros["du"]
-        m = re.search(r"du\s*0*([0-9]+)", raw_du, re.IGNORECASE)
+
+        m = re.search(
+            r"du\s*0*([0-9]+)",
+            raw_du,
+            re.IGNORECASE,
+        )
+
         term = m.group(1) if m else re.sub(r"\D+", "", raw_du)
+
         if term:
             qs = qs.filter(du__icontains=term)
 
     if filtros["id_claro"]:
         qs = qs.filter(id_claro__icontains=filtros["id_claro"])
+
     if filtros["id_new"]:
         qs = qs.filter(id_new__icontains=filtros["id_new"])
+
     if filtros["mes_produccion"]:
         qs = qs.filter(mes_produccion__icontains=filtros["mes_produccion"])
+
     if filtros["estado"]:
         if filtros["estado"] in estados_ok:
             qs = qs.filter(estado=filtros["estado"])
         else:
             qs = qs.none()
+
     if f_region:
         qs = qs.filter(region__icontains=f_region)
 
-    # ---------- Construir filas por técnico (prorrateo) ----------
+    # ============================================================
+    # CONSTRUIR FILAS POR TÉCNICO
+    # ============================================================
+
     filas = []
+
     for s in qs:
+
         asignados = list(s.trabajadores_asignados.all())
-        n = len(asignados) or 1
-        total = Decimal(str(s.monto_mmoo or 0))
-        parte = (total / n).quantize(Decimal('0.01'))
 
         if asignados:
+
             for tec in asignados:
+
+                # --------------------------------------------
+                # FILTRO POR TÉCNICO
+                # --------------------------------------------
+
                 if f_tecnico:
                     target = f_tecnico.lower()
-                    full_name = ((tec.first_name or "") + " " +
-                                 (tec.last_name or "")).strip().lower()
+
+                    full_name = (
+                        ((tec.first_name or "") + " " + (tec.last_name or ""))
+                        .strip()
+                        .lower()
+                    )
+
                     username = (tec.username or "").lower()
+
                     if target not in full_name and target not in username:
                         continue
 
-                filas.append({
-                    "id": s.id,  # 👈 necesario para acciones
+                # --------------------------------------------
+                # MONTO INDIVIDUAL
+                # --------------------------------------------
+                # Antes de octubre 2026: histórico.
+                # Desde octubre 2026: tarifa del técnico.
+                # Ajustes: cálculo histórico.
+                # --------------------------------------------
+
+                parte = obtener_monto_tecnico(
+                    s,
+                    tec,
+                )
+
+                filas.append(
+                    {
+                        "id": s.id,
+                        "du": s.du,
+                        "id_claro": s.id_claro or "",
+                        "region": s.region or "",
+                        "mes_produccion": s.mes_produccion or "",
+                        "id_new": s.id_new or "",
+                        "detalle_tarea": s.detalle_tarea or "",
+                        "monto_tecnico": parte,
+                        "tecnico": tec,
+                        "fecha_fin": s.fecha_aprobacion_supervisor,
+                        "status": s.estado,
+                    }
+                )
+
+        else:
+
+            # Mantener visualización de servicios sin técnicos.
+            # No se asigna una tarifa individual inexistente.
+
+            parte = Decimal(str(s.monto_mmoo or 0)).quantize(Decimal("0.01"))
+
+            filas.append(
+                {
+                    "id": s.id,
                     "du": s.du,
                     "id_claro": s.id_claro or "",
                     "region": s.region or "",
@@ -158,103 +230,162 @@ def produccion_admin(request):
                     "id_new": s.id_new or "",
                     "detalle_tarea": s.detalle_tarea or "",
                     "monto_tecnico": parte,
-                    "tecnico": tec,
+                    "tecnico": None,
                     "fecha_fin": s.fecha_aprobacion_supervisor,
                     "status": s.estado,
-                })
-        else:
-            filas.append({
-                "id": s.id,  # 👈 necesario también aquí
-                "du": s.du,
-                "id_claro": s.id_claro or "",
-                "region": s.region or "",
-                "mes_produccion": s.mes_produccion or "",
-                "id_new": s.id_new or "",
-                "detalle_tarea": s.detalle_tarea or "",
-                "monto_tecnico": parte,
-                "tecnico": None,
-                "fecha_fin": s.fecha_aprobacion_supervisor,
-                "status": s.estado,
-            })
+                }
+            )
 
-    # ---------- Ordenar: mes actual hacia abajo ----------
+    # ============================================================
+    # ORDENAR: MES ACTUAL HACIA ABAJO
+    # ============================================================
+
     MONTHS_ES = {
-        "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-        "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10,
-        "noviembre": 11, "diciembre": 12,
+        "enero": 1,
+        "febrero": 2,
+        "marzo": 3,
+        "abril": 4,
+        "mayo": 5,
+        "junio": 6,
+        "julio": 7,
+        "agosto": 8,
+        "septiembre": 9,
+        "setiembre": 9,
+        "octubre": 10,
+        "noviembre": 11,
+        "diciembre": 12,
     }
 
     def parse_mes_token(txt: str) -> int | None:
         """
-        Devuelve YYYYMM (p.ej. 202509) a partir de mes_produccion.
-        Acepta: '2025-09', '2025/9', '09-2025', 'septiembre 2025', 'Sep 2025', etc.
+        Devuelve YYYYMM a partir de mes_produccion.
         """
+
         if not txt:
             return None
+
         s = str(txt).strip().lower()
 
-        m = re.search(r"(\d{4})[/-](\d{1,2})", s)  # YYYY-MM o YYYY/MM
+        m = re.search(
+            r"(\d{4})[/-](\d{1,2})",
+            s,
+        )
+
         if m:
-            y, mm = int(m.group(1)), int(m.group(2))
+            y = int(m.group(1))
+            mm = int(m.group(2))
             return y * 100 + mm
 
-        m = re.search(r"(\d{1,2})[/-](\d{4})", s)  # MM-YYYY o MM/YYYY
+        m = re.search(
+            r"(\d{1,2})[/-](\d{4})",
+            s,
+        )
+
         if m:
-            mm, y = int(m.group(1)), int(m.group(2))
+            mm = int(m.group(1))
+            y = int(m.group(2))
             return y * 100 + mm
 
-        m = re.search(r"([a-záéíóúü]{3,})\s+(\d{4})", s)  # nombre mes + año
+        m = re.search(
+            r"([a-záéíóúü]{3,})\s+(\d{4})",
+            s,
+        )
+
         if m:
             name = m.group(1)
             y = int(m.group(2))
+
             for full, num in MONTHS_ES.items():
                 if name.startswith(full[:3]):
                     return y * 100 + num
+
         return None
 
     for r in filas:
+
         ym = parse_mes_token(r["mes_produccion"])
+
         r["_ym_key"] = ym if ym is not None else -1
 
-        # Normalizar fecha_fin a date para evitar comparar datetime vs date
         fin = r["fecha_fin"]
+
         if isinstance(fin, datetime):
             dkey = fin.date()
+
         elif isinstance(fin, date):
             dkey = fin
+
         else:
             dkey = date(1900, 1, 1)
+
         r["_date_key"] = dkey
 
-    # Orden final: mes (YYYYMM) desc y, a igualdad, fecha_fin desc
-    filas.sort(key=lambda x: (x["_ym_key"], x["_date_key"]), reverse=True)
+    filas.sort(
+        key=lambda x: (
+            x["_ym_key"],
+            x["_date_key"],
+        ),
+        reverse=True,
+    )
 
-     # ---------- Paginación ----------
+    # ============================================================
+    # PAGINACIÓN
+    # ============================================================
+
     page_number = request.GET.get("page") or 1
 
-    # Tratar "todos" como 100 y nunca pasar de 100
     try:
         if cantidad == "todos":
             per_page = 100
         else:
             per_page = int(cantidad)
-        per_page = max(5, min(per_page, 100))  # mínimo 5, máximo 100
+
+        per_page = max(
+            5,
+            min(per_page, 100),
+        )
+
     except ValueError:
         per_page = 10
 
-    paginator = Paginator(filas, per_page)
+    paginator = Paginator(
+        filas,
+        per_page,
+    )
+
     pagina = paginator.get_page(page_number)
 
-    # Normalizar cantidad para que el select quede coherente
     cantidad = str(per_page)
 
+    # ============================================================
+    # ESTADOS
+    # ============================================================
+
     estado_choices = [
-        ('aprobado_supervisor', 'Aprobado por Supervisor'),
-        ('aprobado_pm', 'Aprobado por PM'),
-        ('aprobado_finanzas', 'Aprobado por Finanzas'),
-        ('ajuste_bono', '🎁 Bono'),
-        ('ajuste_adelanto', '⏩ Adelanto'),
-        ('ajuste_descuento', '➖ Descuento'),
+        (
+            "aprobado_supervisor",
+            "Aprobado por Supervisor",
+        ),
+        (
+            "aprobado_pm",
+            "Aprobado por PM",
+        ),
+        (
+            "aprobado_finanzas",
+            "Aprobado por Finanzas",
+        ),
+        (
+            "ajuste_bono",
+            "🎁 Bono",
+        ),
+        (
+            "ajuste_adelanto",
+            "⏩ Adelanto",
+        ),
+        (
+            "ajuste_descuento",
+            "➖ Descuento",
+        ),
     ]
 
     filters_dict = {
@@ -263,32 +394,53 @@ def produccion_admin(request):
         "f_region": f_region,
         "cantidad": cantidad,
     }
+
     filters_qs = urlencode({k: v for k, v in filters_dict.items() if v})
 
-    # Usuarios activos para el modal de Ajuste
-    User = get_user_model()
-    usuarios = User.objects.filter(is_active=True).order_by(
-        'first_name', 'last_name', 'username')
+    # ============================================================
+    # USUARIOS PARA MODAL DE AJUSTES
+    # ============================================================
 
-    return render(request, "operaciones/produccion_admin.html", {
-        "current_month": current_month,
-        "pagina": pagina,
-        "cantidad": cantidad,
-        "filtros": filtros,
-        "estado_choices": estado_choices,
-        "f_tecnico": f_tecnico,
-        "f_region": f_region,
-        "filters_qs": filters_qs,
-        "usuarios": usuarios,
-    })
+    User = get_user_model()
+
+    usuarios = User.objects.filter(is_active=True).order_by(
+        "first_name",
+        "last_name",
+        "username",
+    )
+
+    # ============================================================
+    # RENDER
+    # ============================================================
+
+    return render(
+        request,
+        "operaciones/produccion_admin.html",
+        {
+            "current_month": current_month,
+            "pagina": pagina,
+            "cantidad": cantidad,
+            "filtros": filtros,
+            "estado_choices": estado_choices,
+            "f_tecnico": f_tecnico,
+            "f_region": f_region,
+            "filters_qs": filters_qs,
+            "usuarios": usuarios,
+        },
+    )
 
 
 @login_required
 def exportar_produccion_admin(request):
     """
-    Export a Excel (respeta filtros). Una fila por técnico con monto prorrateado,
-    incluyendo ajustes (bono/adelanto/descuento).
+    Exporta a Excel la producción administrativa respetando filtros.
+
+    Una fila por técnico:
+    - Hasta septiembre de 2026: prorrateo histórico.
+    - Desde octubre de 2026: tarifa individual.
+    - Ajustes: conservar cálculo histórico y signo.
     """
+
     filtros = {
         "du": (request.GET.get("du") or "").strip(),
         "id_claro": (request.GET.get("id_claro") or "").strip(),
@@ -296,363 +448,635 @@ def exportar_produccion_admin(request):
         "mes_produccion": (request.GET.get("mes_produccion") or "").strip(),
         "estado": (request.GET.get("estado") or "").strip(),
     }
+
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
     f_region = (request.GET.get("f_region") or "").strip()
 
-    # ⬅️ incluir producción + ajustes
     estados_ok = ESTADOS_PROD_Y_AJUSTES
 
+    # ============================================================
+    # QUERY BASE
+    # ============================================================
+
     qs = (
-        ServicioCotizado.objects
-        .filter(estado__in=estados_ok)
-        .prefetch_related('trabajadores_asignados')
-        .order_by('-fecha_aprobacion_supervisor', '-id')
+        ServicioCotizado.objects.filter(estado__in=estados_ok)
+        .prefetch_related("trabajadores_asignados")
+        .order_by(
+            "-fecha_aprobacion_supervisor",
+            "-id",
+        )
     )
 
-    # Filtros
+    # ============================================================
+    # FILTROS
+    # ============================================================
+
     if filtros["du"]:
         raw_du = filtros["du"]
-        m = re.search(r"du\s*0*([0-9]+)", raw_du, re.IGNORECASE)
+
+        m = re.search(
+            r"du\s*0*([0-9]+)",
+            raw_du,
+            re.IGNORECASE,
+        )
+
         term = m.group(1) if m else re.sub(r"\D+", "", raw_du)
+
         if term:
             qs = qs.filter(du__icontains=term)
 
     if filtros["id_claro"]:
         qs = qs.filter(id_claro__icontains=filtros["id_claro"])
+
     if filtros["id_new"]:
         qs = qs.filter(id_new__icontains=filtros["id_new"])
+
     if filtros["mes_produccion"]:
         qs = qs.filter(mes_produccion__icontains=filtros["mes_produccion"])
+
     if filtros["estado"]:
         if filtros["estado"] in estados_ok:
             qs = qs.filter(estado=filtros["estado"])
         else:
             qs = qs.none()
+
     if f_region:
         qs = qs.filter(region__icontains=f_region)
 
-    # Armar filas export
-    filas = []
-    for s in qs:
-        asignados = list(s.trabajadores_asignados.all())
-        n = len(asignados) or 1
+    # ============================================================
+    # ARMAR FILAS
+    # ============================================================
 
-        # ⬅️ monto con signo según el estado (descuento negativo, bono/adelanto positivo)
-        firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
-        parte = (Decimal(str(firmado)) / n).quantize(Decimal('0.01'))
+    filas = []
+
+    for s in qs:
+
+        asignados = list(s.trabajadores_asignados.all())
 
         if asignados:
+
             for tec in asignados:
+
+                # -----------------------------------------------
+                # FILTRO POR TÉCNICO
+                # -----------------------------------------------
+
                 if f_tecnico:
                     target = f_tecnico.lower()
-                    full_name = ((tec.first_name or "") + " " +
-                                 (tec.last_name or "")).strip().lower()
+
+                    full_name = (
+                        ((tec.first_name or "") + " " + (tec.last_name or ""))
+                        .strip()
+                        .lower()
+                    )
+
                     username = (tec.username or "").lower()
+
                     if target not in full_name and target not in username:
                         continue
 
-                filas.append((
+                # -----------------------------------------------
+                # MONTO INDIVIDUAL
+                # -----------------------------------------------
+                # Histórico: prorrateo.
+                # Octubre 2026+: tarifa individual.
+                # Ajustes: cálculo histórico.
+                # -----------------------------------------------
+
+                parte = obtener_monto_tecnico(
+                    s,
+                    tec,
+                )
+
+                parte = _monto_firmado_por_estado(
+                    parte,
+                    s.estado,
+                )
+
+                filas.append(
+                    (
+                        f"DU{s.du}",
+                        s.id_claro or "",
+                        s.region or "",
+                        s.mes_produccion or "",
+                        s.id_new or "",
+                        s.detalle_tarea or "",
+                        (tec.get_full_name() or tec.username),
+                        (
+                            s.fecha_aprobacion_supervisor.strftime("%d/%m/%Y %H:%M")
+                            if s.fecha_aprobacion_supervisor
+                            else ""
+                        ),
+                        s.estado,
+                        float(parte),
+                    )
+                )
+
+        else:
+
+            # Mantener la fila administrativa de servicios
+            # sin técnicos asignados.
+            #
+            # No se inventa una tarifa individual.
+            firmado = _monto_firmado_por_estado(
+                s.monto_mmoo,
+                s.estado,
+            )
+
+            filas.append(
+                (
                     f"DU{s.du}",
                     s.id_claro or "",
                     s.region or "",
                     s.mes_produccion or "",
                     s.id_new or "",
                     s.detalle_tarea or "",
-                    (tec.get_full_name() or tec.username) if tec else "",
-                    s.fecha_aprobacion_supervisor.strftime(
-                        "%d/%m/%Y %H:%M") if s.fecha_aprobacion_supervisor else "",
+                    "",
+                    (
+                        s.fecha_aprobacion_supervisor.strftime("%d/%m/%Y %H:%M")
+                        if s.fecha_aprobacion_supervisor
+                        else ""
+                    ),
                     s.estado,
-                    float(parte),
-                ))
-        else:
-            filas.append((
-                f"DU{s.du}",
-                s.id_claro or "",
-                s.region or "",
-                s.mes_produccion or "",
-                s.id_new or "",
-                s.detalle_tarea or "",
-                "",
-                s.fecha_aprobacion_supervisor.strftime(
-                    "%d/%m/%Y %H:%M") if s.fecha_aprobacion_supervisor else "",
-                s.estado,
-                float(parte),
-            ))
+                    float(firmado),
+                )
+            )
 
-    # Excel
+    # ============================================================
+    # EXCEL
+    # ============================================================
+
     wb = Workbook()
+
     ws = wb.active
     ws.title = "Producción"
+
     headers = [
-        "DU", "ID CLARO", "REGIÓN", "MES PRODUCCIÓN", "ID NEW", "DETALLE TAREA",
-        "TÉCNICO", "FECHA FIN", "STATUS", "MONTO TÉCNICO (CLP)"
+        "DU",
+        "ID CLARO",
+        "REGIÓN",
+        "MES PRODUCCIÓN",
+        "ID NEW",
+        "DETALLE TAREA",
+        "TÉCNICO",
+        "FECHA FIN",
+        "STATUS",
+        "MONTO TÉCNICO (CLP)",
     ]
+
     ws.append(headers)
+
     for row in filas:
         ws.append(row)
 
-    # Auto ancho
+    # ============================================================
+    # ANCHO AUTOMÁTICO
+    # ============================================================
+
     for col in ws.columns:
+
         max_len = 0
+
         letter = get_column_letter(col[0].column)
+
         for cell in col:
             try:
-                max_len = max(max_len, len(str(cell.value or "")))
+                max_len = max(
+                    max_len,
+                    len(str(cell.value or "")),
+                )
             except Exception:
                 pass
-        ws.column_dimensions[letter].width = min(max(10, max_len + 2), 60)
 
-    # Formato numérico última columna
+        ws.column_dimensions[letter].width = min(
+            max(10, max_len + 2),
+            60,
+        )
+
+    # ============================================================
+    # FORMATO MONETARIO
+    # ============================================================
+
     last_col = len(headers)
-    for col_cells in ws.iter_cols(min_col=last_col, max_col=last_col, min_row=2, values_only=False):
+
+    for col_cells in ws.iter_cols(
+        min_col=last_col,
+        max_col=last_col,
+        min_row=2,
+        values_only=False,
+    ):
+
         for c in col_cells:
-            c.number_format = '#,##0.00'
+            c.number_format = "#,##0.00"
+
+    # ============================================================
+    # RESPUESTA
+    # ============================================================
 
     resp = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        content_type=(
+            "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+        )
     )
+
     resp["Content-Disposition"] = 'attachment; filename="produccion_aprobada.xlsx"'
+
     wb.save(resp)
+
     return resp
 
 
 @login_required
 def produccion_totales_a_pagar(request):
     """
-    Totales a pagar por TÉCNICO (MENSUAL) a partir de ServiciosCotizados aprobados
-    + ajustes (bono/adelanto/descuento).
+    Totales a pagar por TÉCNICO (MENSUAL) a partir de
+    servicios aprobados + ajustes.
 
-    - Estados producción: aprobado_supervisor / aprobado_pm / aprobado_finanzas
-    - Ajustes: ajuste_bono (suma), ajuste_adelanto (suma), ajuste_descuento (resta)
-    - Prorrateo: monto_mmoo / N_tecnicos
-    - Filtros: f_month (YYYY-MM o 'Mes Año' o 'Mes de Año'), f_tecnico, f_project, f_region
-    - Desglose: lista de DUs/ajustes con su subtotal prorrateado.
+    - Hasta septiembre 2026: prorrateo histórico.
+    - Desde octubre 2026: tarifa individual.
+    - Ajustes: conservan su cálculo histórico.
+    - El bloque superior no se filtra por mes.
+    - El historial sí admite filtro por mes.
     """
+
     current_month = _yyyy_mm(timezone.localdate())
 
     f_month = (request.GET.get("f_month") or "").strip()
+
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
+
     f_project = (request.GET.get("f_project") or "").strip()
+
     f_region = (request.GET.get("f_region") or "").strip()
+
     cantidad = (request.GET.get("cantidad") or "10").strip().lower()
 
-    # ANTES: month_to_use = f_month or current_month  (esto escondía septiembre al pasar a octubre)
-    # AHORA: el mes solo afecta el HISTORIAL (abajo). Arriba NO se filtra por mes.
-    month_to_use = f_month  # <-- clave
+    # El filtro de mes afecta únicamente al historial.
+    month_to_use = f_month
 
-    # ---- Estados incluidos ----
-    EST_PROD = {"aprobado_supervisor", "aprobado_pm", "aprobado_finanzas"}
-    AJ_POS = {"ajuste_bono", "ajuste_adelanto"}        # SUMAN
-    AJ_NEG = {"ajuste_descuento"}                      # RESTA
+    # ============================================================
+    # ESTADOS
+    # ============================================================
+
+    EST_PROD = {
+        "aprobado_supervisor",
+        "aprobado_pm",
+        "aprobado_finanzas",
+    }
+
+    AJ_POS = {
+        "ajuste_bono",
+        "ajuste_adelanto",
+    }
+
+    AJ_NEG = {
+        "ajuste_descuento",
+    }
+
     estados_ok = EST_PROD | AJ_POS | AJ_NEG
 
-    # ===== 1) BASE SIN MES (servirá para el bloque superior) =====
+    # ============================================================
+    # BASE SIN FILTRO DE MES
+    # ============================================================
+
     qs_base = (
-        ServicioCotizado.objects
-        .filter(estado__in=estados_ok)
+        ServicioCotizado.objects.filter(estado__in=estados_ok)
         .prefetch_related("trabajadores_asignados")
-        .order_by("-fecha_aprobacion_supervisor", "-id")
+        .order_by(
+            "-fecha_aprobacion_supervisor",
+            "-id",
+        )
     )
 
-    # Filtros de proyecto / región (se aplican a ambos bloques)
     if f_project:
         qs_base = qs_base.filter(
-            Q(id_claro__icontains=f_project) |
-            Q(id_new__icontains=f_project) |
-            Q(detalle_tarea__icontains=f_project)
+            Q(id_claro__icontains=f_project)
+            | Q(id_new__icontains=f_project)
+            | Q(detalle_tarea__icontains=f_project)
         )
+
     if f_region:
         qs_base = qs_base.filter(region__icontains=f_region)
 
-    # ===== 2) HISTORIAL (con mes si viene) =====
-    # Creamos un clon que sí aplicará el filtro de mes
+    # ============================================================
+    # HISTORIAL
+    # ============================================================
+
     qs_hist = qs_base
 
-    # ---- Filtro MES: acepta 'YYYY-MM', 'Mes Año' y 'Mes de Año' ----
     MONTHS_ES = [
-        "enero", "febrero", "marzo", "abril", "mayo", "junio",
-        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
     ]
 
     def _aliases_for_month(token: str) -> list[str]:
+
         token = (token or "").strip()
+
         if not token:
             return []
-        out = set([token])
 
-        # YYYY-MM o YYYY/M
-        m = re.search(r"^\s*(\d{4})[/-](\d{1,2})\s*$", token)
+        out = {token}
+
+        m = re.search(
+            r"^\s*(\d{4})[/-](\d{1,2})\s*$",
+            token,
+        )
+
         if m:
             y = int(m.group(1))
             mm = int(m.group(2))
+
+            if not 1 <= mm <= 12:
+                return list(out)
+
             mm2 = str(mm).zfill(2)
-            name = MONTHS_ES[mm-1]
-            out.update({
-                f"{y}-{mm2}", f"{y}/{mm}",
-                f"{name} {y}", f"{name.capitalize()} {y}",
-                f"{name} de {y}", f"{name.capitalize()} de {y}",
-                f"{mm}-{y}", f"{mm2}-{y}", f"{mm}/{y}",
-            })
+            name = MONTHS_ES[mm - 1]
+
+            out.update(
+                {
+                    f"{y}-{mm2}",
+                    f"{y}/{mm}",
+                    f"{name} {y}",
+                    f"{name.capitalize()} {y}",
+                    f"{name} de {y}",
+                    f"{name.capitalize()} de {y}",
+                    f"{mm}-{y}",
+                    f"{mm2}-{y}",
+                    f"{mm}/{y}",
+                }
+            )
+
             return list(out)
 
-        # "mes (de) año"
         m = re.search(
-            r"^\s*([a-záéíóúü]+)\s+(?:de\s+)?(\d{4})\s*$", token.lower())
+            r"^\s*([a-záéíóúü]+)\s+(?:de\s+)?(\d{4})\s*$",
+            token.lower(),
+        )
+
         if m:
             name = m.group(1)
             y = int(m.group(2))
-            idx = next((i for i, n in enumerate(MONTHS_ES)
-                       if name.startswith(n[:3])), None)
+
+            idx = next(
+                (i for i, n in enumerate(MONTHS_ES) if name.startswith(n[:3])),
+                None,
+            )
+
             if idx is not None:
-                mm = idx+1
+                mm = idx + 1
                 mm2 = str(mm).zfill(2)
                 full = MONTHS_ES[idx]
-                out.update({
-                    f"{y}-{mm2}", f"{y}/{mm}",
-                    f"{full} {y}", f"{full.capitalize()} {y}",
-                    f"{full} de {y}", f"{full.capitalize()} de {y}",
-                    f"{mm}-{y}", f"{mm2}-{y}", f"{mm}/{y}",
-                })
+
+                out.update(
+                    {
+                        f"{y}-{mm2}",
+                        f"{y}/{mm}",
+                        f"{full} {y}",
+                        f"{full.capitalize()} {y}",
+                        f"{full} de {y}",
+                        f"{full.capitalize()} de {y}",
+                        f"{mm}-{y}",
+                        f"{mm2}-{y}",
+                        f"{mm}/{y}",
+                    }
+                )
+
             return list(out)
 
         return list(out)
 
-    # SOLO al historial le aplicamos f_month
+    # ============================================================
+    # FILTRO DE MES SOLO PARA HISTORIAL
+    # ============================================================
+
     if month_to_use:
+
         try:
-            aliases = _month_aliases(month_to_use)  # si ya existe
+            aliases = _month_aliases(month_to_use)
+
         except NameError:
             aliases = _aliases_for_month(month_to_use)
 
         cond = Q()
+
         for a in aliases:
             cond |= Q(mes_produccion__icontains=a)
+
         qs_hist = qs_hist.filter(cond)
 
-    # ===== 3) Agregador común (tu misma lógica, solo envuelta) =====
-    agregados_tipo = dict[int, dict]  # hint
+    # ============================================================
+    # AGREGADOR POR TÉCNICO
+    # ============================================================
+
+    agregados_tipo = dict[int, dict]
 
     def _agrega_por_tecnico(qs_src) -> list[dict]:
+
         agregados: agregados_tipo = {}
+
         for s in qs_src:
+
             asignados = list(s.trabajadores_asignados.all())
+
             if not asignados:
                 continue
 
-            n = len(asignados)
-            base = Decimal(str(s.monto_mmoo or 0))
-
-            # Normalizar signo según estado
-            if s.estado in AJ_NEG:
-                firmado = -abs(base)        # descuento/adelanto restan
-            elif s.estado in AJ_POS:
-                firmado = abs(base)         # bono suma
-            else:
-                firmado = base              # producción
-
-            parte = (firmado / n).quantize(Decimal("0.01"))
-
-            # Etiqueta DU
             du_label, project_id = _fmt_du_and_pid(s)
 
             for tec in asignados:
-                # Filtro por técnico (nombre/username)
+
+                # --------------------------------------------
+                # FILTRO POR TÉCNICO
+                # --------------------------------------------
+
                 if f_tecnico:
+
                     target = f_tecnico.lower()
-                    full_name = ((tec.first_name or "") + " " +
-                                 (tec.last_name or "")).strip().lower()
+
+                    full_name = (
+                        ((tec.first_name or "") + " " + (tec.last_name or ""))
+                        .strip()
+                        .lower()
+                    )
+
                     username = (tec.username or "").lower()
+
                     if target not in full_name and target not in username:
                         continue
 
+                # --------------------------------------------
+                # MONTO INDIVIDUAL
+                # --------------------------------------------
+                # Histórico: prorrateo.
+                # Octubre 2026+: tarifa del técnico.
+                # Ajustes: prorrateo histórico.
+                # --------------------------------------------
+
+                parte = obtener_monto_tecnico(
+                    s,
+                    tec,
+                )
+
+                # Conservar signo según tipo de ajuste.
+                parte = _monto_firmado_por_estado(
+                    parte,
+                    s.estado,
+                )
+
+                # --------------------------------------------
+                # DATOS DEL TÉCNICO
+                # --------------------------------------------
+
                 display_name = tec.get_full_name() or tec.username
+
                 serv_month = (s.mes_produccion or "").strip()
 
-                bucket = agregados.setdefault(tec.id, {
-                    "tecnico": tec,
-                    "display_name": display_name,
-                    "week": serv_month or (month_to_use or ""),
-                    "amount": Decimal("0.00"),
-                    "details": [],
-                    "status": "",
-                    "receipt": None,
-                })
+                bucket = agregados.setdefault(
+                    tec.id,
+                    {
+                        "tecnico": tec,
+                        "display_name": display_name,
+                        "week": (serv_month or (month_to_use or "")),
+                        "amount": Decimal("0.00"),
+                        "details": [],
+                        "status": "",
+                        "receipt": None,
+                    },
+                )
 
-                # Si mezcla meses en el mismo bucket → "(varios meses)"
+                # Si mezcla meses en un mismo bucket:
                 if bucket["week"] and serv_month and bucket["week"] != serv_month:
                     bucket["week"] = "(varios meses)"
 
+                # --------------------------------------------
+                # TOTAL Y DESGLOSE
+                # --------------------------------------------
+
                 bucket["amount"] += parte
-                bucket["details"].append({
-                    "project_id": s.id_claro or s.id_new or du_label,
-                    "du": du_label,
-                    "subtotal": parte,
-                })
+
+                bucket["details"].append(
+                    {
+                        "project_id": (s.id_claro or s.id_new or du_label),
+                        "du": du_label,
+                        "subtotal": parte,
+                    }
+                )
 
         rows = list(agregados.values())
-        rows.sort(key=lambda r: (
-            (r["tecnico"].last_name or "").lower(),
-            (r["tecnico"].first_name or "").lower(),
-            (r["tecnico"].username or "").lower(),
-        ))
+
+        rows.sort(
+            key=lambda r: (
+                (r["tecnico"].last_name or "").lower(),
+                (r["tecnico"].first_name or "").lower(),
+                (r["tecnico"].username or "").lower(),
+            )
+        )
+
         return rows
 
-    # ===== 4) Construir datasets separados =====
-    # Arriba (pendiente por pagar): SIN mes
+    # ============================================================
+    # DATASETS
+    # ============================================================
+
+    # Bloque superior: sin filtro de mes.
     rows_top = _agrega_por_tecnico(qs_base)
 
-    # Abajo (historial/paginación): CON mes si se solicitó
+    # Historial: con filtro de mes.
     rows_hist = _agrega_por_tecnico(qs_hist)
 
-        # Paginación del bloque inferior (historial)
+    # ============================================================
+    # PAGINACIÓN DEL HISTORIAL
+    # ============================================================
+
     try:
-        # Si viene "todos", lo tratamos como 100 (máximo permitido)
         if cantidad == "todos":
             per_page_raw = 100
         else:
             per_page_raw = int(cantidad)
+
     except ValueError:
-        per_page_raw = 10  # fallback seguro
+        per_page_raw = 10
 
-    # Forzamos entre 5 y 100
-    per_page = max(5, min(100, per_page_raw))
+    per_page = max(
+        5,
+        min(100, per_page_raw),
+    )
 
-    paginator = Paginator(rows_hist, per_page)
+    paginator = Paginator(
+        rows_hist,
+        per_page,
+    )
+
     page_number = request.GET.get("page") or 1
+
     pagina = paginator.get_page(page_number)
 
-    # Normalizamos cantidad para que en la plantilla coincida con el select
     cantidad = str(per_page)
 
-    filters_qs = urlencode({
-        k: v for k, v in {
-            "f_month": month_to_use,      # solo historial
+    # ============================================================
+    # CONSERVAR FILTROS
+    # ============================================================
+
+    filters_qs = urlencode(
+        {
+            k: v
+            for k, v in {
+                "f_month": month_to_use,
+                "f_tecnico": f_tecnico,
+                "f_project": f_project,
+                "f_region": f_region,
+                "cantidad": cantidad,
+            }.items()
+            if v
+        }
+    )
+
+    # ============================================================
+    # RENDER
+    # ============================================================
+
+    return render(
+        request,
+        "operaciones/produccion_totales_admin.html",
+        {
+            "current_month": current_month,
+            "selected_month": (month_to_use or ""),
+            "top": rows_top,
+            "pagina": pagina,
+            "cantidad": cantidad,
+            "f_month": (month_to_use or ""),
             "f_tecnico": f_tecnico,
             "f_project": f_project,
-            "f_region":  f_region,
-            "cantidad":  cantidad,
-        }.items() if v
-    })
-
-    return render(request, "operaciones/produccion_totales_admin.html", {
-        "current_month": current_month,
-        "selected_month": month_to_use or "",
-        "top": rows_top,          # ← independiente del mes y de ?f_month=...
-        "pagina": pagina,         # ← sí respeta el filtro de mes
-        "cantidad": cantidad,
-        "f_month": month_to_use or "",
-        "f_tecnico": f_tecnico,
-        "f_project": f_project,
-        "f_region": f_region,
-        "filters_qs": filters_qs,
-    })
+            "f_region": f_region,
+            "filters_qs": filters_qs,
+        },
+    )
 
 
 @login_required
 def exportar_totales_produccion(request):
     """
-    Exporta a Excel los totales a pagar (mensual) por técnico con detalle por DU/ajuste.
-    Respeta filtros de mes (acepta YYYY-MM y alias), técnico, proyecto y región.
+    Exporta a Excel los totales a pagar (mensual) por técnico
+    con detalle por DU/ajuste.
+
+    Respeta filtros de mes (acepta YYYY-MM y alias),
+    técnico, proyecto y región.
+
+    Reglas de cálculo:
+    - Hasta septiembre de 2026: prorrateo histórico.
+    - Desde octubre de 2026: tarifa individual por técnico.
+    - Ajustes: conservan su cálculo y signo correspondiente.
     """
     current_month = _yyyy_mm(timezone.localdate())
 
@@ -661,107 +1085,232 @@ def exportar_totales_produccion(request):
     f_project = (request.GET.get("f_project") or "").strip()
     f_region = (request.GET.get("f_region") or "").strip()
 
-    # Query base con ajustes
+    # ============================================================
+    # QUERY BASE CON PRODUCCIÓN Y AJUSTES
+    # ============================================================
+
     qs = (
-        ServicioCotizado.objects
-        .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
+        ServicioCotizado.objects.filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
         .prefetch_related("trabajadores_asignados")
         .order_by("-fecha_aprobacion_supervisor", "-id")
     )
 
-    # Filtro por mes con alias
+    # ============================================================
+    # FILTRO POR MES
+    # ============================================================
+
     if f_month:
         cond_m = Q()
+
         for a in _month_aliases(f_month):
             cond_m |= Q(mes_produccion__icontains=a)
+
         qs = qs.filter(cond_m)
+
+    # ============================================================
+    # FILTROS DE PROYECTO Y REGIÓN
+    # ============================================================
 
     if f_project:
         qs = qs.filter(
-            Q(id_claro__icontains=f_project) |
-            Q(id_new__icontains=f_project) |
-            Q(detalle_tarea__icontains=f_project)
+            Q(id_claro__icontains=f_project)
+            | Q(id_new__icontains=f_project)
+            | Q(detalle_tarea__icontains=f_project)
         )
+
     if f_region:
         qs = qs.filter(region__icontains=f_region)
 
+    # ============================================================
+    # AGREGACIÓN POR TÉCNICO
+    # ============================================================
+
     agregados: dict[int, dict] = {}
+
     for s in qs:
         asignados = list(s.trabajadores_asignados.all())
+
         if not asignados:
             continue
-        n = len(asignados)
-
-        firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
-        parte = (Decimal(str(firmado)) / n).quantize(Decimal("0.01"))
 
         du_label, project_id = _fmt_du_and_pid(s)
 
         for tec in asignados:
+
+            # ----------------------------------------------------
+            # FILTRO POR TÉCNICO
+            # ----------------------------------------------------
+
             if f_tecnico:
                 target = f_tecnico.lower()
-                full_name = ((tec.first_name or "") + " " +
-                             (tec.last_name or "")).strip().lower()
+
+                full_name = (
+                    ((tec.first_name or "") + " " + (tec.last_name or ""))
+                    .strip()
+                    .lower()
+                )
+
                 username = (tec.username or "").lower()
+
                 if target not in full_name and target not in username:
                     continue
-            b = agregados.setdefault(tec.id, {
-                "tecnico": tec,
-                "week": f_month,
-                "amount": Decimal("0.00"),
-                "details": [],
-            })
+
+            # ----------------------------------------------------
+            # MONTO INDIVIDUAL
+            # ----------------------------------------------------
+            # El servicio centralizado determina:
+            #
+            # - Prorrateo para períodos históricos.
+            # - Tarifa individual desde octubre de 2026.
+            # - Prorrateo histórico para ajustes.
+            # ----------------------------------------------------
+
+            parte = obtener_monto_tecnico(
+                s,
+                tec,
+            )
+
+            # Mantener el signo de los ajustes:
+            # descuento negativo; bono/adelanto positivo.
+            parte = _monto_firmado_por_estado(
+                parte,
+                s.estado,
+            )
+
+            # ----------------------------------------------------
+            # AGRUPAR POR TÉCNICO
+            # ----------------------------------------------------
+
+            b = agregados.setdefault(
+                tec.id,
+                {
+                    "tecnico": tec,
+                    "week": f_month,
+                    "amount": Decimal("0.00"),
+                    "details": [],
+                },
+            )
+
             b["amount"] += parte
-            b["details"].append({
-                "project_id": project_id,
-                "du": du_label,
-                "subtotal": parte,
-            })
+
+            b["details"].append(
+                {
+                    "project_id": project_id,
+                    "du": du_label,
+                    "subtotal": parte,
+                }
+            )
+
+    # ============================================================
+    # ORDENAR RESULTADOS
+    # ============================================================
 
     rows = list(agregados.values())
-    rows.sort(key=lambda r: (
-        (r["tecnico"].last_name or "").lower(),
-        (r["tecnico"].first_name or "").lower(),
-        (r["tecnico"].username or "").lower(),
-    ))
 
-    # ---- Excel ----
+    rows.sort(
+        key=lambda r: (
+            (r["tecnico"].last_name or "").lower(),
+            (r["tecnico"].first_name or "").lower(),
+            (r["tecnico"].username or "").lower(),
+        )
+    )
+
+    # ============================================================
+    # CREAR EXCEL
+    # ============================================================
+
     wb = Workbook()
+
     ws = wb.active
     ws.title = "Totales a pagar"
 
-    ws.append(["Técnico", "Mes", "Total (CLP)"])
+    ws.append(
+        [
+            "Técnico",
+            "Mes",
+            "Total (CLP)",
+        ]
+    )
+
     for r in rows:
         tech_name = r["tecnico"].get_full_name() or r["tecnico"].username
-        ws.append([tech_name, r["week"], float(r["amount"])])
 
-    # Hoja de detalle
+        ws.append(
+            [
+                tech_name,
+                r["week"],
+                float(r["amount"]),
+            ]
+        )
+
+    # ============================================================
+    # HOJA DE DETALLE POR DU
+    # ============================================================
+
     ws2 = wb.create_sheet("Detalle por DU")
-    ws2.append(["Técnico", "Mes", "Proyecto (ID)", "DU", "Subtotal (CLP)"])
+
+    ws2.append(
+        [
+            "Técnico",
+            "Mes",
+            "Proyecto (ID)",
+            "DU",
+            "Subtotal (CLP)",
+        ]
+    )
+
     for r in rows:
         tech_name = r["tecnico"].get_full_name() or r["tecnico"].username
-        for d in r["details"]:
-            ws2.append([tech_name, r["week"], d["project_id"],
-                       d["du"], float(d["subtotal"])])
 
-    # Anchos auto
+        for d in r["details"]:
+            ws2.append(
+                [
+                    tech_name,
+                    r["week"],
+                    d["project_id"],
+                    d["du"],
+                    float(d["subtotal"]),
+                ]
+            )
+
+    # ============================================================
+    # AJUSTAR ANCHOS DE COLUMNAS
+    # ============================================================
+
     for sheet in (ws, ws2):
         for col in sheet.columns:
             max_len = 0
+
             letter = get_column_letter(col[0].column)
+
             for cell in col:
                 try:
-                    max_len = max(max_len, len(str(cell.value or "")))
+                    max_len = max(
+                        max_len,
+                        len(str(cell.value or "")),
+                    )
                 except Exception:
                     pass
+
             sheet.column_dimensions[letter].width = min(
-                max(12, max_len + 2), 60)
+                max(12, max_len + 2),
+                60,
+            )
+
+    # ============================================================
+    # RESPUESTA HTTP
+    # ============================================================
 
     resp = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        content_type=(
+            "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+        )
     )
+
     resp["Content-Disposition"] = 'attachment; filename="totales_a_pagar_mensual.xlsx"'
+
     wb.save(resp)
+
     return resp
 
 
@@ -826,6 +1375,7 @@ def _fmt_du_and_pid(s) -> tuple[str, str]:
 
 def _sync_monthly_totals(month: str, create_missing: bool = True) -> dict:
     aliases = _month_aliases(month)
+
     cond = Q()
     for a in aliases:
         cond |= Q(mes_produccion__icontains=a)
@@ -833,70 +1383,178 @@ def _sync_monthly_totals(month: str, create_missing: bool = True) -> dict:
     totals: dict[int, Decimal] = {}
 
     servicios = (
-        ServicioCotizado.objects
-        .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)   # ← incluir ajustes
+        ServicioCotizado.objects.filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
         .filter(cond)
         .prefetch_related("trabajadores_asignados")
-        .only("id", "du", "id_claro", "id_new", "monto_mmoo", "estado")
+        .only(
+            "id",
+            "du",
+            "id_claro",
+            "id_new",
+            "mes_produccion",
+            "monto_mmoo",
+            "estado",
+        )
     )
 
     for s in servicios:
         asignados = list(s.trabajadores_asignados.all())
+
         if not asignados:
             continue
-        n = len(asignados)
-        firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
-        parte = (Decimal(str(firmado)) / n).quantize(Decimal("0.01"))
-        for tec in asignados:
-            totals[tec.id] = totals.get(tec.id, Decimal("0.00")) + parte
 
-    existing = {(mp.technician_id, mp.month): mp
-                for mp in MonthlyPayment.objects.filter(month=month)}
+        for tec in asignados:
+            parte = obtener_monto_tecnico(s, tec)
+
+            # Mantener el signo correcto de bonos,
+            # adelantos y descuentos.
+            parte = _monto_firmado_por_estado(
+                parte,
+                s.estado,
+            )
+
+            totals[tec.id] = (
+                totals.get(
+                    tec.id,
+                    Decimal("0.00"),
+                )
+                + parte
+            )
+
     updated = created = deleted = 0
 
-    for tech_id, amount in totals.items():
-        key = (tech_id, month)
-        mp = existing.pop(key, None)
-        if mp:
-            if mp.amount != amount:
-                mp.amount = amount
-                save_fields = ["amount", "updated_at"]
-                if mp.status == "approved_user":
-                    mp.status = "pending_payment"
-                    save_fields.append("status")
-                mp.save(update_fields=save_fields)
-                updated += 1
-        else:
-            if create_missing and amount != 0:
+    # ============================================================
+    # PROTEGER PERÍODOS HISTÓRICOS
+    # ============================================================
+    #
+    # La sincronización de tarifas individuales
+    # comienza en octubre de 2026.
+    #
+    # Los pagos históricos existentes no se modifican.
+    # ============================================================
+
+    if month < "2026-10":
+        return {
+            "updated": 0,
+            "created": 0,
+            "deleted": 0,
+        }
+
+    with transaction.atomic():
+
+        existing = {
+            (mp.technician_id, mp.month): mp
+            for mp in MonthlyPayment.objects.select_for_update().filter(month=month)
+        }
+
+        for tech_id, amount in totals.items():
+
+            amount = amount.quantize(Decimal("0.01"))
+
+            key = (tech_id, month)
+
+            mp = existing.pop(
+                key,
+                None,
+            )
+
+            if mp:
+
+                # ====================================================
+                # CORRECCIÓN: PROTEGER PAGOS APROBADOS Y PAGADOS
+                # ====================================================
+                #
+                # No modificar importes que ya fueron:
+                #
+                # - aprobados por el usuario;
+                # - enviados a pago;
+                # - pagados.
+                #
+                # Sólo se recalculan los estados que todavía
+                # permiten modificaciones.
+                # ====================================================
+
+                if mp.status in {
+                    "approved_user",
+                    "pending_payment",
+                    "paid",
+                }:
+                    continue
+
+                if mp.amount != amount:
+
+                    mp.amount = amount
+
+                    # Conservar el estado actual:
+                    # pending_user o rejected_user.
+
+                    mp.save(
+                        update_fields=[
+                            "amount",
+                            "updated_at",
+                        ]
+                    )
+
+                    updated += 1
+
+            elif create_missing and amount != 0:
+
                 MonthlyPayment.objects.create(
                     technician_id=tech_id,
                     month=month,
                     amount=amount,
                     status="pending_user",
                 )
+
                 created += 1
 
-    # NO borrar rechazados; mantenerlos para poder restablecerlos.
-    for _key, mp in existing.items():
-        if mp.status == "paid":
-            # nunca tocar pagados
-            continue
+        # ========================================================
+        # REGISTROS SIN PRODUCCIÓN ACTUAL
+        # ========================================================
 
-        if mp.status == "rejected_user":
-            # conservar el registro rechazado, pero sincronizar monto (por si cambió)
-            new_amount = totals.get(mp.technician_id, Decimal("0.00"))
-            if mp.amount != new_amount:
-                mp.amount = new_amount
-                mp.save(update_fields=["amount", "updated_at"])
-                updated += 1
-            continue
+        for _key, mp in existing.items():
 
-        # para los demás estados no pagados (pending_user/approved_user/pending_payment):
-        # si ya no hay total para ese técnico-mes, se elimina
-        mp.delete()
-        deleted += 1
+            # No eliminar pagos realizados ni registros
+            # que ya tengan aprobación administrativa.
 
-    return {"updated": updated, "created": created, "deleted": deleted}
+            if mp.status in {
+                "paid",
+                "approved_user",
+                "pending_payment",
+            }:
+                continue
+
+            if mp.status == "rejected_user":
+
+                if mp.amount != Decimal("0.00"):
+
+                    mp.amount = Decimal("0.00")
+
+                    mp.save(
+                        update_fields=[
+                            "amount",
+                            "updated_at",
+                        ]
+                    )
+
+                    updated += 1
+
+                continue
+
+            # Sólo se elimina un registro sin producción
+            # que todavía esté pendiente de aprobación.
+
+            if mp.status == "pending_user":
+
+                mp.delete()
+
+                deleted += 1
+
+    return {
+        "updated": updated,
+        "created": created,
+        "deleted": deleted,
+    }
 
 
 def _prev_month(yyyy_mm: str) -> str:
@@ -913,7 +1571,7 @@ def admin_monthly_payments(request):
     day = today.day  # (ya no se usa para decidir qué mostrar)
 
     # ---------- Filtros del formulario ----------
-    applied = (request.GET.get("filters") == "1")
+    applied = request.GET.get("filters") == "1"
     f_month_raw = (request.GET.get("f_month") or "").strip()
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
     f_project = (request.GET.get("f_project") or "").strip()
@@ -931,8 +1589,7 @@ def admin_monthly_payments(request):
 
     # Base: todos los no pagados con monto > 0
     top_qs = (
-        MonthlyPayment.objects
-        .filter(amount__gt=0)
+        MonthlyPayment.objects.filter(amount__gt=0)
         .exclude(status="paid")
         .select_related("technician")
     )
@@ -943,144 +1600,245 @@ def admin_monthly_payments(request):
     # Filtro por técnico en el bloque superior
     if f_tecnico:
         top_qs = top_qs.filter(
-            Q(technician__first_name__icontains=f_tecnico) |
-            Q(technician__last_name__icontains=f_tecnico) |
-            Q(technician__username__icontains=f_tecnico)
+            Q(technician__first_name__icontains=f_tecnico)
+            | Q(technician__last_name__icontains=f_tecnico)
+            | Q(technician__username__icontains=f_tecnico)
         )
 
     top_qs = top_qs.order_by(
         "status", "month", "technician__first_name", "technician__last_name"
     )
 
-    # Helper para armar el detalle por DU para un técnico/mes
+    # ============================================================
+    # DETALLE POR DU PARA CADA TÉCNICO Y MES
+    # ============================================================
+    # Hasta septiembre de 2026:
+    #   conservar el prorrateo histórico.
+    #
+    # Desde octubre de 2026:
+    #   utilizar la tarifa individual del técnico.
+    #
+    # Los ajustes mantienen su cálculo histórico y su signo.
+    #
+    # Esta función es de consulta:
+    #   NO modifica MonthlyPayment ni sus estados.
+    # ============================================================
+
     def _details_for(tech_id: int, month: str):
         aliases = _month_aliases(month)
+
         cond = Q()
         for a in aliases:
             cond |= Q(mes_produccion__icontains=a)
+
         detalles = []
+
         servicios = (
-            ServicioCotizado.objects
-            .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
+            ServicioCotizado.objects.filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
             .filter(cond)
             .prefetch_related("trabajadores_asignados")
-            .only("du", "id_claro", "id_new", "monto_mmoo", "estado")
+            .only(
+                "id",
+                "du",
+                "id_claro",
+                "id_new",
+                "mes_produccion",
+                "monto_mmoo",
+                "estado",
+            )
         )
+
         for s in servicios:
             tecs = list(s.trabajadores_asignados.all())
-            if not tecs or not any(t.id == tech_id for t in tecs):
+
+            if not tecs:
                 continue
-            firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
-            parte = (Decimal(str(firmado)) / len(tecs)
-                     ).quantize(Decimal("0.01"))
+
+            tecnico = next(
+                (t for t in tecs if t.id == tech_id),
+                None,
+            )
+
+            if tecnico is None:
+                continue
+
+            # Cálculo centralizado:
+            # - histórico: prorrateo
+            # - octubre 2026+: tarifa individual
+            # - ajustes: conservar cálculo histórico
+            parte = obtener_monto_tecnico(
+                s,
+                tecnico,
+            )
+
+            # Aplicar signo correcto a bonos, adelantos
+            # y descuentos, igual que en el flujo de pagos.
+            parte = _monto_firmado_por_estado(
+                parte,
+                s.estado,
+            )
+
             du_label, project_id = _fmt_du_and_pid(s)
+
             detalles.append(
-                {"du": du_label, "project_id": project_id, "subtotal": parte})
+                {
+                    "du": du_label,
+                    "project_id": project_id,
+                    "subtotal": parte,
+                }
+            )
+
         return detalles
 
     top = list(top_qs)
+
     for r in top:
-        r.display_name = (r.technician.get_full_name()
-                          or r.technician.username)
+        r.display_name = r.technician.get_full_name() or r.technician.username
         r.week = r.month
-        r.details = _details_for(r.technician_id, r.month)
+        r.details = _details_for(
+            r.technician_id,
+            r.month,
+        )
 
     # ---------- HISTORIAL (pagados) con filtros opcionales ----------
     bottom_qs = (
-        MonthlyPayment.objects
-        .filter(status="paid")
+        MonthlyPayment.objects.filter(status="paid")
         .select_related("technician")
-        .order_by("-paid_month", "-month", "technician__first_name", "technician__last_name")
+        .order_by(
+            "-paid_month",
+            "-month",
+            "technician__first_name",
+            "technician__last_name",
+        )
     )
+
     if applied and f_month_raw:
         bottom_qs = bottom_qs.filter(month=f_month_raw)
+
     if f_paid_month:
         bottom_qs = bottom_qs.filter(paid_month__icontains=f_paid_month)
+
     if f_tecnico:
         bottom_qs = bottom_qs.filter(
-            Q(technician__first_name__icontains=f_tecnico) |
-            Q(technician__last_name__icontains=f_tecnico) |
-            Q(technician__username__icontains=f_tecnico)
+            Q(technician__first_name__icontains=f_tecnico)
+            | Q(technician__last_name__icontains=f_tecnico)
+            | Q(technician__username__icontains=f_tecnico)
         )
 
     # Filtro DU en memoria
     def _match_du(detalles, needle: str) -> bool:
         if not needle:
             return True
+
         n = needle.strip().lower()
+
         for d in detalles:
             du_text = (d.get("du") or "").lower()
             pid = (d.get("project_id") or "").lower()
+
             if n in du_text or n in pid:
                 return True
+
             if du_text.startswith("du") and du_text[2:] == n:
                 return True
+
         return False
 
     if f_du:
         tmp = []
+
         for mp in bottom_qs:
-            dets = _details_for(mp.technician_id, mp.month)
+            dets = _details_for(
+                mp.technician_id,
+                mp.month,
+            )
+
             if _match_du(dets, f_du):
                 mp.details = dets
                 tmp.append(mp)
+
         bottom_list = tmp
+
     else:
         bottom_list = list(bottom_qs)
 
     # Paginación
     if cantidad == "todos":
         pagina = bottom_list
+
     else:
         try:
-            per_page = max(5, min(100, int(cantidad)))
+            per_page = max(
+                5,
+                min(100, int(cantidad)),
+            )
+
         except ValueError:
             per_page = 10
             cantidad = "10"
-        paginator = Paginator(bottom_list, per_page)
+
+        paginator = Paginator(
+            bottom_list,
+            per_page,
+        )
+
         page_number = request.GET.get("page") or 1
+
         pagina = paginator.get_page(page_number)
 
     # Completar visibles
     page_items = list(pagina) if not isinstance(pagina, list) else pagina
+
     for r in page_items:
-        r.display_name = (r.technician.get_full_name()
-                          or r.technician.username)
+        r.display_name = r.technician.get_full_name() or r.technician.username
+
         r.week = r.month
+
         if not hasattr(r, "details"):
-            r.details = _details_for(r.technician_id, r.month)
+            r.details = _details_for(
+                r.technician_id,
+                r.month,
+            )
 
     # El input “Mes de Pago” aparece vacío si no hay filtros aplicados
     f_month_input = f_month_raw if (applied and f_month_raw) else ""
 
-    filters_qs = urlencode({
-        k: v for k, v in {
-            "filters": "1" if applied else "",
+    filters_qs = urlencode(
+        {
+            k: v
+            for k, v in {
+                "filters": "1" if applied else "",
+                "f_month": f_month_input,
+                "f_tecnico": f_tecnico,
+                "f_project": f_project,
+                "f_region": f_region,
+                "f_du": f_du,
+                "f_paid_month": f_paid_month,
+                "cantidad": cantidad,
+            }.items()
+            if v
+        }
+    )
+
+    # selected_month: muestra el mes actual en la cabecera
+    return render(
+        request,
+        "operaciones/produccion_totales_admin.html",
+        {
+            "current_month": current_month,
+            "selected_month": current_month,
+            "top": top,
+            "pagina": pagina,
+            "cantidad": cantidad,
             "f_month": f_month_input,
             "f_tecnico": f_tecnico,
             "f_project": f_project,
             "f_region": f_region,
             "f_du": f_du,
             "f_paid_month": f_paid_month,
-            "cantidad": cantidad,
-        }.items() if v
-    })
-
-    # selected_month: muestra el mes actual en la cabecera
-    return render(request, "operaciones/produccion_totales_admin.html", {
-        "current_month": current_month,
-        "selected_month": current_month,
-        "top": top,
-        "pagina": pagina,
-        "cantidad": cantidad,
-        "f_month": f_month_input,
-        "f_tecnico": f_tecnico,
-        "f_project": f_project,
-        "f_region": f_region,
-        "f_du": f_du,
-        "f_paid_month": f_paid_month,
-        "filters_qs": filters_qs,
-    })
+            "filters_qs": filters_qs,
+        },
+    )
 
 
 log = logging.getLogger('presign_receipt_monthly')
@@ -1202,110 +1960,181 @@ def admin_unpay_monthly(request, pk: int):
 def user_monthly_payments(request):
     """
     Vista del técnico:
-    - Sincroniza TODOS los meses (hasta el mes actual) donde el técnico tenga producción/ajustes.
-    - Lista sus MonthlyPayment con desglose (DU/AJUSTE) y TOTAL.
-    - Botones Aprobar/Rechazar: mes en curso desde el 26; meses anteriores, siempre.
+    - Sincroniza los períodos con producción aprobada y ajustes.
+    - Conserva los pagos históricos anteriores a octubre de 2026.
+    - Desde octubre de 2026 utiliza tarifas individuales.
+    - Muestra el desglose por DU y el total mensual.
+    - Conserva las reglas existentes de aprobación y rechazo.
     """
+
     today = timezone.localdate()
     current_month = _yyyy_mm(today)
 
-    # === 1) Descubrir meses a sincronizar para ESTE técnico ===
-    # Incluye producción aprobada + ajustes (bono/adelanto/descuento)
-    qs_serv = (
-        ServicioCotizado.objects
-        .filter(estado__in=ESTADOS_PROD_Y_AJUSTES, trabajadores_asignados=request.user)
-        .only("mes_produccion")
-    )
+    # ============================================================
+    # 1. DESCUBRIR MESES CON PRODUCCIÓN
+    # ============================================================
+
+    qs_serv = ServicioCotizado.objects.filter(
+        estado__in=ESTADOS_PROD_Y_AJUSTES,
+        trabajadores_asignados=request.user,
+    ).only("mes_produccion")
 
     meses_detectados: set[str] = set()
+
     for s in qs_serv:
+
         txt = (s.mes_produccion or "").strip()
+
         if not txt:
             continue
-        # Intenta normalizar a "YYYY-MM" (si falla, usa alias tal cual)
-        norm = _yyyymm_from_mes_texto(txt) if ' ' in txt else txt
+
+        norm = _yyyymm_from_mes_texto(txt) if " " in txt else txt
+
         if isinstance(norm, str) and len(norm) >= 7 and norm[4] == "-":
             meses_detectados.add(norm[:7])
+
         else:
-            # fallback: si viene "2025-9" o similar, intenta normalizar
-            m = re.match(r"^\s*(\d{4})[/-](\d{1,2})\s*$", txt)
+            m = re.match(
+                r"^\s*(\d{4})[/-](\d{1,2})\s*$",
+                txt,
+            )
+
             if m:
                 y, mm = int(m.group(1)), int(m.group(2))
+
                 meses_detectados.add(f"{y:04d}-{mm:02d}")
 
-    # Garantiza al menos mes actual
     meses_detectados.add(current_month)
 
-    # Mantén sólo meses <= actual
     meses_a_sync = sorted([m for m in meses_detectados if m <= current_month])
 
-    # === 2) Sincronizar cada mes detectado para este técnico ===
-    # Nota: _sync_monthly_totals crea/actualiza para todos los técnicos, lo cual está OK.
+    # ============================================================
+    # 2. SINCRONIZAR PAGOS
+    # ============================================================
+
     for m in meses_a_sync:
-        _sync_monthly_totals(m, create_missing=True)
 
-    # === 3) Cargar mis MonthlyPayment (ahora sí deberían incluir septiembre, etc.) ===
-    mine = (
-        MonthlyPayment.objects
-        .filter(technician=request.user)
-        .order_by("-month")
-    )
+        # La función protege los registros históricos.
+        _sync_monthly_totals(
+            m,
+            create_missing=True,
+        )
 
-    # === 4) Preparar desglose y totales por mes sólo para ESTE usuario ===
+    # ============================================================
+    # 3. CARGAR PAGOS DEL TÉCNICO
+    # ============================================================
+
+    mine = MonthlyPayment.objects.filter(technician=request.user).order_by("-month")
+
+    # ============================================================
+    # 4. CONSTRUIR DESGLOSE POR MES
+    # ============================================================
+
     by_month = {mp.month for mp in mine}
+
     details: dict[str, list] = {}
     totals: dict[str, Decimal] = {}
 
     for m in by_month:
+
         aliases = _month_aliases(m)
+
         cond = Q()
+
         for a in aliases:
             cond |= Q(mes_produccion__icontains=a)
 
         servicios = (
-            ServicioCotizado.objects
-            .filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
+            ServicioCotizado.objects.filter(estado__in=ESTADOS_PROD_Y_AJUSTES)
             .filter(cond)
             .prefetch_related("trabajadores_asignados")
-            .only("du", "id_claro", "id_new", "monto_mmoo", "estado")
+            .only(
+                "du",
+                "id_claro",
+                "id_new",
+                "mes_produccion",
+                "monto_mmoo",
+                "estado",
+            )
         )
 
         tot_m = Decimal("0.00")
         det_m = []
 
         for s in servicios:
+
             tecs = list(s.trabajadores_asignados.all())
-            if not tecs or not any(t.id == request.user.id for t in tecs):
+
+            if not tecs:
                 continue
 
-            firmado = _monto_firmado_por_estado(s.monto_mmoo, s.estado)
-            parte = (Decimal(str(firmado)) / len(tecs)
-                     ).quantize(Decimal("0.01"))
+            if not any(t.id == request.user.id for t in tecs):
+                continue
+
+            # ====================================================
+            # IMPORTE INDIVIDUAL DEL TÉCNICO
+            # ====================================================
+
+            parte = obtener_monto_tecnico(
+                s,
+                request.user,
+            )
+
+            parte = _monto_firmado_por_estado(
+                parte,
+                s.estado,
+            )
+
             du_label, project_id = _fmt_du_and_pid(s)
 
             det_m.append(
-                {"du": du_label, "project_id": project_id, "subtotal": parte})
+                {
+                    "du": du_label,
+                    "project_id": project_id,
+                    "subtotal": parte,
+                }
+            )
+
             tot_m += parte
 
         if det_m:
             details[m] = det_m
+
         totals[m] = tot_m
 
-    # Inyecta 'details' y un 'display_amount' robusto
+    # ============================================================
+    # 5. MOSTRAR IMPORTES
+    # ============================================================
+
     for mp in mine:
-        mp.details = details.get(mp.month, [])
+
+        mp.details = details.get(
+            mp.month,
+            [],
+        )
+
+        # El registro mensual es la fuente del importe
+        # aprobado o pendiente de aprobación.
         mp.display_amount = (
             Decimal(str(mp.amount)).quantize(Decimal("0.01"))
             if getattr(mp, "amount", None) is not None
-            else totals.get(mp.month, Decimal("0.00")).quantize(Decimal("0.01"))
+            else totals.get(
+                mp.month,
+                Decimal("0.00"),
+            ).quantize(Decimal("0.01"))
         )
 
     can_approve_today = today.day >= 26
-    return render(request, "operaciones/pagos_usuario_mensual.html", {
-        "current_month": current_month,
-        "mine": mine,
-        "can_approve_today": can_approve_today,
-    })
+
+    return render(
+        request,
+        "operaciones/pagos_usuario_mensual.html",
+        {
+            "current_month": current_month,
+            "mine": mine,
+            "can_approve_today": can_approve_today,
+        },
+    )
 
 
 # ---- Helper para detectar (año, mes) del MonthlyPayment ----
@@ -1477,56 +2306,102 @@ def produccion_tecnico(request):
     q_text = (request.GET.get("id_claro") or "").strip()
     q_month = (request.GET.get("mes_produccion") or "").strip()
 
-    # 🔹 ahora usamos raw_cantidad y luego la normalizamos / limitamos a 100
+    # 🔹 Ahora usamos raw_cantidad y luego la normalizamos / limitamos a 100
     raw_cantidad = (request.GET.get("cantidad") or "10").strip().lower()
 
-    # 👉 incluir ajustes para que se muestren al usuario
+    # 👉 Incluir ajustes para que se muestren al usuario
     AJUSTES = ["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"]
 
     qs = (
-        ServicioCotizado.objects
-        .filter(
+        ServicioCotizado.objects.filter(
             Q(estado__in=APROBADOS_OK) | Q(estado__in=AJUSTES),
-            trabajadores_asignados=request.user
+            trabajadores_asignados=request.user,
         )
         .order_by("-fecha_aprobacion_supervisor", "-id")
         .prefetch_related("trabajadores_asignados")
     )
 
-    # ====== Encabezado (mes actual) ======
+    # ============================================================
+    # ENCABEZADO: MES ACTUAL
+    # ============================================================
+
     _y = int(current_month[:4])
     _m = int(current_month[5:7])
-    _meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-              "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+    _meses = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+    ]
+
     current_month_label = f"{_meses[_m-1]} {_y}"
 
     total_current_month = Decimal("0.00")
+
     _cond_mes = Q()
+
     for alias in _month_aliases(current_month):
         _cond_mes |= Q(mes_produccion__icontains=alias)
+
     for s in qs.filter(_cond_mes):
+
         asignados_cm = list(s.trabajadores_asignados.all())
+
         if not asignados_cm:
             continue
-        parte_cm = (Decimal(str(s.monto_mmoo or 0)) /
-                    len(asignados_cm)).quantize(Decimal("0.01"))
+
+        # ========================================================
+        # MMOO INDIVIDUAL
+        #
+        # Hasta septiembre de 2026:
+        #     Prorrateo histórico.
+        #
+        # Desde octubre de 2026:
+        #     Tarifa individual del técnico.
+        #
+        # Ajustes:
+        #     Conservan el cálculo histórico.
+        # ========================================================
+
+        parte_cm = obtener_monto_tecnico(
+            s,
+            request.user,
+        )
+
         total_current_month += parte_cm
-    # =====================================
+
+    # ============================================================
+    # FILTROS
+    # ============================================================
 
     if q_month:
         cond = Q()
+
         for alias in _month_aliases(q_month):
             cond |= Q(mes_produccion__icontains=alias)
+
         qs = qs.filter(cond)
 
     if q_text:
         qs = qs.filter(
-            Q(id_claro__icontains=q_text) |
-            Q(id_new__icontains=q_text) |
-            Q(detalle_tarea__icontains=q_text)
+            Q(id_claro__icontains=q_text)
+            | Q(id_new__icontains=q_text)
+            | Q(detalle_tarea__icontains=q_text)
         )
 
-    # === Construcción de filas (primero mes actual, luego septiembre, agosto, etc.) ===
+    # ============================================================
+    # CONSTRUCCIÓN DE FILAS
+    # ============================================================
+
     filas, total_estimado = [], Decimal("0.00")
 
     qs_mes_actual = qs.filter(_cond_mes)
@@ -1535,216 +2410,664 @@ def produccion_tecnico(request):
     # Parser robusto para "mes_produccion": "YYYY-MM" o "Octubre 2025"
     def _ym_from_mes(txt: str):
         import re
+
         if not txt:
             return (0, 0)
+
         t = str(txt).strip()
+
         # 1) Formato "YYYY-MM"
         m = re.match(r"^\s*(\d{4})-(\d{1,2})\s*$", t)
+
         if m:
             y, mm = int(m.group(1)), int(m.group(2))
             return (y, mm)
+
         # 2) Formato "Mes YYYY" en español
         mes_map = {
-            "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
-            "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9,
-            "octubre": 10, "noviembre": 11, "diciembre": 12
+            "enero": 1,
+            "febrero": 2,
+            "marzo": 3,
+            "abril": 4,
+            "mayo": 5,
+            "junio": 6,
+            "julio": 7,
+            "agosto": 8,
+            "septiembre": 9,
+            "setiembre": 9,
+            "octubre": 10,
+            "noviembre": 11,
+            "diciembre": 12,
         }
-        m2 = re.match(r"^\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+(\d{4})\s*$", t)
+
+        m2 = re.match(
+            r"^\s*([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\s+(\d{4})\s*$",
+            t,
+        )
+
         if m2:
             mes_txt = m2.group(1).lower()
             y = int(m2.group(2))
             mm = mes_map.get(mes_txt, 0)
             return (y, mm)
+
         return (0, 0)
 
     def _push(s):
         nonlocal total_estimado
+
         asignados = list(s.trabajadores_asignados.all())
+
         if not asignados:
             return
-        parte = (Decimal(str(s.monto_mmoo or 0)) /
-                 len(asignados)).quantize(Decimal("0.01"))
-        filas.append({
-            "id": s.id,
-            "du": s.du,
-            "id_claro": s.id_claro or "",
-            "id_new": s.id_new or "",
-            "region": s.region or "",
-            "mes_produccion": s.mes_produccion or "",
-            "detalle_tarea": s.detalle_tarea or "",
-            "estado": s.estado or "",
-            "monto_tecnico": parte,
-        })
+
+        # ========================================================
+        # MMOO POR TÉCNICO
+        # ========================================================
+
+        parte = obtener_monto_tecnico(
+            s,
+            request.user,
+        )
+
+        filas.append(
+            {
+                "id": s.id,
+                "du": s.du,
+                "id_claro": s.id_claro or "",
+                "id_new": s.id_new or "",
+                "region": s.region or "",
+                "mes_produccion": s.mes_produccion or "",
+                "detalle_tarea": s.detalle_tarea or "",
+                "estado": s.estado or "",
+                "monto_tecnico": parte,
+            }
+        )
+
         total_estimado += parte
 
     # 1) Mes actual (respetando el order_by original del queryset)
     for s in qs_mes_actual:
         _push(s)
 
-    # 2) Resto de meses, ordenados de más reciente a más antiguo por mes_produccion
+    # 2) Resto de meses, ordenados de más reciente a más antiguo
     otros_ordenados = sorted(
-        list(qs_otros),
-        key=lambda s: _ym_from_mes(s.mes_produccion),
-        reverse=True
+        list(qs_otros), key=lambda s: _ym_from_mes(s.mes_produccion), reverse=True
     )
+
     for s in otros_ordenados:
         _push(s)
-    # ====================================================================
 
-    # 🔹 Lógica de paginación: máx 100, igual que Mis Rendiciones
+    # ============================================================
+    # PAGINACIÓN
+    # ============================================================
+
     if raw_cantidad == "todos":
         per_page = 100
         cantidad = "100"
+
     else:
         try:
             per_page = int(raw_cantidad)
+
         except (TypeError, ValueError):
             per_page = 10
             cantidad = "10"
+
         else:
             if per_page < 1:
                 per_page = 10
                 cantidad = "10"
+
             elif per_page > 100:
                 per_page = 100
                 cantidad = "100"
+
             else:
                 cantidad = raw_cantidad
 
     paginator = Paginator(filas, per_page)
+
     pagina = paginator.get_page(request.GET.get("page") or 1)
 
-    return render(request, "operaciones/produccion_tecnico.html", {
-        "current_month": current_month,
-        "current_month_label": current_month_label,
-        "total_current_month": total_current_month,
-        "pagina": pagina,
-        "cantidad": cantidad,
-        "id_claro": q_text,
-        "mes_produccion": q_month,
-        "total_estimado": total_estimado,
-    })
+    return render(
+        request,
+        "operaciones/produccion_tecnico.html",
+        {
+            "current_month": current_month,
+            "current_month_label": current_month_label,
+            "total_current_month": total_current_month,
+            "pagina": pagina,
+            "cantidad": cantidad,
+            "id_claro": q_text,
+            "mes_produccion": q_month,
+            "total_estimado": total_estimado,
+        },
+    )
 
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
-@rol_requerido('usuario')
+@rol_requerido("usuario")
 def exportar_produccion_pdf(request):
+
     try:
+
         usuario = request.user
+
         id_new = request.GET.get("id_new", "")
-        mes_produccion = request.GET.get("mes_produccion", "")
-        filtro_pdf = request.GET.get("filtro_pdf", "mes_actual")
-
-        # Traducción manual de meses
-        meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-                    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-        now_local = timezone.localtime()
-        mes_actual = f"{meses_es[now.month]} {now.year}"
-
-        # Texto de filtro
-        if filtro_pdf == "mes_actual":
-            filtro_seleccionado = f"Solo mes actual: {mes_actual}"
-        elif filtro_pdf == "filtro_actual":
-            filtro_seleccionado = f"Con filtros aplicados: {mes_produccion}" if mes_produccion else "Con filtros aplicados"
-        else:
-            filtro_seleccionado = "Toda la producción"
-
-        # Query base
-        servicios = ServicioCotizado.objects.filter(
-            trabajadores_asignados=usuario,
-            estado='aprobado_supervisor'
+        mes_produccion = request.GET.get(
+            "mes_produccion",
+            "",
         )
 
-        # Filtro según selección
+        filtro_pdf = request.GET.get(
+            "filtro_pdf",
+            "mes_actual",
+        )
+
+        # ========================================================
+        # MESES EN ESPAÑOL
+        # ========================================================
+
+        meses_es = [
+            "",
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
+        ]
+
+        now_local = timezone.localtime()
+
+        mes_actual = f"{meses_es[now_local.month]} " f"{now_local.year}"
+
+        # ========================================================
+        # TEXTO DEL FILTRO
+        # ========================================================
+
+        if filtro_pdf == "mes_actual":
+
+            filtro_seleccionado = f"Solo mes actual: {mes_actual}"
+
+        elif filtro_pdf == "filtro_actual":
+
+            filtro_seleccionado = (
+                f"Con filtros aplicados: {mes_produccion}"
+                if mes_produccion
+                else "Con filtros aplicados"
+            )
+
+        else:
+
+            filtro_seleccionado = "Toda la producción"
+
+        # ========================================================
+        # QUERY BASE
+        # ========================================================
+
+        servicios = ServicioCotizado.objects.filter(
+            trabajadores_asignados=usuario,
+            estado="aprobado_supervisor",
+        )
+
+        # ========================================================
+        # FILTROS
+        # ========================================================
+
         if filtro_pdf == "filtro_actual":
+
             if id_new:
                 servicios = servicios.filter(id_new__icontains=id_new)
+
             if mes_produccion:
-                servicios = servicios.filter(
-                    mes_produccion__icontains=mes_produccion)
+                servicios = servicios.filter(mes_produccion__icontains=mes_produccion)
+
         elif filtro_pdf == "mes_actual":
+
             servicios = servicios.filter(mes_produccion__iexact=mes_actual)
 
-        # Si no hay datos, lanzamos excepción
+        # ========================================================
+        # VALIDAR DATOS
+        # ========================================================
+
         if not servicios.exists():
             raise ValueError("No hay datos para exportar.")
 
-        # Datos PDF
-        produccion_data = []
-        total_produccion = Decimal("0.0")
-        for servicio in servicios:
-            total_mmoo = servicio.monto_mmoo or Decimal("0.0")
-            total_tecnicos = servicio.trabajadores_asignados.count()
-            monto_tecnico = total_mmoo / \
-                total_tecnicos if total_tecnicos else Decimal("0.0")
+        # ========================================================
+        # PREPARAR DATOS DEL PDF
+        # ========================================================
 
-            produccion_data.append([
-                f"DU{servicio.du}",
-                servicio.id_new or "-",
-                Paragraph(servicio.detalle_tarea or "-", ParagraphStyle(
-                    'detalle_style', fontSize=9, leading=11, alignment=0)),
-                f"{monto_tecnico:,.0f}".replace(",", ".")
-            ])
+        produccion_data = []
+
+        total_produccion = Decimal("0.00")
+
+        detalle_style = ParagraphStyle(
+            "detalle_style",
+            fontSize=9,
+            leading=11,
+            alignment=0,
+        )
+
+        for servicio in servicios:
+
+            # ----------------------------------------------------
+            # MONTO DEL TÉCNICO
+            # ----------------------------------------------------
+            # Histórico: prorrateo.
+            # Octubre 2026+: tarifa individual.
+            # ----------------------------------------------------
+
+            monto_tecnico = obtener_monto_tecnico(
+                servicio,
+                usuario,
+            )
+
+            monto_tecnico = _monto_firmado_por_estado(
+                monto_tecnico,
+                servicio.estado,
+            )
+
+            produccion_data.append(
+                [
+                    f"DU{servicio.du}",
+                    servicio.id_new or "-",
+                    Paragraph(
+                        servicio.detalle_tarea or "-",
+                        detalle_style,
+                    ),
+                    f"{monto_tecnico:,.0f}".replace(
+                        ",",
+                        ".",
+                    ),
+                ]
+            )
 
             total_produccion += monto_tecnico
 
-        # Generación PDF
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4,
-                                topMargin=50, bottomMargin=50)
-        elements = []
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name="CenterTitle",
-                   alignment=1, fontSize=16, spaceAfter=20))
+        # ========================================================
+        # GENERAR PDF
+        # ========================================================
 
-        # Títulos
-        elements.append(Paragraph(
-            f"Producción del Técnico: {usuario.get_full_name()}", styles["CenterTitle"]))
-        elements.append(Paragraph(
-            f"<b>Total Producción:</b> ${total_produccion:,.0f} CLP".replace(",", "."), styles["Normal"]))
-        elements.append(Paragraph(
-            f"<i>El total corresponde a la selección:</i> {filtro_seleccionado}.", styles["Normal"]))
-        elements.append(Paragraph(
-            f"<b>Fecha de generación:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles["Normal"]))
+        buffer = io.BytesIO()
+
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=A4,
+            topMargin=50,
+            bottomMargin=50,
+        )
+
+        elements = []
+
+        styles = getSampleStyleSheet()
+
+        styles.add(
+            ParagraphStyle(
+                name="CenterTitle",
+                alignment=1,
+                fontSize=16,
+                spaceAfter=20,
+            )
+        )
+
+        # ========================================================
+        # TÍTULOS
+        # ========================================================
+
+        elements.append(
+            Paragraph(
+                ("Producción del Técnico: " f"{usuario.get_full_name()}"),
+                styles["CenterTitle"],
+            )
+        )
+
+        elements.append(
+            Paragraph(
+                ("<b>Total Producción:</b> " f"${total_produccion:,.0f} CLP").replace(
+                    ",", "."
+                ),
+                styles["Normal"],
+            )
+        )
+
+        elements.append(
+            Paragraph(
+                (
+                    "<i>El total corresponde a la selección:</i> "
+                    f"{filtro_seleccionado}."
+                ),
+                styles["Normal"],
+            )
+        )
+
+        elements.append(
+            Paragraph(
+                (
+                    "<b>Fecha de generación:</b> "
+                    f"{datetime.now().strftime('%d/%m/%Y %H:%M')}"
+                ),
+                styles["Normal"],
+            )
+        )
+
         elements.append(Spacer(1, 12))
 
-        # Tabla
-        data = [["DU", "ID NEW", "Detalle",
-                 "Producción (CLP)"]] + produccion_data
-        table = Table(data, colWidths=[70, 100, 300, 80])
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0e7490")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 11),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1),
-             [colors.whitesmoke, colors.lightgrey]),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.gray),
-        ]))
+        # ========================================================
+        # TABLA
+        # ========================================================
+
+        data = [
+            [
+                "DU",
+                "ID NEW",
+                "Detalle",
+                "Producción (CLP)",
+            ]
+        ] + produccion_data
+
+        table = Table(
+            data,
+            colWidths=[
+                70,
+                100,
+                300,
+                80,
+            ],
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    (
+                        "BACKGROUND",
+                        (0, 0),
+                        (-1, 0),
+                        colors.HexColor("#0e7490"),
+                    ),
+                    (
+                        "TEXTCOLOR",
+                        (0, 0),
+                        (-1, 0),
+                        colors.white,
+                    ),
+                    (
+                        "ALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "CENTER",
+                    ),
+                    (
+                        "VALIGN",
+                        (0, 0),
+                        (-1, -1),
+                        "TOP",
+                    ),
+                    (
+                        "FONTNAME",
+                        (0, 0),
+                        (-1, 0),
+                        "Helvetica-Bold",
+                    ),
+                    (
+                        "FONTSIZE",
+                        (0, 0),
+                        (-1, 0),
+                        11,
+                    ),
+                    (
+                        "ROWBACKGROUNDS",
+                        (0, 1),
+                        (-1, -1),
+                        [
+                            colors.whitesmoke,
+                            colors.lightgrey,
+                        ],
+                    ),
+                    (
+                        "GRID",
+                        (0, 0),
+                        (-1, -1),
+                        0.5,
+                        colors.gray,
+                    ),
+                ]
+            )
+        )
+
         elements.append(table)
 
-        # Firma
+        # ========================================================
+        # FIRMA
+        # ========================================================
+
         elements.append(Spacer(1, 40))
+
         elements.append(
-            Paragraph("<b>Firma del Técnico:</b>", styles["Normal"]))
+            Paragraph(
+                "<b>Firma del Técnico:</b>",
+                styles["Normal"],
+            )
+        )
+
         elements.append(Spacer(1, 20))
-        elements.append(Paragraph(
-            f"__________________________<br/>{usuario.get_full_name()}", styles["Normal"]))
+
+        elements.append(
+            Paragraph(
+                ("__________________________<br/>" f"{usuario.get_full_name()}"),
+                styles["Normal"],
+            )
+        )
+
+        # ========================================================
+        # RESPUESTA PDF
+        # ========================================================
 
         doc.build(elements)
+
         buffer.seek(0)
-        response = HttpResponse(buffer, content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="produccion.pdf"'
+
+        response = HttpResponse(
+            buffer,
+            content_type="application/pdf",
+        )
+
+        response["Content-Disposition"] = 'attachment; filename="produccion.pdf"'
+
         return response
 
     except Exception as e:
+
         logger.error(f"Error exportando PDF: {e}")
-        return HttpResponse(f"Error generando PDF: {e}", status=500)
+
+        return HttpResponse(
+            f"Error generando PDF: {e}",
+            status=500,
+        )
+
+
+@login_required
+def exportar_pagos_pendientes_excel(request):
+    """
+    Exporta los pagos pendientes que aparecen en
+    Totales a pagar.
+
+    Utiliza MonthlyPayment.amount como fuente del total.
+    No sincroniza, recalcula ni modifica pagos.
+    """
+
+    current_month = _yyyy_mm(timezone.localdate())
+
+    f_tecnico = (request.GET.get("f_tecnico") or "").strip()
+
+    pagos = (
+        MonthlyPayment.objects.filter(
+            amount__gt=0,
+            month__lte=current_month,
+        )
+        .exclude(status="paid")
+        .select_related("technician")
+    )
+
+    if f_tecnico:
+        pagos = pagos.filter(
+            Q(technician__first_name__icontains=f_tecnico)
+            | Q(technician__last_name__icontains=f_tecnico)
+            | Q(technician__username__icontains=f_tecnico)
+        )
+
+    pagos = pagos.order_by(
+        "status",
+        "month",
+        "technician__first_name",
+        "technician__last_name",
+    )
+
+    wb = Workbook()
+
+    # ========================================================
+    # HOJA 1: PAGOS PENDIENTES
+    # ========================================================
+
+    ws = wb.active
+    ws.title = "Pagos pendientes"
+
+    ws.append(
+        [
+            "Técnico",
+            "Mes de pago",
+            "Total (CLP)",
+            "Estado",
+            "Motivo rechazo",
+        ]
+    )
+
+    estados = {
+        "pending_user": "Pendiente aprobación del técnico",
+        "approved_user": "Pendiente de pago",
+        "pending_payment": "Pendiente de pago",
+        "rejected_user": "Rechazado por el técnico",
+    }
+
+    for pago in pagos:
+        nombre = pago.technician.get_full_name() or pago.technician.username
+
+        ws.append(
+            [
+                nombre,
+                pago.month,
+                float(pago.amount),
+                estados.get(pago.status, pago.status),
+                pago.reject_reason or "",
+            ]
+        )
+
+    # ========================================================
+    # HOJA 2: DETALLE POR DU
+    # ========================================================
+
+    ws2 = wb.create_sheet("Detalle por DU")
+
+    ws2.append(
+        [
+            "Técnico",
+            "Mes",
+            "DU",
+            "Proyecto",
+            "Subtotal (CLP)",
+        ]
+    )
+
+    for pago in pagos:
+
+        nombre = pago.technician.get_full_name() or pago.technician.username
+
+        cond = Q()
+
+        for alias in _month_aliases(pago.month):
+            cond |= Q(mes_produccion__icontains=alias)
+
+        servicios = (
+            ServicioCotizado.objects.filter(
+                estado__in=ESTADOS_PROD_Y_AJUSTES,
+                trabajadores_asignados=pago.technician,
+            )
+            .filter(cond)
+            .distinct()
+        )
+
+        for servicio in servicios:
+
+            monto = obtener_monto_tecnico(
+                servicio,
+                pago.technician,
+            )
+
+            monto = _monto_firmado_por_estado(
+                monto,
+                servicio.estado,
+            )
+
+            du_label, project_id = _fmt_du_and_pid(servicio)
+
+            ws2.append(
+                [
+                    nombre,
+                    pago.month,
+                    du_label,
+                    project_id,
+                    float(monto),
+                ]
+            )
+
+    # ========================================================
+    # FORMATO
+    # ========================================================
+
+    for sheet in (ws, ws2):
+
+        for col in sheet.columns:
+
+            max_len = max(len(str(cell.value or "")) for cell in col)
+
+            letter = get_column_letter(col[0].column)
+
+            sheet.column_dimensions[letter].width = min(
+                max(12, max_len + 2),
+                60,
+            )
+
+    for row in ws.iter_rows(min_row=2):
+        row[2].number_format = "#,##0.00"
+
+    for row in ws2.iter_rows(min_row=2):
+        row[4].number_format = "#,##0.00"
+
+    # ========================================================
+    # DESCARGA
+    # ========================================================
+
+    response = HttpResponse(
+        content_type=(
+            "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+        )
+    )
+
+    response["Content-Disposition"] = 'attachment; filename="pagos_pendientes.xlsx"'
+
+    wb.save(response)
+
+    return response
 
 
 User = get_user_model()

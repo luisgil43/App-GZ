@@ -17,16 +17,11 @@
       width: 100%;
       max-width: 900px;
       margin: 0 auto;
-
       overflow: hidden;
-
       border: 1px solid #e2e8f0;
       border-radius: 1.5rem;
-
       background: #ffffff;
-
-      box-shadow:
-        0 20px 45px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.08);
     }
 
     /* ====================================================== */
@@ -36,31 +31,19 @@
     .cotizacion-field {
       width: 100%;
       min-height: 46px;
-
       border: 1px solid #cbd5e1 !important;
       border-radius: 0.85rem !important;
-
       background: #ffffff !important;
-
       padding: 0.7rem 0.85rem !important;
-
       color: #0f172a !important;
-
       font-size: 0.875rem !important;
-
       outline: none !important;
-
-      box-shadow:
-        0 1px 2px rgba(15, 23, 42, 0.04);
-
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       transition:
         border-color 0.18s ease,
         box-shadow 0.18s ease,
         background-color 0.18s ease;
     }
-    /* ====================================================== */
-    /* CAMPOS CON PREFIJO MONETARIO                           */
-    /* ====================================================== */
 
     .cotizacion-field.con-prefijo-uf {
       padding-left: 3.5rem !important;
@@ -69,11 +52,10 @@
     .cotizacion-field.con-prefijo-clp {
       padding-left: 2.75rem !important;
     }
+
     .cotizacion-field:focus {
       border-color: #22d3ee !important;
-
-      box-shadow:
-        0 0 0 3px rgba(34, 211, 238, 0.13) !important;
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.13) !important;
     }
 
     textarea.cotizacion-field {
@@ -83,14 +65,10 @@
 
     .field-label {
       display: block;
-
       margin-bottom: 0.45rem;
-
       color: #475569;
-
       font-size: 0.78rem;
       font-weight: 800;
-
       letter-spacing: 0.02em;
     }
 
@@ -108,27 +86,17 @@
 
     .month-picker-button {
       display: flex;
-
       width: 100%;
       min-height: 46px;
-
       align-items: center;
       justify-content: space-between;
-
       border: 1px solid #cbd5e1;
       border-radius: 0.85rem;
-
       background: #ffffff;
-
       padding: 0.65rem 0.8rem;
-
       color: #0f172a;
-
       cursor: pointer;
-
-      box-shadow:
-        0 1px 2px rgba(15, 23, 42, 0.04);
-
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       transition:
         border-color 0.18s ease,
         box-shadow 0.18s ease,
@@ -137,66 +105,46 @@
 
     .month-picker-button:hover {
       border-color: #94a3b8;
-
       background: #f8fafc;
     }
 
     .month-picker-button.open {
       border-color: #22d3ee;
-
-      box-shadow:
-        0 0 0 3px rgba(34, 211, 238, 0.13);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.13);
     }
 
     .month-picker-panel {
       position: absolute;
       top: calc(100% + 0.5rem);
       left: 0;
-
       z-index: 80;
-
       width: 100%;
       min-width: 320px;
-
       padding: 1rem;
-
       border: 1px solid #cbd5e1;
       border-radius: 1rem;
-
       background: rgba(255, 255, 255, 0.98);
-
-      box-shadow:
-        0 24px 60px rgba(15, 23, 42, 0.18);
-
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
     }
 
     .month-grid {
       display: grid;
-
       grid-template-columns: repeat(3, minmax(0, 1fr));
-
       gap: 0.45rem;
-
       margin-top: 0.9rem;
     }
 
     .month-option {
       min-height: 42px;
-
       border: 1px solid #e2e8f0;
       border-radius: 0.75rem;
-
       background: #f8fafc;
-
       color: #475569;
-
       font-size: 0.78rem;
       font-weight: 800;
-
       cursor: pointer;
-
       transition:
         background-color 0.16s ease,
         border-color 0.16s ease,
@@ -206,48 +154,29 @@
 
     .month-option:hover {
       transform: translateY(-1px);
-
       border-color: #67e8f9;
-
       background: #ecfeff;
-
       color: #0e7490;
     }
 
     .month-option.selected {
       border-color: #0891b2;
-
-      background:
-        linear-gradient(
-          135deg,
-          #0891b2,
-          #0e7490
-        );
-
+      background: linear-gradient(135deg, #0891b2, #0e7490);
       color: #ffffff;
-
-      box-shadow:
-        0 5px 12px rgba(8, 145, 178, 0.22);
+      box-shadow: 0 5px 12px rgba(8, 145, 178, 0.22);
     }
 
     .year-control-button {
       display: inline-flex;
-
       width: 38px;
       height: 38px;
-
       align-items: center;
       justify-content: center;
-
       border: 1px solid #cbd5e1;
       border-radius: 0.7rem;
-
       background: #ffffff;
-
       color: #475569;
-
       font-weight: 900;
-
       transition:
         background-color 0.16s ease,
         border-color 0.16s ease;
@@ -255,9 +184,7 @@
 
     .year-control-button:hover {
       border-color: #67e8f9;
-
       background: #ecfeff;
-
       color: #0e7490;
     }
 
@@ -267,9 +194,7 @@
 
     .site-lookup-status {
       min-height: 1.2rem;
-
       margin-top: 0.35rem;
-
       font-size: 0.72rem;
       font-weight: 700;
     }
@@ -280,11 +205,43 @@
 
     .errorlist {
       margin-top: 0.35rem;
-
       color: #dc2626;
-
       font-size: 0.75rem;
       font-weight: 700;
+    }
+
+    /* ====================================================== */
+    /* NUEVA SECCIÓN DE MODALIDAD                             */
+    /* ====================================================== */
+
+    .payment-info {
+      border: 1px solid #bae6fd;
+      border-radius: 0.85rem;
+      background: #f0f9ff;
+      padding: 0.85rem 1rem;
+      color: #0369a1;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      font-weight: 600;
+    }
+
+    .payment-info.tarifa {
+      border-color: #a7f3d0;
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .payment-info.cotizacion {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .field-help {
+      margin-top: 0.4rem;
+      color: #64748b;
+      font-size: 0.72rem;
+      line-height: 1.5;
     }
 
     /* ====================================================== */
@@ -328,18 +285,11 @@
 
         <div
           class="
-            flex
-            h-12 w-12
-            shrink-0
-            items-center
-            justify-center
-            rounded-2xl
-            border border-cyan-100
-            bg-gradient-to-br
-            from-cyan-50
-            to-blue-100
-            text-2xl
-            shadow-sm
+            flex h-12 w-12 shrink-0
+            items-center justify-center
+            rounded-2xl border border-cyan-100
+            bg-gradient-to-br from-cyan-50 to-blue-100
+            text-2xl shadow-sm
           "
         >
           📝
@@ -347,14 +297,7 @@
 
         <div>
 
-          <h1
-            class="
-              text-2xl
-              font-black
-              tracking-tight
-              text-slate-900
-            "
-          >
+          <h1 class="text-2xl font-black tracking-tight text-slate-900">
             Crear Cotización
           </h1>
 
@@ -382,14 +325,9 @@
 
           <div
             class="
-              mb-6
-              rounded-xl
-              border border-red-200
-              bg-red-50
-              px-4 py-3
-              text-sm
-              font-semibold
-              text-red-700
+              mb-6 rounded-xl border border-red-200
+              bg-red-50 px-4 py-3
+              text-sm font-semibold text-red-700
             "
           >
             {{ form.non_field_errors }}
@@ -421,10 +359,7 @@
 
             <div>
 
-              <label
-                for="id_claro"
-                class="field-label"
-              >
+              <label for="id_claro" class="field-label">
                 ID CLARO
                 <span class="field-required">*</span>
               </label>
@@ -444,10 +379,7 @@
 
             <div>
 
-              <label
-                for="id_region"
-                class="field-label"
-              >
+              <label for="id_region" class="field-label">
                 Región
                 <span class="field-required">*</span>
               </label>
@@ -475,10 +407,7 @@
 
               <!-- Selector visual -->
 
-              <div
-                id="monthPickerWrapper"
-                class="month-picker-wrapper"
-              >
+              <div id="monthPickerWrapper" class="month-picker-wrapper">
 
                 <button
                   type="button"
@@ -492,13 +421,9 @@
 
                     <div
                       class="
-                        flex
-                        h-8 w-8
-                        items-center
-                        justify-center
-                        rounded-lg
-                        bg-cyan-50
-                        text-base
+                        flex h-8 w-8
+                        items-center justify-center
+                        rounded-lg bg-cyan-50 text-base
                       "
                     >
                       📅
@@ -554,8 +479,7 @@
                       <p
                         id="monthPickerYear"
                         class="text-xl font-black text-slate-900"
-                      >
-                      </p>
+                      ></p>
 
                     </div>
 
@@ -572,10 +496,7 @@
 
                   <!-- Meses -->
 
-                  <div
-                    id="monthPickerGrid"
-                    class="month-grid"
-                  ></div>
+                  <div id="monthPickerGrid" class="month-grid"></div>
 
                 </div>
 
@@ -589,10 +510,7 @@
 
             <div>
 
-              <label
-                for="id_id_new"
-                class="field-label"
-              >
+              <label for="id_id_new" class="field-label">
                 ID NEW
                 <span class="field-required">*</span>
               </label>
@@ -608,15 +526,68 @@
         </div>
 
         <!-- ================================================= -->
+        <!-- PROYECTO Y ACTIVIDAD                              -->
+        <!-- ================================================= -->
+
+        <div class="border-t border-slate-100 pt-6 pb-6">
+
+          <div class="mb-4">
+
+            <h2 class="text-sm font-black uppercase tracking-wide text-slate-800">
+              Proyecto y actividad
+            </h2>
+
+            <p class="mt-1 text-xs text-slate-500">
+              Selecciona el proyecto y la actividad que corresponde al servicio.
+            </p>
+
+          </div>
+
+          <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+
+            <!-- PROYECTO -->
+
+            <div>
+
+              <label for="id_proyecto" class="field-label">
+                Proyecto
+                <span class="field-required">*</span>
+              </label>
+
+              {{ form.proyecto|add_class:"cotizacion-field"|attr:"id:id_proyecto" }}
+
+              {{ form.proyecto.errors }}
+
+            </div>
+
+            <!-- ACTIVIDAD -->
+
+            <div>
+
+              <label for="id_actividad" class="field-label">
+                Actividad
+                <span class="field-required">*</span>
+              </label>
+
+              {{ form.actividad|add_class:"cotizacion-field"|attr:"id:id_actividad" }}
+
+              {{ form.actividad.errors }}
+
+              <p id="actividadHelp" class="field-help">
+                Primero selecciona un proyecto.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ================================================= -->
         <!-- INFORMACIÓN DE LA COTIZACIÓN                      -->
         <!-- ================================================= -->
 
-        <div
-          class="
-            border-t border-slate-100
-            pt-6
-          "
-        >
+        <div class="border-t border-slate-100 pt-6">
 
           <div class="mb-4">
 
@@ -660,16 +631,9 @@
 
                 <div
                   class="
-                    pointer-events-none
-                    absolute
-                    inset-y-0
-                    left-0
-                    flex
-                    items-center
-                    pl-4
-                    text-xs
-                    font-black
-                    text-slate-400
+                    pointer-events-none absolute inset-y-0 left-0
+                    flex items-center pl-4
+                    text-xs font-black text-slate-400
                   "
                 >
                   UF
@@ -696,28 +660,68 @@
 
                 <div
                   class="
-                    pointer-events-none
-                    absolute
-                    inset-y-0
-                    left-0
-                    flex
-                    items-center
-                    pl-4
-                    font-black
-                    text-slate-400
+                    pointer-events-none absolute inset-y-0 left-0
+                    flex items-center pl-4
+                    font-black text-slate-400
                   "
                 >
                   $
                 </div>
 
-                {{ form.monto_mmoo|add_class:"cotizacion-field con-prefijo-clp"|attr:"required" }}
+                {{ form.monto_mmoo|add_class:"cotizacion-field con-prefijo-clp"|attr:"id:id_monto_mmoo"|attr:"placeholder:0" }}
 
               </div>
 
               {{ form.monto_mmoo.errors }}
 
+              <p class="field-help">
+                Puedes ingresar 0. En ese caso se utilizarán las tarifas individuales
+                configuradas para los técnicos de esta actividad.
+              </p>
+
             </div>
 
+          </div>
+
+        </div>
+
+        <!-- ================================================= -->
+        <!-- MODALIDAD DE PAGO                                 -->
+        <!-- ================================================= -->
+
+        <div class="mt-6 border-t border-slate-100 pt-6">
+
+          <div class="mb-4">
+
+            <h2 class="text-sm font-black uppercase tracking-wide text-slate-800">
+              Modalidad de pago a técnicos
+            </h2>
+
+            <p class="mt-1 text-xs text-slate-500">
+              Define cómo se calculará el pago de los trabajadores asignados.
+            </p>
+
+          </div>
+
+          <div>
+
+            <label for="id_modalidad_pago_tecnicos" class="field-label">
+              Modalidad de pago
+              <span class="field-required">*</span>
+            </label>
+
+            {{ form.modalidad_pago_tecnicos|add_class:"cotizacion-field"|attr:"id:id_modalidad_pago_tecnicos" }}
+
+            {{ form.modalidad_pago_tecnicos.errors }}
+
+          </div>
+
+          <div
+            id="paymentInfo"
+            class="payment-info mt-4"
+            aria-live="polite"
+          >
+            Selecciona una modalidad para conocer cómo se calcularán los pagos.
           </div>
 
         </div>
@@ -730,38 +734,21 @@
 
       <div
         class="
-          flex
-          flex-col-reverse
-          gap-3
-          border-t border-slate-200
-          bg-slate-50
+          flex flex-col-reverse gap-3
+          border-t border-slate-200 bg-slate-50
           px-5 py-4
-          sm:flex-row
-          sm:items-center
-          sm:justify-between
-          sm:px-7
+          sm:flex-row sm:items-center sm:justify-between sm:px-7
         "
       >
 
         <a
           href="{% url 'operaciones:listar_servicios_pm' %}"
           class="
-            inline-flex
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            border border-slate-300
-            bg-white
-            px-5 py-2.5
-            text-sm
-            font-bold
-            text-slate-700
-            shadow-sm
-            transition
-            hover:-translate-y-0.5
-            hover:bg-slate-100
-            hover:shadow-md
+            inline-flex items-center justify-center gap-2
+            rounded-xl border border-slate-300 bg-white
+            px-5 py-2.5 text-sm font-bold text-slate-700
+            shadow-sm transition
+            hover:-translate-y-0.5 hover:bg-slate-100 hover:shadow-md
           "
         >
           ← Volver
@@ -770,23 +757,12 @@
         <button
           type="submit"
           class="
-            inline-flex
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            border border-emerald-500
-            bg-gradient-to-r
-            from-emerald-600
-            to-teal-600
-            px-6 py-2.5
-            text-sm
-            font-black
-            text-white
-            shadow-md
-            transition
-            hover:-translate-y-0.5
-            hover:shadow-lg
+            inline-flex items-center justify-center gap-2
+            rounded-xl border border-emerald-500
+            bg-gradient-to-r from-emerald-600 to-teal-600
+            px-6 py-2.5 text-sm font-black text-white
+            shadow-md transition
+            hover:-translate-y-0.5 hover:shadow-lg
           "
         >
           💾 Guardar Cotización
@@ -800,6 +776,8 @@
 
 </div>
 
+{{ actividades_disponibles|json_script:"actividades-disponibles-data" }}
+
 <!-- ====================================================== -->
 <!-- AUTOCOMPLETAR SITIO                                    -->
 <!-- ====================================================== -->
@@ -807,112 +785,73 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
-  const idClaroInput =
-    document.getElementById("id_claro");
+  const idClaroInput = document.getElementById("id_claro");
+  const regionInput = document.getElementById("id_region");
+  const idNewInput = document.getElementById("id_id_new");
+  const status = document.getElementById("siteLookupStatus");
 
-  const regionInput =
-    document.getElementById("id_region");
-
-  const idNewInput =
-    document.getElementById("id_id_new");
-
-  const status =
-    document.getElementById("siteLookupStatus");
-
-  if (
-    !idClaroInput ||
-    !regionInput ||
-    !idNewInput
-  ) {
+  if (!idClaroInput || !regionInput || !idNewInput) {
     return;
   }
 
-  idClaroInput.addEventListener(
-    "blur",
-    async function () {
+  idClaroInput.addEventListener("blur", async function () {
 
-      const idClaro =
-        idClaroInput.value.trim();
+    const idClaro = idClaroInput.value.trim();
 
-      if (!idClaro) {
+    if (!idClaro) {
+      if (status) {
+        status.textContent = "";
+      }
+      return;
+    }
+
+    if (status) {
+      status.className = "site-lookup-status text-cyan-600";
+      status.textContent = "Buscando información del sitio...";
+    }
+
+    try {
+
+      const response = await fetch(
+        `/operaciones/ajax/obtener-datos-sitio/?id_claro=${encodeURIComponent(idClaro)}`
+      );
+
+      const data = await response.json();
+
+      if (data.region && data.id_new) {
+
+        regionInput.value = data.region;
+        idNewInput.value = data.id_new;
+
         if (status) {
-          status.textContent = "";
+          status.className = "site-lookup-status text-emerald-600";
+          status.textContent =
+            "✓ Sitio encontrado. Datos completados automáticamente.";
         }
 
-        return;
+      } else {
+
+        if (status) {
+          status.className = "site-lookup-status text-amber-600";
+          status.textContent =
+            "No se encontró información automática para este ID Claro.";
+        }
+
       }
+
+    } catch (error) {
+
+      console.error("Error al buscar datos:", error);
 
       if (status) {
-        status.className =
-          "site-lookup-status text-cyan-600";
-
+        status.className = "site-lookup-status text-red-600";
         status.textContent =
-          "Buscando información del sitio...";
-      }
-
-      try {
-
-        const response =
-          await fetch(
-            `/operaciones/ajax/obtener-datos-sitio/?id_claro=${encodeURIComponent(idClaro)}`
-          );
-
-        const data =
-          await response.json();
-
-        if (
-          data.region &&
-          data.id_new
-        ) {
-
-          regionInput.value =
-            data.region;
-
-          idNewInput.value =
-            data.id_new;
-
-          if (status) {
-
-            status.className =
-              "site-lookup-status text-emerald-600";
-
-            status.textContent =
-              "✓ Sitio encontrado. Datos completados automáticamente.";
-          }
-
-        } else {
-
-          if (status) {
-
-            status.className =
-              "site-lookup-status text-amber-600";
-
-            status.textContent =
-              "No se encontró información automática para este ID Claro.";
-          }
-
-        }
-
-      } catch (error) {
-
-        console.error(
-          "Error al buscar datos:",
-          error
-        );
-
-        if (status) {
-
-          status.className =
-            "site-lookup-status text-red-600";
-
-          status.textContent =
-            "No fue posible consultar la información del sitio.";
-        }
-
+          "No fue posible consultar la información del sitio.";
       }
 
     }
-  );
+
+  });
 
 });
 </script>
@@ -925,73 +864,25 @@ document.addEventListener("DOMContentLoaded", function () {
 (function () {
 
   const MONTHS_ES = [
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre"
+    "Enero", "Febrero", "Marzo", "Abril",
+    "Mayo", "Junio", "Julio", "Agosto",
+    "Septiembre", "Octubre", "Noviembre", "Diciembre"
   ];
 
-  const hiddenInput =
-    document.getElementById(
-      "id_mes_produccion"
-    );
-
-  const wrapper =
-    document.getElementById(
-      "monthPickerWrapper"
-    );
-
-  const button =
-    document.getElementById(
-      "monthPickerButton"
-    );
-
-  const panel =
-    document.getElementById(
-      "monthPickerPanel"
-    );
-
-  const label =
-    document.getElementById(
-      "monthPickerLabel"
-    );
-
-  const yearLabel =
-    document.getElementById(
-      "monthPickerYear"
-    );
-
-  const grid =
-    document.getElementById(
-      "monthPickerGrid"
-    );
-
-  const previousButton =
-    document.getElementById(
-      "previousYear"
-    );
-
-  const nextButton =
-    document.getElementById(
-      "nextYear"
-    );
+  const hiddenInput = document.getElementById("id_mes_produccion");
+  const wrapper = document.getElementById("monthPickerWrapper");
+  const button = document.getElementById("monthPickerButton");
+  const panel = document.getElementById("monthPickerPanel");
+  const label = document.getElementById("monthPickerLabel");
+  const yearLabel = document.getElementById("monthPickerYear");
+  const grid = document.getElementById("monthPickerGrid");
+  const previousButton = document.getElementById("previousYear");
+  const nextButton = document.getElementById("nextYear");
 
   if (
-    !hiddenInput ||
-    !wrapper ||
-    !button ||
-    !panel ||
-    !label ||
-    !yearLabel ||
-    !grid
+    !hiddenInput || !wrapper || !button || !panel ||
+    !label || !yearLabel || !grid ||
+    !previousButton || !nextButton
   ) {
     return;
   }
@@ -999,15 +890,8 @@ document.addEventListener("DOMContentLoaded", function () {
   let selectedMonth = null;
   let selectedYear = null;
 
-  const now =
-    new Date();
-
-  let visibleYear =
-    now.getFullYear();
-
-  /* ====================================================== */
-  /* PARSEO                                                */
-  /* ====================================================== */
+  const now = new Date();
+  let visibleYear = now.getFullYear();
 
   function parseExistingValue(value) {
 
@@ -1015,306 +899,366 @@ document.addEventListener("DOMContentLoaded", function () {
       return null;
     }
 
-    const raw =
-      String(value)
-        .trim()
-        .replace(/\s+de\s+/i, " ")
-        .replace(/\s+/g, " ");
+    const raw = String(value)
+      .trim()
+      .replace(/\s+de\s+/i, " ")
+      .replace(/\s+/g, " ");
 
     if (/^\d{4}-\d{2}$/.test(raw)) {
 
-      const parts =
-        raw.split("-");
+      const parts = raw.split("-");
 
-      return {
-        year: parseInt(parts[0], 10),
-        month:
-          parseInt(parts[1], 10) - 1
-      };
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
 
+      if (month < 0 || month > 11) {
+        return null;
+      }
+
+      return { year, month };
     }
 
-    const parts =
-      raw.split(" ");
+    const parts = raw.split(" ");
 
     if (parts.length !== 2) {
       return null;
     }
 
-    const monthIndex =
-      MONTHS_ES.findIndex(
-        month =>
-          month.toLowerCase() ===
-          parts[0].toLowerCase()
-      );
+    const monthIndex = MONTHS_ES.findIndex(
+      month => month.toLowerCase() === parts[0].toLowerCase()
+    );
 
-    const year =
-      parseInt(
-        parts[1],
-        10
-      );
+    const year = parseInt(parts[1], 10);
 
-    if (
-      monthIndex < 0 ||
-      Number.isNaN(year)
-    ) {
+    if (monthIndex < 0 || Number.isNaN(year)) {
       return null;
     }
 
-    return {
-      year: year,
-      month: monthIndex
-    };
+    return { year, month: monthIndex };
   }
-
-  /* ====================================================== */
-  /* VALOR                                                 */
-  /* ====================================================== */
 
   function updateValue() {
 
-    if (
-      selectedMonth === null ||
-      selectedYear === null
-    ) {
+    if (selectedMonth === null || selectedYear === null) {
       return;
     }
 
-    const text =
-      `${MONTHS_ES[selectedMonth]} ${selectedYear}`;
+    const text = `${MONTHS_ES[selectedMonth]} ${selectedYear}`;
 
-    hiddenInput.value =
-      text;
+    hiddenInput.value = text;
+    label.textContent = text;
 
-    label.textContent =
-      text;
+    hiddenInput.dispatchEvent(
+      new Event("change", { bubbles: true })
+    );
   }
-
-  /* ====================================================== */
-  /* RENDER                                                */
-  /* ====================================================== */
 
   function renderMonths() {
 
-    yearLabel.textContent =
-      visibleYear;
-
+    yearLabel.textContent = visibleYear;
     grid.innerHTML = "";
 
-    MONTHS_ES.forEach(
-      (monthName, index) => {
+    MONTHS_ES.forEach((monthName, index) => {
 
-        const monthButton =
-          document.createElement(
-            "button"
-          );
+      const monthButton = document.createElement("button");
 
-        monthButton.type =
-          "button";
+      monthButton.type = "button";
+      monthButton.className = "month-option";
+      monthButton.textContent = monthName;
 
-        monthButton.className =
-          "month-option";
-
-        monthButton.textContent =
-          monthName;
-
-        if (
-          selectedMonth === index &&
-          selectedYear === visibleYear
-        ) {
-          monthButton.classList.add(
-            "selected"
-          );
-        }
-
-        monthButton.addEventListener(
-          "click",
-          () => {
-
-            selectedMonth =
-              index;
-
-            selectedYear =
-              visibleYear;
-
-            updateValue();
-
-            renderMonths();
-
-            closePanel();
-          }
-        );
-
-        grid.appendChild(
-          monthButton
-        );
+      if (
+        selectedMonth === index &&
+        selectedYear === visibleYear
+      ) {
+        monthButton.classList.add("selected");
       }
-    );
-  }
 
-  /* ====================================================== */
-  /* ABRIR / CERRAR                                        */
-  /* ====================================================== */
+      monthButton.addEventListener("click", () => {
+
+        selectedMonth = index;
+        selectedYear = visibleYear;
+
+        updateValue();
+        renderMonths();
+        closePanel();
+      });
+
+      grid.appendChild(monthButton);
+    });
+  }
 
   function openPanel() {
 
-    panel.classList.remove(
-      "hidden"
-    );
-
-    button.classList.add(
-      "open"
-    );
-
-    button.setAttribute(
-      "aria-expanded",
-      "true"
-    );
+    panel.classList.remove("hidden");
+    button.classList.add("open");
+    button.setAttribute("aria-expanded", "true");
 
     renderMonths();
   }
 
   function closePanel() {
 
-    panel.classList.add(
-      "hidden"
-    );
-
-    button.classList.remove(
-      "open"
-    );
-
-    button.setAttribute(
-      "aria-expanded",
-      "false"
-    );
+    panel.classList.add("hidden");
+    button.classList.remove("open");
+    button.setAttribute("aria-expanded", "false");
   }
 
-  /* ====================================================== */
-  /* INICIALIZAR                                           */
-  /* ====================================================== */
-
-  const parsed =
-    parseExistingValue(
-      hiddenInput.value
-    );
+  const parsed = parseExistingValue(hiddenInput.value);
 
   if (parsed) {
 
-    selectedMonth =
-      parsed.month;
-
-    selectedYear =
-      parsed.year;
-
-    visibleYear =
-      parsed.year;
+    selectedMonth = parsed.month;
+    selectedYear = parsed.year;
+    visibleYear = parsed.year;
 
   } else {
 
-    selectedMonth =
-      now.getMonth();
-
-    selectedYear =
-      now.getFullYear();
-
-    visibleYear =
-      selectedYear;
-
+    selectedMonth = now.getMonth();
+    selectedYear = now.getFullYear();
+    visibleYear = selectedYear;
   }
 
   updateValue();
-
   renderMonths();
 
-  /* ====================================================== */
-  /* EVENTOS                                               */
-  /* ====================================================== */
+  button.addEventListener("click", function () {
 
-  button.addEventListener(
-    "click",
-    function () {
-
-      if (
-        panel.classList.contains(
-          "hidden"
-        )
-      ) {
-        openPanel();
-
-      } else {
-        closePanel();
-      }
-
+    if (panel.classList.contains("hidden")) {
+      openPanel();
+    } else {
+      closePanel();
     }
-  );
+  });
 
-  previousButton.addEventListener(
-    "click",
-    () => {
+  previousButton.addEventListener("click", () => {
+    visibleYear -= 1;
+    renderMonths();
+  });
 
-      visibleYear -= 1;
+  nextButton.addEventListener("click", () => {
+    visibleYear += 1;
+    renderMonths();
+  });
 
-      renderMonths();
+  document.addEventListener("click", function (event) {
+
+    if (!wrapper.contains(event.target)) {
+      closePanel();
     }
-  );
+  });
 
-  nextButton.addEventListener(
-    "click",
-    () => {
+  document.addEventListener("keydown", function (event) {
 
-      visibleYear += 1;
-
-      renderMonths();
+    if (event.key === "Escape") {
+      closePanel();
     }
-  );
+  });
 
-  document.addEventListener(
-    "click",
-    function (event) {
-
-      if (
-        !wrapper.contains(
-          event.target
-        )
-      ) {
-        closePanel();
-      }
-
-    }
-  );
-
-  document.addEventListener(
-    "keydown",
-    function (event) {
-
-      if (
-        event.key === "Escape"
-      ) {
-        closePanel();
-      }
-
-    }
-  );
-
-  const form =
-    hiddenInput.closest(
-      "form"
-    );
+  const form = hiddenInput.closest("form");
 
   if (form) {
 
-    form.addEventListener(
-      "submit",
-      function () {
-
-        updateValue();
-      }
-    );
-
+    form.addEventListener("submit", function () {
+      updateValue();
+    });
   }
 
 })();
+</script>
+
+<!-- ====================================================== -->
+<!-- PROYECTO / ACTIVIDAD / MODALIDAD                        -->
+<!-- ====================================================== -->
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  const proyecto = document.getElementById("id_proyecto");
+  const actividad = document.getElementById("id_actividad");
+  const actividadHelp = document.getElementById("actividadHelp");
+
+  const modalidad = document.getElementById("id_modalidad_pago_tecnicos");
+  const montoMmoo = document.getElementById("id_monto_mmoo");
+  const paymentInfo = document.getElementById("paymentInfo");
+
+  const dataElement = document.getElementById(
+    "actividades-disponibles-data"
+  );
+
+  let actividades = [];
+
+  if (dataElement) {
+    try {
+      actividades = JSON.parse(dataElement.textContent);
+    } catch (error) {
+      console.error("No se pudieron cargar las actividades:", error);
+    }
+  }
+
+  /* ====================================================== */
+  /* FILTRAR ACTIVIDADES                                    */
+  /* ====================================================== */
+
+  if (proyecto && actividad) {
+
+    const actividadInicial = actividad.value;
+
+    function actualizarActividades(conservarSeleccion) {
+
+      const proyectoId = proyecto.value;
+      const seleccionAnterior = conservarSeleccion
+        ? actividad.value
+        : "";
+
+      const opcionesActuales = Array.from(actividad.options);
+
+      const opcionHistorica = opcionesActuales.find(
+        option => option.value === seleccionAnterior
+      );
+
+      actividad.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = proyectoId
+        ? "Selecciona una actividad"
+        : "Primero selecciona un proyecto";
+
+      actividad.appendChild(placeholder);
+
+      if (!proyectoId) {
+
+        if (actividadHelp) {
+          actividadHelp.textContent =
+            "Primero selecciona un proyecto.";
+        }
+
+        return;
+      }
+
+      const disponibles = actividades.filter(
+        item => String(item.proyecto_id) === String(proyectoId)
+      );
+
+      disponibles.forEach(item => {
+
+        const option = document.createElement("option");
+
+        option.value = String(item.id);
+        option.textContent = item.nombre;
+
+        actividad.appendChild(option);
+      });
+
+      // Mantener actividad histórica previamente seleccionada.
+      if (
+        opcionHistorica &&
+        seleccionAnterior &&
+        !disponibles.some(
+          item => String(item.id) === String(seleccionAnterior)
+        )
+      ) {
+        actividad.appendChild(opcionHistorica);
+      }
+
+      if (
+        seleccionAnterior &&
+        Array.from(actividad.options).some(
+          option => option.value === seleccionAnterior
+        )
+      ) {
+        actividad.value = seleccionAnterior;
+      }
+
+      if (actividadHelp) {
+        actividadHelp.textContent = disponibles.length
+          ? "Actividades disponibles para el proyecto seleccionado."
+          : "Este proyecto no tiene actividades activas registradas.";
+      }
+    }
+
+    proyecto.addEventListener("change", function () {
+      actualizarActividades(false);
+    });
+
+    actualizarActividades(true);
+
+    if (actividadInicial && !actividad.value) {
+      actividad.value = actividadInicial;
+    }
+  }
+
+  /* ====================================================== */
+  /* EXPLICACIÓN DE MODALIDAD                                */
+  /* ====================================================== */
+
+  function actualizarModalidad() {
+
+    if (!modalidad || !paymentInfo) {
+      return;
+    }
+
+    const tipo = modalidad.value;
+
+    const montoTexto = montoMmoo
+      ? montoMmoo.value.trim()
+      : "";
+
+    const montoNormalizado = montoTexto
+      .replace(/\s/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
+
+    const monto = montoNormalizado === ""
+      ? null
+      : Number(montoNormalizado);
+
+    paymentInfo.className = "payment-info mt-4";
+
+    if (tipo === "tarifa_actividad") {
+
+      paymentInfo.classList.add("tarifa");
+
+      paymentInfo.textContent =
+        "Tarifa por actividad: el sistema calculará automáticamente " +
+        "la MMOO sumando las tarifas individuales de los técnicos " +
+        "que se asignen al servicio. Puedes dejar la MMOO en 0.";
+
+    } else if (tipo === "mmoo_cotizacion") {
+
+      paymentInfo.classList.add("cotizacion");
+
+      if (monto === 0) {
+
+        paymentInfo.textContent =
+          "MMOO de cotización en $0: al guardar, el sistema utilizará " +
+          "la modalidad de tarifas individuales por actividad.";
+
+      } else {
+
+        paymentInfo.textContent =
+          "MMOO de cotización: el monto ingresado se distribuirá " +
+          "automáticamente y en partes iguales entre los técnicos asignados.";
+      }
+
+    } else {
+
+      paymentInfo.textContent =
+        "Selecciona una modalidad para conocer cómo se calcularán los pagos.";
+    }
+  }
+
+  if (modalidad) {
+    modalidad.addEventListener("change", actualizarModalidad);
+  }
+
+  if (montoMmoo) {
+    montoMmoo.addEventListener("input", actualizarModalidad);
+  }
+
+  actualizarModalidad();
+
+});
 </script>
 
 {% endblock %}

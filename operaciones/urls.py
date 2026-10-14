@@ -6,7 +6,7 @@ from . import views
 from . import views_fotos
 from . import views_fotos as fotos
 from . import views_produccion as produc
-from . import views_resumen
+from . import views_resumen, views_tarifas
 
 app_name = 'operaciones'  # <--- ESTA LÍNEA ES OBLIGATORIA PARA USAR NAMESPACES
 
@@ -290,5 +290,45 @@ urlpatterns = [
         "cotizaciones/accion-masiva/",
         views.accion_masiva_cotizaciones_pm,
         name="accion_masiva_cotizaciones_pm",
+    ),
+    # ========================================================
+    # ADMINISTRACIÓN DE TARIFAS
+    # ========================================================
+    path(
+        "tarifas/",
+        views_tarifas.administrar_tarifas,
+        name="administrar_tarifas",
+    ),
+    # Eliminar tarifa individual del sistema anterior
+    # Se conserva para no afectar funcionalidades existentes.
+    path(
+        "tarifas/eliminar/<int:pk>/",
+        views_tarifas.eliminar_tarifa,
+        name="eliminar_tarifa",
+    ),
+    # Eliminar tarifa por proyecto, actividad y trabajador
+    # Exclusivo para administradores.
+    path(
+        "tarifas/actividad/eliminar/<int:pk>/",
+        views_tarifas.eliminar_tarifa_actividad,
+        name="eliminar_tarifa_actividad",
+    ),
+    path(
+        "produccion/pagos-pendientes/exportar-excel/",
+        produc.exportar_pagos_pendientes_excel,
+        name="exportar_pagos_pendientes_excel",
+    ),
+    # ========================================================
+    # ACTIVAR / DESACTIVAR TARIFA POR ACTIVIDAD
+    # ========================================================
+    path(
+        "tarifas/actividad/estado/<int:pk>/",
+        views_tarifas.cambiar_estado_tarifa_actividad,
+        name="cambiar_estado_tarifa_actividad",
+    ),
+    path(
+        "cotizaciones/descargar-formato/",
+        views.descargar_formato_cotizaciones,
+        name="descargar_formato_cotizaciones",
     ),
 ]

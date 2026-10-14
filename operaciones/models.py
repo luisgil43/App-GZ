@@ -226,16 +226,13 @@ class SitiosTablaMetadata(models.Model):
 
 class ServicioCotizado(models.Model):
     ESTADOS = [
-        ('cotizado', 'Cotizado'),
-        ('aprobado_pendiente', 'Aprobada, pendiente por asignar'),
-        ('asignado', 'Asignado'),
-        ('en_progreso', 'En progreso'),
-        ('en_revision_supervisor', 'En revision supervisor'),
-        ('rechazado_supervisor', 'Rechazado por supervisor'),
-        ('aprobado_supervisor', 'Aprobado por supervisor'),
-
-
-
+        ("cotizado", "Cotizado"),
+        ("aprobado_pendiente", "Aprobada, pendiente por asignar"),
+        ("asignado", "Asignado"),
+        ("en_progreso", "En progreso"),
+        ("en_revision_supervisor", "En revision supervisor"),
+        ("rechazado_supervisor", "Rechazado por supervisor"),
+        ("aprobado_supervisor", "Aprobado por supervisor"),
     ]
 
     du = models.CharField(max_length=20, blank=True, unique=True)
@@ -259,16 +256,64 @@ class ServicioCotizado(models.Model):
     detalle_tarea = models.TextField()
     monto_cotizado = models.DecimalField(max_digits=12, decimal_places=2)
     monto_mmoo = models.DecimalField(
-        max_digits=12, decimal_places=2, blank=True, null=True)
+        max_digits=12, decimal_places=2, blank=True, null=True
+    )
 
-    estado = models.CharField(
-        max_length=50, choices=ESTADOS, default='cotizado')
+    # ============================================================
+    # PROYECTO, ACTIVIDAD Y MODALIDAD DE PAGO
+    # ============================================================
+    # Campos opcionales para conservar compatibilidad con
+    # todas las cotizaciones y producciones existentes.
+    # ============================================================
+
+    proyecto = models.ForeignKey(
+        "facturacion.Proyecto",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="servicios_operacionales",
+    )
+
+    actividad = models.ForeignKey(
+        "operaciones.ActividadProyecto",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="servicios_cotizados",
+    )
+
+    monto_mmoo_cotizacion = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="MMOO original indicada en la cotización.",
+    )
+
+    MODALIDADES_PAGO = [
+        ("tarifa_actividad", "Tarifa por actividad"),
+        ("mmoo_cotizacion", "Usar MMOO de cotización"),
+    ]
+
+    modalidad_pago_tecnicos = models.CharField(
+        max_length=30,
+        choices=MODALIDADES_PAGO,
+        null=True,
+        blank=True,
+        default=None,
+        help_text=(
+            "NULL conserva el comportamiento anterior. "
+            "Los nuevos servicios utilizarán una modalidad explícita."
+        ),
+    )
+
+    estado = models.CharField(max_length=50, choices=ESTADOS, default="cotizado")
 
     creado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='servicios_creados'
+        related_name="servicios_creados",
     )
 
     fecha_creacion = models.DateTimeField(auto_now_add=True)
@@ -276,9 +321,9 @@ class ServicioCotizado(models.Model):
     trabajadores_asignados = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
-        related_name='servicios_asignados',
-        limit_choices_to={'rol': 'usuario'},
-        verbose_name='Técnicos asignados'
+        related_name="servicios_asignados",
+        limit_choices_to={"rol": "usuario"},
+        verbose_name="Técnicos asignados",
     )
 
     pm_aprueba = models.ForeignKey(
@@ -286,8 +331,8 @@ class ServicioCotizado(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='cotizaciones_aprobadas_pm',
-        verbose_name="Aprobado por PM"
+        related_name="cotizaciones_aprobadas_pm",
+        verbose_name="Aprobado por PM",
     )
 
     tecnico_aceptado = models.ForeignKey(
@@ -295,8 +340,8 @@ class ServicioCotizado(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='servicios_aceptados_tecnico',
-        verbose_name="Aceptado por técnico"
+        related_name="servicios_aceptados_tecnico",
+        verbose_name="Aceptado por técnico",
     )
 
     tecnico_finalizo = models.ForeignKey(
@@ -304,8 +349,8 @@ class ServicioCotizado(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='servicios_finalizados_tecnico',
-        verbose_name="Finalizado por técnico"
+        related_name="servicios_finalizados_tecnico",
+        verbose_name="Finalizado por técnico",
     )
 
     supervisor_aprobo = models.ForeignKey(
@@ -313,14 +358,12 @@ class ServicioCotizado(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='servicios_aprobados_supervisor',
-        verbose_name="Aprobado por supervisor"
+        related_name="servicios_aprobados_supervisor",
+        verbose_name="Aprobado por supervisor",
     )
 
     fecha_aprobacion_supervisor = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name="Fecha aprobación del supervisor"
+        null=True, blank=True, verbose_name="Fecha aprobación del supervisor"
     )
 
     supervisor_rechazo = models.ForeignKey(
@@ -328,8 +371,8 @@ class ServicioCotizado(models.Model):
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        related_name='servicios_rechazados_supervisor',
-        verbose_name="Rechazado por supervisor"
+        related_name="servicios_rechazados_supervisor",
+        verbose_name="Rechazado por supervisor",
     )
 
     supervisor_asigna = models.ForeignKey(
@@ -337,15 +380,16 @@ class ServicioCotizado(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='servicios_asignados_como_supervisor'
+        related_name="servicios_asignados_como_supervisor",
     )
 
     usuario_informe = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         on_delete=models.SET_NULL,
-        related_name='informes_cargados',
-        verbose_name='Usuario que cargó el informe'
+        related_name="informes_cargados",
+        verbose_name="Usuario que cargó el informe",
     )
 
     motivo_rechazo = models.TextField(blank=True, null=True)
@@ -354,23 +398,32 @@ class ServicioCotizado(models.Model):
     reporte_fotografico = models.FileField(
         upload_to=upload_to_reporte_field,
         storage=_gz_storage,
-        blank=True, null=True, max_length=1024
+        blank=True,
+        null=True,
+        max_length=1024,
     )
     acta_aceptacion_pdf = models.FileField(
         upload_to=upload_to_acta_field,
         storage=_gz_storage,
-        blank=True, null=True, max_length=1024,
-        validators=[FileExtensionValidator(["pdf"])]
+        blank=True,
+        null=True,
+        max_length=1024,
+        validators=[FileExtensionValidator(["pdf"])],
     )
 
     # Datos para el acta
     monto_uf = models.DecimalField(
-        max_digits=12, decimal_places=2, blank=True, null=True,
-        help_text="Monto en UF para el acta"
+        max_digits=12,
+        decimal_places=2,
+        blank=True,
+        null=True,
+        help_text="Monto en UF para el acta",
     )
     documento_compra = models.CharField(
-        max_length=50, blank=True, null=True,
-        help_text="N° de OC/Documento de compra para el acta"
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="N° de OC/Documento de compra para el acta",
     )
 
     class Meta:
@@ -378,12 +431,11 @@ class ServicioCotizado(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.du:
-            ultimo = ServicioCotizado.objects.exclude(
-                du='').order_by('-du').first()
+            ultimo = ServicioCotizado.objects.exclude(du="").order_by("-du").first()
             if ultimo and ultimo.du.isdigit():
                 nuevo = str(int(ultimo.du) + 1).zfill(8)
             else:
-                nuevo = '00000001'
+                nuevo = "00000001"
             # Asegura que no exista el nuevo DU
             while ServicioCotizado.objects.filter(du=nuevo).exists():
                 nuevo = str(int(nuevo) + 1).zfill(8)
@@ -599,3 +651,312 @@ class MonthlyPayment(models.Model):
         self.status = "paid"
         self.paid_month = paid_month
         self.save(update_fields=["status", "paid_month", "updated_at"])
+
+
+class TarifaTecnico(models.Model):
+    """
+    Tarifa individual por servicio y técnico.
+
+    Cada registro representa un cambio de tarifa.
+    Se conserva el historial de modificaciones.
+    """
+
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="historial_tarifas_operaciones",
+    )
+
+    mes_vigencia = models.CharField(
+        max_length=7,
+        db_index=True,
+        help_text="Mes de vigencia en formato YYYY-MM.",
+    )
+
+    monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tarifas_operaciones_registradas",
+    )
+
+    fecha_registro = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-mes_vigencia", "-fecha_registro", "-id"]
+        indexes = [
+            models.Index(fields=["tecnico", "mes_vigencia"]),
+        ]
+        verbose_name = "Tarifa de técnico"
+        verbose_name_plural = "Tarifas de técnicos"
+
+    def __str__(self):
+        return f"{self.tecnico} | " f"{self.mes_vigencia} | " f"${self.monto}"
+
+
+class ActividadProyecto(models.Model):
+    """
+    Actividades asociadas a los proyectos existentes
+    del módulo de facturación.
+
+    Cada actividad puede tener un precio de referencia
+    utilizado para completar inicialmente las tarifas
+    de los técnicos seleccionados.
+
+    El precio de referencia NO determina automáticamente
+    el pago de un técnico.
+
+    Los importes individuales se almacenan en
+    TarifaActividadTecnico y pueden ser diferentes
+    para cada trabajador.
+    """
+
+    proyecto = models.ForeignKey(
+        "facturacion.Proyecto",
+        on_delete=models.PROTECT,
+        related_name="actividades_operacionales",
+    )
+
+    nombre = models.CharField(
+        max_length=255,
+    )
+
+    # ============================================================
+    # PRECIO DE REFERENCIA
+    # ============================================================
+
+    precio_referencia = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text=(
+            "Precio base sugerido para los técnicos de esta "
+            "actividad. Puede modificarse individualmente "
+            "para cada trabajador."
+        ),
+    )
+
+    # ============================================================
+    # ESTADO
+    # ============================================================
+
+    activa = models.BooleanField(
+        default=True,
+    )
+
+    # ============================================================
+    # AUDITORÍA
+    # ============================================================
+
+    fecha_creacion = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    # ============================================================
+    # CONFIGURACIÓN
+    # ============================================================
+
+    class Meta:
+        ordering = [
+            "proyecto_id",
+            "nombre",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "proyecto",
+                    "nombre",
+                ],
+                name="unique_actividad_por_proyecto",
+            ),
+        ]
+
+        verbose_name = "Actividad de proyecto"
+        verbose_name_plural = "Actividades de proyectos"
+
+    # ============================================================
+    # REPRESENTACIÓN
+    # ============================================================
+
+    def __str__(self):
+        return f"{self.proyecto.nombre} | {self.nombre}"
+
+
+class TarifaActividadTecnico(models.Model):
+    """
+    Tarifas individuales por actividad y técnico.
+
+    Permite registrar diferentes tarifas por mes
+    sin modificar las tarifas históricas existentes.
+
+    Las tarifas pueden activarse o desactivarse
+    sin eliminar sus registros históricos.
+    """
+
+    actividad = models.ForeignKey(
+        "operaciones.ActividadProyecto",
+        on_delete=models.PROTECT,
+        related_name="tarifas_tecnicos",
+    )
+
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="tarifas_por_actividad",
+    )
+
+    mes_vigencia = models.CharField(
+        max_length=7,
+        db_index=True,
+        help_text="Mes de vigencia en formato YYYY-MM.",
+    )
+
+    monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    # ============================================================
+    # ESTADO DE LA TARIFA
+    # ============================================================
+
+    activa = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text=("Indica si la tarifa puede utilizarse " "en nuevas operaciones."),
+    )
+
+    # ============================================================
+    # AUDITORÍA DE DESACTIVACIÓN
+    # ============================================================
+
+    fecha_desactivacion = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    desactivada_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tarifas_actividad_desactivadas",
+    )
+
+    # ============================================================
+    # AUDITORÍA DE REGISTRO
+    # ============================================================
+
+    registrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tarifas_actividad_registradas",
+    )
+
+    fecha_registro = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    # ============================================================
+    # CONFIGURACIÓN
+    # ============================================================
+
+    class Meta:
+        ordering = [
+            "-mes_vigencia",
+            "-fecha_registro",
+            "-id",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "actividad",
+                    "tecnico",
+                    "mes_vigencia",
+                ],
+            ),
+        ]
+
+        verbose_name = "Tarifa por actividad"
+        verbose_name_plural = "Tarifas por actividad"
+
+    # ============================================================
+    # REPRESENTACIÓN
+    # ============================================================
+
+    def __str__(self):
+        estado = "Activa" if self.activa else "Desactivada"
+
+        return (
+            f"{self.actividad} | "
+            f"{self.tecnico} | "
+            f"{self.mes_vigencia} | "
+            f"${self.monto} | "
+            f"{estado}"
+        )
+
+
+class MontoTecnicoServicio(models.Model):
+    """
+    Importe individual aplicado a un técnico por DU.
+
+    Permitirá conservar el monto aprobado aunque
+    posteriormente cambien las tarifas.
+    """
+
+    servicio = models.ForeignKey(
+        "operaciones.ServicioCotizado",
+        on_delete=models.PROTECT,
+        related_name="montos_tecnicos",
+    )
+
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="montos_por_servicio",
+    )
+
+    monto = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    aprobado = models.BooleanField(
+        default=False,
+    )
+
+    fecha_aprobacion = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    fecha_creacion = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["servicio", "tecnico"],
+                name="unique_monto_tecnico_servicio",
+            ),
+        ]
+
+        verbose_name = "Monto individual por servicio"
+        verbose_name_plural = "Montos individuales por servicio"
+
+    def __str__(self):
+        return f"DU{self.servicio.du} | " f"{self.tecnico} | " f"${self.monto}"

@@ -184,7 +184,7 @@
       <div class="px-5 py-6 sm:px-7">
 
         <!-- ================================================= -->
-        <!-- FORMATO                                           -->
+        <!-- FORMATO DINÁMICO                                  -->
         <!-- ================================================= -->
 
         <div
@@ -230,12 +230,22 @@
                 Descarga la plantilla oficial antes de importar.
               </p>
 
+              <!-- NUEVO -->
+              <p class="mt-1 text-xs font-medium text-blue-700">
+                Incluye los proyectos, actividades y modalidades
+                de pago registrados en el sistema.
+              </p>
+
             </div>
 
           </div>
 
+          <!-- =============================================== -->
+          <!-- DESCARGA DINÁMICA                               -->
+          <!-- =============================================== -->
+
           <a
-            href="{% static 'importar_cotizaciones.xlsx' %}"
+            href="{% url 'operaciones:descargar_formato_cotizaciones' %}"
             class="
               inline-flex
               items-center
@@ -257,6 +267,110 @@
           >
             📥 Descargar formato
           </a>
+
+        </div>
+
+        <!-- ================================================= -->
+        <!-- INFORMACIÓN DE MODALIDADES                        -->
+        <!-- ================================================= -->
+
+        <div
+          class="
+            mb-5
+            rounded-2xl
+            border border-slate-200
+            bg-slate-50
+            px-4 py-4
+          "
+        >
+
+          <div class="flex items-center gap-2">
+
+            <span class="text-lg">
+              💰
+            </span>
+
+            <h2 class="text-sm font-black text-slate-800">
+              Modalidades de pago a técnicos
+            </h2>
+
+          </div>
+
+          <p class="mt-2 text-xs leading-5 text-slate-600">
+            Para las cotizaciones desde octubre de 2026,
+            selecciona una modalidad de pago en la plantilla.
+          </p>
+
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+
+            <!-- TARIFA POR ACTIVIDAD -->
+
+            <div
+              class="
+                rounded-xl
+                border border-emerald-200
+                bg-emerald-50
+                px-3 py-3
+              "
+            >
+
+              <p class="text-xs font-black text-emerald-800">
+                💰 Tarifa por actividad
+              </p>
+
+              <p class="mt-1 text-xs leading-5 text-emerald-900">
+                Cada técnico recibe el importe de su tarifa
+                individual para la actividad y el mes de producción.
+              </p>
+
+              <p class="mt-2 text-[11px] font-semibold text-emerald-700">
+                Valor en Excel: tarifa_actividad
+              </p>
+
+              <p class="mt-1 text-[11px] text-emerald-700">
+                El monto MMOO puede ser 0.
+              </p>
+
+            </div>
+
+            <!-- MMOO DE COTIZACIÓN -->
+
+            <div
+              class="
+                rounded-xl
+                border border-blue-200
+                bg-blue-50
+                px-3 py-3
+              "
+            >
+
+              <p class="text-xs font-black text-blue-800">
+                👥 MMOO de cotización
+              </p>
+
+              <p class="mt-1 text-xs leading-5 text-blue-900">
+                El monto MMOO indicado en la cotización
+                se divide automáticamente entre los
+                técnicos asignados.
+              </p>
+
+              <p class="mt-2 text-[11px] font-semibold text-blue-700">
+                Valor en Excel: mmoo_cotizacion
+              </p>
+
+              <p class="mt-1 text-[11px] text-blue-700">
+                El monto MMOO debe ser mayor que 0.
+              </p>
+
+            </div>
+
+          </div>
+
+          <p class="mt-3 text-[11px] leading-5 text-slate-500">
+            La plantilla Excel utiliza los catálogos disponibles
+            al momento de descargarla. Si se agregan proyectos
+            o actividades, descarga nuevamente el formato.
+          </p>
 
         </div>
 
@@ -451,7 +565,8 @@
             justify-center
             gap-2
             rounded-xl
-            border border-slate-300
+            border
+            border-slate-300
             bg-white
             px-5 py-2.5
             text-sm
@@ -469,6 +584,7 @@
 
         <button
           type="submit"
+          id="btnImportarCotizaciones"
           class="
             inline-flex
             items-center
@@ -538,12 +654,26 @@
       "clearSelectedFile"
     );
 
+  const form =
+    document.getElementById(
+      "importCotizacionesForm"
+    );
+
+  const submitButton =
+    document.getElementById(
+      "btnImportarCotizaciones"
+    );
+
   if (
     !input ||
     !dropZone
   ) {
     return;
   }
+
+  // ========================================================
+  // FORMATEAR TAMAÑO
+  // ========================================================
 
   function formatBytes(bytes) {
 
@@ -560,6 +690,10 @@
 
     return `${(kb / 1024).toFixed(2)} MB`;
   }
+
+  // ========================================================
+  // ACTUALIZAR INTERFAZ
+  // ========================================================
 
   function updateFileUI() {
 
@@ -601,10 +735,18 @@
     );
   }
 
+  // ========================================================
+  // SELECCIONAR ARCHIVO
+  // ========================================================
+
   input.addEventListener(
     "change",
     updateFileUI
   );
+
+  // ========================================================
+  // DRAG AND DROP
+  // ========================================================
 
   [
     "dragenter",
@@ -676,6 +818,10 @@
     }
   );
 
+  // ========================================================
+  // QUITAR ARCHIVO
+  // ========================================================
+
   clearButton?.addEventListener(
     "click",
     function (event) {
@@ -686,6 +832,37 @@
       input.value = "";
 
       updateFileUI();
+    }
+  );
+
+  // ========================================================
+  // EVITAR DOBLE ENVÍO
+  // ========================================================
+
+  form?.addEventListener(
+    "submit",
+    function () {
+
+      if (
+        !input.files ||
+        !input.files.length
+      ) {
+        return;
+      }
+
+      if (submitButton) {
+
+        submitButton.disabled = true;
+
+        submitButton.classList.add(
+          "opacity-70",
+          "cursor-wait"
+        );
+
+        submitButton.textContent =
+          "⏳ Importando cotizaciones...";
+      }
+
     }
   );
 

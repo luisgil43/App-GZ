@@ -5,12 +5,13 @@ import requests
 from django import forms
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import models
 from django.forms import ModelMultipleChoiceField
 from django.utils import timezone
 
 from facturacion.models import CartolaMovimiento, TipoGasto
 
-from .models import ServicioCotizado, SitioMovil
+from .models import ActividadProyecto, ServicioCotizado, SitioMovil
 
 
 class ServicioCotizadoForm(forms.ModelForm):
@@ -19,72 +20,272 @@ class ServicioCotizadoForm(forms.ModelForm):
 
     class Meta:
         model = ServicioCotizado
+
         fields = [
-            'id_claro', 'region', 'mes_produccion',
-            'id_new', 'detalle_tarea', 'monto_cotizado', 'monto_mmoo'
+            "id_claro",
+            "region",
+            "mes_produccion",
+            "id_new",
+            "detalle_tarea",
+            "monto_cotizado",
+            "monto_mmoo",
+            "proyecto",
+            "actividad",
+            "modalidad_pago_tecnicos",
         ]
+
         widgets = {
-            'detalle_tarea': forms.Textarea(attrs={'rows': 3}),
-            'mes_produccion': forms.TextInput(attrs={'placeholder': 'Ej: Julio 2025'}),
+            "detalle_tarea": forms.Textarea(attrs={"rows": 3}),
+            "mes_produccion": forms.TextInput(attrs={"placeholder": "Ej: Julio 2025"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         for field in self.fields.values():
             field.required = True
 
-        # Campo monto cotizado como texto con coma
-        self.fields['monto_cotizado'].widget = forms.TextInput(
-            attrs={'placeholder': 'Ej: 10,00 UF'}
-        )
-        # Campo monto MMOO como texto para aceptar miles y coma decimal
-        self.fields['monto_mmoo'].widget = forms.TextInput(
-            attrs={'placeholder': 'Ej: 632.543,76'}
+        self.fields["monto_mmoo"].required = False
+
+        # Los registros anteriores conservan sus campos opcionales.
+        self.fields["proyecto"].required = False
+        self.fields["actividad"].required = False
+        self.fields["modalidad_pago_tecnicos"].required = False
+
+        self.fields["proyecto"].empty_label = "Selecciona un proyecto"
+        self.fields["actividad"].empty_label = "Selecciona una actividad"
+
+        self.fields["modalidad_pago_tecnicos"].choices = [
+            ("", "Selecciona una modalidad"),
+            ("tarifa_actividad", "Tarifa por actividad"),
+            ("mmoo_cotizacion", "Usar MMOO de cotización"),
+        ]
+
+        self.fields["actividad"].queryset = ActividadProyecto.objects.none()
+
+        # ====================================================
+        # ACTIVIDADES DEL PROYECTO SELECCIONADO
+        # ====================================================
+
+        proyecto_id = None
+
+        if self.is_bound:
+            proyecto_id = self.data.get(self.add_prefix("proyecto"))
+
+        elif self.instance and self.instance.pk:
+            proyecto_id = self.instance.proyecto_id
+
+        if proyecto_id:
+            try:
+                proyecto_id = int(proyecto_id)
+
+                actividades = ActividadProyecto.objects.filter(proyecto_id=proyecto_id)
+
+                # Conservar una actividad histórica al editar.
+                if self.instance and self.instance.pk:
+                    actividades = actividades.filter(
+                        models.Q(activa=True) | models.Q(pk=self.instance.actividad_id)
+                    )
+                else:
+                    actividades = actividades.filter(activa=True)
+
+                self.fields["actividad"].queryset = actividades.order_by("nombre")
+
+            except (TypeError, ValueError):
+                pass
+
+        # ====================================================
+        # FORMATO DE IMPORTES
+        # ====================================================
+
+        self.fields["monto_cotizado"].widget = forms.TextInput(
+            attrs={"placeholder": "Ej: 10,00 UF"}
         )
 
-        # Preformatear valores iniciales para edición
+        self.fields["monto_mmoo"].widget = forms.TextInput(
+            attrs={"placeholder": "Ej: 632.543,76"}
+        )
+
         if self.instance and self.instance.pk:
+
             if self.instance.monto_cotizado is not None:
-                # Mostrar coma como separador decimal
-                self.initial['monto_cotizado'] = str(
-                    self.instance.monto_cotizado).replace(".", ",")
-            if self.instance.monto_mmoo is not None:
-                # Mostrar con separador de miles y coma como decimal
-                self.initial['monto_mmoo'] = f"{self.instance.monto_mmoo:,.2f}".replace(
-                    ",", "X").replace(".", ",").replace("X", ".")
+                self.initial["monto_cotizado"] = str(
+                    self.instance.monto_cotizado
+                ).replace(".", ",")
+
+            monto_inicial = self.instance.monto_mmoo
+
+            if (
+                self.instance.modalidad_pago_tecnicos == "mmoo_cotizacion"
+                and self.instance.monto_mmoo_cotizacion is not None
+            ):
+                monto_inicial = self.instance.monto_mmoo_cotizacion
+
+            if monto_inicial is not None:
+                self.initial["monto_mmoo"] = (
+                    f"{monto_inicial:,.2f}".replace(",", "X")
+                    .replace(".", ",")
+                    .replace("X", ".")
+                )
 
     def clean_monto_cotizado(self):
-        """Convierte UF a Decimal, acepta coma o punto como separador y fuerza 2 decimales."""
-        data = self.cleaned_data.get('monto_cotizado')
+        """Convierte UF a Decimal y fuerza dos decimales."""
+
+        data = self.cleaned_data.get("monto_cotizado")
+
         if not data:
             raise forms.ValidationError("Este campo es obligatorio.")
+
         data = data.replace(" ", "").replace(",", ".")
+
         try:
             value = Decimal(data).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP)
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+
             if value <= 0:
                 raise forms.ValidationError("El monto debe ser mayor que 0.")
+
             return value
+
         except (InvalidOperation, ValueError):
-            raise forms.ValidationError(
-                "Ingrese un monto válido en formato 0,00")
+            raise forms.ValidationError("Ingrese un monto válido en formato 0,00")
 
     def clean_monto_mmoo(self):
-        """Convierte CLP formateado (1.234.567,89) a Decimal."""
-        data = self.cleaned_data.get('monto_mmoo')
+        """Convierte CLP formateado a Decimal."""
+
+        data = self.cleaned_data.get("monto_mmoo")
+
         if not data:
             return None
-        # Eliminar espacios, puntos de miles y reemplazar coma por punto
+
         data = data.replace(" ", "").replace(".", "").replace(",", ".")
+
         try:
             value = Decimal(data).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP)
+                Decimal("0.01"),
+                rounding=ROUND_HALF_UP,
+            )
+
             if value < 0:
                 raise forms.ValidationError("El monto no puede ser negativo.")
+
             return value
+
         except InvalidOperation:
-            raise forms.ValidationError(
-                "Ingrese un monto válido en formato 1.234,56")
+            raise forms.ValidationError("Ingrese un monto válido en formato 1.234,56")
+
+    def clean(self):
+        cleaned = super().clean()
+
+        proyecto = cleaned.get("proyecto")
+        actividad = cleaned.get("actividad")
+        modalidad = cleaned.get("modalidad_pago_tecnicos")
+        monto_mmoo = cleaned.get("monto_mmoo")
+
+        from .services.tarifas import normalizar_mes_produccion
+
+        mes = normalizar_mes_produccion(cleaned.get("mes_produccion"))
+
+        # ====================================================
+        # COMPATIBILIDAD CON REGISTROS HISTÓRICOS
+        # ====================================================
+
+        if mes is None:
+            self.add_error(
+                "mes_produccion",
+                "No se pudo interpretar el mes de producción.",
+            )
+            return cleaned
+
+        if mes < "2026-10":
+            return cleaned
+
+        # Los registros históricos sin modalidad explícita
+        # pueden conservar sus valores anteriores al editar.
+        es_historico = bool(
+            self.instance
+            and self.instance.pk
+            and self.instance.modalidad_pago_tecnicos is None
+        )
+
+        if es_historico and not modalidad:
+            return cleaned
+
+        # ====================================================
+        # VALIDAR MODALIDAD
+        # ====================================================
+
+        if not modalidad:
+            self.add_error(
+                "modalidad_pago_tecnicos",
+                "Selecciona una modalidad de pago.",
+            )
+            return cleaned
+
+        # ====================================================
+        # VALIDAR PROYECTO Y ACTIVIDAD
+        # ====================================================
+
+        if not proyecto:
+            self.add_error(
+                "proyecto",
+                "Selecciona un proyecto.",
+            )
+
+        if not actividad:
+            self.add_error(
+                "actividad",
+                "Selecciona una actividad.",
+            )
+
+        if proyecto and actividad:
+
+            if actividad.proyecto_id != proyecto.pk:
+                self.add_error(
+                    "actividad",
+                    "La actividad no pertenece al proyecto seleccionado.",
+                )
+
+            elif not actividad.activa:
+                es_actividad_historica = bool(
+                    self.instance
+                    and self.instance.pk
+                    and self.instance.actividad_id == actividad.pk
+                )
+
+                if not es_actividad_historica:
+                    self.add_error(
+                        "actividad",
+                        "La actividad seleccionada está desactivada.",
+                    )
+
+        # ====================================================
+        # MODALIDAD: TARIFA POR ACTIVIDAD
+        # ====================================================
+
+        if modalidad == "tarifa_actividad":
+
+            # El importe definitivo se calculará al asignar
+            # los técnicos según sus tarifas individuales.
+            cleaned["monto_mmoo"] = Decimal("0.00")
+
+        # ====================================================
+        # MODALIDAD: MMOO DE COTIZACIÓN
+        # ====================================================
+
+        elif modalidad == "mmoo_cotizacion":
+
+            # Una MMOO positiva se distribuirá equitativamente.
+            # Una MMOO de cero utilizará las tarifas por actividad.
+            if monto_mmoo is None:
+                self.add_error(
+                    "monto_mmoo",
+                    "Ingresa la MMOO de cotización, incluso si es 0.",
+                )
+
+        return cleaned
 
 
 User = get_user_model()

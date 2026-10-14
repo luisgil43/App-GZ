@@ -11,15 +11,34 @@
     {% csrf_token %}
   </form>
 
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+
     <div class="flex items-center gap-2">
       <a href="{% url 'operaciones:produccion_admin' %}"
-         class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded-full shadow text-sm">
+        class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded-full shadow text-sm">
         ← Volver
       </a>
-      <h1 class="text-2xl font-bold">💳 Totales a pagar</h1>
+
+      <h1 class="text-2xl font-bold">
+        💳 Totales a pagar
+      </h1>
     </div>
-    <div class="text-sm text-gray-600">Mes actual: <b>{{ current_month }}</b></div>
+
+    <div class="flex flex-wrap items-center gap-3">
+
+      <span class="text-sm text-gray-600">
+        Mes actual: <b>{{ current_month }}</b>
+      </span>
+
+      <a href="{% url 'operaciones:exportar_pagos_pendientes_excel' %}{% if f_tecnico %}?f_tecnico={{ f_tecnico|urlencode }}{% endif %}"
+        class="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow text-sm font-medium whitespace-nowrap">
+
+        📥 Exportar Excel
+
+      </a>
+
+    </div>
+
   </div>
 
   <!-- ================= PARTE SUPERIOR: este mes ================= -->

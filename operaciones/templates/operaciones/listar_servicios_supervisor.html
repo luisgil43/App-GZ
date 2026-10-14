@@ -2,7 +2,7 @@
 {% load humanize %}
 {% load custom_filters %}
 
-{% block title %}Servicios Cotizados - Supervisor{% endblock %}
+{% block title %}Servicios Disponibles - Supervisor{% endblock %}
 
 {% block dashboard_content %}
 <div class="min-h-screen bg-slate-50 px-3 py-4 sm:mx-0 sm:p-6">
@@ -356,7 +356,7 @@
       <div>
 
         <h1 class="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-          Servicios Cotizados
+          Servicios Disponibles
         </h1>
 
         <p class="mt-1 text-sm text-slate-500">
@@ -563,26 +563,31 @@
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="6" checked>
-            <span>MONTO MMOO</span>
+            <span>ACTIVIDAD</span>
           </label>
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="7" checked>
-            <span>ASIGNADOS</span>
+            <span>MONTO MMOO</span>
           </label>
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="8" checked>
-            <span>FECHA FIN</span>
+            <span>ASIGNADOS</span>
           </label>
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="9" checked>
-            <span>ESTADO</span>
+            <span>FECHA FIN</span>
           </label>
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="10" checked>
+            <span>ESTADO</span>
+          </label>
+
+          <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
+            <input type="checkbox" class="col-toggle accent-cyan-600" data-col="11" checked>
             <span>ACCIONES</span>
           </label>
 
@@ -778,29 +783,35 @@
 
           <th class="px-2 py-3" data-excel-col data-excel-key="6">
             <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
+              <span>ACTIVIDAD</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
           <th class="px-2 py-3" data-excel-col data-excel-key="7">
             <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>ASIGNADOS</span><span class="excel-arrow text-gray-500">▼</span>
+              <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
           <th class="px-2 py-3" data-excel-col data-excel-key="8">
             <button type="button" class="excel-header-btn flex items-center gap-1">
+              <span>ASIGNADOS</span><span class="excel-arrow text-gray-500">▼</span>
+            </button>
+          </th>
+
+          <th class="px-2 py-3" data-excel-col data-excel-key="9">
+            <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>FECHA FIN</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="px-2 py-3"lass="p-2" data-excel-col data-excel-key="9">
+          <th class="px-2 py-3" data-excel-col data-excel-key="10">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ESTADO</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
 
-          <th class="px-2 py-3" data-excel-col data-excel-key="10">
+          <th class="px-2 py-3" data-excel-col data-excel-key="11">
             <button type="button" class="excel-header-btn flex items-center gap-1">
               <span>ACCIONES</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
@@ -820,6 +831,31 @@
 
               <td class="p-2 align-top text-xs leading-tight whitespace-pre-line break-words min-w-[300px] w-[350px] max-w-[400px]">
                 {{ servicio.detalle_tarea }}
+              </td>
+
+              <td class="p-2 text-xs">
+                {% if servicio.actividad %}
+                  <span
+                    class="
+                      inline-flex
+                      max-w-[260px]
+                      items-center
+                      rounded-lg
+                      border border-violet-100
+                      bg-violet-50
+                      px-2.5 py-1
+                      font-bold
+                      text-violet-700
+                      whitespace-normal
+                    "
+                  >
+                    {{ servicio.actividad.nombre }}
+                  </span>
+                {% else %}
+                  <span class="text-slate-400">
+                    Sin actividad
+                  </span>
+                {% endif %}
               </td>
 
               <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
@@ -1069,7 +1105,7 @@
           {% endwith %}
         {% empty %}
           <tr>
-            <td colspan="11" class="p-4 text-center text-gray-500">
+            <td colspan="12" class="p-4 text-center text-gray-500">
               No hay servicios para mostrar.
             </td>
           </tr>
@@ -1343,7 +1379,7 @@
 
     const tableId = table.dataset.columnsTable || 'servicios-supervisor';
 
-    return 'cols:' + tableId;
+    return 'cols:' + tableId + ':v2';
   }
 
   function loadState() {

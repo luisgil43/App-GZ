@@ -46,7 +46,12 @@ from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
 from facturacion.models import CartolaMovimiento
 from notificaciones.services import notificar_asignacion_servicio_tecnicos
 from operaciones.forms import AsignarTrabajadoresForm
-from operaciones.models import SitioMovil, SitiosTablaMetadata
+from operaciones.models import (MonthlyPayment, MontoTecnicoServicio,
+                                SitioMovil, SitiosTablaMetadata)
+from operaciones.services.tarifas import (TarifaNoConfigurada,
+                                          normalizar_mes_produccion,
+                                          obtener_monto_tecnico,
+                                          obtener_tarifa_tecnico)
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
 from usuarios.utils import \
@@ -1833,6 +1838,13 @@ def listar_servicios_pm(request):
         - Mes de producción
         - Estado
 
+    COLUMNAS NUEVAS
+    ==========================================================
+
+        - Proyecto
+        - Actividad
+        - Modalidad de pago de técnicos
+
     Los filtros Excel se aplican antes de paginar.
 
     excel_global_json se construye sobre todo el queryset
@@ -1866,11 +1878,18 @@ def listar_servicios_pm(request):
     # QUERYSET BASE
     # ========================================================
 
-    servicios = ServicioCotizado.objects.filter(
-        estado__in=ESTADOS_VISIBLES,
-    ).order_by(
-        "-fecha_creacion",
-        "-id",
+    servicios = (
+        ServicioCotizado.objects.filter(
+            estado__in=ESTADOS_VISIBLES,
+        )
+        .select_related(
+            "proyecto",
+            "actividad",
+        )
+        .order_by(
+            "-fecha_creacion",
+            "-id",
+        )
     )
 
     # ========================================================
@@ -1919,6 +1938,7 @@ def listar_servicios_pm(request):
     du = du_raw
 
     if du:
+
         du = (
             du.strip()
             .upper()
@@ -1933,21 +1953,25 @@ def listar_servicios_pm(request):
         )
 
     if id_claro:
+
         servicios = servicios.filter(
             id_claro__icontains=id_claro,
         )
 
     if id_new:
+
         servicios = servicios.filter(
             id_new__icontains=id_new,
         )
 
     if mes_produccion:
+
         servicios = servicios.filter(
             mes_produccion__icontains=mes_produccion,
         )
 
     if estado and estado in ESTADOS_VISIBLES:
+
         servicios = servicios.filter(
             estado=estado,
         )
@@ -1958,53 +1982,44 @@ def listar_servicios_pm(request):
     # HELPERS EXCEL
     # ========================================================
 
-    def money_clp_label(
-        n,
-    ):
+    def money_clp_label(n):
+
         try:
+
             return f"$ {int(n or 0):,} CLP".replace(
                 ",",
                 ".",
             )
 
         except Exception:
+
             return "$ 0 CLP"
 
-    def uf_label(
-        n,
-    ):
+    def uf_label(n):
+
         try:
+
             val = float(
                 n or 0,
             )
 
             if val.is_integer():
+
                 return f"UF {int(val):,}".replace(
                     ",",
                     ".",
                 )
 
             return (
-                f"UF {val:,.2f}".replace(
-                    ",",
-                    "X",
-                )
-                .replace(
-                    ".",
-                    ",",
-                )
-                .replace(
-                    "X",
-                    ".",
-                )
+                f"UF {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
         except Exception:
+
             return "UF 0"
 
-    def status_label(
-        servicio,
-    ):
+    def status_label(servicio):
+
         labels = {
             "cotizado": "Cotizado (pendiente aprobación)",
             "aprobado_pendiente": "Aprobada, pendiente por asignar",
@@ -2021,48 +2036,165 @@ def listar_servicios_pm(request):
             servicio.estado,
         )
 
+    # ========================================================
+    # NUEVO: LABEL DE MODALIDAD DE PAGO
+    # ========================================================
+
+    def modalidad_pago_label(servicio):
+
+        modalidades = {
+            "tarifa_actividad": "Tarifa por actividad",
+            "mmoo_cotizacion": "MMOO de cotización",
+        }
+
+        return modalidades.get(
+            servicio.modalidad_pago_tecnicos,
+            "Histórico",
+        )
+
+    # ========================================================
+    # NUEVO: LABEL DE PROYECTO
+    # ========================================================
+
+    def proyecto_label(servicio):
+
+        if servicio.proyecto_id and servicio.proyecto:
+
+            return str(servicio.proyecto.nombre or "—")
+
+        return "—"
+
+    # ========================================================
+    # NUEVO: LABEL DE ACTIVIDAD
+    # ========================================================
+
+    def actividad_label(servicio):
+
+        if servicio.actividad_id and servicio.actividad:
+
+            return str(servicio.actividad.nombre or "—")
+
+        return "—"
+
+    # ========================================================
+    # COLUMNAS EXCEL
+    # ========================================================
+    #
+    #  0  DU
+    #  1  ID CLARO
+    #  2  REGIÓN
+    #  3  MES PRODUCCIÓN
+    #  4  ID NEW
+    #  5  PROYECTO                 NUEVO
+    #  6  ACTIVIDAD                NUEVO
+    #  7  DETALLE TAREA
+    #  8  MONTO COTIZADO
+    #  9  MONTO MMOO
+    # 10  MODALIDAD DE PAGO        NUEVO
+    # 11  ESTADO
+    # 12  ACCIONES
+    #
+    # IMPORTANTE:
+    # El HTML debe respetar exactamente este orden.
+    # ========================================================
+
     def excel_value_for_servicio(
         servicio,
         col,
     ):
+
         col = str(
             col,
         )
 
         if col == "0":
+
             return f"DU{servicio.du}" if servicio.du is not None else "—"
 
         if col == "1":
+
             return str(servicio.id_claro or "—")
 
         if col == "2":
+
             return str(servicio.region or "—")
 
         if col == "3":
+
             return str(servicio.mes_produccion or "—")
 
         if col == "4":
+
             return str(servicio.id_new or "—")
 
+        # ====================================================
+        # NUEVO: PROYECTO
+        # ====================================================
+
         if col == "5":
-            return str(servicio.detalle_tarea or "—")
+
+            return proyecto_label(servicio)
+
+        # ====================================================
+        # NUEVO: ACTIVIDAD
+        # ====================================================
 
         if col == "6":
+
+            return actividad_label(servicio)
+
+        # ====================================================
+        # DETALLE TAREA
+        # ====================================================
+
+        if col == "7":
+
+            return str(servicio.detalle_tarea or "—")
+
+        # ====================================================
+        # MONTO COTIZADO
+        # ====================================================
+
+        if col == "8":
+
             return uf_label(
                 servicio.monto_cotizado,
             )
 
-        if col == "7":
+        # ====================================================
+        # MONTO MMOO
+        # ====================================================
+
+        if col == "9":
+
             return money_clp_label(
                 servicio.monto_mmoo,
             )
 
-        if col == "8":
+        # ====================================================
+        # NUEVO: MODALIDAD DE PAGO
+        # ====================================================
+
+        if col == "10":
+
+            return modalidad_pago_label(servicio)
+
+        # ====================================================
+        # ESTADO
+        # ====================================================
+
+        if col == "11":
+
             return status_label(
                 servicio,
             )
 
-        if col == "9":
+        # ====================================================
+        # ACCIONES
+        # ====================================================
+
+        if col == "12":
+
             return "Acciones"
 
         return ""
@@ -2079,6 +2211,7 @@ def listar_servicios_pm(request):
     ).strip()
 
     try:
+
         excel_filters = (
             json.loads(
                 excel_filters_raw,
@@ -2088,6 +2221,7 @@ def listar_servicios_pm(request):
         )
 
     except json.JSONDecodeError:
+
         excel_filters = {}
 
     servicios_list = list(
@@ -2095,11 +2229,28 @@ def listar_servicios_pm(request):
     )
 
     # ========================================================
-    # LABEL DE ESTADO PARA EL TEMPLATE
+    # LABELS PARA EL TEMPLATE
     # ========================================================
 
     for servicio in servicios_list:
+
+        # Estado original
+
         servicio.estado_pm_label = status_label(
+            servicio,
+        )
+
+        # Nuevos campos
+
+        servicio.proyecto_pm_label = proyecto_label(
+            servicio,
+        )
+
+        servicio.actividad_pm_label = actividad_label(
+            servicio,
+        )
+
+        servicio.modalidad_pago_pm_label = modalidad_pago_label(
             servicio,
         )
 
@@ -2130,10 +2281,12 @@ def listar_servicios_pm(request):
                 )
 
                 if label not in values_set:
+
                     ok = False
                     break
 
             if ok:
+
                 filtered_list.append(
                     servicio,
                 )
@@ -2146,8 +2299,11 @@ def listar_servicios_pm(request):
 
     excel_global = {}
 
+    # Antes: 10 columnas
+    # Ahora: 13 columnas
+
     for col in range(
-        10,
+        13,
     ):
 
         vals = set()
@@ -2187,6 +2343,7 @@ def listar_servicios_pm(request):
     else:
 
         try:
+
             per_page = max(
                 5,
                 min(
@@ -2200,6 +2357,7 @@ def listar_servicios_pm(request):
             )
 
         except ValueError:
+
             per_page = 10
             cantidad = "10"
 
@@ -2226,24 +2384,31 @@ def listar_servicios_pm(request):
     keep_params = {}
 
     if cantidad:
+
         keep_params["cantidad"] = cantidad
 
     if du_raw:
+
         keep_params["du"] = du_raw
 
     if id_claro:
+
         keep_params["id_claro"] = id_claro
 
     if id_new:
+
         keep_params["id_new"] = id_new
 
     if mes_produccion:
+
         keep_params["mes_produccion"] = mes_produccion
 
     if estado and estado in ESTADOS_VISIBLES:
+
         keep_params["estado"] = estado
 
     if excel_filters_raw:
+
         keep_params["excel_filters"] = excel_filters_raw
 
     qs_keep = urlencode(
@@ -2626,9 +2791,8 @@ def accion_masiva_cotizaciones_pm(
     "admin",
     "facturacion",
 )
-def crear_servicio_cotizado(
-    request,
-):
+def crear_servicio_cotizado(request):
+
     if request.method == "POST":
 
         form = ServicioCotizadoForm(request.POST)
@@ -2638,56 +2802,137 @@ def crear_servicio_cotizado(
             servicio = form.save(commit=False)
 
             servicio.creado_por = request.user
-
             servicio.estado = "cotizado"
 
             # ====================================================
-            # VINCULAR A EJECUCIÓN MENSUAL EXACTA
+            # VALIDAR MES DE PRODUCCIÓN
             # ====================================================
 
-            servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
-                id_claro=(servicio.id_claro),
-                mes_produccion=(servicio.mes_produccion),
-            )
+            mes_normalizado = normalizar_mes_produccion(servicio.mes_produccion)
 
-            servicio.save()
+            if mes_normalizado is None:
 
-            if servicio.sitio_planificado_id:
-
-                messages.success(
-                    request,
-                    (
-                        f"DU{servicio.du} creado y "
-                        "vinculado correctamente con "
-                        "su planificación mensual."
-                    ),
+                form.add_error(
+                    "mes_produccion",
+                    "No se pudo interpretar el mes de producción.",
                 )
 
             else:
 
-                messages.warning(
-                    request,
-                    (
-                        f"DU{servicio.du} fue creado, "
-                        "pero no existe una planificación "
-                        "mensual exacta para "
-                        f"{servicio.id_claro} / "
-                        f"{servicio.mes_produccion}. "
-                        "El servicio quedó sin vínculo."
-                    ),
+                # ====================================================
+                # MODALIDAD DE PAGO
+                # ====================================================
+
+                if mes_normalizado >= "2026-10":
+
+                    modalidad = servicio.modalidad_pago_tecnicos
+
+                    monto_ingresado = form.cleaned_data.get("monto_mmoo") or Decimal(
+                        "0.00"
+                    )
+
+                    # --------------------------------------------
+                    # TARIFA POR ACTIVIDAD
+                    # --------------------------------------------
+
+                    if modalidad == "tarifa_actividad":
+
+                        servicio.monto_mmoo = Decimal("0.00")
+                        servicio.monto_mmoo_cotizacion = None
+
+                    # --------------------------------------------
+                    # MMOO DE COTIZACIÓN
+                    # --------------------------------------------
+
+                    elif modalidad == "mmoo_cotizacion":
+
+                        if monto_ingresado > 0:
+
+                            servicio.monto_mmoo_cotizacion = monto_ingresado
+                            servicio.monto_mmoo = monto_ingresado
+
+                        else:
+
+                            # MMOO = 0:
+                            # utilizar tarifas individuales de actividad.
+
+                            servicio.modalidad_pago_tecnicos = "tarifa_actividad"
+
+                            servicio.monto_mmoo = Decimal("0.00")
+                            servicio.monto_mmoo_cotizacion = None
+
+                # ====================================================
+                # VINCULAR A EJECUCIÓN MENSUAL EXACTA
+                # ====================================================
+
+                servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
+                    id_claro=servicio.id_claro,
+                    mes_produccion=servicio.mes_produccion,
                 )
 
-            return redirect("operaciones:listar_servicios_pm")
+                servicio.save()
+
+                # ====================================================
+                # MENSAJES ORIGINALES
+                # ====================================================
+
+                if servicio.sitio_planificado_id:
+
+                    messages.success(
+                        request,
+                        (
+                            f"DU{servicio.du} creado y "
+                            "vinculado correctamente con "
+                            "su planificación mensual."
+                        ),
+                    )
+
+                else:
+
+                    messages.warning(
+                        request,
+                        (
+                            f"DU{servicio.du} fue creado, "
+                            "pero no existe una planificación "
+                            "mensual exacta para "
+                            f"{servicio.id_claro} / "
+                            f"{servicio.mes_produccion}. "
+                            "El servicio quedó sin vínculo."
+                        ),
+                    )
+
+                return redirect("operaciones:listar_servicios_pm")
 
     else:
 
         form = ServicioCotizadoForm()
+
+    # ====================================================
+    # ACTIVIDADES DISPONIBLES PARA EL SELECTOR DEL HTML
+    # ====================================================
+
+    from operaciones.models import ActividadProyecto
+
+    actividades_disponibles = list(
+        ActividadProyecto.objects.filter(activa=True)
+        .values(
+            "id",
+            "proyecto_id",
+            "nombre",
+        )
+        .order_by("nombre")
+    )
+
+    # ====================================================
+    # RENDER
+    # ====================================================
 
     return render(
         request,
         "operaciones/crear_servicio_cotizado.html",
         {
             "form": form,
+            "actividades_disponibles": actividades_disponibles,
         },
     )
 
@@ -2695,49 +2940,256 @@ def crear_servicio_cotizado(
 @login_required
 @rol_requerido("pm", "admin", "facturacion")
 def editar_servicio_cotizado(request, pk):
-    servicio = get_object_or_404(ServicioCotizado, pk=pk)
+
+    servicio = get_object_or_404(
+        ServicioCotizado,
+        pk=pk,
+    )
 
     next_url = request.POST.get("next") or request.GET.get("next") or ""
 
     if next_url and not next_url.startswith("/"):
         next_url = ""
 
-    # --- Permitir edición siempre a PM, Admin y Facturación ---
-    if servicio.estado not in ["cotizado", "aprobado_pendiente"] and not (
+    # ====================================================
+    # PERMISOS ORIGINALES
+    # ====================================================
+
+    if servicio.estado not in [
+        "cotizado",
+        "aprobado_pendiente",
+    ] and not (
         request.user.is_superuser or request.user.es_facturacion or request.user.es_pm
     ):
+
         messages.error(
-            request, "No puedes editar esta cotización porque ya fue asignada."
+            request,
+            "No puedes editar esta cotización porque ya fue asignada.",
         )
+
         return redirect(next_url or "operaciones:listar_servicios_pm")
 
+    # ====================================================
+    # CONSERVAR CONDICIONES ECONÓMICAS ORIGINALES
+    # ====================================================
+
+    monto_mmoo_anterior = servicio.monto_mmoo
+
+    monto_mmoo_cotizacion_anterior = servicio.monto_mmoo_cotizacion
+
+    modalidad_anterior = servicio.modalidad_pago_tecnicos
+
+    proyecto_anterior_id = servicio.proyecto_id
+    actividad_anterior_id = servicio.actividad_id
+
+    mes_anterior = servicio.mes_produccion
+
+    tiene_tecnicos = servicio.trabajadores_asignados.exists()
+
+    tiene_montos_registrados = servicio.montos_tecnicos.exists()
+
+    condiciones_economicas_protegidas = tiene_tecnicos or tiene_montos_registrados
+
+    # ====================================================
+    # FORMULARIO
+    # ====================================================
+
     if request.method == "POST":
-        form = ServicioCotizadoForm(request.POST, instance=servicio)
+
+        form = ServicioCotizadoForm(
+            request.POST,
+            instance=servicio,
+        )
 
         if form.is_valid():
+
             servicio = form.save(commit=False)
 
-            if servicio.id_claro:
-                sitio = SitioMovil.objects.filter(id_claro=servicio.id_claro).first()
+            mes_normalizado = normalizar_mes_produccion(servicio.mes_produccion)
 
-                if sitio:
-                    servicio.id_new = sitio.id_sites_new
-                    servicio.region = sitio.region
+            if mes_normalizado is None:
 
-            servicio.sitio_planificado = obtener_sitio_planificado_para_servicio(
-                id_claro=servicio.id_claro,
-                mes_produccion=servicio.mes_produccion,
+                form.add_error(
+                    "mes_produccion",
+                    "No se pudo interpretar el mes de producción.",
+                )
+
+            else:
+
+                modalidad = servicio.modalidad_pago_tecnicos
+
+                monto_ingresado = form.cleaned_data.get("monto_mmoo") or Decimal("0.00")
+
+                # ====================================================
+                # NORMALIZAR MODALIDAD EFECTIVA
+                # ====================================================
+
+                if mes_normalizado >= "2026-10":
+
+                    if modalidad == "mmoo_cotizacion" and monto_ingresado == Decimal(
+                        "0.00"
+                    ):
+
+                        modalidad = "tarifa_actividad"
+
+                # ====================================================
+                # PROTEGER SERVICIOS CON TÉCNICOS
+                # ====================================================
+
+                if condiciones_economicas_protegidas:
+
+                    cambios_economicos = (
+                        servicio.proyecto_id != proyecto_anterior_id
+                        or servicio.actividad_id != actividad_anterior_id
+                        or modalidad != modalidad_anterior
+                        or servicio.mes_produccion != mes_anterior
+                    )
+
+                    if modalidad_anterior == "mmoo_cotizacion":
+
+                        monto_original = (
+                            monto_mmoo_cotizacion_anterior
+                            if monto_mmoo_cotizacion_anterior is not None
+                            else monto_mmoo_anterior
+                        )
+
+                        if monto_ingresado != monto_original:
+                            cambios_economicos = True
+
+                    if cambios_economicos:
+
+                        form.add_error(
+                            None,
+                            (
+                                "Esta cotización ya tiene técnicos "
+                                "asignados o importes individuales "
+                                "registrados. No puedes modificar "
+                                "su proyecto, actividad, modalidad, "
+                                "mes de producción ni MMOO."
+                            ),
+                        )
+
+                # ====================================================
+                # GUARDAR SI NO EXISTEN ERRORES
+                # ====================================================
+
+                if not form.errors:
+
+                    # --------------------------------------------
+                    # COTIZACIONES DESDE OCTUBRE 2026
+                    # --------------------------------------------
+
+                    if mes_normalizado >= "2026-10":
+
+                        if condiciones_economicas_protegidas:
+
+                            # Conservar importes originales.
+
+                            servicio.monto_mmoo = monto_mmoo_anterior
+
+                            servicio.monto_mmoo_cotizacion = (
+                                monto_mmoo_cotizacion_anterior
+                            )
+
+                            servicio.modalidad_pago_tecnicos = modalidad_anterior
+
+                        elif modalidad == "tarifa_actividad":
+
+                            servicio.modalidad_pago_tecnicos = "tarifa_actividad"
+
+                            servicio.monto_mmoo = Decimal("0.00")
+
+                            servicio.monto_mmoo_cotizacion = None
+
+                        elif modalidad == "mmoo_cotizacion":
+
+                            servicio.modalidad_pago_tecnicos = "mmoo_cotizacion"
+
+                            servicio.monto_mmoo_cotizacion = monto_ingresado
+
+                            servicio.monto_mmoo = monto_ingresado
+
+                    # --------------------------------------------
+                    # COTIZACIONES ANTERIORES A OCTUBRE
+                    # --------------------------------------------
+
+                    else:
+
+                        if condiciones_economicas_protegidas:
+
+                            servicio.monto_mmoo = monto_mmoo_anterior
+
+                            servicio.monto_mmoo_cotizacion = (
+                                monto_mmoo_cotizacion_anterior
+                            )
+
+                            servicio.modalidad_pago_tecnicos = modalidad_anterior
+
+                    # ====================================================
+                    # AUTOCOMPLETAR DATOS DEL SITIO
+                    # ====================================================
+
+                    if servicio.id_claro:
+
+                        sitio = SitioMovil.objects.filter(
+                            id_claro=servicio.id_claro
+                        ).first()
+
+                        if sitio:
+
+                            servicio.id_new = sitio.id_sites_new
+                            servicio.region = sitio.region
+
+                    # ====================================================
+                    # VINCULAR PLANIFICACIÓN MENSUAL EXACTA
+                    # ====================================================
+
+                    servicio.sitio_planificado = (
+                        obtener_sitio_planificado_para_servicio(
+                            id_claro=servicio.id_claro,
+                            mes_produccion=servicio.mes_produccion,
+                        )
+                    )
+
+                    servicio.save()
+
+                    messages.success(
+                        request,
+                        "Cotización actualizada correctamente.",
+                    )
+
+                    return redirect(next_url or "operaciones:listar_servicios_pm")
+
+        if form.errors:
+
+            messages.error(
+                request,
+                "Corrige los errores en el formulario.",
             )
 
-            servicio.save()
-            messages.success(request, "Cotización actualizada correctamente.")
-            return redirect(next_url or "operaciones:listar_servicios_pm")
-
-        else:
-            messages.error(request, "Corrige los errores en el formulario.")
-
     else:
+
         form = ServicioCotizadoForm(instance=servicio)
+
+    # ====================================================
+    # ACTIVIDADES DISPONIBLES PARA EL SELECTOR DEL HTML
+    # ====================================================
+
+    from operaciones.models import ActividadProyecto
+
+    actividades_disponibles = list(
+        ActividadProyecto.objects.filter(activa=True)
+        .values(
+            "id",
+            "proyecto_id",
+            "nombre",
+        )
+        .order_by("nombre")
+    )
+
+    # ====================================================
+    # RENDER
+    # ====================================================
 
     return render(
         request,
@@ -2746,6 +3198,7 @@ def editar_servicio_cotizado(request, pk):
             "form": form,
             "servicio": servicio,
             "next_url": next_url,
+            "actividades_disponibles": actividades_disponibles,
         },
     )
 
@@ -2988,295 +3441,1512 @@ def obtener_sitio_planificado_para_servicio(
 
 
 @login_required
-@rol_requerido(
-    "pm",
-    "admin",
-    "facturacion",
-)
-def importar_cotizaciones(
-    request,
-):
-    if request.method == "POST" and request.FILES.get("archivo"):
+@rol_requerido("pm", "admin", "facturacion")
+def importar_cotizaciones(request):
 
-        archivo = request.FILES["archivo"]
+    import re
+    import unicodedata
+    from datetime import datetime
+    from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+    import pandas as pd
+    from django.contrib import messages
+    from django.db import models, transaction
+    from django.shortcuts import redirect, render
+
+    from facturacion.models import Proyecto
+    from operaciones.models import (ActividadProyecto, ServicioCotizado,
+                                    SitioMovil)
+
+    # ====================================================
+    # GET
+    # ====================================================
+
+    if request.method != "POST":
+
+        return render(
+            request,
+            "operaciones/importar_cotizaciones.html",
+        )
+
+    archivo = request.FILES.get("archivo")
+
+    if not archivo:
+
+        messages.error(
+            request,
+            "Debes seleccionar un archivo Excel o CSV.",
+        )
+
+        return redirect("operaciones:listar_servicios_pm")
+
+    # ====================================================
+    # FUNCIONES AUXILIARES
+    # ====================================================
+
+    def texto(valor):
+
+        if valor is None or pd.isna(valor):
+            return ""
+
+        resultado = str(valor).strip()
+
+        if resultado.endswith(".0"):
+
+            parte_entera = resultado[:-2]
+
+            if parte_entera.isdigit():
+                return parte_entera
+
+        return resultado
+
+    def normalizar_encabezado(valor):
+
+        valor = texto(valor)
+
+        valor = unicodedata.normalize(
+            "NFKD",
+            valor,
+        )
+
+        valor = "".join(
+            caracter for caracter in valor if not unicodedata.combining(caracter)
+        )
+
+        valor = re.sub(
+            r"\s+",
+            " ",
+            valor,
+        )
+
+        return valor.strip().upper()
+
+    def convertir_monto(valor, nombre_campo):
+
+        if valor is None or pd.isna(valor):
+
+            raise ValueError(f"{nombre_campo} está vacío.")
+
+        if isinstance(valor, (int, float, Decimal)):
+
+            try:
+
+                monto = Decimal(str(valor))
+
+            except InvalidOperation:
+
+                raise ValueError(f"{nombre_campo} no es válido.")
+
+        else:
+
+            cadena = str(valor).strip()
+
+            cadena = (
+                cadena.replace("UF", "")
+                .replace("CLP", "")
+                .replace("$", "")
+                .replace(" ", "")
+            )
+
+            if not cadena:
+
+                raise ValueError(f"{nombre_campo} está vacío.")
+
+            # Formato chileno: 70.000,50
+            if "," in cadena and "." in cadena:
+
+                if cadena.rfind(",") > cadena.rfind("."):
+
+                    cadena = cadena.replace(".", "")
+                    cadena = cadena.replace(",", ".")
+
+                else:
+
+                    cadena = cadena.replace(",", "")
+
+            elif "," in cadena:
+
+                cadena = cadena.replace(",", ".")
+
+            elif "." in cadena:
+
+                partes = cadena.split(".")
+
+                # 70.000 => 70000
+                if (
+                    len(partes) == 2
+                    and len(partes[1]) == 3
+                    and partes[0].isdigit()
+                    and partes[1].isdigit()
+                ):
+
+                    cadena = "".join(partes)
+
+                # 1.250.000 => 1250000
+                elif len(partes) > 2 and all(parte.isdigit() for parte in partes):
+
+                    cadena = "".join(partes)
+
+            try:
+
+                monto = Decimal(cadena)
+
+            except InvalidOperation:
+
+                raise ValueError(f"{nombre_campo} no es válido: {valor}")
+
+        if not monto.is_finite():
+
+            raise ValueError(f"{nombre_campo} debe ser un número finito.")
+
+        return monto.quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    def obtener_mes(valor):
+
+        if valor is None or pd.isna(valor):
+            return None, None
+
+        if isinstance(valor, (datetime, pd.Timestamp)):
+
+            fecha = valor
+
+            meses = [
+                "Enero",
+                "Febrero",
+                "Marzo",
+                "Abril",
+                "Mayo",
+                "Junio",
+                "Julio",
+                "Agosto",
+                "Septiembre",
+                "Octubre",
+                "Noviembre",
+                "Diciembre",
+            ]
+
+            mes_produccion = f"{meses[fecha.month - 1]} " f"{fecha.year}"
+
+        else:
+
+            mes_produccion = texto(valor)
+
+        mes_normalizado = normalizar_mes_produccion(mes_produccion)
+
+        if not mes_normalizado:
+            return None, None
+
+        # Normalizamos la presentación a español.
+        meses_es = [
+            "Enero",
+            "Febrero",
+            "Marzo",
+            "Abril",
+            "Mayo",
+            "Junio",
+            "Julio",
+            "Agosto",
+            "Septiembre",
+            "Octubre",
+            "Noviembre",
+            "Diciembre",
+        ]
 
         try:
 
-            # ====================================================
-            # CARGAR ARCHIVO
-            # ====================================================
+            anio, numero_mes = mes_normalizado.split("-")
 
-            if archivo.name.endswith(".csv"):
+            mes_produccion = f"{meses_es[int(numero_mes) - 1]} " f"{anio}"
 
-                df = pd.read_csv(archivo)
+        except (ValueError, IndexError):
+
+            return None, None
+
+        return mes_produccion, mes_normalizado
+
+    # ====================================================
+    # CARGAR ARCHIVO
+    # ====================================================
+
+    try:
+
+        nombre_archivo = archivo.name.lower()
+
+        if nombre_archivo.endswith(".csv"):
+
+            try:
+
+                df = pd.read_csv(
+                    archivo,
+                    dtype=str,
+                    sep=None,
+                    engine="python",
+                    encoding="utf-8-sig",
+                )
+
+            except UnicodeDecodeError:
+
+                archivo.seek(0)
+
+                df = pd.read_csv(
+                    archivo,
+                    dtype=str,
+                    sep=None,
+                    engine="python",
+                    encoding="latin-1",
+                )
+
+        elif nombre_archivo.endswith(".xlsx"):
+
+            df = pd.read_excel(
+                archivo,
+                sheet_name="Cotizaciones",
+                dtype=object,
+            )
+
+        else:
+
+            messages.error(
+                request,
+                "Formato no permitido. Utiliza XLSX o CSV.",
+            )
+
+            return redirect("operaciones:listar_servicios_pm")
+
+    except Exception as error:
+
+        messages.error(
+            request,
+            f"No se pudo leer el archivo: {error}",
+        )
+
+        return redirect("operaciones:listar_servicios_pm")
+
+    # ====================================================
+    # NORMALIZAR ENCABEZADOS
+    # ====================================================
+
+    equivalencias = {
+        "ID CLARO": "id_claro",
+        "REGION": "region",
+        "MES PRODUCCION": "mes_produccion",
+        "ID NEW": "id_new",
+        "PROYECTO": "proyecto",
+        "ACTIVIDAD": "actividad",
+        "DETALLE TAREA": "detalle_tarea",
+        "MONTO COTIZADO": "monto_cotizado",
+        "MONTO MMOO": "monto_mmoo",
+        "MODALIDAD DE PAGO": "modalidad_pago",
+    }
+
+    columnas_nuevas = {}
+
+    for columna in df.columns:
+
+        normalizado = normalizar_encabezado(columna)
+
+        columnas_nuevas[columna] = equivalencias.get(
+            normalizado,
+            normalizado.lower().replace(" ", "_"),
+        )
+
+    df.rename(
+        columns=columnas_nuevas,
+        inplace=True,
+    )
+
+    # ====================================================
+    # COLUMNAS REQUERIDAS
+    # ====================================================
+
+    columnas_requeridas = [
+        "id_claro",
+        "mes_produccion",
+        "detalle_tarea",
+        "monto_cotizado",
+    ]
+
+    faltantes = [
+        columna for columna in columnas_requeridas if columna not in df.columns
+    ]
+
+    if faltantes:
+
+        messages.error(
+            request,
+            ("Faltan columnas requeridas: " + ", ".join(faltantes)),
+        )
+
+        return redirect("operaciones:listar_servicios_pm")
+
+    # ====================================================
+    # RESULTADOS
+    # ====================================================
+
+    cotizaciones_creadas = []
+    cotizaciones_omitidas = []
+    errores_importacion = []
+
+    cotizaciones_vinculadas = 0
+    cotizaciones_sin_planificacion = []
+
+    # ====================================================
+    # PROCESAR FILAS
+    # ====================================================
+
+    for indice, row in df.iterrows():
+
+        numero_fila = indice + 2
+
+        # Ignorar filas completamente vacías.
+        if all(pd.isna(valor) or str(valor).strip() == "" for valor in row):
+            continue
+
+        try:
+
+            # ============================================
+            # ID CLARO
+            # ============================================
+
+            id_claro = texto(row.get("id_claro"))
+
+            if not id_claro:
+
+                raise ValueError("ID CLARO es obligatorio.")
+
+            # ============================================
+            # MES PRODUCCIÓN
+            # ============================================
+
+            (
+                mes_produccion,
+                mes_normalizado,
+            ) = obtener_mes(row.get("mes_produccion"))
+
+            if not mes_normalizado:
+
+                raise ValueError("MES PRODUCCIÓN incorrecto. " "Ejemplo: Octubre 2026.")
+
+            # ============================================
+            # DETALLE TAREA
+            # ============================================
+
+            detalle_tarea = texto(row.get("detalle_tarea"))
+
+            if not detalle_tarea:
+
+                raise ValueError("DETALLE TAREA es obligatorio.")
+
+            # ============================================
+            # MONTO COTIZADO
+            # ============================================
+
+            monto_cotizado = convertir_monto(
+                row.get("monto_cotizado"),
+                "MONTO COTIZADO",
+            )
+
+            if monto_cotizado <= 0:
+
+                raise ValueError("MONTO COTIZADO debe ser mayor que cero.")
+
+            # ============================================
+            # REGIÓN
+            # ============================================
+
+            region = texto(row.get("region"))
+
+            if not region:
+
+                region = id_claro.split("_")[0] if "_" in id_claro else "13"
+
+            # ============================================
+            # ID NEW
+            # ============================================
+
+            id_new = texto(row.get("id_new"))
+
+            if not id_new:
+
+                sitio = SitioMovil.objects.filter(id_claro=id_claro).first()
+
+                if sitio:
+
+                    id_new = texto(sitio.id_sites_new)
+
+            if not id_new:
+
+                raise ValueError("No se encontró ID NEW para " f"ID CLARO {id_claro}.")
+
+            # ============================================
+            # EVITAR DUPLICADOS
+            # ============================================
+
+            # Se revisan todos los servicios y se compara
+            # el mes normalizado para evitar diferencias
+            # entre representaciones del mismo mes.
+
+            candidatos = ServicioCotizado.objects.filter(
+                models.Q(id_claro=id_claro) | models.Q(id_new=id_new)
+            )
+
+            existente = None
+
+            for candidato in candidatos:
+
+                if (
+                    normalizar_mes_produccion(candidato.mes_produccion)
+                    == mes_normalizado
+                ):
+
+                    existente = candidato
+                    break
+
+            if existente:
+
+                cotizaciones_omitidas.append(
+                    {
+                        "id_claro": id_claro,
+                        "id_new": id_new,
+                        "mes_produccion": mes_produccion,
+                        "du": existente.du,
+                        "estado": existente.get_estado_display(),
+                    }
+                )
+
+                continue
+
+            # ============================================
+            # PROYECTO Y ACTIVIDAD
+            # ============================================
+
+            proyecto = None
+            actividad = None
+
+            modalidad = None
+
+            monto_mmoo = None
+            monto_mmoo_cotizacion = None
+
+            if mes_normalizado >= "2026-10":
+
+                nombre_proyecto = texto(row.get("proyecto"))
+
+                nombre_actividad = texto(row.get("actividad"))
+
+                modalidad = texto(row.get("modalidad_pago")).lower()
+
+                if not nombre_proyecto:
+
+                    raise ValueError(
+                        "PROYECTO es obligatorio " "desde octubre de 2026."
+                    )
+
+                if not nombre_actividad:
+
+                    raise ValueError(
+                        "ACTIVIDAD es obligatoria " "desde octubre de 2026."
+                    )
+
+                if modalidad not in (
+                    "tarifa_actividad",
+                    "mmoo_cotizacion",
+                ):
+
+                    raise ValueError(
+                        "MODALIDAD DE PAGO debe ser "
+                        "'tarifa_actividad' o "
+                        "'mmoo_cotizacion'."
+                    )
+
+                proyectos = Proyecto.objects.filter(nombre__iexact=nombre_proyecto)
+
+                if proyectos.count() != 1:
+
+                    raise ValueError(
+                        "El proyecto no existe o "
+                        "su nombre no es único: "
+                        f"{nombre_proyecto}."
+                    )
+
+                proyecto = proyectos.first()
+
+                actividades = ActividadProyecto.objects.filter(
+                    proyecto=proyecto,
+                    nombre__iexact=nombre_actividad,
+                    activa=True,
+                )
+
+                if actividades.count() != 1:
+
+                    raise ValueError(
+                        "La actividad no existe, está "
+                        "inactiva o no pertenece al "
+                        f"proyecto seleccionado: "
+                        f"{nombre_actividad}."
+                    )
+
+                actividad = actividades.first()
+
+                # ========================================
+                # MODALIDAD TARIFA POR ACTIVIDAD
+                # ========================================
+
+                if modalidad == "tarifa_actividad":
+
+                    monto_mmoo = Decimal("0.00")
+
+                    monto_mmoo_cotizacion = None
+
+                # ========================================
+                # MODALIDAD MMOO DE COTIZACIÓN
+                # ========================================
+
+                elif modalidad == "mmoo_cotizacion":
+
+                    monto_mmoo = convertir_monto(
+                        row.get("monto_mmoo"),
+                        "MONTO MMOO",
+                    )
+
+                    if monto_mmoo <= 0:
+
+                        raise ValueError(
+                            "MONTO MMOO debe ser mayor "
+                            "que cero cuando la modalidad "
+                            "es mmoo_cotizacion."
+                        )
+
+                    monto_mmoo_cotizacion = monto_mmoo
 
             else:
 
-                df = pd.read_excel(archivo)
+                # ========================================
+                # SERVICIOS HISTÓRICOS
+                # ========================================
 
-            # ====================================================
-            # ENCABEZADOS
-            # ====================================================
+                valor_historico = row.get("monto_mmoo")
 
-            encabezados_validos = {
-                "ID CLARO": "id_claro",
-                "Id Claro": "id_claro",
-                "REGION": "region",
-                "REGIÓN": "region",
-                "MES PRODUCCION": "mes_produccion",
-                "Mes Producción": "mes_produccion",
-                "ID NEW": "id_new",
-                "DETALLE TAREA": "detalle_tarea",
-                "MONTO COTIZADO": "monto_cotizado",
-                "MONTO MMOO": "monto_mmoo",
-            }
-
-            df.rename(
-                columns=encabezados_validos,
-                inplace=True,
-            )
-
-            columnas_requeridas = [
-                "id_claro",
-                "mes_produccion",
-                "detalle_tarea",
-                "monto_cotizado",
-            ]
-
-            for col in columnas_requeridas:
-
-                if col not in df.columns:
-
-                    messages.error(
-                        request,
-                        ("Falta la columna requerida: " f"{col}"),
-                    )
-
-                    return redirect("operaciones:listar_servicios_pm")
-
-            # ====================================================
-            # RESULTADOS
-            # ====================================================
-
-            cotizaciones_omitidas = []
-
-            cotizaciones_creadas = []
-
-            cotizaciones_vinculadas = 0
-
-            cotizaciones_sin_planificacion = []
-
-            # ====================================================
-            # FILAS
-            # ====================================================
-
-            for _, row in df.iterrows():
-
-                id_claro = str(row["id_claro"]).strip()
-
-                # ================================================
-                # REGION
-                # ================================================
-
-                region = (
-                    row["region"]
-                    if ("region" in row and not pd.isna(row["region"]))
-                    else (id_claro.split("_")[0] if "_" in id_claro else "13")
-                )
-
-                # ================================================
-                # ID NEW
-                # ================================================
-
-                if "id_new" in row and not pd.isna(row["id_new"]):
-
-                    id_new = row["id_new"]
-
-                else:
-
-                    try:
-
-                        sitio = SitioMovil.objects.get(id_claro=id_claro)
-
-                        id_new = sitio.id_sites_new
-
-                    except SitioMovil.DoesNotExist:
-
-                        messages.warning(
-                            request,
-                            (
-                                "No se encontró ID NEW "
-                                "para ID CLARO "
-                                f"{id_claro}. Se omitió."
-                            ),
-                        )
-
-                        continue
-
-                # ================================================
-                # MES PRODUCCIÓN
-                # ================================================
-
-                valor = row["mes_produccion"]
-
-                if isinstance(
-                    valor,
-                    (
-                        datetime,
-                        pd.Timestamp,
-                    ),
+                if (
+                    valor_historico is not None
+                    and not pd.isna(valor_historico)
+                    and str(valor_historico).strip()
                 ):
 
-                    mes_produccion = valor.strftime("%B %Y").capitalize()
-
-                else:
-
-                    try:
-
-                        fecha_parseada = pd.to_datetime(
-                            str(valor),
-                            dayfirst=True,
-                            errors="coerce",
-                        )
-
-                        mes_produccion = (
-                            fecha_parseada.strftime("%B %Y").capitalize()
-                            if not pd.isna(fecha_parseada)
-                            else str(valor).capitalize()
-                        )
-
-                    except Exception:
-
-                        mes_produccion = str(valor).capitalize()
-
-                # ================================================
-                # EVITAR DUPLICADO
-                # ================================================
-
-                existente = (
-                    ServicioCotizado.objects.filter(mes_produccion=mes_produccion)
-                    .filter(models.Q(id_claro=id_claro) | models.Q(id_new=id_new))
-                    .first()
-                )
-
-                if existente:
-
-                    cotizaciones_omitidas.append(
-                        {
-                            "id_claro": id_claro,
-                            "id_new": id_new,
-                            "mes_produccion": mes_produccion,
-                            "du": existente.du,
-                            "estado": (existente.get_estado_display()),
-                        }
+                    monto_mmoo = convertir_monto(
+                        valor_historico,
+                        "MONTO MMOO",
                     )
 
-                    continue
+                # Se conserva la modalidad histórica.
+                modalidad = None
 
-                # ================================================
-                # BUSCAR EJECUCIÓN MENSUAL EXACTA
-                # ================================================
+            # ============================================
+            # BUSCAR PLANIFICACIÓN
+            # ============================================
 
-                sitio_planificado = obtener_sitio_planificado_para_servicio(
-                    id_claro=id_claro,
-                    mes_produccion=mes_produccion,
-                )
+            sitio_planificado = obtener_sitio_planificado_para_servicio(
+                id_claro=id_claro,
+                mes_produccion=mes_produccion,
+            )
 
-                # ================================================
-                # CREAR SERVICIO
-                # ================================================
+            # ============================================
+            # CREAR COTIZACIÓN
+            # ============================================
+
+            with transaction.atomic():
 
                 servicio = ServicioCotizado.objects.create(
                     id_claro=id_claro,
                     region=region,
                     mes_produccion=mes_produccion,
                     id_new=id_new,
-                    detalle_tarea=row["detalle_tarea"],
-                    monto_cotizado=row["monto_cotizado"],
-                    monto_mmoo=(
-                        row["monto_mmoo"]
-                        if ("monto_mmoo" in row and not pd.isna(row["monto_mmoo"]))
-                        else None
-                    ),
+                    proyecto=proyecto,
+                    actividad=actividad,
+                    detalle_tarea=detalle_tarea,
+                    monto_cotizado=monto_cotizado,
+                    monto_mmoo=monto_mmoo,
+                    monto_mmoo_cotizacion=(monto_mmoo_cotizacion),
+                    modalidad_pago_tecnicos=modalidad,
                     estado="cotizado",
                     creado_por=request.user,
-                    sitio_planificado=(sitio_planificado),
+                    sitio_planificado=sitio_planificado,
                 )
 
-                if sitio_planificado:
+            # ============================================
+            # RESULTADOS
+            # ============================================
 
-                    cotizaciones_vinculadas += 1
+            cotizaciones_creadas.append(f"{id_claro} - {mes_produccion}")
 
-                else:
+            if sitio_planificado:
 
-                    cotizaciones_sin_planificacion.append(
-                        {
-                            "servicio_id": (servicio.pk),
-                            "du": (servicio.du),
-                            "id_claro": (id_claro),
-                            "mes_produccion": (mes_produccion),
-                        }
-                    )
+                cotizaciones_vinculadas += 1
 
-                cotizaciones_creadas.append((f"{id_claro} - " f"{mes_produccion}"))
+            else:
 
-            # ====================================================
-            # CONFLICTOS EXISTENTES
-            # ====================================================
-
-            if cotizaciones_omitidas:
-
-                request.session["cotizaciones_omitidas"] = cotizaciones_omitidas
-
-                messages.warning(
-                    request,
-                    ("Se detectaron cotizaciones " "ya registradas."),
+                cotizaciones_sin_planificacion.append(
+                    {
+                        "servicio_id": servicio.pk,
+                        "du": servicio.du,
+                        "id_claro": id_claro,
+                        "mes_produccion": mes_produccion,
+                    }
                 )
 
-                return redirect("operaciones:" "advertencia_cotizaciones_omitidas")
+        except Exception as error:
 
-            # ====================================================
-            # RESULTADO
-            # ====================================================
+            errores_importacion.append(f"Fila {numero_fila}: {error}")
 
-            mensaje = (
-                "Se importaron correctamente "
-                f"{len(cotizaciones_creadas)} "
-                "cotizaciones. "
-                f"{cotizaciones_vinculadas} "
-                "quedaron vinculadas automáticamente "
-                "a su planificación mensual."
-            )
+            continue
 
-            if cotizaciones_sin_planificacion:
+    # ====================================================
+    # GUARDAR DUPLICADOS
+    # ====================================================
 
-                mensaje += (
-                    f" {len(cotizaciones_sin_planificacion)} "
-                    "no tenían una planificación mensual "
-                    "exacta disponible y quedaron sin vínculo."
-                )
+    if cotizaciones_omitidas:
 
-            messages.success(
-                request,
-                mensaje,
-            )
+        request.session["cotizaciones_omitidas"] = cotizaciones_omitidas
 
-            return redirect("operaciones:listar_servicios_pm")
+    # ====================================================
+    # MENSAJE RESULTADO
+    # ====================================================
 
-        except Exception as e:
+    total_creadas = len(cotizaciones_creadas)
+
+    mensaje = (
+        f"Se importaron {total_creadas} cotizaciones. "
+        f"{cotizaciones_vinculadas} quedaron vinculadas "
+        "a su planificación mensual."
+    )
+
+    if cotizaciones_sin_planificacion:
+
+        mensaje += (
+            f" {len(cotizaciones_sin_planificacion)} "
+            "quedaron sin planificación exacta."
+        )
+
+    if total_creadas:
+
+        messages.success(
+            request,
+            mensaje,
+        )
+
+    else:
+
+        messages.warning(
+            request,
+            "No se importaron cotizaciones nuevas.",
+        )
+
+    # ====================================================
+    # ERRORES
+    # ====================================================
+
+    if errores_importacion:
+
+        for error in errores_importacion[:15]:
 
             messages.error(
                 request,
-                f"Error al importar: {e}",
+                error,
             )
 
-            return redirect("operaciones:listar_servicios_pm")
+        if len(errores_importacion) > 15:
 
-    return render(
-        request,
-        "operaciones/importar_cotizaciones.html",
+            messages.warning(
+                request,
+                ("Existen más errores en el archivo. " "Revisa las filas restantes."),
+            )
+
+    # ====================================================
+    # DUPLICADOS
+    # ====================================================
+
+    if cotizaciones_omitidas:
+
+        messages.warning(
+            request,
+            (
+                f"Se omitieron "
+                f"{len(cotizaciones_omitidas)} "
+                "cotizaciones duplicadas."
+            ),
+        )
+
+        return redirect("operaciones:advertencia_cotizaciones_omitidas")
+
+    return redirect("operaciones:listar_servicios_pm")
+
+
+@login_required
+@rol_requerido("pm", "admin", "facturacion")
+def descargar_formato_cotizaciones(request):
+
+    from io import BytesIO
+
+    from django.http import HttpResponse
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.workbook.defined_name import DefinedName
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    from facturacion.models import Proyecto
+    from operaciones.models import ActividadProyecto
+
+    # ====================================================
+    # CONFIGURACIÓN
+    # ====================================================
+
+    MAX_FILAS = 1000
+
+    COLOR_PRINCIPAL = "0F766E"
+    COLOR_SECUNDARIO = "E0F2FE"
+    COLOR_EJEMPLO = "F0FDF4"
+    COLOR_TEXTO = "1E293B"
+
+    # ====================================================
+    # CONSULTAR DATOS ACTUALES
+    # ====================================================
+
+    proyectos = list(
+        Proyecto.objects.order_by("nombre")
     )
 
+    actividades = list(
+        ActividadProyecto.objects.filter(
+            activa=True
+        )
+        .select_related("proyecto")
+        .order_by(
+            "proyecto__nombre",
+            "nombre",
+        )
+    )
+
+    # ====================================================
+    # CREAR LIBRO
+    # ====================================================
+
+    wb = Workbook()
+
+    ws = wb.active
+    ws.title = "Cotizaciones"
+
+    instrucciones = wb.create_sheet(
+        "Instrucciones y ejemplos"
+    )
+
+    catalogo = wb.create_sheet("Catalogos")
+
+    # ====================================================
+    # ENCABEZADOS
+    # ====================================================
+
+    encabezados = [
+        "ID CLARO",
+        "REGIÓN",
+        "MES PRODUCCIÓN",
+        "ID NEW",
+        "PROYECTO",
+        "ACTIVIDAD",
+        "DETALLE TAREA",
+        "MONTO COTIZADO",
+        "MONTO MMOO",
+        "MODALIDAD DE PAGO",
+    ]
+
+    anchos = {
+        "A": 19,
+        "B": 15,
+        "C": 23,
+        "D": 25,
+        "E": 30,
+        "F": 38,
+        "G": 48,
+        "H": 22,
+        "I": 22,
+        "J": 27,
+    }
+
+    for columna, titulo in enumerate(
+        encabezados,
+        start=1,
+    ):
+
+        celda = ws.cell(
+            row=1,
+            column=columna,
+            value=titulo,
+        )
+
+        celda.font = Font(
+            bold=True,
+            color="FFFFFF",
+            size=10,
+        )
+
+        celda.fill = PatternFill(
+            fill_type="solid",
+            fgColor=COLOR_PRINCIPAL,
+        )
+
+        celda.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+        )
+
+    for columna, ancho in anchos.items():
+        ws.column_dimensions[columna].width = ancho
+
+    ws.row_dimensions[1].height = 30
+
+    ws.freeze_panes = "A2"
+
+    ws.auto_filter.ref = f"A1:J{MAX_FILAS}"
+
+    # ====================================================
+    # PREPARAR FILAS
+    # ====================================================
+
+    for fila in range(2, MAX_FILAS + 1):
+
+        for columna in range(1, 11):
+
+            celda = ws.cell(
+                row=fila,
+                column=columna,
+            )
+
+            celda.alignment = Alignment(
+                vertical="center",
+            )
+
+            if fila % 2 == 0:
+
+                celda.fill = PatternFill(
+                    fill_type="solid",
+                    fgColor="F8FAFC",
+                )
+
+        # ID CLARO e ID NEW como texto
+        ws[f"A{fila}"].number_format = "@"
+        ws[f"D{fila}"].number_format = "@"
+
+        # Montos
+        ws[f"H{fila}"].number_format = '#,##0.00'
+        ws[f"I{fila}"].number_format = '#,##0.00'
+
+        # Mes como texto
+        ws[f"C{fila}"].number_format = "@"
+
+    # ====================================================
+    # CATÁLOGO DE PROYECTOS
+    # ====================================================
+
+    catalogo["A1"] = "PROYECTOS"
+
+    for fila, proyecto in enumerate(
+        proyectos,
+        start=2,
+    ):
+
+        catalogo.cell(
+            row=fila,
+            column=1,
+            value=proyecto.nombre,
+        )
+
+    # ====================================================
+    # CATÁLOGO DE ACTIVIDADES
+    # ====================================================
+
+    catalogo["C1"] = "PROYECTO"
+    catalogo["D1"] = "ACTIVIDAD"
+
+    for fila, actividad in enumerate(
+        actividades,
+        start=2,
+    ):
+
+        catalogo.cell(
+            row=fila,
+            column=3,
+            value=actividad.proyecto.nombre,
+        )
+
+        catalogo.cell(
+            row=fila,
+            column=4,
+            value=actividad.nombre,
+        )
+
+    # ====================================================
+    # MODALIDADES
+    # ====================================================
+
+    catalogo["F1"] = "MODALIDADES"
+
+    catalogo["F2"] = "tarifa_actividad"
+    catalogo["F3"] = "mmoo_cotizacion"
+
+    # ====================================================
+    # NOMBRES DEFINIDOS PARA DESPLEGABLES
+    # ====================================================
+
+    total_proyectos = max(
+        len(proyectos) + 1,
+        2,
+    )
+
+    total_actividades = max(
+        len(actividades) + 1,
+        2,
+    )
+
+    wb.defined_names.add(
+        DefinedName(
+            "ListaProyectos",
+            attr_text=(
+                f"'Catalogos'!$A$2:$A${total_proyectos}"
+            ),
+        )
+    )
+
+    wb.defined_names.add(
+        DefinedName(
+            "ListaActividades",
+            attr_text=(
+                f"'Catalogos'!$D$2:$D${total_actividades}"
+            ),
+        )
+    )
+
+    wb.defined_names.add(
+        DefinedName(
+            "ListaModalidades",
+            attr_text="'Catalogos'!$F$2:$F$3",
+        )
+    )
+
+    # ====================================================
+    # VALIDACIÓN PROYECTOS
+    # ====================================================
+
+    validacion_proyecto = DataValidation(
+        type="list",
+        formula1="ListaProyectos",
+        allow_blank=True,
+    )
+
+    validacion_proyecto.errorTitle = (
+        "Proyecto no válido"
+    )
+
+    validacion_proyecto.error = (
+        "Selecciona un proyecto de la lista."
+    )
+
+    validacion_proyecto.showErrorMessage = True
+    validacion_proyecto.showInputMessage = True
+
+    validacion_proyecto.promptTitle = (
+        "Proyecto"
+    )
+
+    validacion_proyecto.prompt = (
+        "Selecciona un proyecto registrado."
+    )
+
+    ws.add_data_validation(
+        validacion_proyecto
+    )
+
+    validacion_proyecto.add(
+        f"E2:E{MAX_FILAS}"
+    )
+
+    # ====================================================
+    # VALIDACIÓN ACTIVIDADES
+    # ====================================================
+
+    validacion_actividad = DataValidation(
+        type="list",
+        formula1="ListaActividades",
+        allow_blank=True,
+    )
+
+    validacion_actividad.errorTitle = (
+        "Actividad no válida"
+    )
+
+    validacion_actividad.error = (
+        "Selecciona una actividad de la lista."
+    )
+
+    validacion_actividad.showErrorMessage = True
+    validacion_actividad.showInputMessage = True
+
+    validacion_actividad.promptTitle = (
+        "Actividad"
+    )
+
+    validacion_actividad.prompt = (
+        "Selecciona una actividad activa."
+    )
+
+    ws.add_data_validation(
+        validacion_actividad
+    )
+
+    validacion_actividad.add(
+        f"F2:F{MAX_FILAS}"
+    )
+
+    # ====================================================
+    # VALIDACIÓN MODALIDADES
+    # ====================================================
+
+    validacion_modalidad = DataValidation(
+        type="list",
+        formula1="ListaModalidades",
+        allow_blank=True,
+    )
+
+    validacion_modalidad.errorTitle = (
+        "Modalidad no válida"
+    )
+
+    validacion_modalidad.error = (
+        "Selecciona una modalidad de pago."
+    )
+
+    validacion_modalidad.showErrorMessage = True
+
+    ws.add_data_validation(
+        validacion_modalidad
+    )
+
+    validacion_modalidad.add(
+        f"J2:J{MAX_FILAS}"
+    )
+
+    # ====================================================
+    # VALIDACIÓN MES DE PRODUCCIÓN
+    # ====================================================
+
+    validacion_mes = DataValidation(
+        type="custom",
+        formula1=(
+            'AND('
+            'LEN(TRIM(C2))>=8,'
+            'ISNUMBER(VALUE(RIGHT(TRIM(C2),4))),'
+            'VALUE(RIGHT(TRIM(C2),4))>=2020,'
+            'VALUE(RIGHT(TRIM(C2),4))<=2100'
+            ')'
+        ),
+        allow_blank=True,
+    )
+
+    validacion_mes.errorTitle = (
+        "Mes de producción incorrecto"
+    )
+
+    validacion_mes.error = (
+        "Debes escribir el mes y el año. "
+        "Ejemplo: Octubre 2026."
+    )
+
+    validacion_mes.showErrorMessage = True
+    validacion_mes.showInputMessage = True
+
+    validacion_mes.promptTitle = (
+        "Mes de producción"
+    )
+
+    validacion_mes.prompt = (
+        "Ejemplo correcto: Octubre 2026"
+    )
+
+    ws.add_data_validation(
+        validacion_mes
+    )
+
+    validacion_mes.add(
+        f"C2:C{MAX_FILAS}"
+    )
+
+    # ====================================================
+    # VALIDACIÓN MONTOS
+    # ====================================================
+
+    validacion_monto = DataValidation(
+        type="decimal",
+        operator="greaterThanOrEqual",
+        formula1=0,
+        allow_blank=True,
+    )
+
+    validacion_monto.errorTitle = (
+        "Monto incorrecto"
+    )
+
+    validacion_monto.error = (
+        "Ingresa un monto numérico mayor "
+        "o igual a cero."
+    )
+
+    validacion_monto.showErrorMessage = True
+
+    ws.add_data_validation(
+        validacion_monto
+    )
+
+    validacion_monto.add(
+        f"H2:I{MAX_FILAS}"
+    )
+
+    # ====================================================
+    # HOJA INSTRUCCIONES
+    # ====================================================
+
+    instrucciones.merge_cells("A1:J2")
+
+    titulo = instrucciones["A1"]
+
+    titulo.value = (
+        "FORMATO DE IMPORTACIÓN DE COTIZACIONES"
+    )
+
+    titulo.font = Font(
+        bold=True,
+        size=17,
+        color="FFFFFF",
+    )
+
+    titulo.fill = PatternFill(
+        fill_type="solid",
+        fgColor=COLOR_PRINCIPAL,
+    )
+
+    titulo.alignment = Alignment(
+        horizontal="center",
+        vertical="center",
+    )
+
+    instrucciones.row_dimensions[1].height = 25
+    instrucciones.row_dimensions[2].height = 25
+
+    instrucciones.merge_cells("A4:J4")
+
+    instrucciones["A4"] = (
+        "INSTRUCCIONES GENERALES"
+    )
+
+    instrucciones["A4"].font = Font(
+        bold=True,
+        size=13,
+        color=COLOR_PRINCIPAL,
+    )
+
+    reglas = [
+        (
+            "1.",
+            "Completa las cotizaciones en la hoja Cotizaciones."
+        ),
+        (
+            "2.",
+            "No modifiques los nombres de las columnas."
+        ),
+        (
+            "3.",
+            "MES PRODUCCIÓN debe incluir mes y año. "
+            "Ejemplo: Octubre 2026."
+        ),
+        (
+            "4.",
+            "Selecciona PROYECTO, ACTIVIDAD y "
+            "MODALIDAD DE PAGO desde las listas."
+        ),
+        (
+            "5.",
+            "La actividad debe pertenecer "
+            "al proyecto seleccionado."
+        ),
+        (
+            "6.",
+            "MONTO COTIZADO corresponde al valor "
+            "de la cotización en UF."
+        ),
+        (
+            "7.",
+            "MONTO MMOO corresponde al monto "
+            "de mano de obra en CLP."
+        ),
+        (
+            "8.",
+            "Con tarifa_actividad, MONTO MMOO "
+            "puede ser cero."
+        ),
+        (
+            "9.",
+            "Con mmoo_cotizacion, MONTO MMOO "
+            "debe ser mayor que cero."
+        ),
+        (
+            "10.",
+            "Los ejemplos de esta hoja NO "
+            "se importan."
+        ),
+    ]
+
+    for fila, (numero, descripcion) in enumerate(
+        reglas,
+        start=6,
+    ):
+
+        instrucciones.cell(
+            row=fila,
+            column=1,
+            value=numero,
+        )
+
+        instrucciones.merge_cells(
+            start_row=fila,
+            start_column=2,
+            end_row=fila,
+            end_column=10,
+        )
+
+        celda = instrucciones.cell(
+            row=fila,
+            column=2,
+            value=descripcion,
+        )
+
+        celda.font = Font(
+            size=11,
+            color=COLOR_TEXTO,
+        )
+
+        celda.alignment = Alignment(
+            vertical="center",
+            wrap_text=True,
+        )
+
+        instrucciones.row_dimensions[fila].height = 25
+
+    # ====================================================
+    # EJEMPLOS
+    # ====================================================
+
+    instrucciones.merge_cells("A18:J18")
+
+    instrucciones["A18"] = (
+        "EJEMPLOS DE LAS DOS MODALIDADES"
+    )
+
+    instrucciones["A18"].font = Font(
+        bold=True,
+        size=13,
+        color=COLOR_PRINCIPAL,
+    )
+
+    for columna, titulo in enumerate(
+        encabezados,
+        start=1,
+    ):
+
+        celda = instrucciones.cell(
+            row=20,
+            column=columna,
+            value=titulo,
+        )
+
+        celda.font = Font(
+            bold=True,
+            color="FFFFFF",
+        )
+
+        celda.fill = PatternFill(
+            fill_type="solid",
+            fgColor=COLOR_PRINCIPAL,
+        )
+
+        celda.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+
+    instrucciones.row_dimensions[20].height = 35
+
+    # ====================================================
+    # SELECCIONAR EJEMPLOS DE CATÁLOGOS REALES
+    # ====================================================
+
+    proyecto_ejemplo = (
+        actividades[0].proyecto.nombre
+        if actividades
+        else (
+            proyectos[0].nombre
+            if proyectos
+            else "Seleccionar proyecto"
+        )
+    )
+
+    actividad_ejemplo = (
+        actividades[0].nombre
+        if actividades
+        else "Seleccionar actividad"
+    )
+
+    ejemplo_tarifa = [
+        "EJEMPLO_001",
+        "13",
+        "Octubre 2026",
+        "CL-EJEMPLO-001",
+        proyecto_ejemplo,
+        actividad_ejemplo,
+        "Inventario y mantenimiento preventivo",
+        6.20,
+        0,
+        "tarifa_actividad",
+    ]
+
+    ejemplo_mmoo = [
+        "EJEMPLO_002",
+        "13",
+        "Octubre 2026",
+        "CL-EJEMPLO-002",
+        proyecto_ejemplo,
+        actividad_ejemplo,
+        "Inventario en torre",
+        6.20,
+        70000,
+        "mmoo_cotizacion",
+    ]
+
+    for fila, valores in [
+        (21, ejemplo_tarifa),
+        (22, ejemplo_mmoo),
+    ]:
+
+        for columna, valor in enumerate(
+            valores,
+            start=1,
+        ):
+
+            celda = instrucciones.cell(
+                row=fila,
+                column=columna,
+                value=valor,
+            )
+
+            celda.fill = PatternFill(
+                fill_type="solid",
+                fgColor=COLOR_EJEMPLO,
+            )
+
+            celda.alignment = Alignment(
+                vertical="center",
+                wrap_text=True,
+            )
+
+        instrucciones[f"H{fila}"].number_format = (
+            '#,##0.00'
+        )
+
+        instrucciones[f"I{fila}"].number_format = (
+            '#,##0.00'
+        )
+
+        instrucciones.row_dimensions[fila].height = 40
+
+    instrucciones.merge_cells("A24:J24")
+
+    instrucciones["A24"] = (
+        "IMPORTANTE: estas filas son ejemplos. "
+        "Ingresa tus datos reales en la hoja Cotizaciones."
+    )
+
+    instrucciones["A24"].font = Font(
+        bold=True,
+        color="B45309",
+    )
+
+    instrucciones["A24"].alignment = Alignment(
+        wrap_text=True,
+    )
+
+    # ====================================================
+    # ANCHOS INSTRUCCIONES
+    # ====================================================
+
+    for columna, ancho in anchos.items():
+
+        instrucciones.column_dimensions[
+            columna
+        ].width = ancho
+
+    instrucciones.freeze_panes = "A20"
+
+    # ====================================================
+    # CATÁLOGOS
+    # ====================================================
+
+    for columna in ["A", "C", "D", "F"]:
+
+        catalogo[f"{columna}1"].font = Font(
+            bold=True,
+            color="FFFFFF",
+        )
+
+        catalogo[f"{columna}1"].fill = PatternFill(
+            fill_type="solid",
+            fgColor=COLOR_PRINCIPAL,
+        )
+
+    catalogo.column_dimensions["A"].width = 35
+    catalogo.column_dimensions["C"].width = 35
+    catalogo.column_dimensions["D"].width = 45
+    catalogo.column_dimensions["F"].width = 30
+
+    # ====================================================
+    # OCULTAR CATÁLOGOS
+    # ====================================================
+
+    catalogo.sheet_state = "hidden"
+
+    # ====================================================
+    # GUARDAR EXCEL
+    # ====================================================
+
+    output = BytesIO()
+
+    wb.save(output)
+
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "spreadsheetml.sheet"
+        ),
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="formato_cotizaciones.xlsx"'
+    )
+
+    return response
 
 @login_required
 @rol_requerido('pm', 'admin', 'facturacion')
@@ -3303,24 +4973,39 @@ def advertencia_cotizaciones_omitidas(request):
 @rol_requerido("supervisor", "admin", "facturacion", "pm")
 def listar_servicios_supervisor(request):
     """
-    Vista supervisor con filtros tipo Excel globales por columna.
+    Vista Servicios Disponibles - Supervisor.
 
-    Importante:
-    - Los filtros Excel se aplican antes de paginar.
-    - excel_global_json se construye sobre todo el queryset filtrado, no solo sobre la página.
-    - La tabla se recarga por AJAX reemplazando solo #zonaTabla.
+    - Mantiene los filtros Excel globales.
+    - Los filtros se aplican antes de paginar.
+    - excel_global_json utiliza el conjunto completo filtrado.
+    - La tabla se recarga por AJAX reemplazando #zonaTabla.
+    - Incorpora ACTIVIDAD sin modificar el flujo operativo.
     """
+
     import json
     from urllib.parse import urlencode
 
     from django.core.paginator import Paginator
-    from django.db.models import Case, IntegerField, Q, Value, When
+    from django.db.models import Case, IntegerField, Value, When
+
+    # ========================================================
+    # PRIORIDAD DE ESTADOS
+    # ========================================================
 
     estado_prioridad = Case(
-        When(estado="aprobado_pendiente", then=Value(1)),
-        When(estado__in=["asignado", "en_progreso"], then=Value(2)),
         When(
-            estado__in=["en_revision_supervisor", "finalizado_trabajador"],
+            estado="aprobado_pendiente",
+            then=Value(1),
+        ),
+        When(
+            estado__in=["asignado", "en_progreso"],
+            then=Value(2),
+        ),
+        When(
+            estado__in=[
+                "en_revision_supervisor",
+                "finalizado_trabajador",
+            ],
             then=Value(3),
         ),
         When(
@@ -3336,6 +5021,10 @@ def listar_servicios_supervisor(request):
         output_field=IntegerField(),
     )
 
+    # ========================================================
+    # CONSULTA PRINCIPAL
+    # ========================================================
+
     servicios = (
         ServicioCotizado.objects.filter(
             estado__in=[
@@ -3350,7 +5039,14 @@ def listar_servicios_supervisor(request):
                 "finalizado",
             ]
         )
-        .exclude(estado__in=["ajuste_bono", "ajuste_adelanto", "ajuste_descuento"])
+        .exclude(
+            estado__in=[
+                "ajuste_bono",
+                "ajuste_adelanto",
+                "ajuste_descuento",
+            ]
+        )
+        .select_related("actividad")
         .prefetch_related(
             "trabajadores_asignados",
             "sesion_fotos__asignaciones__tecnico",
@@ -3359,7 +5055,10 @@ def listar_servicios_supervisor(request):
         .order_by("prioridad", "-du")
     )
 
-    # ---------------- Filtros rápidos normales ----------------
+    # ========================================================
+    # FILTROS RÁPIDOS EXISTENTES
+    # ========================================================
+
     du_raw = (request.GET.get("du") or "").strip()
     id_claro = (request.GET.get("id_claro") or "").strip()
     id_new = (request.GET.get("id_new") or "").strip()
@@ -3369,7 +5068,7 @@ def listar_servicios_supervisor(request):
     du = du_raw
 
     if du:
-        du = du.strip().upper().replace("DU", "")
+        du = du.upper().replace("DU", "")
         servicios = servicios.filter(du__iexact=du)
 
     if id_claro:
@@ -3386,12 +5085,21 @@ def listar_servicios_supervisor(request):
 
     servicios = servicios.distinct()
 
-    # ---------------- Helpers Excel ----------------
+    # ========================================================
+    # HELPERS EXCEL
+    # ========================================================
+
     def money_label(n):
         try:
-            return f"$ {int(n or 0):,} CLP".replace(",", ".")
+            return (f"$ {int(n or 0):,} CLP").replace(",", ".")
         except Exception:
             return "$ 0 CLP"
+
+    def actividad_label(servicio):
+        if servicio.actividad_id and servicio.actividad:
+            return servicio.actividad.nombre
+
+        return "Sin actividad"
 
     def asignados_lista(servicio):
         vals = []
@@ -3399,8 +5107,10 @@ def listar_servicios_supervisor(request):
         try:
             for tecnico in servicio.trabajadores_asignados.all():
                 nombre = (tecnico.get_full_name() or tecnico.username or "").strip()
+
                 if nombre:
                     vals.append(nombre)
+
         except Exception:
             pass
 
@@ -3408,6 +5118,7 @@ def listar_servicios_supervisor(request):
 
     def asignados_label(servicio):
         vals = asignados_lista(servicio)
+
         return ", ".join(vals) if vals else "Sin asignar"
 
     def fecha_fin_label(servicio):
@@ -3420,6 +5131,7 @@ def listar_servicios_supervisor(request):
 
             if servicio.fecha_fin:
                 return servicio.fecha_fin.strftime("%d/%m/%Y %H:%M")
+
         except Exception:
             pass
 
@@ -3435,7 +5147,10 @@ def listar_servicios_supervisor(request):
         if servicio.estado == "en_progreso":
             return "En ejecución"
 
-        if servicio.estado in ["en_revision_supervisor", "finalizado_trabajador"]:
+        if servicio.estado in [
+            "en_revision_supervisor",
+            "finalizado_trabajador",
+        ]:
             return "Pendiente revisión supervisor"
 
         if servicio.estado == "rechazado_supervisor":
@@ -3454,6 +5169,23 @@ def listar_servicios_supervisor(request):
             return "Descuento"
 
         return str(servicio.estado or "—")
+
+    # ========================================================
+    # VALORES POR COLUMNA
+    #
+    # 0  DU
+    # 1  ID CLARO
+    # 2  REGIÓN
+    # 3  MES PRODUCCIÓN
+    # 4  ID NEW
+    # 5  DETALLE TAREA
+    # 6  ACTIVIDAD
+    # 7  MONTO MMOO
+    # 8  ASIGNADOS
+    # 9  FECHA FIN
+    # 10 ESTADO
+    # 11 ACCIONES
+    # ========================================================
 
     def excel_value_for_servicio(servicio, col):
         col = str(col)
@@ -3477,38 +5209,44 @@ def listar_servicios_supervisor(request):
             return str(servicio.detalle_tarea or "—")
 
         if col == "6":
-            return money_label(servicio.monto_mmoo)
+            return actividad_label(servicio)
 
         if col == "7":
-            return asignados_label(servicio)
+            return money_label(servicio.monto_mmoo)
 
         if col == "8":
-            return fecha_fin_label(servicio)
+            return asignados_label(servicio)
 
         if col == "9":
-            return status_label(servicio)
+            return fecha_fin_label(servicio)
 
         if col == "10":
+            return status_label(servicio)
+
+        if col == "11":
             return "Acciones"
 
         return ""
 
     def excel_values_for_servicio(servicio, col):
         """
-        Devuelve todos los valores posibles por columna para filtrar.
-        En ASIGNADOS devuelve:
-        - cada técnico individual
-        - y también el texto combinado
+        Para ASIGNADOS devuelve:
+        - Cada técnico individual.
+        - El texto combinado.
+
+        Las demás columnas devuelven un valor.
         """
+
         col = str(col)
 
-        if col == "7":
+        if col == "8":
             individuales = asignados_lista(servicio)
 
             if not individuales:
                 return ["Sin asignar"]
 
             combinado = ", ".join(individuales)
+
             vals = list(individuales)
 
             if combinado and combinado not in vals:
@@ -3518,12 +5256,16 @@ def listar_servicios_supervisor(request):
 
         return [excel_value_for_servicio(servicio, col)]
 
-    # ---------------- Filtros Excel globales ----------------
+    # ========================================================
+    # FILTROS EXCEL GLOBALES
+    # ========================================================
+
     excel_filters_raw = (request.GET.get("excel_filters") or "").strip()
 
     try:
         excel_filters = json.loads(excel_filters_raw) if excel_filters_raw else {}
-    except json.JSONDecodeError:
+
+    except (json.JSONDecodeError, TypeError):
         excel_filters = {}
 
     if not isinstance(excel_filters, dict):
@@ -3531,12 +5273,11 @@ def listar_servicios_supervisor(request):
 
     servicios_base_excel = list(servicios)
 
-    def pasa_filtros_excel(servicio, filtros, skip_col=None):
-        """
-        Aplica filtros Excel.
-        skip_col permite construir las opciones de una columna ignorando
-        el filtro de esa misma columna, para poder acumular varios valores.
-        """
+    def pasa_filtros_excel(
+        servicio,
+        filtros,
+        skip_col=None,
+    ):
         if not filtros:
             return True
 
@@ -3546,14 +5287,20 @@ def listar_servicios_supervisor(request):
             if skip_col is not None and col == str(skip_col):
                 continue
 
-            values_set = {str(v).strip() for v in (values or []) if str(v).strip()}
+            if not isinstance(values, (list, tuple, set)):
+                continue
+
+            values_set = {str(v).strip() for v in values if str(v).strip()}
 
             if not values_set:
                 continue
 
             row_values = {
                 str(v).strip()
-                for v in excel_values_for_servicio(servicio, col)
+                for v in excel_values_for_servicio(
+                    servicio,
+                    col,
+                )
                 if str(v).strip()
             }
 
@@ -3562,51 +5309,93 @@ def listar_servicios_supervisor(request):
 
         return True
 
+    # ========================================================
+    # APLICAR FILTROS
+    # ========================================================
+
     if excel_filters:
         servicios_list = [
             servicio
             for servicio in servicios_base_excel
-            if pasa_filtros_excel(servicio, excel_filters)
+            if pasa_filtros_excel(
+                servicio,
+                excel_filters,
+            )
         ]
     else:
         servicios_list = servicios_base_excel
 
-    # ---------------- Globales para panel Excel ----------------
+    # ========================================================
+    # OPCIONES GLOBALES DE FILTROS
+    # ========================================================
+
     excel_global = {}
 
-    for col in range(11):
+    for col in range(12):
         vals = set()
 
         for servicio in servicios_base_excel:
-            if not pasa_filtros_excel(servicio, excel_filters, skip_col=str(col)):
+            if not pasa_filtros_excel(
+                servicio,
+                excel_filters,
+                skip_col=str(col),
+            ):
                 continue
 
-            for value in excel_values_for_servicio(servicio, str(col)):
+            for value in excel_values_for_servicio(
+                servicio,
+                str(col),
+            ):
                 vals.add(value or "(Vacías)")
 
-        excel_global[col] = sorted(vals, key=lambda x: str(x).lower())
+        excel_global[col] = sorted(
+            vals,
+            key=lambda x: str(x).lower(),
+        )
 
-    excel_global_json = json.dumps(excel_global, ensure_ascii=False)
+    excel_global_json = json.dumps(
+        excel_global,
+        ensure_ascii=False,
+    )
 
-    # ---------------- Paginación ----------------
-    cantidad_param = request.GET.get("cantidad", "10")
+    # ========================================================
+    # PAGINACIÓN
+    # ========================================================
+
+    cantidad_param = request.GET.get(
+        "cantidad",
+        "10",
+    )
 
     if cantidad_param == "todos":
         per_page = 100
         cantidad = "100"
+
     else:
         try:
-            per_page = max(5, min(int(cantidad_param), 100))
+            per_page = max(
+                5,
+                min(int(cantidad_param), 100),
+            )
             cantidad = str(per_page)
-        except ValueError:
+
+        except (ValueError, TypeError):
             per_page = 10
             cantidad = "10"
 
-    paginator = Paginator(servicios_list, per_page)
+    paginator = Paginator(
+        servicios_list,
+        per_page,
+    )
+
     page_number = request.GET.get("page") or 1
+
     pagina = paginator.get_page(page_number)
 
-    # ---------------- Info por fila ----------------
+    # ========================================================
+    # INFORMACIÓN POR FILA
+    # ========================================================
+
     pagina_info = []
 
     estados_aceptados = {
@@ -3618,6 +5407,7 @@ def listar_servicios_supervisor(request):
 
     for servicio in pagina:
         asignados = list(servicio.trabajadores_asignados.all())
+
         asignados_ids = {u.id for u in asignados}
 
         aceptados = []
@@ -3625,6 +5415,7 @@ def listar_servicios_supervisor(request):
 
         try:
             sesion = servicio.sesion_fotos
+
         except SesionFotos.DoesNotExist:
             sesion = None
 
@@ -3639,6 +5430,7 @@ def listar_servicios_supervisor(request):
 
             if asg and asg.estado in estados_aceptados:
                 aceptados.append(tecnico)
+
             else:
                 pendientes.append(tecnico)
 
@@ -3653,7 +5445,10 @@ def listar_servicios_supervisor(request):
             }
         )
 
-    # ---------------- Mantener parámetros ----------------
+    # ========================================================
+    # CONSERVAR PARÁMETROS
+    # ========================================================
+
     keep_params = {}
 
     if cantidad:
@@ -3678,6 +5473,10 @@ def listar_servicios_supervisor(request):
         keep_params["excel_filters"] = excel_filters_raw
 
     qs_keep = urlencode(keep_params)
+
+    # ========================================================
+    # RENDER
+    # ========================================================
 
     return render(
         request,
@@ -3775,7 +5574,7 @@ def actualizar_motivo_rechazo(request, pk):
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def asignar_trabajadores(request, pk):
     """
     Soporta que pk venga como:
@@ -3785,13 +5584,38 @@ def asignar_trabajadores(request, pk):
     Modos:
       - reasignar: reemplaza lista completa
       - agregar: mantiene los actuales y solo agrega nuevos
+
+    Desde octubre de 2026:
+      - tarifa_actividad:
+          MMOO = suma de importes individuales registrados.
+          En primera asignación utiliza las tarifas por actividad.
+          Los importes existentes se conservan.
+          Los técnicos nuevos utilizan su tarifa correspondiente.
+          Las tarifas desactivadas bloquean nuevas asignaciones.
+
+      - mmoo_cotizacion:
+          Se conserva la MMOO definida en la cotización.
+          En primera asignación se distribuye entre los técnicos.
+          Los importes existentes no se redistribuyen
+          automáticamente.
+
+      - Sin técnicos:
+          En tarifa_actividad, MMOO = 0.
+          En mmoo_cotizacion, se conserva la MMOO original.
+
+      - Pagos protegidos:
+          Se bloquean cambios económicos.
+
+    Servicios anteriores:
+      - Se conserva el comportamiento histórico.
+
+    Servicios sin modalidad definida:
+      - Se conserva el cálculo anterior con TarifaTecnico.
     """
 
-    next_url = (
-        request.POST.get("next")
-        or request.GET.get("next")
-        or ""
-    )
+    from operaciones.services.tarifas import obtener_tarifa_actividad_tecnico
+
+    next_url = request.POST.get("next") or request.GET.get("next") or ""
 
     if next_url and not next_url.startswith("/"):
         next_url = ""
@@ -3802,6 +5626,7 @@ def asignar_trabajadores(request, pk):
         du_raw = str(pk).strip()
 
         candidates = []
+
         if du_raw:
             candidates.append(du_raw)
 
@@ -3813,32 +5638,140 @@ def asignar_trabajadores(request, pk):
             if du_raw.isdigit():
                 candidates.append(du_raw.zfill(8))
 
-        cotizacion = (
-            ServicioCotizado.objects
-            .filter(du__in=list(dict.fromkeys(candidates)))
-            .first()
-        )
+        cotizacion = ServicioCotizado.objects.filter(
+            du__in=list(dict.fromkeys(candidates))
+        ).first()
 
     if not cotizacion:
         messages.error(
             request,
-            "No se encontró la cotización (ID/DU). Puede haber sido eliminada o no existe."
+            "No se encontró la cotización (ID/DU). "
+            "Puede haber sido eliminada o no existe.",
         )
-        return redirect(next_url or 'operaciones:listar_servicios_supervisor')
+        return redirect(next_url or "operaciones:listar_servicios_supervisor")
 
-    modo = (request.GET.get('modo') or request.POST.get('modo') or 'reasignar').strip().lower()
-    if modo not in {'reasignar', 'agregar'}:
-        modo = 'reasignar'
+    modo = (
+        (request.GET.get("modo") or request.POST.get("modo") or "reasignar")
+        .strip()
+        .lower()
+    )
 
-    if request.method == 'POST':
+    if modo not in {"reasignar", "agregar"}:
+        modo = "reasignar"
+
+    def mostrar_formulario(formulario):
+        return render(
+            request,
+            "operaciones/asignar_trabajadores.html",
+            {
+                "cotizacion": cotizacion,
+                "form": formulario,
+                "modo": modo,
+                "next_url": next_url,
+            },
+        )
+
+    if request.method == "POST":
+
         form = AsignarTrabajadoresForm(request.POST)
-        dejar_pendiente = request.POST.get('dejar_pendiente_asignacion') == '1'
+
+        dejar_pendiente = request.POST.get("dejar_pendiente_asignacion") == "1"
+
+        mes_normalizado = normalizar_mes_produccion(cotizacion.mes_produccion)
+
+        if mes_normalizado is None:
+            messages.error(
+                request,
+                "No se pudo determinar el mes de producción del servicio. "
+                "No se modificó la asignación.",
+            )
+            return mostrar_formulario(form)
+
+        usa_tarifas_individuales = mes_normalizado >= "2026-10"
+
+        modalidad_pago = (cotizacion.modalidad_pago_tecnicos or "").strip()
+
+        usa_tarifa_actividad = (
+            usa_tarifas_individuales and modalidad_pago == "tarifa_actividad"
+        )
+
+        usa_mmoo_cotizacion = (
+            usa_tarifas_individuales and modalidad_pago == "mmoo_cotizacion"
+        )
+
+        usa_tarifa_legacy = (
+            usa_tarifas_individuales
+            and not usa_tarifa_actividad
+            and not usa_mmoo_cotizacion
+        )
+
+        usa_modalidad_nueva = usa_tarifa_actividad or usa_mmoo_cotizacion
+
+        # ====================================================
+        # DEJAR PENDIENTE DE ASIGNACIÓN
+        # ====================================================
 
         if dejar_pendiente:
+
+            old_ids = set(
+                cotizacion.trabajadores_asignados.values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+            if usa_tarifas_individuales and old_ids:
+
+                pagos_protegidos = MonthlyPayment.objects.filter(
+                    technician_id__in=old_ids,
+                    month=mes_normalizado,
+                    status__in={
+                        "approved_user",
+                        "pending_payment",
+                        "paid",
+                    },
+                )
+
+                if pagos_protegidos.exists():
+                    messages.error(
+                        request,
+                        "No se puede dejar pendiente este servicio porque "
+                        "existen pagos aprobados, pendientes de pago o pagados "
+                        "para técnicos asignados en este período.",
+                    )
+                    return mostrar_formulario(form)
+
+            # ====================================================
+            # PROTEGER MONTOS INDIVIDUALES APROBADOS
+            # ====================================================
+
+            if usa_modalidad_nueva:
+
+                montos_aprobados = MontoTecnicoServicio.objects.filter(
+                    servicio=cotizacion,
+                    aprobado=True,
+                )
+
+                if montos_aprobados.exists():
+                    messages.error(
+                        request,
+                        "No se puede dejar pendiente este servicio porque "
+                        "existen montos individuales aprobados.",
+                    )
+                    return mostrar_formulario(form)
+
             with transaction.atomic():
+
                 cotizacion.trabajadores_asignados.clear()
 
-                cotizacion.estado = 'aprobado_pendiente'
+                if usa_modalidad_nueva:
+
+                    MontoTecnicoServicio.objects.filter(
+                        servicio=cotizacion,
+                        aprobado=False,
+                    ).delete()
+
+                cotizacion.estado = "aprobado_pendiente"
                 cotizacion.supervisor_asigna = request.user
                 cotizacion.tecnico_aceptado = None
                 cotizacion.tecnico_finalizo = None
@@ -3846,65 +5779,105 @@ def asignar_trabajadores(request, pk):
                 cotizacion.supervisor_rechazo = None
 
                 update_fields = [
-                    'estado',
-                    'supervisor_asigna',
-                    'tecnico_aceptado',
-                    'tecnico_finalizo',
-                    'supervisor_aprobo',
-                    'supervisor_rechazo',
+                    "estado",
+                    "supervisor_asigna",
+                    "tecnico_aceptado",
+                    "tecnico_finalizo",
+                    "supervisor_aprobo",
+                    "supervisor_rechazo",
                 ]
 
-                if hasattr(cotizacion, 'fecha_aprobacion_supervisor'):
+                if usa_tarifas_individuales:
+
+                    if not usa_mmoo_cotizacion:
+                        cotizacion.monto_mmoo = Decimal("0.00")
+                        update_fields.append("monto_mmoo")
+
+                if hasattr(
+                    cotizacion,
+                    "fecha_aprobacion_supervisor",
+                ):
                     cotizacion.fecha_aprobacion_supervisor = None
-                    update_fields.append('fecha_aprobacion_supervisor')
+                    update_fields.append("fecha_aprobacion_supervisor")
 
                 cotizacion.save(update_fields=update_fields)
 
                 sesion = _get_or_create_sesion(cotizacion)
 
                 qs = SesionFotoTecnico.objects.filter(sesion=sesion)
-                vals = {'estado': 'asignado'}
 
-                if hasattr(SesionFotoTecnico, 'aceptado_en'):
-                    vals['aceptado_en'] = None
+                vals = {
+                    "estado": "asignado",
+                }
 
-                if hasattr(SesionFotoTecnico, 'finalizado_en'):
-                    vals['finalizado_en'] = None
+                if hasattr(
+                    SesionFotoTecnico,
+                    "aceptado_en",
+                ):
+                    vals["aceptado_en"] = None
 
-                if hasattr(SesionFotoTecnico, 'reintento_habilitado'):
-                    vals['reintento_habilitado'] = False
+                if hasattr(
+                    SesionFotoTecnico,
+                    "finalizado_en",
+                ):
+                    vals["finalizado_en"] = None
+
+                if hasattr(
+                    SesionFotoTecnico,
+                    "reintento_habilitado",
+                ):
+                    vals["reintento_habilitado"] = False
 
                 qs.update(**vals)
 
             messages.success(
                 request,
-                "El servicio quedó nuevamente pendiente por asignar. Se quitaron todos los técnicos y se limpió la aceptación previa."
+                "El servicio quedó nuevamente pendiente por asignar. "
+                "Se quitaron todos los técnicos y se limpió "
+                "la aceptación previa.",
             )
-            return redirect(next_url or 'operaciones:listar_servicios_supervisor')
+
+            return redirect(next_url or "operaciones:listar_servicios_supervisor")
+
+        # ====================================================
+        # ASIGNAR O REASIGNAR TRABAJADORES
+        # ====================================================
 
         if form.is_valid():
-            seleccionados = form.cleaned_data['trabajadores']
 
-            old_ids = set(cotizacion.trabajadores_asignados.values_list('id', flat=True))
-            selected_ids = set(seleccionados.values_list('id', flat=True))
+            seleccionados = form.cleaned_data["trabajadores"]
 
-            if modo == 'agregar':
+            old_ids = set(
+                cotizacion.trabajadores_asignados.values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+            selected_ids = set(
+                seleccionados.values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+            if modo == "agregar":
+
                 removed_ids = old_ids - selected_ids
 
                 if removed_ids:
                     messages.error(
                         request,
-                        "En modo 'agregar técnicos' no puedes quitar técnicos actuales. Usa 'Reasignar' si quieres reemplazar responsables."
+                        "En modo 'agregar técnicos' no puedes quitar "
+                        "técnicos actuales. Usa 'Reasignar' si quieres "
+                        "reemplazar responsables.",
                     )
-                    return render(request, 'operaciones/asignar_trabajadores.html', {
-                        'cotizacion': cotizacion,
-                        'form': form,
-                        'modo': modo,
-                        'next_url': next_url,
-                    })
+                    return mostrar_formulario(form)
 
                 final_ids = old_ids | selected_ids
+
             else:
+
                 final_ids = selected_ids
 
             added_ids = final_ids - old_ids
@@ -3913,27 +5886,390 @@ def asignar_trabajadores(request, pk):
             primera_asignacion = not old_ids
 
             es_reasignacion_real = (
-                not primera_asignacion
-                and modo == 'reasignar'
-                and bool(removed_ids)
+                not primera_asignacion and modo == "reasignar" and bool(removed_ids)
             )
 
             solo_agregando = (
-                not primera_asignacion
-                and not removed_ids
-                and bool(added_ids)
+                not primera_asignacion and not removed_ids and bool(added_ids)
             )
 
+            nuevo_monto_mmoo = None
+
+            montos_individuales = {}
+
+            # ====================================================
+            # CARGAR MONTOS YA REGISTRADOS
+            # ====================================================
+            #
+            # Estos importes son la referencia económica
+            # del servicio una vez asignado.
+            #
+            # No deben sustituirse automáticamente por
+            # tarifas modificadas posteriormente.
+            # ====================================================
+
+            montos_existentes = {}
+
+            if usa_modalidad_nueva:
+
+                registros_existentes = MontoTecnicoServicio.objects.filter(
+                    servicio=cotizacion,
+                )
+
+                montos_existentes = {
+                    registro.tecnico_id: registro for registro in registros_existentes
+                }
+
+            # ====================================================
+            # PROTEGER PAGOS DEL PERÍODO
+            # ====================================================
+
+            if usa_tarifas_individuales:
+
+                tecnicos_involucrados = old_ids | final_ids
+
+                if tecnicos_involucrados:
+
+                    pagos_protegidos = MonthlyPayment.objects.filter(
+                        technician_id__in=tecnicos_involucrados,
+                        month=mes_normalizado,
+                        status__in={
+                            "approved_user",
+                            "pending_payment",
+                            "paid",
+                        },
+                    )
+
+                    if pagos_protegidos.exists():
+                        messages.error(
+                            request,
+                            "No se puede modificar la asignación porque "
+                            "uno o más técnicos tienen pagos aprobados, "
+                            "pendientes de pago o pagados para este mes.",
+                        )
+                        return mostrar_formulario(form)
+
+                # ================================================
+                # MODALIDAD: TARIFAS POR ACTIVIDAD
+                # ================================================
+
+                if usa_tarifa_actividad:
+
+                    if cotizacion.actividad_id is None:
+                        messages.error(
+                            request,
+                            "Este servicio utiliza tarifas por actividad, "
+                            "pero no tiene una actividad configurada. "
+                            "No se modificó la asignación.",
+                        )
+                        return mostrar_formulario(form)
+
+                    if (
+                        cotizacion.proyecto_id
+                        and cotizacion.actividad.proyecto_id != cotizacion.proyecto_id
+                    ):
+                        messages.error(
+                            request,
+                            "La actividad configurada no pertenece "
+                            "al proyecto de este servicio. "
+                            "No se modificó la asignación.",
+                        )
+                        return mostrar_formulario(form)
+
+                    nuevo_monto_mmoo = Decimal("0.00")
+
+                    tecnicos_finales = list(CustomUser.objects.filter(id__in=final_ids))
+
+                    for tecnico in tecnicos_finales:
+
+                        monto_existente = montos_existentes.get(tecnico.pk)
+
+                        # ========================================
+                        # CONSERVAR IMPORTE YA REGISTRADO
+                        # ========================================
+
+                        if monto_existente is not None:
+
+                            monto_individual = Decimal(
+                                str(monto_existente.monto)
+                            ).quantize(
+                                Decimal("0.01"),
+                                rounding=ROUND_HALF_UP,
+                            )
+
+                        else:
+
+                            # ====================================
+                            # SOLO TÉCNICOS SIN MONTO REGISTRADO
+                            # ====================================
+
+                            try:
+                                tarifa = obtener_tarifa_actividad_tecnico(
+                                    cotizacion.actividad,
+                                    tecnico,
+                                    mes_normalizado,
+                                )
+
+                            except TarifaNoConfigurada as exc:
+                                messages.error(
+                                    request,
+                                    str(exc),
+                                )
+                                return mostrar_formulario(form)
+
+                            monto_individual = Decimal(str(tarifa)).quantize(
+                                Decimal("0.01"),
+                                rounding=ROUND_HALF_UP,
+                            )
+
+                        montos_individuales[tecnico.pk] = monto_individual
+
+                        nuevo_monto_mmoo += monto_individual
+
+                    nuevo_monto_mmoo = nuevo_monto_mmoo.quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP,
+                    )
+
+                # ================================================
+                # MODALIDAD: MMOO DEFINIDA EN COTIZACIÓN
+                # ================================================
+
+                elif usa_mmoo_cotizacion:
+
+                    monto_original = getattr(
+                        cotizacion,
+                        "monto_mmoo_cotizacion",
+                        None,
+                    )
+
+                    if monto_original is None:
+                        messages.error(
+                            request,
+                            "Este servicio utiliza la MMOO de cotización, "
+                            "pero no tiene un monto original registrado. "
+                            "No se modificó la asignación.",
+                        )
+                        return mostrar_formulario(form)
+
+                    nuevo_monto_mmoo = Decimal(str(monto_original)).quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP,
+                    )
+
+                    if final_ids:
+
+                        tecnicos_ordenados = sorted(final_ids)
+
+                        # ========================================
+                        # CONSERVAR DISTRIBUCIÓN YA REGISTRADA
+                        # ========================================
+
+                        ids_con_monto = {
+                            tecnico_id
+                            for tecnico_id in final_ids
+                            if tecnico_id in montos_existentes
+                        }
+
+                        # ========================================
+                        # PRIMERA DISTRIBUCIÓN
+                        # ========================================
+
+                        if not ids_con_monto:
+
+                            cantidad_tecnicos = len(tecnicos_ordenados)
+
+                            total_centavos = int(nuevo_monto_mmoo * Decimal("100"))
+
+                            centavos_base, centavos_restantes = divmod(
+                                total_centavos,
+                                cantidad_tecnicos,
+                            )
+
+                            for indice, tecnico_id in enumerate(tecnicos_ordenados):
+
+                                centavos_tecnico = centavos_base
+
+                                if indice < centavos_restantes:
+                                    centavos_tecnico += 1
+
+                                montos_individuales[tecnico_id] = Decimal(
+                                    centavos_tecnico
+                                ) / Decimal("100")
+
+                        else:
+
+                            # ====================================
+                            # CONSERVAR IMPORTES EXISTENTES
+                            # ====================================
+
+                            for tecnico_id in ids_con_monto:
+
+                                registro = montos_existentes[tecnico_id]
+
+                                montos_individuales[tecnico_id] = Decimal(
+                                    str(registro.monto)
+                                ).quantize(
+                                    Decimal("0.01"),
+                                    rounding=ROUND_HALF_UP,
+                                )
+
+                            ids_sin_monto = final_ids - ids_con_monto
+
+                            total_registrado = sum(
+                                montos_individuales.values(),
+                                Decimal("0.00"),
+                            )
+
+                            # ====================================
+                            # NO REDISTRIBUIR SILENCIOSAMENTE
+                            # ====================================
+
+                            if ids_sin_monto:
+
+                                messages.error(
+                                    request,
+                                    "Este servicio tiene una MMOO definida "
+                                    "en cotización y ya existen importes "
+                                    "individuales registrados. "
+                                    "Agregar o reemplazar técnicos requiere "
+                                    "redistribuir la MMOO original. "
+                                    "La operación se bloqueó para evitar "
+                                    "modificar importes previamente acordados.",
+                                )
+                                return mostrar_formulario(form)
+
+                            if total_registrado != nuevo_monto_mmoo:
+
+                                messages.error(
+                                    request,
+                                    "La suma de los importes individuales "
+                                    "registrados no coincide con la MMOO "
+                                    "original de la cotización. "
+                                    "No se modificó la asignación.",
+                                )
+                                return mostrar_formulario(form)
+
+                # ================================================
+                # MODALIDAD ANTERIOR: TARIFA INDIVIDUAL
+                # ================================================
+
+                elif usa_tarifa_legacy:
+
+                    nuevo_monto_mmoo = Decimal("0.00")
+
+                    tecnicos_finales = list(CustomUser.objects.filter(id__in=final_ids))
+
+                    for tecnico in tecnicos_finales:
+
+                        try:
+                            tarifa = obtener_tarifa_tecnico(
+                                tecnico,
+                                mes_normalizado,
+                            )
+
+                        except TarifaNoConfigurada as exc:
+                            messages.error(
+                                request,
+                                str(exc),
+                            )
+                            return mostrar_formulario(form)
+
+                        nuevo_monto_mmoo += Decimal(str(tarifa))
+
+                    nuevo_monto_mmoo = nuevo_monto_mmoo.quantize(
+                        Decimal("0.01"),
+                        rounding=ROUND_HALF_UP,
+                    )
+
+            # ====================================================
+            # PROTEGER MONTOS INDIVIDUALES APROBADOS
+            # ====================================================
+
+            if usa_modalidad_nueva:
+
+                for monto_aprobado in montos_existentes.values():
+
+                    if not monto_aprobado.aprobado:
+                        continue
+
+                    nuevo_monto = montos_individuales.get(monto_aprobado.tecnico_id)
+
+                    if (
+                        nuevo_monto is None
+                        or Decimal(str(monto_aprobado.monto)) != nuevo_monto
+                    ):
+                        messages.error(
+                            request,
+                            "No se puede modificar la asignación porque "
+                            "existen montos individuales aprobados que "
+                            "serían alterados.",
+                        )
+                        return mostrar_formulario(form)
+
+            # ====================================================
+            # GUARDAR ASIGNACIÓN
+            # ====================================================
+
             with transaction.atomic():
+
                 cotizacion.trabajadores_asignados.set(final_ids)
 
-                update_fields = ['supervisor_asigna']
+                # ====================================================
+                # SINCRONIZAR MONTOS INDIVIDUALES
+                # ====================================================
+
+                if usa_modalidad_nueva:
+
+                    # Eliminar importes no aprobados de
+                    # técnicos que fueron retirados.
+
+                    MontoTecnicoServicio.objects.filter(
+                        servicio=cotizacion,
+                        aprobado=False,
+                    ).exclude(
+                        tecnico_id__in=final_ids,
+                    ).delete()
+
+                    # Registrar únicamente importes faltantes.
+                    #
+                    # Los importes existentes se conservan.
+
+                    for tecnico_id, monto_individual in montos_individuales.items():
+
+                        monto_existente = montos_existentes.get(tecnico_id)
+
+                        if monto_existente is None:
+
+                            MontoTecnicoServicio.objects.create(
+                                servicio=cotizacion,
+                                tecnico_id=tecnico_id,
+                                monto=monto_individual,
+                            )
+
+                update_fields = [
+                    "supervisor_asigna",
+                ]
+
                 cotizacion.supervisor_asigna = request.user
 
+                if usa_tarifas_individuales:
+
+                    cotizacion.monto_mmoo = nuevo_monto_mmoo
+
+                    update_fields.append("monto_mmoo")
+
+                # ================================================
+                # PRIMERA ASIGNACIÓN
+                # ================================================
+
                 if primera_asignacion:
-                    if cotizacion.estado == 'aprobado_pendiente':
-                        cotizacion.estado = 'asignado'
-                        update_fields.append('estado')
+
+                    if cotizacion.estado == "aprobado_pendiente":
+
+                        cotizacion.estado = "asignado"
+
+                        update_fields.append("estado")
 
                     _sincronizar_asignaciones_sesion(
                         cotizacion,
@@ -3941,24 +6277,35 @@ def asignar_trabajadores(request, pk):
                         reset_para_ids=set(final_ids),
                     )
 
+                # ================================================
+                # REASIGNACIÓN REAL
+                # ================================================
+
                 elif es_reasignacion_real:
-                    cotizacion.estado = 'asignado'
+
+                    cotizacion.estado = "asignado"
                     cotizacion.tecnico_aceptado = None
                     cotizacion.tecnico_finalizo = None
                     cotizacion.supervisor_aprobo = None
                     cotizacion.supervisor_rechazo = None
 
-                    update_fields.extend([
-                        'estado',
-                        'tecnico_aceptado',
-                        'tecnico_finalizo',
-                        'supervisor_aprobo',
-                        'supervisor_rechazo',
-                    ])
+                    update_fields.extend(
+                        [
+                            "estado",
+                            "tecnico_aceptado",
+                            "tecnico_finalizo",
+                            "supervisor_aprobo",
+                            "supervisor_rechazo",
+                        ]
+                    )
 
-                    if hasattr(cotizacion, 'fecha_aprobacion_supervisor'):
+                    if hasattr(
+                        cotizacion,
+                        "fecha_aprobacion_supervisor",
+                    ):
                         cotizacion.fecha_aprobacion_supervisor = None
-                        update_fields.append('fecha_aprobacion_supervisor')
+
+                        update_fields.append("fecha_aprobacion_supervisor")
 
                     _sincronizar_asignaciones_sesion(
                         cotizacion,
@@ -3966,14 +6313,24 @@ def asignar_trabajadores(request, pk):
                         reset_para_ids=set(final_ids),
                     )
 
+                # ================================================
+                # AGREGAR TÉCNICOS
+                # ================================================
+
                 elif solo_agregando:
+
                     _sincronizar_asignaciones_sesion(
                         cotizacion,
                         tecnicos_actuales_ids=final_ids,
                         reset_para_ids=set(added_ids),
                     )
 
+                # ================================================
+                # SIN CAMBIOS DE RESPONSABLES
+                # ================================================
+
                 else:
+
                     _sincronizar_asignaciones_sesion(
                         cotizacion,
                         tecnicos_actuales_ids=final_ids,
@@ -3982,22 +6339,39 @@ def asignar_trabajadores(request, pk):
 
                 cotizacion.save(update_fields=update_fields)
 
+            # ====================================================
+            # NOTIFICACIONES INTERNAS
+            # ====================================================
+
             if primera_asignacion or es_reasignacion_real:
+
                 usuarios_a_notificar = list(CustomUser.objects.filter(id__in=final_ids))
+
             else:
+
                 usuarios_a_notificar = list(CustomUser.objects.filter(id__in=added_ids))
 
             for trabajador in usuarios_a_notificar:
+
                 crear_notificacion(
                     usuario=trabajador,
-                    mensaje=f"Se te ha asignado una nueva tarea: DU{str(cotizacion.du).zfill(8)}.",
-                    url=reverse('operaciones:mis_servicios_tecnico'),
+                    mensaje=(
+                        f"Se te ha asignado una nueva tarea: "
+                        f"DU{str(cotizacion.du).zfill(8)}."
+                    ),
+                    url=reverse("operaciones:mis_servicios_tecnico"),
                 )
 
+            # ====================================================
+            # NOTIFICACIONES TELEGRAM
+            # ====================================================
+
             try:
+
                 if usuarios_a_notificar:
+
                     enlace_app = request.build_absolute_uri(
-                        reverse('operaciones:mis_servicios_tecnico')
+                        reverse("operaciones:mis_servicios_tecnico")
                     )
 
                     logs = notificar_asignacion_servicio_tecnicos(
@@ -4011,8 +6385,10 @@ def asignar_trabajadores(request, pk):
                     )
 
                     for log in logs:
+
                         logger.info(
-                            "Telegram asignación servicio DU%s -> usuario_id=%s status=%s error=%s",
+                            "Telegram asignación servicio DU%s "
+                            "-> usuario_id=%s status=%s error=%s",
                             str(cotizacion.du).zfill(8),
                             log.usuario_id,
                             log.status,
@@ -4020,81 +6396,198 @@ def asignar_trabajadores(request, pk):
                         )
 
             except Exception:
+
                 logger.exception("Error enviando notificación Telegram de asignación")
 
-            if primera_asignacion:
-                messages.success(request, "Trabajadores asignados correctamente.")
-            elif es_reasignacion_real:
-                messages.success(
-                    request,
-                    "Servicio reasignado correctamente. El estado volvió a 'asignado' y los técnicos actuales deben aceptar nuevamente."
-                )
-            elif solo_agregando:
-                messages.success(
-                    request,
-                    "Técnicos agregados correctamente. Los nuevos deben aceptar su asignación."
-                )
-            else:
-                messages.success(request, "Asignación actualizada correctamente.")
+            # ====================================================
+            # MENSAJES DE RESULTADO
+            # ====================================================
 
-            return redirect(next_url or 'operaciones:listar_servicios_supervisor')
+            if primera_asignacion:
+
+                messages.success(
+                    request,
+                    "Trabajadores asignados correctamente.",
+                )
+
+            elif es_reasignacion_real:
+
+                messages.success(
+                    request,
+                    "Servicio reasignado correctamente. "
+                    "El estado volvió a 'asignado' y los técnicos actuales "
+                    "deben aceptar nuevamente.",
+                )
+
+            elif solo_agregando:
+
+                messages.success(
+                    request,
+                    "Técnicos agregados correctamente. "
+                    "Los nuevos deben aceptar su asignación.",
+                )
+
+            else:
+
+                messages.success(
+                    request,
+                    "Asignación actualizada correctamente.",
+                )
+
+            return redirect(next_url or "operaciones:listar_servicios_supervisor")
 
     else:
-        inicial_ids = list(cotizacion.trabajadores_asignados.values_list('id', flat=True))
-        form = AsignarTrabajadoresForm(
-            initial={"trabajadores": inicial_ids}
+
+        inicial_ids = list(
+            cotizacion.trabajadores_asignados.values_list(
+                "id",
+                flat=True,
+            )
         )
 
-    return render(request, 'operaciones/asignar_trabajadores.html', {
-        'cotizacion': cotizacion,
-        'form': form,
-        'modo': modo,
-        'next_url': next_url,
-    })
+        form = AsignarTrabajadoresForm(
+            initial={
+                "trabajadores": inicial_ids,
+            }
+        )
+
+    return mostrar_formulario(form)
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def exportar_servicios_supervisor(request):
-    servicios = ServicioCotizado.objects.filter(
-        estado__in=[
-            'aprobado_pendiente', 'asignado', 'en_proceso',
-            'en_revision_supervisor',
-            'rechazado_supervisor', 'aprobado_supervisor'
-        ]
+    """
+    Exporta los servicios disponibles para el supervisor.
+
+    - Conserva las columnas existentes.
+    - Incorpora la actividad asociada al servicio.
+    - Mantiene los estados originales de exportación.
+    - No modifica información en la base de datos.
+    """
+
+    servicios = (
+        ServicioCotizado.objects.filter(
+            estado__in=[
+                "aprobado_pendiente",
+                "asignado",
+                "en_proceso",
+                "en_revision_supervisor",
+                "rechazado_supervisor",
+                "aprobado_supervisor",
+            ]
+        )
+        .select_related("actividad")
+        .prefetch_related("trabajadores_asignados")
     )
+
+    # ========================================================
+    # PREPARAR DATOS
+    # ========================================================
 
     data = []
-    for s in servicios:
-        asignados = ', '.join(
-            [f"{u.first_name} {u.last_name}" for u in s.trabajadores_asignados.all()]
-        )
-        data.append({
-            'DU': f'DU{s.du}',
-            'ID Claro': s.id_claro,
-            'Región': s.region,
-            'Mes Producción': s.mes_produccion or '',
-            'ID NEW': s.id_new,
-            'Detalle Tarea': s.detalle_tarea,
-            'Monto MMOO': float(s.monto_mmoo) if s.monto_mmoo else 0,
-            'Asignados': asignados,
-            'Fecha Fin': s.fecha_aprobacion_supervisor.strftime("%d-%m-%Y") if s.fecha_aprobacion_supervisor else '',
-            'Estado': dict(s.ESTADOS).get(s.estado, s.estado),
-        })
 
-    df = pd.DataFrame(data)
+    for s in servicios:
+
+        # ----------------------------------------------------
+        # TÉCNICOS ASIGNADOS
+        # ----------------------------------------------------
+
+        asignados = ", ".join(
+            [
+                f"{u.first_name} {u.last_name}".strip()
+                for u in s.trabajadores_asignados.all()
+            ]
+        )
+
+        # ----------------------------------------------------
+        # ACTIVIDAD
+        # ----------------------------------------------------
+
+        actividad = (
+            s.actividad.nombre if s.actividad_id and s.actividad else "Sin actividad"
+        )
+
+        # ----------------------------------------------------
+        # FECHA FIN
+        # ----------------------------------------------------
+
+        fecha_fin = (
+            s.fecha_aprobacion_supervisor.strftime("%d-%m-%Y")
+            if s.fecha_aprobacion_supervisor
+            else ""
+        )
+
+        # ----------------------------------------------------
+        # REGISTRO
+        # ----------------------------------------------------
+
+        data.append(
+            {
+                "DU": f"DU{s.du}",
+                "ID Claro": s.id_claro,
+                "Región": s.region,
+                "Mes Producción": s.mes_produccion or "",
+                "ID NEW": s.id_new,
+                "Detalle Tarea": s.detalle_tarea,
+                # Nueva columna
+                "Actividad": actividad,
+                "Monto MMOO": (float(s.monto_mmoo) if s.monto_mmoo is not None else 0),
+                "Asignados": asignados,
+                "Fecha Fin": fecha_fin,
+                "Estado": dict(s.ESTADOS).get(
+                    s.estado,
+                    s.estado,
+                ),
+            }
+        )
+
+    # ========================================================
+    # COLUMNAS DEL EXCEL
+    # ========================================================
+
     columnas = [
-        'DU', 'ID Claro', 'Región', 'Mes Producción',
-        'ID NEW', 'Detalle Tarea', 'Monto MMOO',
-        'Asignados', 'Fecha Fin', 'Estado'
+        "DU",
+        "ID Claro",
+        "Región",
+        "Mes Producción",
+        "ID NEW",
+        "Detalle Tarea",
+        "Actividad",
+        "Monto MMOO",
+        "Asignados",
+        "Fecha Fin",
+        "Estado",
     ]
-    df = df[columnas]
+
+    # ========================================================
+    # DATAFRAME
+    # ========================================================
+
+    df = pd.DataFrame(
+        data,
+        columns=columnas,
+    )
+
+    # ========================================================
+    # GENERAR EXCEL
+    # ========================================================
 
     response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        content_type=(
+            "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+        )
     )
-    response['Content-Disposition'] = 'attachment; filename=servicios_supervisor.xlsx'
-    df.to_excel(response, index=False)
+
+    response["Content-Disposition"] = (
+        'attachment; filename="servicios_disponibles.xlsx"'
+    )
+
+    df.to_excel(
+        response,
+        index=False,
+    )
+
     return response
 
 
@@ -4120,6 +6613,11 @@ def mis_servicios_tecnico(request):
     - filtrar por las columnas principales;
     - seleccionar la cantidad de filas;
     - paginar sin perder los filtros.
+
+    Montos:
+    - Tarifa por actividad: respeta el monto individual registrado.
+    - MMOO de cotización: respeta la distribución individual registrada.
+    - Servicios históricos: conserva el cálculo anterior.
     """
 
     usuario = request.user
@@ -4684,29 +7182,83 @@ def mis_servicios_tecnico(request):
         # ========================================================
         # MONTO MMOO POR TÉCNICO
         # ========================================================
+        #
+        # MODALIDAD 1: tarifa_actividad
+        #     Utiliza el monto individual guardado al asignar.
+        #
+        # MODALIDAD 2: mmoo_cotizacion
+        #     Utiliza el monto individual distribuido y guardado.
+        #
+        # HISTÓRICOS:
+        #     Conservan el cálculo anterior cuando no existe
+        #     un monto individual registrado.
+        #
+        # IMPORTANTE:
+        #     No modificar ni recalcular montos ya asignados.
+        # ========================================================
 
-        monto_total = servicio.monto_mmoo or servicio.monto_cotizado or Decimal("0")
+        monto_registrado = MontoTecnicoServicio.objects.filter(
+            servicio=servicio,
+            tecnico=usuario,
+        ).first()
 
-        if not isinstance(
-            monto_total,
-            Decimal,
-        ):
-            try:
-                monto_total = Decimal(str(monto_total))
+        if monto_registrado is not None:
 
-            except Exception:
-                monto_total = Decimal("0")
+            # El importe guardado tiene prioridad para ambas
+            # modalidades y para cualquier registro histórico
+            # que ya tenga monto individual.
 
-        total_tecnicos = servicio.trabajadores_asignados.count() or 1
-
-        try:
-            monto_tecnico = (monto_total / Decimal(total_tecnicos)).quantize(
-                Decimal("0.01"),
-                rounding=ROUND_HALF_UP,
+            monto_tecnico = (
+                monto_registrado.monto
+                if monto_registrado.monto is not None
+                else Decimal("0.00")
             )
 
-        except Exception:
+        elif servicio.modalidad_pago_tecnicos in (
+            "tarifa_actividad",
+            "mmoo_cotizacion",
+        ):
+
+            # Un servicio nuevo con modalidad definida debería
+            # tener su monto individual registrado al asignar.
+            #
+            # No consultar tarifas vigentes ni repartir de nuevo
+            # la MMOO, porque eso podría mostrar un importe
+            # diferente del acordado al asignar.
+
+            logger.warning(
+                "Servicio DU%s con modalidad %s sin monto "
+                "individual registrado para técnico %s.",
+                servicio.du,
+                servicio.modalidad_pago_tecnicos,
+                usuario.pk,
+            )
+
             monto_tecnico = Decimal("0.00")
+
+        else:
+
+            # Compatibilidad con servicios históricos sin
+            # modalidad ni monto individual registrado.
+
+            try:
+
+                monto_tecnico = obtener_monto_tecnico(
+                    servicio,
+                    usuario,
+                )
+
+            except (TarifaNoConfigurada, ValueError) as exc:
+
+                logger.warning(
+                    "No se pudo calcular el MMOO del técnico %s "
+                    "para el servicio DU%s: %s",
+                    usuario.pk,
+                    servicio.du,
+                    exc,
+                )
+
+                monto_tecnico = Decimal("0.00")
 
         monto_str = f"{monto_tecnico:.2f}"
 
