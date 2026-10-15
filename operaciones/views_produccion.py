@@ -37,7 +37,8 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (Image, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
-from operaciones.services.tarifas import obtener_monto_tecnico
+from operaciones.services.tarifas import (TarifaNoConfigurada,
+                                          obtener_monto_tecnico)
 from usuarios.decoradores import rol_requerido
 
 from .models import MonthlyPayment  # <-- CAMBIA esto por tu modelo real
@@ -190,12 +191,27 @@ def produccion_admin(request):
                 # Antes de octubre 2026: histórico.
                 # Desde octubre 2026: tarifa del técnico.
                 # Ajustes: cálculo histórico.
+                #
+                # Si falta una tarifa, conservar el servicio
+                # visible sin inventar un importe.
                 # --------------------------------------------
 
-                parte = obtener_monto_tecnico(
-                    s,
-                    tec,
-                )
+                try:
+                    parte = obtener_monto_tecnico(
+                        s,
+                        tec,
+                    )
+
+                except (TarifaNoConfigurada, ValueError) as exc:
+                    logging.warning(
+                        "Produccion pendiente de regularizacion: "
+                        "servicio=%s tecnico=%s motivo=%s",
+                        s.pk,
+                        tec.pk,
+                        exc,
+                    )
+
+                    parte = None
 
                 filas.append(
                     {
@@ -218,7 +234,9 @@ def produccion_admin(request):
             # Mantener visualización de servicios sin técnicos.
             # No se asigna una tarifa individual inexistente.
 
-            parte = Decimal(str(s.monto_mmoo or 0)).quantize(Decimal("0.01"))
+            parte = Decimal(str(s.monto_mmoo or 0)).quantize(
+                Decimal("0.01")
+            )
 
             filas.append(
                 {
@@ -395,7 +413,9 @@ def produccion_admin(request):
         "cantidad": cantidad,
     }
 
-    filters_qs = urlencode({k: v for k, v in filters_dict.items() if v})
+    filters_qs = urlencode(
+        {k: v for k, v in filters_dict.items() if v}
+    )
 
     # ============================================================
     # USUARIOS PARA MODAL DE AJUSTES
@@ -697,16 +717,16 @@ def produccion_totales_a_pagar(request):
     - Ajustes: conservan su cálculo histórico.
     - El bloque superior no se filtra por mes.
     - El historial sí admite filtro por mes.
+
+    Los montos sin tarifa configurada se identifican como
+    pendientes y no se incluyen en las sumas.
     """
 
     current_month = _yyyy_mm(timezone.localdate())
 
     f_month = (request.GET.get("f_month") or "").strip()
-
     f_tecnico = (request.GET.get("f_tecnico") or "").strip()
-
     f_project = (request.GET.get("f_project") or "").strip()
-
     f_region = (request.GET.get("f_region") or "").strip()
 
     cantidad = (request.GET.get("cantidad") or "10").strip().lower()
@@ -879,11 +899,9 @@ def produccion_totales_a_pagar(request):
     # AGREGADOR POR TÉCNICO
     # ============================================================
 
-    agregados_tipo = dict[int, dict]
-
     def _agrega_por_tecnico(qs_src) -> list[dict]:
 
-        agregados: agregados_tipo = {}
+        agregados: dict[int, dict] = {}
 
         for s in qs_src:
 
@@ -921,18 +939,38 @@ def produccion_totales_a_pagar(request):
                 # Histórico: prorrateo.
                 # Octubre 2026+: tarifa del técnico.
                 # Ajustes: prorrateo histórico.
+                #
+                # Si falta una tarifa:
+                # - No inventar un importe.
+                # - No sumar un valor desconocido.
+                # - Identificar el total como incompleto.
                 # --------------------------------------------
 
-                parte = obtener_monto_tecnico(
-                    s,
-                    tec,
-                )
+                try:
+                    parte = obtener_monto_tecnico(
+                        s,
+                        tec,
+                    )
 
-                # Conservar signo según tipo de ajuste.
-                parte = _monto_firmado_por_estado(
-                    parte,
-                    s.estado,
-                )
+                except (TarifaNoConfigurada, ValueError) as exc:
+
+                    logging.warning(
+                        "Total pendiente de regularizacion: "
+                        "servicio=%s tecnico=%s motivo=%s",
+                        s.pk,
+                        tec.pk,
+                        exc,
+                    )
+
+                    parte = None
+
+                if parte is not None:
+
+                    # Conservar signo según tipo de ajuste.
+                    parte = _monto_firmado_por_estado(
+                        parte,
+                        s.estado,
+                    )
 
                 # --------------------------------------------
                 # DATOS DEL TÉCNICO
@@ -952,12 +990,37 @@ def produccion_totales_a_pagar(request):
                         "details": [],
                         "status": "",
                         "receipt": None,
+                        # Indica si hay importes pendientes.
+                        "total_incompleto": False,
+                        "servicios_pendientes": 0,
                     },
                 )
 
                 # Si mezcla meses en un mismo bucket:
                 if bucket["week"] and serv_month and bucket["week"] != serv_month:
                     bucket["week"] = "(varios meses)"
+
+                # --------------------------------------------
+                # TARIFA PENDIENTE
+                # --------------------------------------------
+
+                if parte is None:
+
+                    bucket["total_incompleto"] = True
+
+                    bucket["servicios_pendientes"] += 1
+
+                    bucket["details"].append(
+                        {
+                            "project_id": (s.id_claro or s.id_new or du_label),
+                            "du": du_label,
+                            "subtotal": None,
+                            "pendiente_regularizacion": True,
+                        }
+                    )
+
+                    # No sumar un importe desconocido.
+                    continue
 
                 # --------------------------------------------
                 # TOTAL Y DESGLOSE
@@ -970,6 +1033,7 @@ def produccion_totales_a_pagar(request):
                         "project_id": (s.id_claro or s.id_new or du_label),
                         "du": du_label,
                         "subtotal": parte,
+                        "pendiente_regularizacion": False,
                     }
                 )
 

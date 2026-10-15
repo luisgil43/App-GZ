@@ -270,7 +270,13 @@
         </td>
 
         <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-          $ {{ r.monto_tecnico|formato_clp }} CLP
+          {% if r.monto_tecnico is not None %}
+            $ {{ r.monto_tecnico|formato_clp }} CLP
+          {% else %}
+            <span class="text-amber-600 font-semibold">
+              Pendiente de regularizacion
+            </span>
+          {% endif %}
         </td>
 
         <td class="p-2 text-left">
@@ -347,7 +353,13 @@
             <li><b>Tipo:</b>
               {% if r.status == 'ajuste_bono' %}Bono{% elif r.status == 'ajuste_adelanto' %}Adelanto{% else %}Descuento{% endif %}
             </li>
-            <li><b>Monto MMOO:</b> $ {{ r.monto_tecnico|formato_clp }} CLP</li>
+            <li><b>Monto MMOO:</b> {% if r.monto_tecnico is not None %}
+            $ {{ r.monto_tecnico|formato_clp }} CLP
+          {% else %}
+            <span class="text-amber-600 font-semibold">
+              Pendiente de regularizacion
+            </span>
+          {% endif %}</li>
             <li><b>Técnico:</b> {% if r.tecnico %}{{ r.tecnico.get_full_name|default:r.tecnico.username }}{% else %}—{% endif %}</li>
           </ul>
         </div>
