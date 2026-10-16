@@ -52,6 +52,8 @@ from operaciones.services.tarifas import (TarifaNoConfigurada,
                                           normalizar_mes_produccion,
                                           obtener_monto_tecnico,
                                           obtener_tarifa_tecnico)
+from planificacion.services.asignacion_economica import (
+    ErrorAsignacionEconomica, aplicar_asignacion_economica)
 from usuarios.decoradores import rol_requerido
 from usuarios.models import CustomUser
 from usuarios.utils import \
@@ -5579,55 +5581,47 @@ def asignar_trabajadores(request, pk):
     """
     Soporta que pk venga como:
       - ID real (ServicioCotizado.id)
-      - o DU (ServicioCotizado.du), con o sin ceros (83 / 00000083)
+      - o DU (ServicioCotizado.du), con o sin ceros.
 
     Modos:
-      - reasignar: reemplaza lista completa
-      - agregar: mantiene los actuales y solo agrega nuevos
+      - reasignar: reemplaza lista completa.
+      - agregar: mantiene los actuales y agrega nuevos.
 
     Desde octubre de 2026:
-      - tarifa_actividad:
-          MMOO = suma de importes individuales registrados.
-          En primera asignación utiliza las tarifas por actividad.
-          Los importes existentes se conservan.
-          Los técnicos nuevos utilizan su tarifa correspondiente.
-          Las tarifas desactivadas bloquean nuevas asignaciones.
-
-      - mmoo_cotizacion:
-          Se conserva la MMOO definida en la cotización.
-          En primera asignación se distribuye entre los técnicos.
-          Los importes existentes no se redistribuyen
-          automáticamente.
-
-      - Sin técnicos:
-          En tarifa_actividad, MMOO = 0.
-          En mmoo_cotizacion, se conserva la MMOO original.
-
-      - Pagos protegidos:
-          Se bloquean cambios económicos.
+      - tarifa_actividad: MMOO por tarifas individuales.
+      - mmoo_cotizacion: conserva la MMOO original.
+      - modalidad legacy: conserva cálculo TarifaTecnico.
+      - protege pagos y montos aprobados.
 
     Servicios anteriores:
-      - Se conserva el comportamiento histórico.
+      - conserva el comportamiento histórico.
 
-    Servicios sin modalidad definida:
-      - Se conserva el cálculo anterior con TarifaTecnico.
+    La asignación económica utiliza la función compartida
+    con Planificación Diaria.
     """
 
-    from operaciones.services.tarifas import obtener_tarifa_actividad_tecnico
+    from planificacion.services.asignacion_economica import (
+        ErrorAsignacionEconomica, aplicar_asignacion_economica)
 
     next_url = request.POST.get("next") or request.GET.get("next") or ""
 
     if next_url and not next_url.startswith("/"):
         next_url = ""
 
+    # ========================================================
+    # BUSCAR SERVICIO POR ID O DU
+    # ========================================================
+
     cotizacion = ServicioCotizado.objects.filter(pk=pk).first()
 
     if not cotizacion:
+
         du_raw = str(pk).strip()
 
         candidates = []
 
         if du_raw:
+
             candidates.append(du_raw)
 
             try:
@@ -5643,12 +5637,18 @@ def asignar_trabajadores(request, pk):
         ).first()
 
     if not cotizacion:
+
         messages.error(
             request,
             "No se encontró la cotización (ID/DU). "
             "Puede haber sido eliminada o no existe.",
         )
+
         return redirect(next_url or "operaciones:listar_servicios_supervisor")
+
+    # ========================================================
+    # MODO DE ASIGNACIÓN
+    # ========================================================
 
     modo = (
         (request.GET.get("modo") or request.POST.get("modo") or "reasignar")
@@ -5660,6 +5660,7 @@ def asignar_trabajadores(request, pk):
         modo = "reasignar"
 
     def mostrar_formulario(formulario):
+
         return render(
             request,
             "operaciones/asignar_trabajadores.html",
@@ -5671,6 +5672,10 @@ def asignar_trabajadores(request, pk):
             },
         )
 
+    # ========================================================
+    # POST
+    # ========================================================
+
     if request.method == "POST":
 
         form = AsignarTrabajadoresForm(request.POST)
@@ -5680,11 +5685,13 @@ def asignar_trabajadores(request, pk):
         mes_normalizado = normalizar_mes_produccion(cotizacion.mes_produccion)
 
         if mes_normalizado is None:
+
             messages.error(
                 request,
                 "No se pudo determinar el mes de producción del servicio. "
                 "No se modificó la asignación.",
             )
+
             return mostrar_formulario(form)
 
         usa_tarifas_individuales = mes_normalizado >= "2026-10"
@@ -5697,12 +5704,6 @@ def asignar_trabajadores(request, pk):
 
         usa_mmoo_cotizacion = (
             usa_tarifas_individuales and modalidad_pago == "mmoo_cotizacion"
-        )
-
-        usa_tarifa_legacy = (
-            usa_tarifas_individuales
-            and not usa_tarifa_actividad
-            and not usa_mmoo_cotizacion
         )
 
         usa_modalidad_nueva = usa_tarifa_actividad or usa_mmoo_cotizacion
@@ -5720,6 +5721,10 @@ def asignar_trabajadores(request, pk):
                 )
             )
 
+            # =================================================
+            # PROTEGER PAGOS
+            # =================================================
+
             if usa_tarifas_individuales and old_ids:
 
                 pagos_protegidos = MonthlyPayment.objects.filter(
@@ -5733,17 +5738,19 @@ def asignar_trabajadores(request, pk):
                 )
 
                 if pagos_protegidos.exists():
+
                     messages.error(
                         request,
                         "No se puede dejar pendiente este servicio porque "
                         "existen pagos aprobados, pendientes de pago o pagados "
                         "para técnicos asignados en este período.",
                     )
+
                     return mostrar_formulario(form)
 
-            # ====================================================
-            # PROTEGER MONTOS INDIVIDUALES APROBADOS
-            # ====================================================
+            # =================================================
+            # PROTEGER MONTOS APROBADOS
+            # =================================================
 
             if usa_modalidad_nueva:
 
@@ -5753,12 +5760,18 @@ def asignar_trabajadores(request, pk):
                 )
 
                 if montos_aprobados.exists():
+
                     messages.error(
                         request,
                         "No se puede dejar pendiente este servicio porque "
                         "existen montos individuales aprobados.",
                     )
+
                     return mostrar_formulario(form)
+
+            # =================================================
+            # GUARDAR ESTADO PENDIENTE
+            # =================================================
 
             with transaction.atomic():
 
@@ -5790,14 +5803,18 @@ def asignar_trabajadores(request, pk):
                 if usa_tarifas_individuales:
 
                     if not usa_mmoo_cotizacion:
+
                         cotizacion.monto_mmoo = Decimal("0.00")
+
                         update_fields.append("monto_mmoo")
 
                 if hasattr(
                     cotizacion,
                     "fecha_aprobacion_supervisor",
                 ):
+
                     cotizacion.fecha_aprobacion_supervisor = None
+
                     update_fields.append("fecha_aprobacion_supervisor")
 
                 cotizacion.save(update_fields=update_fields)
@@ -5847,13 +5864,6 @@ def asignar_trabajadores(request, pk):
 
             seleccionados = form.cleaned_data["trabajadores"]
 
-            old_ids = set(
-                cotizacion.trabajadores_asignados.values_list(
-                    "id",
-                    flat=True,
-                )
-            )
-
             selected_ids = set(
                 seleccionados.values_list(
                     "id",
@@ -5861,483 +5871,188 @@ def asignar_trabajadores(request, pk):
                 )
             )
 
-            if modo == "agregar":
+            # =================================================
+            # ASIGNACIÓN TRANSACCIONAL
+            # =================================================
 
-                removed_ids = old_ids - selected_ids
+            try:
 
-                if removed_ids:
-                    messages.error(
-                        request,
-                        "En modo 'agregar técnicos' no puedes quitar "
-                        "técnicos actuales. Usa 'Reasignar' si quieres "
-                        "reemplazar responsables.",
-                    )
-                    return mostrar_formulario(form)
+                with transaction.atomic():
 
-                final_ids = old_ids | selected_ids
+                    # =========================================
+                    # BLOQUEAR SERVICIO
+                    # =========================================
 
-            else:
-
-                final_ids = selected_ids
-
-            added_ids = final_ids - old_ids
-            removed_ids = old_ids - final_ids
-
-            primera_asignacion = not old_ids
-
-            es_reasignacion_real = (
-                not primera_asignacion and modo == "reasignar" and bool(removed_ids)
-            )
-
-            solo_agregando = (
-                not primera_asignacion and not removed_ids and bool(added_ids)
-            )
-
-            nuevo_monto_mmoo = None
-
-            montos_individuales = {}
-
-            # ====================================================
-            # CARGAR MONTOS YA REGISTRADOS
-            # ====================================================
-            #
-            # Estos importes son la referencia económica
-            # del servicio una vez asignado.
-            #
-            # No deben sustituirse automáticamente por
-            # tarifas modificadas posteriormente.
-            # ====================================================
-
-            montos_existentes = {}
-
-            if usa_modalidad_nueva:
-
-                registros_existentes = MontoTecnicoServicio.objects.filter(
-                    servicio=cotizacion,
-                )
-
-                montos_existentes = {
-                    registro.tecnico_id: registro for registro in registros_existentes
-                }
-
-            # ====================================================
-            # PROTEGER PAGOS DEL PERÍODO
-            # ====================================================
-
-            if usa_tarifas_individuales:
-
-                tecnicos_involucrados = old_ids | final_ids
-
-                if tecnicos_involucrados:
-
-                    pagos_protegidos = MonthlyPayment.objects.filter(
-                        technician_id__in=tecnicos_involucrados,
-                        month=mes_normalizado,
-                        status__in={
-                            "approved_user",
-                            "pending_payment",
-                            "paid",
-                        },
+                    cotizacion = ServicioCotizado.objects.select_for_update().get(
+                        pk=cotizacion.pk
                     )
 
-                    if pagos_protegidos.exists():
-                        messages.error(
-                            request,
-                            "No se puede modificar la asignación porque "
-                            "uno o más técnicos tienen pagos aprobados, "
-                            "pendientes de pago o pagados para este mes.",
+                    # =========================================
+                    # RESPONSABLES ACTUALES
+                    # =========================================
+
+                    old_ids = set(
+                        cotizacion.trabajadores_asignados.values_list(
+                            "id",
+                            flat=True,
                         )
-                        return mostrar_formulario(form)
-
-                # ================================================
-                # MODALIDAD: TARIFAS POR ACTIVIDAD
-                # ================================================
-
-                if usa_tarifa_actividad:
-
-                    if cotizacion.actividad_id is None:
-                        messages.error(
-                            request,
-                            "Este servicio utiliza tarifas por actividad, "
-                            "pero no tiene una actividad configurada. "
-                            "No se modificó la asignación.",
-                        )
-                        return mostrar_formulario(form)
-
-                    if (
-                        cotizacion.proyecto_id
-                        and cotizacion.actividad.proyecto_id != cotizacion.proyecto_id
-                    ):
-                        messages.error(
-                            request,
-                            "La actividad configurada no pertenece "
-                            "al proyecto de este servicio. "
-                            "No se modificó la asignación.",
-                        )
-                        return mostrar_formulario(form)
-
-                    nuevo_monto_mmoo = Decimal("0.00")
-
-                    tecnicos_finales = list(CustomUser.objects.filter(id__in=final_ids))
-
-                    for tecnico in tecnicos_finales:
-
-                        monto_existente = montos_existentes.get(tecnico.pk)
-
-                        # ========================================
-                        # CONSERVAR IMPORTE YA REGISTRADO
-                        # ========================================
-
-                        if monto_existente is not None:
-
-                            monto_individual = Decimal(
-                                str(monto_existente.monto)
-                            ).quantize(
-                                Decimal("0.01"),
-                                rounding=ROUND_HALF_UP,
-                            )
-
-                        else:
-
-                            # ====================================
-                            # SOLO TÉCNICOS SIN MONTO REGISTRADO
-                            # ====================================
-
-                            try:
-                                tarifa = obtener_tarifa_actividad_tecnico(
-                                    cotizacion.actividad,
-                                    tecnico,
-                                    mes_normalizado,
-                                )
-
-                            except TarifaNoConfigurada as exc:
-                                messages.error(
-                                    request,
-                                    str(exc),
-                                )
-                                return mostrar_formulario(form)
-
-                            monto_individual = Decimal(str(tarifa)).quantize(
-                                Decimal("0.01"),
-                                rounding=ROUND_HALF_UP,
-                            )
-
-                        montos_individuales[tecnico.pk] = monto_individual
-
-                        nuevo_monto_mmoo += monto_individual
-
-                    nuevo_monto_mmoo = nuevo_monto_mmoo.quantize(
-                        Decimal("0.01"),
-                        rounding=ROUND_HALF_UP,
                     )
 
-                # ================================================
-                # MODALIDAD: MMOO DEFINIDA EN COTIZACIÓN
-                # ================================================
+                    # =========================================
+                    # MODO AGREGAR
+                    # =========================================
 
-                elif usa_mmoo_cotizacion:
+                    if modo == "agregar":
 
-                    monto_original = getattr(
-                        cotizacion,
-                        "monto_mmoo_cotizacion",
-                        None,
+                        removed_ids = old_ids - selected_ids
+
+                        if removed_ids:
+
+                            raise ErrorAsignacionEconomica(
+                                "En modo 'agregar técnicos' no puedes quitar "
+                                "técnicos actuales. Usa 'Reasignar' si quieres "
+                                "reemplazar responsables."
+                            )
+
+                        final_ids = old_ids | selected_ids
+
+                    else:
+
+                        final_ids = selected_ids
+
+                    # =========================================
+                    # DIFERENCIAS DE ASIGNACIÓN
+                    # =========================================
+
+                    added_ids = final_ids - old_ids
+
+                    removed_ids = old_ids - final_ids
+
+                    primera_asignacion = not old_ids
+
+                    es_reasignacion_real = (
+                        not primera_asignacion
+                        and modo == "reasignar"
+                        and bool(removed_ids)
                     )
 
-                    if monto_original is None:
-                        messages.error(
-                            request,
-                            "Este servicio utiliza la MMOO de cotización, "
-                            "pero no tiene un monto original registrado. "
-                            "No se modificó la asignación.",
-                        )
-                        return mostrar_formulario(form)
-
-                    nuevo_monto_mmoo = Decimal(str(monto_original)).quantize(
-                        Decimal("0.01"),
-                        rounding=ROUND_HALF_UP,
+                    solo_agregando = (
+                        not primera_asignacion and not removed_ids and bool(added_ids)
                     )
 
-                    if final_ids:
+                    # =========================================
+                    # ECONOMÍA COMPARTIDA
+                    # =========================================
 
-                        tecnicos_ordenados = sorted(final_ids)
-
-                        # ========================================
-                        # CONSERVAR DISTRIBUCIÓN YA REGISTRADA
-                        # ========================================
-
-                        ids_con_monto = {
-                            tecnico_id
-                            for tecnico_id in final_ids
-                            if tecnico_id in montos_existentes
-                        }
-
-                        # ========================================
-                        # PRIMERA DISTRIBUCIÓN
-                        # ========================================
-
-                        if not ids_con_monto:
-
-                            cantidad_tecnicos = len(tecnicos_ordenados)
-
-                            total_centavos = int(nuevo_monto_mmoo * Decimal("100"))
-
-                            centavos_base, centavos_restantes = divmod(
-                                total_centavos,
-                                cantidad_tecnicos,
-                            )
-
-                            for indice, tecnico_id in enumerate(tecnicos_ordenados):
-
-                                centavos_tecnico = centavos_base
-
-                                if indice < centavos_restantes:
-                                    centavos_tecnico += 1
-
-                                montos_individuales[tecnico_id] = Decimal(
-                                    centavos_tecnico
-                                ) / Decimal("100")
-
-                        else:
-
-                            # ====================================
-                            # CONSERVAR IMPORTES EXISTENTES
-                            # ====================================
-
-                            for tecnico_id in ids_con_monto:
-
-                                registro = montos_existentes[tecnico_id]
-
-                                montos_individuales[tecnico_id] = Decimal(
-                                    str(registro.monto)
-                                ).quantize(
-                                    Decimal("0.01"),
-                                    rounding=ROUND_HALF_UP,
-                                )
-
-                            ids_sin_monto = final_ids - ids_con_monto
-
-                            total_registrado = sum(
-                                montos_individuales.values(),
-                                Decimal("0.00"),
-                            )
-
-                            # ====================================
-                            # NO REDISTRIBUIR SILENCIOSAMENTE
-                            # ====================================
-
-                            if ids_sin_monto:
-
-                                messages.error(
-                                    request,
-                                    "Este servicio tiene una MMOO definida "
-                                    "en cotización y ya existen importes "
-                                    "individuales registrados. "
-                                    "Agregar o reemplazar técnicos requiere "
-                                    "redistribuir la MMOO original. "
-                                    "La operación se bloqueó para evitar "
-                                    "modificar importes previamente acordados.",
-                                )
-                                return mostrar_formulario(form)
-
-                            if total_registrado != nuevo_monto_mmoo:
-
-                                messages.error(
-                                    request,
-                                    "La suma de los importes individuales "
-                                    "registrados no coincide con la MMOO "
-                                    "original de la cotización. "
-                                    "No se modificó la asignación.",
-                                )
-                                return mostrar_formulario(form)
-
-                # ================================================
-                # MODALIDAD ANTERIOR: TARIFA INDIVIDUAL
-                # ================================================
-
-                elif usa_tarifa_legacy:
-
-                    nuevo_monto_mmoo = Decimal("0.00")
-
-                    tecnicos_finales = list(CustomUser.objects.filter(id__in=final_ids))
-
-                    for tecnico in tecnicos_finales:
-
-                        try:
-                            tarifa = obtener_tarifa_tecnico(
-                                tecnico,
-                                mes_normalizado,
-                            )
-
-                        except TarifaNoConfigurada as exc:
-                            messages.error(
-                                request,
-                                str(exc),
-                            )
-                            return mostrar_formulario(form)
-
-                        nuevo_monto_mmoo += Decimal(str(tarifa))
-
-                    nuevo_monto_mmoo = nuevo_monto_mmoo.quantize(
-                        Decimal("0.01"),
-                        rounding=ROUND_HALF_UP,
-                    )
-
-            # ====================================================
-            # PROTEGER MONTOS INDIVIDUALES APROBADOS
-            # ====================================================
-
-            if usa_modalidad_nueva:
-
-                for monto_aprobado in montos_existentes.values():
-
-                    if not monto_aprobado.aprobado:
-                        continue
-
-                    nuevo_monto = montos_individuales.get(monto_aprobado.tecnico_id)
-
-                    if (
-                        nuevo_monto is None
-                        or Decimal(str(monto_aprobado.monto)) != nuevo_monto
-                    ):
-                        messages.error(
-                            request,
-                            "No se puede modificar la asignación porque "
-                            "existen montos individuales aprobados que "
-                            "serían alterados.",
-                        )
-                        return mostrar_formulario(form)
-
-            # ====================================================
-            # GUARDAR ASIGNACIÓN
-            # ====================================================
-
-            with transaction.atomic():
-
-                cotizacion.trabajadores_asignados.set(final_ids)
-
-                # ====================================================
-                # SINCRONIZAR MONTOS INDIVIDUALES
-                # ====================================================
-
-                if usa_modalidad_nueva:
-
-                    # Eliminar importes no aprobados de
-                    # técnicos que fueron retirados.
-
-                    MontoTecnicoServicio.objects.filter(
+                    resultado_economico = aplicar_asignacion_economica(
                         servicio=cotizacion,
-                        aprobado=False,
-                    ).exclude(
-                        tecnico_id__in=final_ids,
-                    ).delete()
+                        tecnicos_ids=final_ids,
+                        tecnicos_anteriores_ids=old_ids,
+                    )
 
-                    # Registrar únicamente importes faltantes.
-                    #
-                    # Los importes existentes se conservan.
+                    cotizacion = resultado_economico["servicio"]
 
-                    for tecnico_id, monto_individual in montos_individuales.items():
+                    # =========================================
+                    # GUARDAR RESPONSABLES
+                    # =========================================
 
-                        monto_existente = montos_existentes.get(tecnico_id)
+                    cotizacion.trabajadores_asignados.set(final_ids)
 
-                        if monto_existente is None:
+                    cotizacion.supervisor_asigna = request.user
 
-                            MontoTecnicoServicio.objects.create(
-                                servicio=cotizacion,
-                                tecnico_id=tecnico_id,
-                                monto=monto_individual,
-                            )
+                    update_fields = [
+                        "supervisor_asigna",
+                    ]
 
-                update_fields = [
-                    "supervisor_asigna",
-                ]
+                    # =========================================
+                    # PRIMERA ASIGNACIÓN
+                    # =========================================
 
-                cotizacion.supervisor_asigna = request.user
+                    if primera_asignacion:
 
-                if usa_tarifas_individuales:
+                        if cotizacion.estado == "aprobado_pendiente":
 
-                    cotizacion.monto_mmoo = nuevo_monto_mmoo
+                            cotizacion.estado = "asignado"
 
-                    update_fields.append("monto_mmoo")
+                            update_fields.append("estado")
 
-                # ================================================
-                # PRIMERA ASIGNACIÓN
-                # ================================================
+                        _sincronizar_asignaciones_sesion(
+                            cotizacion,
+                            tecnicos_actuales_ids=final_ids,
+                            reset_para_ids=set(final_ids),
+                        )
 
-                if primera_asignacion:
+                    # =========================================
+                    # REASIGNACIÓN REAL
+                    # =========================================
 
-                    if cotizacion.estado == "aprobado_pendiente":
+                    elif es_reasignacion_real:
 
                         cotizacion.estado = "asignado"
+                        cotizacion.tecnico_aceptado = None
+                        cotizacion.tecnico_finalizo = None
+                        cotizacion.supervisor_aprobo = None
+                        cotizacion.supervisor_rechazo = None
 
-                        update_fields.append("estado")
+                        update_fields.extend(
+                            [
+                                "estado",
+                                "tecnico_aceptado",
+                                "tecnico_finalizo",
+                                "supervisor_aprobo",
+                                "supervisor_rechazo",
+                            ]
+                        )
 
-                    _sincronizar_asignaciones_sesion(
-                        cotizacion,
-                        tecnicos_actuales_ids=final_ids,
-                        reset_para_ids=set(final_ids),
-                    )
+                        if hasattr(
+                            cotizacion,
+                            "fecha_aprobacion_supervisor",
+                        ):
 
-                # ================================================
-                # REASIGNACIÓN REAL
-                # ================================================
+                            cotizacion.fecha_aprobacion_supervisor = None
 
-                elif es_reasignacion_real:
+                            update_fields.append("fecha_aprobacion_supervisor")
 
-                    cotizacion.estado = "asignado"
-                    cotizacion.tecnico_aceptado = None
-                    cotizacion.tecnico_finalizo = None
-                    cotizacion.supervisor_aprobo = None
-                    cotizacion.supervisor_rechazo = None
+                        _sincronizar_asignaciones_sesion(
+                            cotizacion,
+                            tecnicos_actuales_ids=final_ids,
+                            reset_para_ids=set(final_ids),
+                        )
 
-                    update_fields.extend(
-                        [
-                            "estado",
-                            "tecnico_aceptado",
-                            "tecnico_finalizo",
-                            "supervisor_aprobo",
-                            "supervisor_rechazo",
-                        ]
-                    )
+                    # =========================================
+                    # AGREGAR TÉCNICOS
+                    # =========================================
 
-                    if hasattr(
-                        cotizacion,
-                        "fecha_aprobacion_supervisor",
-                    ):
-                        cotizacion.fecha_aprobacion_supervisor = None
+                    elif solo_agregando:
 
-                        update_fields.append("fecha_aprobacion_supervisor")
+                        _sincronizar_asignaciones_sesion(
+                            cotizacion,
+                            tecnicos_actuales_ids=final_ids,
+                            reset_para_ids=set(added_ids),
+                        )
 
-                    _sincronizar_asignaciones_sesion(
-                        cotizacion,
-                        tecnicos_actuales_ids=final_ids,
-                        reset_para_ids=set(final_ids),
-                    )
+                    # =========================================
+                    # SIN CAMBIOS
+                    # =========================================
 
-                # ================================================
-                # AGREGAR TÉCNICOS
-                # ================================================
+                    else:
 
-                elif solo_agregando:
+                        _sincronizar_asignaciones_sesion(
+                            cotizacion,
+                            tecnicos_actuales_ids=final_ids,
+                            reset_para_ids=set(),
+                        )
 
-                    _sincronizar_asignaciones_sesion(
-                        cotizacion,
-                        tecnicos_actuales_ids=final_ids,
-                        reset_para_ids=set(added_ids),
-                    )
+                    cotizacion.save(update_fields=update_fields)
 
-                # ================================================
-                # SIN CAMBIOS DE RESPONSABLES
-                # ================================================
+            except ErrorAsignacionEconomica as exc:
 
-                else:
+                messages.error(
+                    request,
+                    str(exc),
+                )
 
-                    _sincronizar_asignaciones_sesion(
-                        cotizacion,
-                        tecnicos_actuales_ids=final_ids,
-                        reset_para_ids=set(),
-                    )
-
-                cotizacion.save(update_fields=update_fields)
+                return mostrar_formulario(form)
 
             # ====================================================
             # NOTIFICACIONES INTERNAS
@@ -6356,14 +6071,14 @@ def asignar_trabajadores(request, pk):
                 crear_notificacion(
                     usuario=trabajador,
                     mensaje=(
-                        f"Se te ha asignado una nueva tarea: "
+                        "Se te ha asignado una nueva tarea: "
                         f"DU{str(cotizacion.du).zfill(8)}."
                     ),
                     url=reverse("operaciones:mis_servicios_tecnico"),
                 )
 
             # ====================================================
-            # NOTIFICACIONES TELEGRAM
+            # TELEGRAM
             # ====================================================
 
             try:
@@ -6435,6 +6150,10 @@ def asignar_trabajadores(request, pk):
                 )
 
             return redirect(next_url or "operaciones:listar_servicios_supervisor")
+
+    # ========================================================
+    # GET
+    # ========================================================
 
     else:
 

@@ -7,6 +7,8 @@ from notificaciones.services import notificar_asignacion_servicio_tecnicos
 from operaciones.models import (RequisitoFoto, ServicioCotizado,
                                 SesionFotoTecnico)
 from operaciones.views_fotos import _get_or_create_sesion
+from planificacion.services.asignacion_economica import \
+    aplicar_asignacion_economica
 from usuarios.models import CustomUser
 from usuarios.utils import crear_notificacion
 
@@ -222,35 +224,26 @@ def asignar_tecnicos_servicio(
     """
     Asigna un conjunto exacto de técnicos a un ServicioCotizado.
 
-    Esta función es reutilizable para:
+    Conserva las reglas operativas existentes de Planificación:
 
-    - asignación individual;
-    - asignación por cuadrilla;
-    - asignación de día completo.
+    - Validación de estado.
+    - Integrantes activos de cuadrilla.
+    - No exige rol usuario.
+    - Reinicio de aceptaciones.
+    - Sincronización fotográfica.
+    - Notificaciones internas y Telegram.
 
-    REGLA DE ASIGNACIÓN MASIVA
+    NUEVO:
     ==========================================================
 
-    Cuando exigir_pendiente=True solamente permite operar
-    sobre:
+    Antes de confirmar la asignación ejecuta las mismas
+    reglas económicas utilizadas por Servicios Disponibles.
 
-        ServicioCotizado.estado == "aprobado_pendiente"
+    La operación económica y la asignación de técnicos
+    se ejecutan dentro de una misma transacción.
 
-    FUENTE DE TÉCNICOS
-    ==========================================================
-
-    Cuando Planificación envía los integrantes de una
-    CuadrillaOperativa, esa configuración es la fuente
-    oficial.
-
-    Aquí se valida:
-
-    - que los usuarios existan;
-    - que continúen activos.
-
-    No se vuelve a exigir el rol "usuario", porque eso
-    introduciría una segunda regla distinta a la
-    configuración explícita de la cuadrilla.
+    Si falla una validación económica, no se confirma
+    ningún cambio en el servicio.
     """
 
     if servicio is None:
@@ -258,6 +251,10 @@ def asignar_tecnicos_servicio(
         raise ValueError(
             "El servicio es obligatorio.",
         )
+
+    # ========================================================
+    # BLOQUEAR SERVICIO
+    # ========================================================
 
     servicio = ServicioCotizado.objects.select_for_update().get(
         pk=servicio.pk,
@@ -311,19 +308,7 @@ def asignar_tecnicos_servicio(
         )
 
     # ========================================================
-    # VALIDAR USUARIOS
-    # ========================================================
-    #
-    # IMPORTANTE:
-    #
-    # NO filtramos:
-    #
-    #     roles__nombre="usuario"
-    #
-    # La CuadrillaOperativa ya determina explícitamente
-    # quiénes son sus integrantes.
-    #
-    # Aquí solamente verificamos existencia y actividad.
+    # VALIDAR INTEGRANTES ACTIVOS
     # ========================================================
 
     tecnicos_validos = list(
@@ -342,10 +327,6 @@ def asignar_tecnicos_servicio(
 
     tecnicos_validos_ids = {tecnico.pk for tecnico in tecnicos_validos}
 
-    # ========================================================
-    # TODOS DEBEN EXISTIR Y ESTAR ACTIVOS
-    # ========================================================
-
     if tecnicos_validos_ids != tecnicos_ids:
 
         ids_invalidos = tecnicos_ids - tecnicos_validos_ids
@@ -361,7 +342,7 @@ def asignar_tecnicos_servicio(
         )
 
     # ========================================================
-    # ESTADO ANTERIOR
+    # ASIGNACIÓN ANTERIOR
     # ========================================================
 
     old_ids = set(
@@ -370,6 +351,29 @@ def asignar_tecnicos_servicio(
             flat=True,
         )
     )
+
+    # ========================================================
+    # APLICAR REGLAS ECONÓMICAS COMPARTIDAS
+    # ========================================================
+    #
+    # IMPORTANTE:
+    #
+    # Si falta una tarifa, existe un pago protegido
+    # o hay un conflicto con montos aprobados,
+    # la función genera una excepción.
+    #
+    # La transacción revierte todos los cambios.
+    #
+    # No se modifica la asignación de técnicos.
+    # ========================================================
+
+    resultado_economico = aplicar_asignacion_economica(
+        servicio=servicio,
+        tecnicos_ids=tecnicos_validos_ids,
+        tecnicos_anteriores_ids=old_ids,
+    )
+
+    servicio = resultado_economico["servicio"]
 
     # ========================================================
     # ASIGNAR LISTA EXACTA
@@ -416,7 +420,7 @@ def asignar_tecnicos_servicio(
     )
 
     # ========================================================
-    # SESIÓN / REQUISITOS
+    # SESIÓN / REQUISITOS FOTOGRÁFICOS
     # ========================================================
 
     sincronizar_asignaciones_sesion(
@@ -439,15 +443,6 @@ def asignar_tecnicos_servicio(
 
         notificar_ids = tecnicos_validos_ids - old_ids
 
-        # ====================================================
-        # NUEVA ASIGNACIÓN DESDE PENDIENTE
-        # ====================================================
-        #
-        # Aunque existieran responsables históricos,
-        # al reasignarse desde aprobado_pendiente todos
-        # deben volver a aceptar.
-        # ====================================================
-
         if exigir_pendiente:
 
             notificar_ids = set(
@@ -459,69 +454,83 @@ def asignar_tecnicos_servicio(
     ]
 
     # ========================================================
-    # NOTIFICACIÓN INTERNA
+    # NOTIFICACIONES
+    # ========================================================
+    #
+    # Se ejecutan después de confirmar la transacción
+    # completa, evitando avisar por una asignación
+    # que posteriormente pueda revertirse.
     # ========================================================
 
-    if enviar_notificaciones:
+    if enviar_notificaciones and usuarios_a_notificar:
 
-        for trabajador in usuarios_a_notificar:
+        def enviar_avisos():
 
-            crear_notificacion(
-                usuario=trabajador,
-                mensaje=(
-                    "Se te ha asignado una nueva tarea: "
-                    f"DU{str(servicio.du).zfill(8)}."
-                ),
-                url=reverse(
-                    "operaciones:mis_servicios_tecnico",
-                ),
-            )
+            for trabajador in usuarios_a_notificar:
 
-    # ========================================================
-    # TELEGRAM
-    # ========================================================
-
-    if enviar_notificaciones and usuarios_a_notificar and request is not None:
-
-        try:
-
-            enlace_app = request.build_absolute_uri(
-                reverse(
-                    "operaciones:mis_servicios_tecnico",
-                )
-            )
-
-            logs = notificar_asignacion_servicio_tecnicos(
-                servicio=servicio,
-                actor=actor,
-                url=enlace_app,
-                extra={
-                    "du": servicio.du,
-                    "id_claro": servicio.id_claro,
-                },
-            )
-
-            for log in logs:
-
-                logger.info(
-                    (
-                        "Telegram asignación servicio DU%s "
-                        "-> usuario_id=%s "
-                        "status=%s error=%s"
+                crear_notificacion(
+                    usuario=trabajador,
+                    mensaje=(
+                        "Se te ha asignado una nueva tarea: "
+                        f"DU{str(servicio.du).zfill(8)}."
                     ),
-                    str(servicio.du).zfill(8),
-                    log.usuario_id,
-                    log.status,
-                    getattr(
-                        log,
-                        "error",
-                        "",
+                    url=reverse(
+                        "operaciones:mis_servicios_tecnico",
                     ),
                 )
 
-        except Exception:
+            # ================================================
+            # TELEGRAM
+            # ================================================
 
-            logger.exception(("Error enviando notificación Telegram " "de asignación"))
+            if request is None:
+                return
+
+            try:
+
+                enlace_app = request.build_absolute_uri(
+                    reverse(
+                        "operaciones:mis_servicios_tecnico",
+                    )
+                )
+
+                logs = notificar_asignacion_servicio_tecnicos(
+                    servicio=servicio,
+                    actor=actor,
+                    url=enlace_app,
+                    extra={
+                        "du": servicio.du,
+                        "id_claro": servicio.id_claro,
+                    },
+                )
+
+                for log in logs:
+
+                    logger.info(
+                        (
+                            "Telegram asignación servicio DU%s "
+                            "-> usuario_id=%s "
+                            "status=%s error=%s"
+                        ),
+                        str(servicio.du).zfill(8),
+                        log.usuario_id,
+                        log.status,
+                        getattr(
+                            log,
+                            "error",
+                            "",
+                        ),
+                    )
+
+            except Exception:
+
+                logger.exception(
+                    "Error enviando notificación Telegram " "de asignación"
+                )
+
+        transaction.on_commit(
+            enviar_avisos,
+        )
 
     return {
         "servicio": servicio,
