@@ -9,6 +9,7 @@
 <div class="min-h-screen bg-slate-50 px-3 py-6 sm:px-6">
 
   <style>
+
     /* ====================================================== */
     /* CONTENEDOR                                             */
     /* ====================================================== */
@@ -189,7 +190,7 @@
     }
 
     /* ====================================================== */
-    /* STATUS AUTOCOMPLETADO                                  */
+    /* AUTOCOMPLETADO                                         */
     /* ====================================================== */
 
     .site-lookup-status {
@@ -253,7 +254,9 @@
       .month-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+
     }
+
   </style>
 
   <!-- ==================================================== -->
@@ -270,9 +273,7 @@
       class="
         border-b border-slate-100
         bg-gradient-to-r
-        from-slate-50
-        via-white
-        to-cyan-50/40
+        from-slate-50 via-white to-cyan-50/40
         px-5 py-5
         sm:px-7 sm:py-6
       "
@@ -312,7 +313,7 @@
     <!-- FORMULARIO                                         -->
     <!-- ================================================== -->
 
-    <form method="post">
+    <form method="post" id="editarCotizacionForm">
 
       {% csrf_token %}
 
@@ -359,7 +360,9 @@
 
           <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            <!-- ID CLARO -->
+            <!-- ============================================= -->
+            <!-- ID CLARO                                      -->
+            <!-- ============================================= -->
 
             <div>
 
@@ -378,7 +381,9 @@
 
             </div>
 
-            <!-- REGIÓN -->
+            <!-- ============================================= -->
+            <!-- REGIÓN                                        -->
+            <!-- ============================================= -->
 
             <div>
 
@@ -392,24 +397,39 @@
 
             </div>
 
-            <!-- MES PRODUCCIÓN -->
+            <!-- ============================================= -->
+            <!-- MES PRODUCCIÓN                                -->
+            <!-- ============================================= -->
 
             <div>
 
-              <label class="field-label">
+              <label
+                for="monthPickerButton"
+                class="field-label"
+              >
                 Mes Producción
                 <span class="field-required">*</span>
               </label>
 
-              <!-- Campo Django real -->
+              <!--
+                Campo real de Django.
+
+                Conserva el valor original al abrir.
+                Solo cambia cuando el usuario selecciona otro mes.
+              -->
 
               <div class="hidden">
+
                 {{ form.mes_produccion|attr:"id:id_mes_produccion"|attr:"required" }}
+
               </div>
 
               <!-- Selector visual -->
 
-              <div id="monthPickerWrapper" class="month-picker-wrapper">
+              <div
+                id="monthPickerWrapper"
+                class="month-picker-wrapper"
+              >
 
                 <button
                   type="button"
@@ -417,6 +437,7 @@
                   class="month-picker-button"
                   aria-haspopup="dialog"
                   aria-expanded="false"
+                  aria-controls="monthPickerPanel"
                 >
 
                   <div class="flex items-center gap-3">
@@ -437,7 +458,11 @@
                         id="monthPickerLabel"
                         class="text-sm font-black text-slate-800"
                       >
-                        Seleccionar mes
+                        {% if form.mes_produccion.value %}
+                          {{ form.mes_produccion.value }}
+                        {% else %}
+                          Seleccionar mes
+                        {% endif %}
                       </div>
 
                       <div class="text-[11px] font-semibold text-slate-400">
@@ -472,7 +497,13 @@
 
                     <div class="text-center">
 
-                      <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+                      <p
+                        class="
+                          text-[11px] font-bold
+                          uppercase tracking-wide
+                          text-slate-400
+                        "
+                      >
                         Año
                       </p>
 
@@ -494,7 +525,10 @@
 
                   </div>
 
-                  <div id="monthPickerGrid" class="month-grid"></div>
+                  <div
+                    id="monthPickerGrid"
+                    class="month-grid"
+                  ></div>
 
                 </div>
 
@@ -504,7 +538,9 @@
 
             </div>
 
-            <!-- ID NEW -->
+            <!-- ============================================= -->
+            <!-- ID NEW                                        -->
+            <!-- ============================================= -->
 
             <div>
 
@@ -526,7 +562,7 @@
         <!-- PROYECTO Y ACTIVIDAD                              -->
         <!-- ================================================= -->
 
-        <div class="border-t border-slate-100 pt-6 pb-6">
+        <div class="border-t border-slate-100 pb-6 pt-6">
 
           <div class="mb-4">
 
@@ -535,14 +571,17 @@
             </h2>
 
             <p class="mt-1 text-xs text-slate-500">
-              Selecciona el proyecto y la actividad correspondiente.
+              Se muestran el proyecto y la actividad registrados
+              originalmente en la cotización.
             </p>
 
           </div>
 
           <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            <!-- PROYECTO -->
+            <!-- ============================================= -->
+            <!-- PROYECTO                                      -->
+            <!-- ============================================= -->
 
             <div>
 
@@ -556,7 +595,9 @@
 
             </div>
 
-            <!-- ACTIVIDAD -->
+            <!-- ============================================= -->
+            <!-- ACTIVIDAD                                     -->
+            <!-- ============================================= -->
 
             <div>
 
@@ -568,8 +609,11 @@
 
               {{ form.actividad.errors }}
 
-              <p id="actividadHelp" class="field-help">
-                Selecciona un proyecto para visualizar sus actividades.
+              <p
+                id="actividadHelp"
+                class="field-help"
+              >
+                Actividad asociada al proyecto seleccionado.
               </p>
 
             </div>
@@ -591,32 +635,42 @@
             </h2>
 
             <p class="mt-1 text-xs text-slate-500">
-              Modifica el alcance del trabajo o sus montos asociados.
+              Consulta o modifica el alcance del trabajo y sus montos.
             </p>
 
           </div>
 
           <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
 
-            <!-- DETALLE TAREA -->
+            <!-- ============================================= -->
+            <!-- DETALLE TAREA                                 -->
+            <!-- ============================================= -->
 
             <div class="md:col-span-2">
 
-              <label class="field-label">
+              <label
+                for="id_detalle_tarea"
+                class="field-label"
+              >
                 Detalle Tarea
               </label>
 
-              {{ form.detalle_tarea|add_class:"cotizacion-field" }}
+              {{ form.detalle_tarea|add_class:"cotizacion-field"|attr:"id:id_detalle_tarea" }}
 
               {{ form.detalle_tarea.errors }}
 
             </div>
 
-            <!-- MONTO UF -->
+            <!-- ============================================= -->
+            <!-- MONTO UF                                      -->
+            <!-- ============================================= -->
 
             <div>
 
-              <label for="id_monto_cotizado" class="field-label">
+              <label
+                for="id_monto_cotizado"
+                class="field-label"
+              >
                 Monto Cotizado (UF)
               </label>
 
@@ -638,23 +692,33 @@
                   name="monto_cotizado"
                   value="{{ form.monto_cotizado.value|default_if_none:'' }}"
                   class="cotizacion-field con-prefijo-uf"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  required
                 >
 
               </div>
 
-              {% if form.errors.monto_cotizado %}
-                <p class="mt-1 text-sm font-semibold text-red-600">
-                  {{ form.errors.monto_cotizado.0 }}
-                </p>
+              {% if form.monto_cotizado.errors %}
+
+                <div class="mt-1 text-sm font-semibold text-red-600">
+                  {{ form.monto_cotizado.errors }}
+                </div>
+
               {% endif %}
 
             </div>
 
-            <!-- MONTO MMOO -->
+            <!-- ============================================= -->
+            <!-- MONTO MMOO                                    -->
+            <!-- ============================================= -->
 
             <div>
 
-              <label for="id_monto_mmoo" class="field-label">
+              <label
+                for="id_monto_mmoo"
+                class="field-label"
+              >
                 Monto MMOO (CLP)
               </label>
 
@@ -676,19 +740,24 @@
                   name="monto_mmoo"
                   value="{{ form.monto_mmoo.value|default_if_none:'' }}"
                   class="cotizacion-field con-prefijo-clp"
+                  inputmode="decimal"
+                  autocomplete="off"
                 >
 
               </div>
 
-              {% if form.errors.monto_mmoo %}
-                <p class="mt-1 text-sm font-semibold text-red-600">
-                  {{ form.errors.monto_mmoo.0 }}
-                </p>
+              {% if form.monto_mmoo.errors %}
+
+                <div class="mt-1 text-sm font-semibold text-red-600">
+                  {{ form.monto_mmoo.errors }}
+                </div>
+
               {% endif %}
 
               <p class="field-help">
-                Si ingresas 0, se utilizarán las tarifas individuales
-                configuradas para los técnicos de la actividad.
+                El importe mostrado corresponde al valor registrado
+                en la cotización. La modalidad seleccionada determina
+                cómo se calcularán los pagos a técnicos.
               </p>
 
             </div>
@@ -710,14 +779,18 @@
             </h2>
 
             <p class="mt-1 text-xs text-slate-500">
-              Define cómo se calcularán los importes de los trabajadores.
+              Se conserva la modalidad registrada hasta que
+              selecciones otra opción.
             </p>
 
           </div>
 
           <div>
 
-            <label for="id_modalidad_pago_tecnicos" class="field-label">
+            <label
+              for="id_modalidad_pago_tecnicos"
+              class="field-label"
+            >
               Modalidad de pago
             </label>
 
@@ -732,15 +805,17 @@
             class="payment-info mt-4"
             aria-live="polite"
           >
-            Selecciona una modalidad para conocer cómo se calcularán los pagos.
+            Consultando modalidad registrada...
           </div>
 
-          {% if servicio.modalidad_pago_tecnicos == None %}
+          {% if not servicio.modalidad_pago_tecnicos %}
+
             <p class="field-help mt-3">
               Este servicio pertenece al esquema histórico de pagos.
-              Su modalidad original se conservará mientras no se seleccione
-              una nueva modalidad.
+              Su modalidad original se conservará mientras no se
+              seleccione una nueva modalidad.
             </p>
+
           {% endif %}
 
         </div>
@@ -795,7 +870,13 @@
 
 </div>
 
+<!-- ====================================================== -->
+<!-- DATOS SERVIDOR                                         -->
+<!-- ====================================================== -->
+
 {{ actividades_disponibles|json_script:"actividades-disponibles-data" }}
+
+{{ servicio.actividad_id|json_script:"actividad-original-data" }}
 
 <!-- ====================================================== -->
 <!-- AUTOCOMPLETAR SITIO                                    -->
@@ -809,11 +890,23 @@ document.addEventListener("DOMContentLoaded", function () {
   const idNewInput = document.getElementById("id_id_new");
   const status = document.getElementById("siteLookupStatus");
 
-  if (!idClaroInput || !regionInput || !idNewInput) {
+  if (
+    !idClaroInput ||
+    !regionInput ||
+    !idNewInput
+  ) {
     return;
   }
 
-  idClaroInput.addEventListener("blur", async function () {
+  // ========================================================
+  // NO CONSULTAR NI MODIFICAR DATOS AL ABRIR LA EDICIÓN
+  // ========================================================
+
+  const idClaroInicial = idClaroInput.value.trim();
+
+  let ultimoIdConsultado = null;
+
+  async function consultarSitio() {
 
     const idClaro = idClaroInput.value.trim();
 
@@ -826,9 +919,24 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
+    // No alterar Región ni ID NEW al abrir el formulario
+    // o cuando el ID Claro no ha cambiado.
+
+    if (idClaro === idClaroInicial) {
+      return;
+    }
+
+    if (idClaro === ultimoIdConsultado) {
+      return;
+    }
+
+    ultimoIdConsultado = idClaro;
+
     if (status) {
+
       status.className = "site-lookup-status text-cyan-600";
       status.textContent = "Buscando información del sitio...";
+
     }
 
     try {
@@ -837,39 +945,65 @@ document.addEventListener("DOMContentLoaded", function () {
         `/operaciones/ajax/obtener-datos-sitio/?id_claro=${encodeURIComponent(idClaro)}`
       );
 
-      const data = await response.json();
-
-      if (data.region && data.id_new) {
-
-        regionInput.value = data.region;
-        idNewInput.value = data.id_new;
+      if (!response.ok) {
 
         if (status) {
-          status.className = "site-lookup-status text-emerald-600";
-          status.textContent =
-            "✓ Sitio encontrado. Datos actualizados automáticamente.";
-        }
 
-      } else {
-
-        if (status) {
           status.className = "site-lookup-status text-amber-600";
+
           status.textContent =
             "No se encontró información automática para este ID Claro.";
+
         }
+
+        return;
+      }
+
+      const data = await response.json();
+
+      // Si el usuario volvió a modificar el ID Claro mientras
+      // llegaba la respuesta, no aplicar datos de una consulta vieja.
+
+      if (idClaroInput.value.trim() !== idClaro) {
+        return;
+      }
+
+      if (data.region !== undefined && data.region !== null) {
+        regionInput.value = data.region;
+      }
+
+      if (data.id_new !== undefined && data.id_new !== null) {
+        idNewInput.value = data.id_new;
+      }
+
+      if (status) {
+
+        status.className = "site-lookup-status text-emerald-600";
+
+        status.textContent =
+          "✓ Datos del sitio actualizados automáticamente.";
+
       }
 
     } catch (error) {
 
-      console.error("Error al buscar datos:", error);
+      console.error("Error al buscar datos del sitio:", error);
 
       if (status) {
+
         status.className = "site-lookup-status text-red-600";
+
         status.textContent =
           "No fue posible consultar la información del sitio.";
+
       }
+
     }
-  });
+
+  }
+
+  idClaroInput.addEventListener("blur", consultarSitio);
+
 });
 </script>
 
@@ -881,34 +1015,81 @@ document.addEventListener("DOMContentLoaded", function () {
 (function () {
 
   const MONTHS_ES = [
-    "Enero", "Febrero", "Marzo", "Abril",
-    "Mayo", "Junio", "Julio", "Agosto",
-    "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre"
   ];
 
   const hiddenInput = document.getElementById("id_mes_produccion");
+
   const wrapper = document.getElementById("monthPickerWrapper");
+
   const button = document.getElementById("monthPickerButton");
+
   const panel = document.getElementById("monthPickerPanel");
+
   const label = document.getElementById("monthPickerLabel");
+
   const yearLabel = document.getElementById("monthPickerYear");
+
   const grid = document.getElementById("monthPickerGrid");
+
   const previousButton = document.getElementById("previousYear");
+
   const nextButton = document.getElementById("nextYear");
 
   if (
-    !hiddenInput || !wrapper || !button || !panel ||
-    !label || !yearLabel || !grid ||
-    !previousButton || !nextButton
+    !hiddenInput ||
+    !wrapper ||
+    !button ||
+    !panel ||
+    !label ||
+    !yearLabel ||
+    !grid ||
+    !previousButton ||
+    !nextButton
   ) {
     return;
   }
 
+  // ========================================================
+  // ESTADO INICIAL
+  // ========================================================
+
   let selectedMonth = null;
+
   let selectedYear = null;
 
+  let mesModificado = false;
+
   const now = new Date();
+
   let visibleYear = now.getFullYear();
+
+  // ========================================================
+  // INTERPRETAR MES EXISTENTE
+  // ========================================================
+
+  function normalizarTexto(texto) {
+
+    return String(texto || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+de\s+/g, " ")
+      .replace(/\s+/g, " ");
+
+  }
 
   function parseExistingValue(value) {
 
@@ -916,67 +1097,122 @@ document.addEventListener("DOMContentLoaded", function () {
       return null;
     }
 
-    const raw = String(value)
-      .trim()
-      .replace(/\s+de\s+/i, " ")
-      .replace(/\s+/g, " ");
+    const raw = normalizarTexto(value);
 
-    if (/^\d{4}-\d{2}$/.test(raw)) {
+    // Formato YYYY-MM
 
-      const parts = raw.split("-");
+    let match = raw.match(/^(\d{4})-(\d{1,2})$/);
 
-      const year = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
+    if (match) {
 
-      if (month < 0 || month > 11) {
-        return null;
+      const year = Number(match[1]);
+
+      const month = Number(match[2]) - 1;
+
+      if (
+        month >= 0 &&
+        month <= 11 &&
+        year >= 1900 &&
+        year <= 9999
+      ) {
+        return { year, month };
       }
 
-      return { year, month };
-    }
-
-    const parts = raw.split(" ");
-
-    if (parts.length !== 2) {
       return null;
     }
+
+    // Formato MM/YYYY o MM-YYYY
+
+    match = raw.match(/^(\d{1,2})[/-](\d{4})$/);
+
+    if (match) {
+
+      const month = Number(match[1]) - 1;
+
+      const year = Number(match[2]);
+
+      if (
+        month >= 0 &&
+        month <= 11 &&
+        year >= 1900 &&
+        year <= 9999
+      ) {
+        return { year, month };
+      }
+
+      return null;
+    }
+
+    // Formato Octubre 2026 u Octubre de 2026
+
+    match = raw.match(/^([a-z]+)\s+(\d{4})$/);
+
+    if (!match) {
+      return null;
+    }
+
+    const monthName = match[1];
+
+    const year = Number(match[2]);
 
     const monthIndex = MONTHS_ES.findIndex(
-      month => month.toLowerCase() === parts[0].toLowerCase()
+      item => normalizarTexto(item) === monthName
     );
 
-    const year = parseInt(parts[1], 10);
-
-    if (monthIndex < 0 || Number.isNaN(year)) {
+    if (
+      monthIndex < 0 ||
+      year < 1900 ||
+      year > 9999
+    ) {
       return null;
     }
 
-    return { year, month: monthIndex };
+    return {
+      year,
+      month: monthIndex
+    };
+
   }
+
+  // ========================================================
+  // ACTUALIZAR MES SOLO POR SELECCIÓN DEL USUARIO
+  // ========================================================
 
   function updateValue() {
 
-    if (selectedMonth === null || selectedYear === null) {
+    if (
+      selectedMonth === null ||
+      selectedYear === null
+    ) {
       return;
     }
 
     const text = `${MONTHS_ES[selectedMonth]} ${selectedYear}`;
 
     hiddenInput.value = text;
+
     label.textContent = text;
+
   }
+
+  // ========================================================
+  // DIBUJAR MESES
+  // ========================================================
 
   function renderMonths() {
 
     yearLabel.textContent = visibleYear;
+
     grid.innerHTML = "";
 
-    MONTHS_ES.forEach((monthName, index) => {
+    MONTHS_ES.forEach(function (monthName, index) {
 
       const monthButton = document.createElement("button");
 
       monthButton.type = "button";
+
       monthButton.className = "month-option";
+
       monthButton.textContent = monthName;
 
       if (
@@ -989,91 +1225,178 @@ document.addEventListener("DOMContentLoaded", function () {
       monthButton.addEventListener("click", function () {
 
         selectedMonth = index;
+
         selectedYear = visibleYear;
 
+        mesModificado = true;
+
         updateValue();
+
         renderMonths();
+
         closePanel();
+
       });
 
       grid.appendChild(monthButton);
+
     });
+
   }
+
+  // ========================================================
+  // ABRIR SELECTOR
+  // ========================================================
 
   function openPanel() {
 
     panel.classList.remove("hidden");
+
     button.classList.add("open");
+
     button.setAttribute("aria-expanded", "true");
 
     renderMonths();
+
   }
+
+  // ========================================================
+  // CERRAR SELECTOR
+  // ========================================================
 
   function closePanel() {
 
     panel.classList.add("hidden");
+
     button.classList.remove("open");
+
     button.setAttribute("aria-expanded", "false");
+
   }
 
-  const parsed = parseExistingValue(hiddenInput.value);
+  // ========================================================
+  // PRECARGA REAL DEL MES
+  // ========================================================
+
+  const valorOriginal = hiddenInput.value;
+
+  const parsed = parseExistingValue(valorOriginal);
 
   if (parsed) {
 
     selectedMonth = parsed.month;
+
     selectedYear = parsed.year;
+
     visibleYear = parsed.year;
+
+    label.textContent =
+      `${MONTHS_ES[parsed.month]} ${parsed.year}`;
+
+  } else if (valorOriginal && valorOriginal.trim()) {
+
+    // Si el formato es histórico o desconocido,
+    // conservarlo exactamente como lo envió Django.
+
+    selectedMonth = null;
+
+    selectedYear = null;
+
+    label.textContent = valorOriginal;
 
   } else {
 
-    selectedMonth = now.getMonth();
-    selectedYear = now.getFullYear();
-    visibleYear = selectedYear;
+    // Una cotización sin mes no debe recibir
+    // automáticamente el mes actual.
+
+    selectedMonth = null;
+
+    selectedYear = null;
+
+    label.textContent = "Seleccionar mes";
+
   }
 
-  updateValue();
+  // IMPORTANTE:
+  // No ejecutar updateValue() durante la precarga.
+
   renderMonths();
+
+  // ========================================================
+  // EVENTOS
+  // ========================================================
 
   button.addEventListener("click", function () {
 
     if (panel.classList.contains("hidden")) {
+
       openPanel();
+
     } else {
+
       closePanel();
+
     }
+
   });
 
   previousButton.addEventListener("click", function () {
+
     visibleYear -= 1;
+
     renderMonths();
+
   });
 
   nextButton.addEventListener("click", function () {
+
     visibleYear += 1;
+
     renderMonths();
+
   });
 
   document.addEventListener("click", function (event) {
 
     if (!wrapper.contains(event.target)) {
+
       closePanel();
+
     }
+
   });
 
   document.addEventListener("keydown", function (event) {
 
     if (event.key === "Escape") {
+
       closePanel();
+
     }
+
   });
+
+  // ========================================================
+  // PROTEGER MES AL GUARDAR
+  // ========================================================
 
   const form = hiddenInput.closest("form");
 
   if (form) {
 
     form.addEventListener("submit", function () {
-      updateValue();
+
+      // Solo modificar el valor original cuando
+      // el usuario realmente seleccionó otro mes.
+
+      if (mesModificado) {
+
+        updateValue();
+
+      }
+
     });
+
   }
 
 })();
@@ -1087,52 +1410,118 @@ document.addEventListener("DOMContentLoaded", function () {
 document.addEventListener("DOMContentLoaded", function () {
 
   const proyecto = document.getElementById("id_proyecto");
+
   const actividad = document.getElementById("id_actividad");
+
   const actividadHelp = document.getElementById("actividadHelp");
 
-  const modalidad = document.getElementById("id_modalidad_pago_tecnicos");
+  const modalidad = document.getElementById(
+    "id_modalidad_pago_tecnicos"
+  );
+
   const montoMmoo = document.getElementById("id_monto_mmoo");
+
   const paymentInfo = document.getElementById("paymentInfo");
 
   const dataElement = document.getElementById(
     "actividades-disponibles-data"
   );
 
+  const actividadOriginalElement = document.getElementById(
+    "actividad-original-data"
+  );
+
+  // ========================================================
+  // ACTIVIDADES DISPONIBLES
+  // ========================================================
+
   let actividades = [];
 
   if (dataElement) {
+
     try {
-      actividades = JSON.parse(dataElement.textContent);
+
+      const parsed = JSON.parse(dataElement.textContent);
+
+      actividades = Array.isArray(parsed) ? parsed : [];
+
     } catch (error) {
-      console.error("No se pudieron cargar las actividades:", error);
+
+      console.error(
+        "No se pudieron cargar las actividades:",
+        error
+      );
+
     }
+
   }
 
-  /* ====================================================== */
-  /* ACTIVIDADES DEL PROYECTO                               */
-  /* ====================================================== */
+  // ========================================================
+  // ACTIVIDAD GUARDADA EN BASE DE DATOS
+  // ========================================================
+
+  let actividadOriginalId = "";
+
+  if (actividadOriginalElement) {
+
+    try {
+
+      const valor = JSON.parse(
+        actividadOriginalElement.textContent
+      );
+
+      if (valor !== null && valor !== undefined) {
+
+        actividadOriginalId = String(valor);
+
+      }
+
+    } catch (error) {
+
+      console.error(
+        "No se pudo identificar la actividad original:",
+        error
+      );
+
+    }
+
+  }
+
+  // ========================================================
+  // PROYECTO Y ACTIVIDAD
+  // ========================================================
 
   if (proyecto && actividad) {
 
+    // El valor real seleccionado por Django tiene prioridad.
+    // Esto permite conservar lo enviado en un POST con errores.
+
+    const seleccionInicial = String(
+      actividad.value || actividadOriginalId || ""
+    );
+
+    const proyectoInicial = String(proyecto.value || "");
+
+    const opcionesIniciales = Array.from(actividad.options);
+
     function actualizarActividades(conservarSeleccion) {
 
-      const proyectoId = proyecto.value;
+      const proyectoId = String(proyecto.value || "");
 
       const seleccionAnterior = conservarSeleccion
-        ? actividad.value
+        ? seleccionInicial
         : "";
 
-      const opcionesActuales = Array.from(actividad.options);
-
-      const opcionHistorica = opcionesActuales.find(
-        option => option.value === seleccionAnterior
-      );
+      // ====================================================
+      // RECONSTRUIR OPCIONES
+      // ====================================================
 
       actividad.innerHTML = "";
 
       const placeholder = document.createElement("option");
 
       placeholder.value = "";
+
       placeholder.textContent = proyectoId
         ? "Selecciona una actividad"
         : "Primero selecciona un proyecto";
@@ -1142,63 +1531,169 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!proyectoId) {
 
         if (actividadHelp) {
+
           actividadHelp.textContent =
             "Primero selecciona un proyecto.";
+
         }
 
         return;
       }
 
-      const disponibles = actividades.filter(
-        item => String(item.proyecto_id) === String(proyectoId)
-      );
+      // ====================================================
+      // ACTIVIDADES ACTIVAS DEL PROYECTO
+      // ====================================================
 
-      disponibles.forEach(item => {
+      const disponibles = actividades.filter(function (item) {
+
+        return String(item.proyecto_id) === proyectoId;
+
+      });
+
+      disponibles.forEach(function (item) {
 
         const option = document.createElement("option");
 
         option.value = String(item.id);
+
         option.textContent = item.nombre;
 
         actividad.appendChild(option);
+
       });
 
-      if (
-        opcionHistorica &&
-        seleccionAnterior &&
-        !disponibles.some(
-          item => String(item.id) === String(seleccionAnterior)
-        )
-      ) {
-        actividad.appendChild(opcionHistorica);
-      }
+      // ====================================================
+      // CONSERVAR ACTIVIDAD HISTÓRICA EN EDICIÓN
+      // ====================================================
 
       if (
-        seleccionAnterior &&
-        Array.from(actividad.options).some(
-          option => option.value === seleccionAnterior
-        )
+        conservarSeleccion &&
+        seleccionAnterior
       ) {
-        actividad.value = seleccionAnterior;
+
+        const existeEnDisponibles = disponibles.some(function (item) {
+
+          return String(item.id) === seleccionAnterior;
+
+        });
+
+        if (!existeEnDisponibles) {
+
+          const opcionHistorica = opcionesIniciales.find(function (option) {
+
+            return String(option.value) === seleccionAnterior;
+
+          });
+
+          if (opcionHistorica) {
+
+            const opcionConservada = document.createElement("option");
+
+            opcionConservada.value = seleccionAnterior;
+
+            opcionConservada.textContent = opcionHistorica.textContent;
+
+            actividad.appendChild(opcionConservada);
+
+          }
+
+        }
+
       }
+
+      // ====================================================
+      // RESTAURAR SELECCIÓN ORIGINAL
+      // ====================================================
+
+      if (conservarSeleccion && seleccionAnterior) {
+
+        const opcionExiste = Array.from(
+          actividad.options
+        ).some(function (option) {
+
+          return option.value === seleccionAnterior;
+
+        });
+
+        if (opcionExiste) {
+
+          actividad.value = seleccionAnterior;
+
+        }
+
+      }
+
+      // ====================================================
+      // TEXTO INFORMATIVO
+      // ====================================================
 
       if (actividadHelp) {
-        actividadHelp.textContent = disponibles.length
-          ? "Actividades disponibles para el proyecto seleccionado."
-          : "Este proyecto no tiene actividades activas registradas.";
+
+        if (actividad.value) {
+
+          actividadHelp.textContent =
+            "Actividad registrada en esta cotización.";
+
+        } else if (disponibles.length) {
+
+          actividadHelp.textContent =
+            "Selecciona una actividad del proyecto.";
+
+        } else {
+
+          actividadHelp.textContent =
+            "Este proyecto no tiene actividades activas registradas.";
+
+        }
+
       }
+
     }
 
+    // ======================================================
+    // PRECARGAR SIN MODIFICAR EL PROYECTO
+    // ======================================================
+
+    if (proyectoInicial) {
+
+      actualizarActividades(true);
+
+    }
+
+    // ======================================================
+    // CAMBIO REAL DEL PROYECTO
+    // ======================================================
+
     proyecto.addEventListener("change", function () {
+
+      // Si el usuario cambia de proyecto,
+      // limpiar la actividad anterior.
+
       actualizarActividades(false);
+
     });
 
-    actualizarActividades(true);
+    // ======================================================
+    // CAMBIO MANUAL DE ACTIVIDAD
+    // ======================================================
+
+    actividad.addEventListener("change", function () {
+
+      if (actividadHelp) {
+
+        actividadHelp.textContent = actividad.value
+          ? "Actividad seleccionada."
+          : "Selecciona una actividad.";
+
+      }
+
+    });
+
   }
 
-  /* ====================================================== */
-  /* INFORMACIÓN DE PAGO                                    */
-  /* ====================================================== */
+  // ========================================================
+  // INFORMACIÓN DE PAGO
+  // ========================================================
 
   function actualizarModalidad() {
 
@@ -1208,19 +1703,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const tipo = modalidad.value;
 
-    const montoTexto = montoMmoo
-      ? montoMmoo.value.trim()
-      : "";
-
-    const montoNormalizado = montoTexto
-      .replace(/\s/g, "")
-      .replace(/\./g, "")
-      .replace(",", ".");
-
-    const monto = montoNormalizado === ""
-      ? null
-      : Number(montoNormalizado);
-
     paymentInfo.className = "payment-info mt-4";
 
     if (tipo === "tarifa_actividad") {
@@ -1228,40 +1710,50 @@ document.addEventListener("DOMContentLoaded", function () {
       paymentInfo.classList.add("tarifa");
 
       paymentInfo.textContent =
-        "Tarifa por actividad: la MMOO se calculará automáticamente " +
-        "según las tarifas individuales de los técnicos asignados.";
+        "Tarifa por actividad: la MMOO se calculará " +
+        "según las tarifas individuales configuradas " +
+        "para los técnicos asignados.";
 
     } else if (tipo === "mmoo_cotizacion") {
 
       paymentInfo.classList.add("cotizacion");
 
-      if (monto === 0) {
-
-        paymentInfo.textContent =
-          "MMOO en $0: el sistema utilizará las tarifas individuales " +
-          "configuradas para esta actividad.";
-
-      } else {
-
-        paymentInfo.textContent =
-          "MMOO de cotización: el importe original se distribuirá " +
-          "automáticamente y en partes iguales entre los técnicos asignados.";
-      }
+      paymentInfo.textContent =
+        "MMOO de cotización: el importe original registrado " +
+        "se distribuirá entre los técnicos asignados. " +
+        "Los importes aprobados y pagos protegidos " +
+        "no podrán modificarse.";
 
     } else {
 
       paymentInfo.textContent =
-        "Sin modalidad nueva seleccionada. Los registros históricos " +
-        "conservarán sus condiciones anteriores.";
+        "Modalidad histórica o sin modalidad nueva. " +
+        "Se conservarán las condiciones anteriores " +
+        "según las reglas del servicio.";
+
     }
+
+    // Este método solo cambia el mensaje visual.
+    // No modifica montoMmoo.value ni modalidad.value.
+
   }
 
   if (modalidad) {
-    modalidad.addEventListener("change", actualizarModalidad);
+
+    modalidad.addEventListener(
+      "change",
+      actualizarModalidad
+    );
+
   }
 
   if (montoMmoo) {
-    montoMmoo.addEventListener("input", actualizarModalidad);
+
+    montoMmoo.addEventListener(
+      "input",
+      actualizarModalidad
+    );
+
   }
 
   actualizarModalidad();
