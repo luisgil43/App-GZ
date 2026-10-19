@@ -42,27 +42,30 @@ def aplicar_asignacion_economica(
     tecnicos_anteriores_ids=None,
 ):
     """
-    Aplica las reglas económicas existentes de
-    operaciones.views.asignar_trabajadores.
-
-    Debe ejecutarse dentro de la misma transacción
-    que confirma la asignación de técnicos.
+    Aplica las reglas económicas de asignación de técnicos.
 
     REGLAS:
 
-    - No modifica tarifas históricas anteriores a octubre 2026.
-    - Protege pagos del período.
-    - Conserva montos individuales registrados.
-    - Calcula tarifas por actividad únicamente para técnicos
-      que todavía no poseen un monto congelado.
-    - No redistribuye automáticamente MMOO de cotización.
-    - Protege montos aprobados.
-    - Actualiza MMOO y registros individuales.
+    - Conserva el comportamiento anterior a octubre de 2026.
+    - Protege pagos aprobados, pendientes de pago y pagados.
+    - Protege montos individuales aprobados.
+    - Conserva las tarifas existentes cuando no cambia la asignación.
+    - Permite redistribuir MMOO de cotización cuando cambian
+      los técnicos y los importes no están protegidos.
+    - La MMOO de cotización siempre mantiene su total original.
+    - Calcula tarifas por actividad para técnicos sin monto registrado.
+    - No modifica tarifas históricas.
+    - Ejecuta los cambios en una transacción.
     """
 
     from operaciones.services.tarifas import obtener_tarifa_actividad_tecnico
 
+    # ========================================================
+    # VALIDAR SERVICIO
+    # ========================================================
+
     if servicio is None or servicio.pk is None:
+
         raise ErrorAsignacionEconomica(
             "El servicio es obligatorio."
         )
@@ -71,8 +74,10 @@ def aplicar_asignacion_economica(
     # BLOQUEAR SERVICIO
     # ========================================================
 
-    servicio = ServicioCotizado.objects.select_for_update().get(
-        pk=servicio.pk,
+    servicio = (
+        ServicioCotizado.objects
+        .select_for_update()
+        .get(pk=servicio.pk)
     )
 
     final_ids = set(tecnicos_ids)
@@ -88,14 +93,18 @@ def aplicar_asignacion_economica(
 
     else:
 
-        old_ids = set(tecnicos_anteriores_ids)
+        old_ids = set(
+            tecnicos_anteriores_ids
+        )
+
+    cambio_asignacion = final_ids != old_ids
 
     # ========================================================
     # MES DE PRODUCCIÓN
     # ========================================================
 
     mes_normalizado = normalizar_mes_produccion(
-        servicio.mes_produccion,
+        servicio.mes_produccion
     )
 
     if mes_normalizado is None:
@@ -120,16 +129,20 @@ def aplicar_asignacion_economica(
         }
 
     # ========================================================
-    # MODALIDAD
+    # MODALIDAD DE PAGO
     # ========================================================
 
     modalidad = (
         servicio.modalidad_pago_tecnicos or ""
     ).strip()
 
-    usa_tarifa_actividad = modalidad == "tarifa_actividad"
+    usa_tarifa_actividad = (
+        modalidad == "tarifa_actividad"
+    )
 
-    usa_mmoo_cotizacion = modalidad == "mmoo_cotizacion"
+    usa_mmoo_cotizacion = (
+        modalidad == "mmoo_cotizacion"
+    )
 
     usa_tarifa_legacy = not (
         usa_tarifa_actividad or usa_mmoo_cotizacion
@@ -140,12 +153,12 @@ def aplicar_asignacion_economica(
     )
 
     # ========================================================
-    # PROTEGER PAGOS
+    # PROTEGER PAGOS DEL PERÍODO
     # ========================================================
 
     involucrados = old_ids | final_ids
 
-    if involucrados:
+    if involucrados and cambio_asignacion:
 
         pagos_protegidos = MonthlyPayment.objects.filter(
             technician_id__in=involucrados,
@@ -162,15 +175,19 @@ def aplicar_asignacion_economica(
             )
 
     # ========================================================
-    # CARGAR MONTOS CONGELADOS
+    # CARGAR MONTOS EXISTENTES
     # ========================================================
 
     montos_existentes = {}
 
     if usa_modalidad_nueva:
 
-        registros = MontoTecnicoServicio.objects.filter(
-            servicio=servicio,
+        registros = list(
+            MontoTecnicoServicio.objects
+            .select_for_update()
+            .filter(
+                servicio=servicio,
+            )
         )
 
         montos_existentes = {
@@ -181,6 +198,8 @@ def aplicar_asignacion_economica(
     montos_individuales = {}
 
     nuevo_monto_mmoo = Decimal("0.00")
+
+    redistribuir_mmoo = False
 
     # ========================================================
     # TARIFA POR ACTIVIDAD
@@ -222,13 +241,13 @@ def aplicar_asignacion_economica(
         for tecnico in tecnicos_finales:
 
             monto_existente = montos_existentes.get(
-                tecnico.pk,
+                tecnico.pk
             )
 
             if monto_existente is not None:
 
                 monto_individual = _decimal_monto(
-                    monto_existente.monto,
+                    monto_existente.monto
                 )
 
             else:
@@ -248,15 +267,17 @@ def aplicar_asignacion_economica(
                     ) from exc
 
                 monto_individual = _decimal_monto(
-                    tarifa,
+                    tarifa
                 )
 
-            montos_individuales[tecnico.pk] = monto_individual
+            montos_individuales[
+                tecnico.pk
+            ] = monto_individual
 
             nuevo_monto_mmoo += monto_individual
 
         nuevo_monto_mmoo = _decimal_monto(
-            nuevo_monto_mmoo,
+            nuevo_monto_mmoo
         )
 
     # ========================================================
@@ -280,13 +301,13 @@ def aplicar_asignacion_economica(
             )
 
         nuevo_monto_mmoo = _decimal_monto(
-            monto_original,
+            monto_original
         )
 
         if final_ids:
 
             tecnicos_ordenados = sorted(
-                final_ids,
+                final_ids
             )
 
             ids_con_monto = {
@@ -295,14 +316,90 @@ def aplicar_asignacion_economica(
                 if tecnico_id in montos_existentes
             }
 
+            ids_sin_monto = (
+                final_ids - ids_con_monto
+            )
+
             # ====================================================
-            # PRIMERA DISTRIBUCIÓN
+            # IDENTIFICAR SI DEBEMOS REDISTRIBUIR
             # ====================================================
 
-            if not ids_con_monto:
+            redistribuir_mmoo = (
+                cambio_asignacion
+                or bool(ids_sin_monto)
+                or not montos_existentes
+            )
+
+            # ====================================================
+            # CONSERVAR IMPORTES EXISTENTES
+            # ====================================================
+
+            if not redistribuir_mmoo:
+
+                for tecnico_id in tecnicos_ordenados:
+
+                    registro = montos_existentes.get(
+                        tecnico_id
+                    )
+
+                    if registro is None:
+
+                        raise ErrorAsignacionEconomica(
+                            "Falta el monto individual de uno "
+                            "de los técnicos asignados."
+                        )
+
+                    montos_individuales[
+                        tecnico_id
+                    ] = _decimal_monto(
+                        registro.monto
+                    )
+
+                total_registrado = sum(
+                    montos_individuales.values(),
+                    Decimal("0.00"),
+                )
+
+                if total_registrado != nuevo_monto_mmoo:
+
+                    raise ErrorAsignacionEconomica(
+                        "La suma de los importes individuales "
+                        "registrados no coincide con la MMOO "
+                        "original de la cotización. "
+                        "No se modificó la asignación."
+                    )
+
+            # ====================================================
+            # NUEVA DISTRIBUCIÓN O REDISTRIBUCIÓN
+            # ====================================================
+
+            else:
+
+                # ------------------------------------------------
+                # PROTEGER IMPORTES APROBADOS
+                # ------------------------------------------------
+
+                montos_aprobados = [
+                    registro
+                    for registro in montos_existentes.values()
+                    if registro.aprobado
+                ]
+
+                if montos_aprobados:
+
+                    raise ErrorAsignacionEconomica(
+                        "No se puede redistribuir la MMOO "
+                        "de esta cotización porque existen "
+                        "importes individuales aprobados. "
+                        "No se modificó ningún monto."
+                    )
+
+                # ------------------------------------------------
+                # DIVIDIR MMOO ENTRE LOS TÉCNICOS FINALES
+                # ------------------------------------------------
 
                 cantidad_tecnicos = len(
-                    tecnicos_ordenados,
+                    tecnicos_ordenados
                 )
 
                 total_centavos = int(
@@ -321,53 +418,30 @@ def aplicar_asignacion_economica(
                     centavos_tecnico = centavos_base
 
                     if indice < centavos_restantes:
+
                         centavos_tecnico += 1
 
-                    montos_individuales[tecnico_id] = (
-                        Decimal(centavos_tecnico) / Decimal("100")
-                    )
-
-            # ====================================================
-            # CONSERVAR DISTRIBUCIÓN EXISTENTE
-            # ====================================================
-
-            else:
-
-                for tecnico_id in ids_con_monto:
-
-                    registro = montos_existentes[
+                    montos_individuales[
                         tecnico_id
-                    ]
-
-                    montos_individuales[tecnico_id] = (
-                        _decimal_monto(registro.monto)
+                    ] = (
+                        Decimal(centavos_tecnico)
+                        / Decimal("100")
                     )
 
-                ids_sin_monto = final_ids - ids_con_monto
+                # ------------------------------------------------
+                # VALIDAR TOTAL EXACTO
+                # ------------------------------------------------
 
-                total_registrado = sum(
+                total_distribuido = sum(
                     montos_individuales.values(),
                     Decimal("0.00"),
                 )
 
-                if ids_sin_monto:
+                if total_distribuido != nuevo_monto_mmoo:
 
                     raise ErrorAsignacionEconomica(
-                        "Este servicio tiene una MMOO definida "
-                        "en cotización y ya existen importes "
-                        "individuales registrados. "
-                        "Agregar o reemplazar técnicos requiere "
-                        "redistribuir la MMOO original. "
-                        "La operación se bloqueó para evitar "
-                        "modificar importes previamente acordados."
-                    )
-
-                if total_registrado != nuevo_monto_mmoo:
-
-                    raise ErrorAsignacionEconomica(
-                        "La suma de los importes individuales "
-                        "registrados no coincide con la MMOO "
-                        "original de la cotización. "
+                        "La distribución calculada no coincide "
+                        "con la MMOO original de la cotización. "
                         "No se modificó la asignación."
                     )
 
@@ -409,7 +483,7 @@ def aplicar_asignacion_economica(
             )
 
         nuevo_monto_mmoo = _decimal_monto(
-            nuevo_monto_mmoo,
+            nuevo_monto_mmoo
         )
 
     # ========================================================
@@ -424,12 +498,14 @@ def aplicar_asignacion_economica(
                 continue
 
             nuevo_monto = montos_individuales.get(
-                registro.tecnico_id,
+                registro.tecnico_id
             )
 
             if (
                 nuevo_monto is None
-                or Decimal(str(registro.monto)) != nuevo_monto
+                or _decimal_monto(
+                    registro.monto
+                ) != nuevo_monto
             ):
 
                 raise ErrorAsignacionEconomica(
@@ -439,10 +515,15 @@ def aplicar_asignacion_economica(
                 )
 
     # ========================================================
-    # REGISTRAR MONTOS
+    # REGISTRAR MONTOS INDIVIDUALES
     # ========================================================
 
     if usa_modalidad_nueva:
+
+        # ----------------------------------------------------
+        # ELIMINAR SOLO REGISTROS NO APROBADOS
+        # DE TÉCNICOS QUE SALEN DE LA ASIGNACIÓN
+        # ----------------------------------------------------
 
         MontoTecnicoServicio.objects.filter(
             servicio=servicio,
@@ -451,16 +532,59 @@ def aplicar_asignacion_economica(
             tecnico_id__in=final_ids,
         ).delete()
 
+        # ----------------------------------------------------
+        # CREAR O ACTUALIZAR IMPORTES
+        # ----------------------------------------------------
+
         for tecnico_id, monto_individual in (
             montos_individuales.items()
         ):
 
-            if tecnico_id not in montos_existentes:
+            registro = montos_existentes.get(
+                tecnico_id
+            )
+
+            # ------------------------------------------------
+            # TÉCNICO SIN IMPORTE REGISTRADO
+            # ------------------------------------------------
+
+            if registro is None:
 
                 MontoTecnicoServicio.objects.create(
                     servicio=servicio,
                     tecnico_id=tecnico_id,
                     monto=monto_individual,
+                )
+
+                continue
+
+            # ------------------------------------------------
+            # CONSERVAR IMPORTES APROBADOS
+            # ------------------------------------------------
+
+            if registro.aprobado:
+
+                continue
+
+            # ------------------------------------------------
+            # ACTUALIZAR SOLO CUANDO HAYA REDISTRIBUCIÓN
+            # DE MMOO DE COTIZACIÓN
+            # ------------------------------------------------
+
+            if (
+                usa_mmoo_cotizacion
+                and redistribuir_mmoo
+                and _decimal_monto(
+                    registro.monto
+                ) != monto_individual
+            ):
+
+                registro.monto = monto_individual
+
+                registro.save(
+                    update_fields=[
+                        "monto",
+                    ]
                 )
 
     # ========================================================
@@ -474,6 +598,10 @@ def aplicar_asignacion_economica(
             "monto_mmoo",
         ]
     )
+
+    # ========================================================
+    # RESULTADO
+    # ========================================================
 
     return {
         "servicio": servicio,
