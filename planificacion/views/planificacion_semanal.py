@@ -1,3 +1,6 @@
+# GZ_BITACORA_SEMANAL_V1 — IMPORTACIONES GLOBALES
+from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
+from django.db.models.functions import Coalesce
 from io import BytesIO
 
 from django.conf import settings
@@ -1854,6 +1857,22 @@ def detalle_planificacion_semanal(
     # SITIOS INCLUIDOS EN EL BATCH
     # ========================================================
 
+    # GZ_BITACORA_SEMANAL_V1 — CONTADORES COMPARTIDOS
+    from django.db.models.functions import Coalesce
+    from planificacion.models import BitacoraSitio
+
+    # Conteo por SitioMovil original.
+    # La misma bitácora se utiliza en planificación diaria.
+    subconsulta_bitacora = (
+        BitacoraSitio.objects.filter(
+            sitio_id=OuterRef("sitio_planificado__sitio_id"),
+        )
+        .order_by()
+        .values("sitio_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
+
     incluidos = (
         SitioBatchSemanal.objects.filter(
             batch=batch,
@@ -1872,6 +1891,15 @@ def detalle_planificacion_semanal(
         .annotate(
             observacion_contacto=Subquery(
                 observacion_contacto,
+            ),
+            # GZ_BITACORA_SEMANAL_V1
+            total_bitacora=Coalesce(
+                Subquery(
+                    subconsulta_bitacora,
+                    output_field=IntegerField(),
+                ),
+                Value(0),
+                output_field=IntegerField(),
             ),
         )
         .order_by(
