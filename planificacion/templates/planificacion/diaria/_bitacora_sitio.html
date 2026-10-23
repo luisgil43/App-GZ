@@ -1,0 +1,1052 @@
+<!-- =========================================================
+     GZ SERVICES — BITÁCORA POR SITIO
+     HISTORIAL AGRUPADO POR DÍA / LÍNEA DE TIEMPO
+     ========================================================= -->
+
+<div
+  id="modal-bitacora-sitio"
+  class="fixed inset-0 z-[10010] hidden items-center justify-center bg-slate-950/60 p-3 sm:p-5"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="bitacora-titulo"
+  aria-hidden="true"
+>
+  <div
+    class="flex w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+    style="max-height: 92dvh;"
+  >
+
+    <!-- =====================================================
+         ENCABEZADO
+         ===================================================== -->
+
+    <div class="shrink-0 border-b border-slate-200 px-5 py-4">
+
+      <div class="flex items-start justify-between gap-4">
+
+        <div class="min-w-0">
+
+          <h2
+            id="bitacora-titulo"
+            class="text-lg font-black text-slate-900"
+          >
+            📋 Bitácora del sitio
+          </h2>
+
+          <p
+            id="bitacora-sitio-nombre"
+            class="mt-1 text-sm text-slate-500"
+          ></p>
+
+        </div>
+
+        <button
+          type="button"
+          id="bitacora-cerrar"
+          class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100"
+          aria-label="Cerrar bitácora"
+        >
+          ✕
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         MENSAJES
+         ===================================================== -->
+
+    <div
+      id="bitacora-mensaje"
+      class="hidden shrink-0 border-b px-5 py-3 text-sm"
+      role="status"
+      aria-live="polite"
+    ></div>
+
+
+    <!-- =====================================================
+         BUSCADOR
+         ===================================================== -->
+
+    <div class="shrink-0 border-b border-slate-100 px-5 py-3">
+
+      <label
+        for="bitacora-buscar"
+        class="mb-1.5 block text-xs font-bold text-slate-600"
+      >
+        Buscar en el historial
+      </label>
+
+      <input
+        id="bitacora-buscar"
+        type="search"
+        autocomplete="off"
+        placeholder="Buscar comentario, usuario o fecha..."
+        class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      >
+
+    </div>
+
+
+    <!-- =====================================================
+         HISTORIAL CON SCROLL INDEPENDIENTE
+         ===================================================== -->
+
+    <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+
+      <div class="mb-4 flex items-center justify-between gap-3">
+
+        <h3 class="text-sm font-black text-slate-800">
+          Historial de anotaciones
+        </h3>
+
+        <span
+          id="bitacora-total"
+          class="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700"
+        >
+          0
+        </span>
+
+      </div>
+
+      <div
+        id="bitacora-historial"
+        class="space-y-3"
+        aria-live="polite"
+      >
+
+        <p class="text-sm text-slate-500">
+          Selecciona un sitio para consultar su bitácora.
+        </p>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         NUEVA ANOTACIÓN — SIEMPRE VISIBLE
+         ===================================================== -->
+
+    <form
+      id="bitacora-formulario"
+      class="shrink-0 border-t border-slate-200 bg-white p-4 sm:p-5"
+    >
+
+      {% csrf_token %}
+
+      <div class="mb-2 flex items-center justify-between gap-3">
+
+        <label
+          for="bitacora-contenido"
+          class="text-sm font-black text-slate-800"
+        >
+          Nueva anotación
+        </label>
+
+        <span
+          id="bitacora-contador-caracteres"
+          class="text-xs text-slate-400"
+        >
+          0 / 5000
+        </span>
+
+      </div>
+
+      <textarea
+        id="bitacora-contenido"
+        name="contenido"
+        rows="3"
+        maxlength="5000"
+        required
+        placeholder="Escribe aquí la información del sitio..."
+        class="w-full resize-y rounded-xl border border-slate-300 p-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+      ></textarea>
+
+      <div class="mt-3 flex justify-end gap-2">
+
+        <button
+          type="button"
+          id="bitacora-cancelar"
+          class="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50"
+        >
+          Cerrar
+        </button>
+
+        <button
+          type="submit"
+          id="bitacora-guardar"
+          class="rounded-xl bg-blue-700 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Guardar anotación
+        </button>
+
+      </div>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+<script>
+(function () {
+  "use strict";
+
+  // =========================================================
+  // ELEMENTOS
+  // =========================================================
+
+  const modal = document.getElementById("modal-bitacora-sitio");
+
+  if (!modal) {
+    return;
+  }
+
+  const historial = document.getElementById("bitacora-historial");
+  const mensaje = document.getElementById("bitacora-mensaje");
+  const total = document.getElementById("bitacora-total");
+  const nombre = document.getElementById("bitacora-sitio-nombre");
+  const formulario = document.getElementById("bitacora-formulario");
+  const contenido = document.getElementById("bitacora-contenido");
+  const guardar = document.getElementById("bitacora-guardar");
+  const buscar = document.getElementById("bitacora-buscar");
+  const contador = document.getElementById("bitacora-contador-caracteres");
+
+  const cerrar = document.getElementById("bitacora-cerrar");
+  const cancelar = document.getElementById("bitacora-cancelar");
+
+  // =========================================================
+  // ESTADO
+  // =========================================================
+
+  let sitioActual = null;
+  let solicitudActual = 0;
+  let guardando = false;
+  let botonAnterior = null;
+
+  let anotacionesActuales = [];
+
+  let scrollBodyAnterior = "";
+  let scrollHtmlAnterior = "";
+
+  const urlConsultar =
+    "{% url 'planificacion:consultar_bitacora_sitio' 0 %}";
+
+  const urlRegistrar =
+    "{% url 'planificacion:registrar_bitacora_sitio' 0 %}";
+
+
+  // =========================================================
+  // UTILIDADES
+  // =========================================================
+
+  function urlSitio(plantilla, sitioId) {
+    return plantilla.replace(/\/0\//, "/" + sitioId + "/");
+  }
+
+
+  function mostrarMensaje(texto, error = false) {
+
+    mensaje.textContent = texto;
+
+    mensaje.className = error
+      ? "shrink-0 border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700"
+      : "shrink-0 border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm text-emerald-700";
+
+  }
+
+
+  function ocultarMensaje() {
+
+    mensaje.classList.add("hidden");
+    mensaje.textContent = "";
+
+  }
+
+
+  function normalizarTexto(valor) {
+
+    return String(valor || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+
+  }
+
+
+  // =========================================================
+  // FECHA Y HORA
+  // =========================================================
+
+  function interpretarFecha(fechaTexto) {
+
+    const coincidencia = String(fechaTexto || "").match(
+      /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/
+    );
+
+    if (!coincidencia) {
+      return null;
+    }
+
+    const dia = Number(coincidencia[1]);
+    const mes = Number(coincidencia[2]);
+    const anio = Number(coincidencia[3]);
+
+    const fecha = new Date(anio, mes - 1, dia);
+
+    if (
+      fecha.getFullYear() !== anio ||
+      fecha.getMonth() !== mes - 1 ||
+      fecha.getDate() !== dia
+    ) {
+      return null;
+    }
+
+    return {
+      clave:
+        coincidencia[3] + "-" +
+        coincidencia[2] + "-" +
+        coincidencia[1],
+
+      fecha: fecha,
+
+      hora:
+        coincidencia[4] + ":" +
+        coincidencia[5]
+    };
+
+  }
+
+
+  function fechaHumana(fecha) {
+
+    const texto = new Intl.DateTimeFormat(
+      "es-CL",
+      {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric"
+      }
+    ).format(fecha);
+
+    return texto.charAt(0).toUpperCase() + texto.slice(1);
+
+  }
+
+
+  // =========================================================
+  // AGRUPAR POR DÍA
+  // =========================================================
+
+  function agruparAnotaciones(anotaciones) {
+
+    const grupos = new Map();
+
+    for (const anotacion of anotaciones) {
+
+      const fecha = interpretarFecha(anotacion.fecha);
+
+      const clave = fecha
+        ? fecha.clave
+        : "sin-fecha";
+
+      if (!grupos.has(clave)) {
+
+        grupos.set(clave, {
+          clave: clave,
+          fecha: fecha ? fecha.fecha : null,
+          anotaciones: []
+        });
+
+      }
+
+      grupos.get(clave).anotaciones.push({
+        ...anotacion,
+        hora: fecha ? fecha.hora : "—"
+      });
+
+    }
+
+    return Array.from(grupos.values()).sort(
+      (a, b) => b.clave.localeCompare(a.clave)
+    );
+
+  }
+
+
+  // =========================================================
+  // CONSTRUIR COMENTARIO DE LÍNEA DE TIEMPO
+  // =========================================================
+
+  function crearComentario(anotacion) {
+
+    const fila = document.createElement("article");
+
+    fila.className =
+      "relative border-l-2 border-blue-100 pb-5 pl-5 last:pb-0";
+
+
+    // PUNTO DE LA LÍNEA DE TIEMPO
+
+    const punto = document.createElement("span");
+
+    punto.className =
+      "absolute -left-[7px] top-1.5 h-3 w-3 rounded-full " +
+      "border-2 border-white bg-blue-500 shadow-sm";
+
+    punto.setAttribute("aria-hidden", "true");
+
+
+    // ENCABEZADO DEL COMENTARIO
+
+    const encabezado = document.createElement("div");
+
+    encabezado.className =
+      "flex flex-wrap items-center justify-between gap-x-3 gap-y-1";
+
+
+    const autor = document.createElement("strong");
+
+    autor.className = "text-xs font-black text-slate-800";
+
+    autor.textContent =
+      anotacion.usuario || "Usuario";
+
+
+    const hora = document.createElement("time");
+
+    hora.className =
+      "rounded-full bg-blue-50 px-2 py-1 text-[11px] font-black text-blue-700";
+
+    hora.textContent =
+      "🕒 " + anotacion.hora;
+
+    hora.setAttribute(
+      "aria-label",
+      "Hora de la anotación: " + anotacion.hora
+    );
+
+
+    // CONTENIDO
+
+    const texto = document.createElement("p");
+
+    texto.className =
+      "mt-2 whitespace-pre-wrap break-words rounded-xl " +
+      "border border-slate-100 bg-slate-50 px-3 py-2.5 " +
+      "text-sm leading-relaxed text-slate-700";
+
+    texto.textContent =
+      anotacion.contenido || "";
+
+
+    encabezado.append(autor, hora);
+
+    fila.append(
+      punto,
+      encabezado,
+      texto
+    );
+
+    return fila;
+
+  }
+
+
+  // =========================================================
+  // CONSTRUIR GRUPO DIARIO
+  // =========================================================
+
+  function crearGrupoDia(grupo, indice, expandirTodo) {
+
+    const contenedor = document.createElement("details");
+
+    contenedor.className =
+      "overflow-hidden rounded-xl border border-slate-200 bg-white";
+
+    // Día más reciente abierto.
+    // Cuando se busca, se abren todos los grupos encontrados.
+
+    contenedor.open =
+      expandirTodo || indice === 0;
+
+
+    const encabezado = document.createElement("summary");
+
+    encabezado.className =
+      "flex cursor-pointer list-none items-center justify-between " +
+      "gap-3 bg-slate-50 px-4 py-3 hover:bg-slate-100";
+
+
+    const izquierda = document.createElement("div");
+
+    izquierda.className =
+      "flex min-w-0 flex-wrap items-center gap-2";
+
+
+    const fecha = document.createElement("span");
+
+    fecha.className =
+      "text-xs font-black text-slate-800";
+
+    fecha.textContent = grupo.fecha
+      ? "📅 " + fechaHumana(grupo.fecha)
+      : "📅 Fecha no disponible";
+
+
+    const cantidad = document.createElement("span");
+
+    cantidad.className =
+      "rounded-full bg-white px-2 py-0.5 text-[10px] " +
+      "font-bold text-slate-600 ring-1 ring-slate-200";
+
+    const n = grupo.anotaciones.length;
+
+    cantidad.textContent =
+      n + (n === 1 ? " anotación" : " anotaciones");
+
+
+    const indicador = document.createElement("span");
+
+    indicador.className =
+      "shrink-0 text-sm font-black text-slate-500";
+
+    indicador.textContent = contenedor.open ? "−" : "+";
+
+
+    contenedor.addEventListener("toggle", function () {
+
+      indicador.textContent =
+        contenedor.open ? "−" : "+";
+
+    });
+
+
+    izquierda.append(fecha, cantidad);
+
+    encabezado.append(
+      izquierda,
+      indicador
+    );
+
+
+    const cuerpo = document.createElement("div");
+
+    cuerpo.className =
+      "space-y-1 border-t border-slate-100 px-5 py-4";
+
+
+    for (const anotacion of grupo.anotaciones) {
+
+      cuerpo.appendChild(
+        crearComentario(anotacion)
+      );
+
+    }
+
+
+    contenedor.append(
+      encabezado,
+      cuerpo
+    );
+
+    return contenedor;
+
+  }
+
+
+  // =========================================================
+  // MOSTRAR HISTORIAL
+  // =========================================================
+
+  function mostrarHistorial() {
+
+    historial.replaceChildren();
+
+    const filtro = normalizarTexto(buscar.value);
+
+    const filtradas = !filtro
+      ? anotacionesActuales
+      : anotacionesActuales.filter(function (anotacion) {
+
+          const texto = normalizarTexto(
+            [
+              anotacion.contenido,
+              anotacion.usuario,
+              anotacion.fecha
+            ].join(" ")
+          );
+
+          return texto.includes(filtro);
+
+        });
+
+
+    total.textContent = filtro
+      ? filtradas.length + " / " + anotacionesActuales.length
+      : String(anotacionesActuales.length);
+
+
+    if (!filtradas.length) {
+
+      const vacio = document.createElement("p");
+
+      vacio.className =
+        "rounded-xl border border-slate-200 bg-slate-50 " +
+        "p-4 text-sm text-slate-500";
+
+      vacio.textContent = filtro
+        ? "No se encontraron anotaciones con ese criterio."
+        : "Este sitio todavía no tiene anotaciones.";
+
+      historial.appendChild(vacio);
+
+      return;
+
+    }
+
+
+    const grupos = agruparAnotaciones(filtradas);
+
+    grupos.forEach(function (grupo, indice) {
+
+      historial.appendChild(
+        crearGrupoDia(
+          grupo,
+          indice,
+          Boolean(filtro)
+        )
+      );
+
+    });
+
+  }
+
+
+  // =========================================================
+  // PROCESAR RESPUESTAS HTTP
+  // =========================================================
+
+  async function leerRespuesta(respuesta) {
+
+    const tipo =
+      respuesta.headers.get("content-type") || "";
+
+    if (!tipo.includes("application/json")) {
+
+      throw new Error(
+        respuesta.status === 403
+          ? "No tienes permiso para acceder a esta bitácora."
+          : "No se pudo completar la solicitud. Comprueba tu sesión."
+      );
+
+    }
+
+    const datos = await respuesta.json();
+
+    if (!respuesta.ok || !datos.ok) {
+
+      throw new Error(
+        datos.error ||
+        datos.detail ||
+        "La operación no pudo completarse."
+      );
+
+    }
+
+    return datos;
+
+  }
+
+
+
+  // =========================================================
+  // ACTUALIZAR CONTADORES EXTERNOS DEL SITIO
+  // =========================================================
+
+  function actualizarContadoresExternos(sitioId, cantidad) {
+
+    const numero = Number(cantidad);
+
+    if (!Number.isSafeInteger(numero) || numero < 0) {
+      return;
+    }
+
+    document.querySelectorAll(
+      "[data-bitacora-sitio]"
+    ).forEach(function (boton) {
+
+      if (Number(boton.dataset.bitacoraSitio) !== sitioId) {
+        return;
+      }
+
+      const contador = boton.querySelector(
+        "[data-bitacora-contador]"
+      );
+
+      if (!contador) {
+        return;
+      }
+
+      contador.textContent = String(numero);
+
+      contador.classList.toggle(
+        "bg-blue-600",
+        numero > 0
+      );
+
+      contador.classList.toggle(
+        "bg-slate-400",
+        numero === 0
+      );
+
+    });
+
+  }
+
+  // =========================================================
+  // CONSULTAR BITÁCORA
+  // =========================================================
+
+  async function cargarHistorial(sitioId) {
+
+    const solicitud = ++solicitudActual;
+
+    historial.textContent =
+      "Cargando anotaciones...";
+
+    total.textContent = "—";
+
+    try {
+
+      const respuesta = await fetch(
+        urlSitio(urlConsultar, sitioId),
+        {
+          method: "GET",
+          credentials: "same-origin",
+          headers: {
+            "Accept": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        }
+      );
+
+      const datos = await leerRespuesta(respuesta);
+
+      if (
+        solicitud !== solicitudActual ||
+        sitioActual !== sitioId
+      ) {
+        return;
+      }
+
+      nombre.textContent = [
+        datos.sitio.identificador,
+        datos.sitio.nombre
+      ].filter(Boolean).join(" · ");
+
+      anotacionesActuales =
+        Array.isArray(datos.anotaciones)
+          ? datos.anotaciones
+          : [];
+
+            actualizarContadoresExternos(sitioId, datos.total);
+
+      mostrarHistorial();
+
+    } catch (error) {
+
+      if (
+        solicitud !== solicitudActual ||
+        sitioActual !== sitioId
+      ) {
+        return;
+      }
+
+      historial.replaceChildren();
+
+      total.textContent = "—";
+
+      mostrarMensaje(
+        error.message || "Error al cargar la bitácora.",
+        true
+      );
+
+    }
+
+  }
+
+
+  // =========================================================
+  // ABRIR MODAL
+  // =========================================================
+
+  window.abrirBitacoraSitio = function (sitioId, boton) {
+
+    if (guardando) {
+      return;
+    }
+
+    const id = Number(sitioId);
+
+    if (
+      !Number.isSafeInteger(id) ||
+      id <= 0
+    ) {
+      return;
+    }
+
+    sitioActual = id;
+
+    botonAnterior =
+      boton || document.activeElement;
+
+    anotacionesActuales = [];
+
+    buscar.value = "";
+    contenido.value = "";
+
+    actualizarContador();
+
+    ocultarMensaje();
+
+    nombre.textContent = "";
+
+    scrollBodyAnterior = document.body.style.overflow;
+    scrollHtmlAnterior = document.documentElement.style.overflow;
+
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+
+    modal.setAttribute(
+      "aria-hidden",
+      "false"
+    );
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    cerrar.focus();
+
+    cargarHistorial(id);
+
+  };
+
+
+  // =========================================================
+  // CERRAR MODAL
+  // =========================================================
+
+  function cerrarBitacora() {
+
+    if (guardando) {
+      return;
+    }
+
+    solicitudActual++;
+
+    sitioActual = null;
+
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+
+    modal.setAttribute(
+      "aria-hidden",
+      "true"
+    );
+
+    document.body.style.overflow = scrollBodyAnterior;
+    document.documentElement.style.overflow = scrollHtmlAnterior;
+
+    ocultarMensaje();
+
+    contenido.value = "";
+    buscar.value = "";
+
+    anotacionesActuales = [];
+
+    actualizarContador();
+
+    if (
+      botonAnterior &&
+      document.contains(botonAnterior)
+    ) {
+      botonAnterior.focus();
+    }
+
+  }
+
+
+  // =========================================================
+  // CONTADOR DE CARACTERES
+  // =========================================================
+
+  function actualizarContador() {
+
+    contador.textContent =
+      contenido.value.length + " / 5000";
+
+  }
+
+  contenido.addEventListener(
+    "input",
+    actualizarContador
+  );
+
+
+  // =========================================================
+  // BUSCADOR
+  // =========================================================
+
+  buscar.addEventListener(
+    "input",
+    mostrarHistorial
+  );
+
+
+  // =========================================================
+  // GUARDAR NUEVA ANOTACIÓN
+  // =========================================================
+
+  formulario.addEventListener(
+    "submit",
+    async function (evento) {
+
+      evento.preventDefault();
+
+      if (
+        guardando ||
+        sitioActual === null
+      ) {
+        return;
+      }
+
+      const texto = contenido.value.trim();
+
+      if (
+        !texto ||
+        texto.length > 5000
+      ) {
+
+        mostrarMensaje(
+          "Escribe una anotación válida de hasta 5000 caracteres.",
+          true
+        );
+
+        return;
+
+      }
+
+      guardando = true;
+
+      guardar.disabled = true;
+      guardar.textContent = "Guardando...";
+
+      const id = sitioActual;
+
+      try {
+
+        const datosFormulario =
+          new FormData(formulario);
+
+        datosFormulario.set(
+          "contenido",
+          texto
+        );
+
+        const respuesta = await fetch(
+          urlSitio(urlRegistrar, id),
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest"
+            },
+            body: datosFormulario
+          }
+        );
+
+        await leerRespuesta(respuesta);
+
+        contenido.value = "";
+
+        actualizarContador();
+
+        buscar.value = "";
+
+        mostrarMensaje(
+          "Anotación registrada correctamente."
+        );
+
+        await cargarHistorial(id);
+
+      } catch (error) {
+
+        mostrarMensaje(
+          error.message || "No se pudo guardar la anotación.",
+          true
+        );
+
+      } finally {
+
+        guardando = false;
+
+        guardar.disabled = false;
+
+        guardar.textContent =
+          "Guardar anotación";
+
+      }
+
+    }
+  );
+
+
+  // =========================================================
+  // EVENTOS DE CIERRE
+  // =========================================================
+
+  cerrar.addEventListener(
+    "click",
+    cerrarBitacora
+  );
+
+  cancelar.addEventListener(
+    "click",
+    cerrarBitacora
+  );
+
+  modal.addEventListener(
+    "click",
+    function (evento) {
+
+      if (evento.target === modal) {
+        cerrarBitacora();
+      }
+
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    function (evento) {
+
+      if (
+        evento.key === "Escape" &&
+        sitioActual !== null
+      ) {
+        cerrarBitacora();
+      }
+
+    }
+  );
+
+})();
+</script>

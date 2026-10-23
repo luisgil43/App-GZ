@@ -20,6 +20,8 @@ from planificacion.views.asignacion_mensual import (
 from planificacion.views.asignacion_operativa import (
     confirmar_asignacion_dia, confirmar_asignacion_salida,
     preview_asignacion_dia, preview_asignacion_salida)
+from planificacion.views.bitacora_sitios import (consultar_bitacora_sitio,
+                                                 registrar_bitacora_sitio)
 from planificacion.views.completar_semana_anterior import (
     analizar_completar_semana, completar_semana_anterior,
     confirmar_completar_semanas)
@@ -52,7 +54,26 @@ from planificacion.views.prioridades_diarias import (
 app_name = "planificacion"
 
 
+from planificacion.views.planificacion_diaria import alternar_warning_sitio_planificacion_diaria
+
+from planificacion.views.clima_sitios import clima_sitio_planificacion_diaria
+
 urlpatterns = [
+    # CLIMA METEOROLÓGICO POR SITIO
+    path(
+        "semanal/<int:batch_id>/diaria/sitio/"
+        "<int:sitio_batch_id>/clima/",
+        clima_sitio_planificacion_diaria,
+        name="clima_sitio_planificacion_diaria",
+    ),
+
+    # WARNING OPERACIONAL
+    path(
+        "semanal/<int:batch_id>/diaria/sitio/<int:sitio_batch_id>/warning/",
+        alternar_warning_sitio_planificacion_diaria,
+        name="alternar_warning_sitio_planificacion_diaria",
+    ),
+
     # ========================================================
     # CONTACTOS
     # ========================================================
@@ -430,5 +451,18 @@ urlpatterns = [
         "semanal/<int:batch_id>/permiso-masivo/",
         actualizar_permiso_masivo_sitios_batch,
         name="actualizar_permiso_masivo_sitios_batch",
+    ),
+    # ========================================================
+    # BITÁCORA OPERACIONAL POR SITIO
+    # ========================================================
+    path(
+        "bitacora/sitio/<int:sitio_id>/",
+        consultar_bitacora_sitio,
+        name="consultar_bitacora_sitio",
+    ),
+    path(
+        "bitacora/sitio/<int:sitio_id>/registrar/",
+        registrar_bitacora_sitio,
+        name="registrar_bitacora_sitio",
     ),
 ]

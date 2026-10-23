@@ -1,3 +1,5 @@
+from planificacion.models import BitacoraSitio
+from django.db.models import Count
 # planificacion/views/planificacion_diaria.py
 
 from collections import defaultdict
@@ -1290,6 +1292,43 @@ def detalle_planificacion_diaria(
         item.tiene_alertas_contacto_ui = (
             info_contactos["tiene_alertas"]
         )
+
+    # ========================================================
+    # BITÁCORA — CONTADORES POR SITIO ORIGINAL
+    # ========================================================
+
+    ids_sitios_bitacora = {
+        item.sitio_planificado.sitio_id
+        for item in pendientes_planificar
+    }
+
+    for salida_ui in salidas_ui:
+        for fila in salida_ui["sitios"]:
+            ids_sitios_bitacora.add(fila["sitio"].pk)
+
+    contadores_bitacora = {
+        registro["sitio_id"]: registro["total"]
+        for registro in (
+            BitacoraSitio.objects.filter(
+                sitio_id__in=ids_sitios_bitacora,
+            )
+            .values("sitio_id")
+            .annotate(total=Count("id"))
+        )
+    }
+
+    for item in pendientes_planificar:
+        item.total_bitacora = contadores_bitacora.get(
+            item.sitio_planificado.sitio_id,
+            0,
+        )
+
+    for salida_ui in salidas_ui:
+        for fila in salida_ui["sitios"]:
+            fila["total_bitacora"] = contadores_bitacora.get(
+                fila["sitio"].pk,
+                0,
+            )
 
     # ========================================================
     # RESUMEN
@@ -2727,4 +2766,75 @@ def trasladar_pendientes_mes_siguiente_planificacion_diaria(
     return redirect(
         "planificacion:detalle_planificacion_diaria",
         batch_id=batch.pk,
+    )
+
+
+# ============================================================
+# WARNING OPERACIONAL — ACTIVAR / DESACTIVAR
+# ============================================================
+
+from django.views.decorators.http import require_POST
+
+
+@require_POST
+@rol_requerido(*ROLES_PLANIFICACION_DIARIA)
+def alternar_warning_sitio_planificacion_diaria(
+    request,
+    batch_id,
+    sitio_batch_id,
+):
+    from django.db import transaction
+    from django.http import HttpResponseBadRequest
+    from django.shortcuts import redirect
+
+    from planificacion.models import (
+        BatchPlanificacionSemanal,
+        SitioBatchSemanal,
+        SitioSalidaPlanificacionDiaria,
+    )
+
+    with transaction.atomic():
+
+        batch = get_object_or_404(
+            BatchPlanificacionSemanal,
+            pk=batch_id,
+        )
+
+        item = get_object_or_404(
+            SitioBatchSemanal.objects.select_for_update(),
+            pk=sitio_batch_id,
+            batch=batch,
+        )
+
+        # No modificar advertencias de sitios que ya están
+        # integrados en una jornada operacional.
+        tiene_programacion = (
+            SitioSalidaPlanificacionDiaria.objects.filter(
+                sitio_batch=item,
+            )
+            .exclude(
+                estado__in=[
+                    "retirado",
+                    "reprogramado",
+                    "cancelado",
+                ],
+            )
+            .exists()
+        )
+
+        if tiene_programacion:
+            return HttpResponseBadRequest(
+                "El sitio ya pertenece a una jornada. "
+                "No se puede cambiar su Warning desde pendientes."
+            )
+
+        item.warning_operacional = not item.warning_operacional
+
+        item.save(
+            update_fields=["warning_operacional"],
+        )
+
+    return redirect(
+        "planificacion:detalle_planificacion_diaria",
+        batch_id=batch_id,
     )

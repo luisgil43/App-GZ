@@ -2139,6 +2139,16 @@ class SitioBatchSemanal(models.Model):
         default=False,
     )
 
+    # WARNING OPERACIONAL — BLOQUEO TEMPORAL DE PROGRAMACIÓN
+    warning_operacional = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text=(
+            "Excluye temporalmente el sitio del recálculo diario "
+            "y de la programación manual de esta semana."
+        ),
+    )
+
     bloqueado_en_batch = models.BooleanField(
         default=False,
         help_text=(
@@ -2216,3 +2226,99 @@ class SitioBatchSemanal(models.Model):
 
     def __str__(self):
         return f"{self.batch} - " f"{self.sitio_planificado.sitio.id_claro}"
+
+# ============================================================
+# BITÁCORA OPERACIONAL POR SITIO
+# ============================================================
+
+
+class BitacoraSitio(models.Model):
+    """
+    Historial de anotaciones operacionales de un sitio.
+
+    REGLAS
+    ==========================================================
+
+    - Cada anotación pertenece al SitioMovil original.
+    - El historial es independiente de la planificación mensual.
+    - El historial es independiente del batch semanal.
+    - El historial es independiente de la jornada diaria.
+    - Las anotaciones permanecen aunque el sitio cambie de semana.
+    - Cada anotación registra automáticamente autor y fecha.
+    - Las anotaciones anteriores no se editan desde la interfaz.
+    - Las anotaciones no modifican permisos ni estados operativos.
+    """
+
+    # ========================================================
+    # SITIO ORIGINAL
+    # ========================================================
+
+    sitio = models.ForeignKey(
+        SitioMovil,
+        on_delete=models.PROTECT,
+        related_name="bitacora_planificacion",
+        db_index=True,
+    )
+
+    # ========================================================
+    # CONTENIDO DE LA ANOTACIÓN
+    # ========================================================
+
+    contenido = models.TextField(
+        help_text=("Anotación operacional relacionada con el sitio."),
+    )
+
+    # ========================================================
+    # AUTOR
+    # ========================================================
+
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="anotaciones_bitacora_sitios",
+    )
+
+    # ========================================================
+    # FECHA Y HORA
+    # ========================================================
+
+    creado_en = models.DateTimeField(
+        default=timezone.now,
+        editable=False,
+        db_index=True,
+    )
+
+    # ========================================================
+    # CONFIGURACIÓN
+    # ========================================================
+
+    class Meta:
+
+        ordering = [
+            "-creado_en",
+            "-id",
+        ]
+
+        verbose_name = "Anotación de bitácora"
+
+        verbose_name_plural = "Anotaciones de bitácora"
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "sitio",
+                    "-creado_en",
+                ],
+                name="idx_bitacora_sitio_fecha",
+            ),
+        ]
+
+    # ========================================================
+    # REPRESENTACIÓN
+    # ========================================================
+
+    def __str__(self):
+
+        identificador = self.sitio.id_claro or self.sitio.id_sites or str(self.sitio_id)
+
+        return f"Bitácora {identificador} " f"- {self.creado_en:%d/%m/%Y %H:%M}"

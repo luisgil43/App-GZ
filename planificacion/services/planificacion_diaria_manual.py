@@ -208,6 +208,13 @@ def validar_sitio_para_programacion_manual(
             )
         )
 
+    # WARNING OPERACIONAL — BLOQUEO DESDE BACKEND
+    if sitio_batch.warning_operacional:
+        errores.append(
+            f"{identificador}: el sitio tiene Warning operacional activo "
+            "y no puede programarse manualmente."
+        )
+
     sitio_planificado = sitio_batch.sitio_planificado
 
     # ========================================================

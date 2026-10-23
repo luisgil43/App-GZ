@@ -430,6 +430,14 @@ def obtener_sitios_disponibles_planificacion_diaria(
 
     items = _query_sitios_elegibles_planificacion_diaria(batch)
 
+    # WARNING OPERACIONAL:
+    # conservar el sitio en pendientes, pero excluirlo del motor.
+    items = [
+        item
+        for item in items
+        if not item.warning_operacional
+    ]
+
     resultado = []
 
     for item in items:

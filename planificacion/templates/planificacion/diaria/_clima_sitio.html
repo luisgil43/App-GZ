@@ -1,0 +1,29 @@
+{% load l10n %}
+{# GZ_CLIMA_SITIOS_V1 #}
+<div
+  class="gz-clima-sitio flex shrink-0 flex-col items-center justify-center"
+  data-gz-clima
+  data-url="{% url 'planificacion:clima_sitio_planificacion_diaria' batch.id sitio_batch_id %}"
+  data-fecha="{{ fecha_clima|default:'' }}"
+  data-lat="{{ sitio_clima.latitud|default_if_none:''|unlocalize }}"
+  data-lon="{{ sitio_clima.longitud|default_if_none:''|unlocalize }}"
+>
+  <a
+    class="gz-clima-enlace inline-flex min-h-12 min-w-24 flex-col items-center justify-center rounded-xl border border-sky-200 bg-sky-50 px-2 py-1.5 text-center transition hover:bg-sky-100"
+    style="pointer-events:none"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="Abrir mapa meteorológico del sitio"
+    title="Consultar mapa meteorológico"
+  >
+    <span class="gz-clima-valor text-xs font-black text-sky-900">
+      🌦️ Consultando
+    </span>
+    <span class="gz-clima-detalle max-w-28 text-center text-[9px] font-semibold leading-tight text-slate-600">
+      Clima del sitio
+    </span>
+  </a>
+  <span class="mt-0.5 text-[8px] font-semibold text-slate-400">
+    MET Norway
+  </span>
+</div>

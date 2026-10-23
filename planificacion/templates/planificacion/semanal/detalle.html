@@ -2900,115 +2900,100 @@ Detalle Batch Semanal
 
   function aplicarFiltrosSitiosBatch() {
 
-    const filtros =
-      Array.from(
-        document.querySelectorAll(
-          ".filtro-columna-batch"
-        )
+  const filtros = Array.from(
+    document.querySelectorAll(
+      ".filtro-columna-batch"
+    )
+  );
+
+  const filas = Array.from(
+    document.querySelectorAll(
+      "[data-item-row]"
+    )
+  );
+
+  filas.forEach(function (fila) {
+
+    let visible = true;
+
+    filtros.forEach(function (filtro) {
+
+      if (!visible) {
+        return;
+      }
+
+      const campo = filtro.dataset.filtroBatch;
+
+      const valorFiltro = normalizarTextoFiltro(
+        filtro.value
       );
 
+      if (!valorFiltro) {
+        return;
+      }
 
-    const filas =
-      Array.from(
-        document.querySelectorAll(
-          "[data-item-row]"
-        )
+      const nombreDataset = campo.replace(
+        /_([a-z])/g,
+        function (_, letra) {
+          return letra.toUpperCase();
+        }
       );
 
+      const valorFila = normalizarTextoFiltro(
+        fila.dataset[nombreDataset]
+      );
 
-    filas.forEach(
-      function (fila) {
+      /*
+       * Los SELECT deben comparar estados exactos.
+       *
+       * Los INPUT permiten búsquedas parciales.
+       */
 
-        let visible =
-          true;
+      if (filtro.tagName === "SELECT") {
 
+        if (valorFila !== valorFiltro) {
+          visible = false;
+        }
 
-        filtros.forEach(
-          function (filtro) {
+      } else {
 
-            if (!visible) {
-
-              return;
-
-            }
-
-
-            const campo =
-              filtro.dataset.filtroBatch;
-
-
-            const valorFiltro =
-              normalizarTextoFiltro(
-                filtro.value
-              );
-
-
-            if (!valorFiltro) {
-
-              return;
-
-            }
-
-
-            const valorFila =
-              normalizarTextoFiltro(
-                fila.dataset[
-                  campo.replace(
-                    /_([a-z])/g,
-                    function (_, letra) {
-
-                      return letra.toUpperCase();
-
-                    }
-                  )
-                ]
-              );
-
-
-            if (
-              !valorFila.includes(
-                valorFiltro
-              )
-            ) {
-
-              visible =
-                false;
-
-            }
-
-          }
-        );
-
-
-        fila.hidden =
-            !visible;
-
-
-          if (!visible) {
-
-            const checkbox =
-              fila.querySelector(
-                ".item-batch-checkbox"
-              );
-
-
-            if (checkbox) {
-
-              checkbox.checked =
-                false;
-
-            }
-
-          }
+        if (!valorFila.includes(valorFiltro)) {
+          visible = false;
+        }
 
       }
-    );
 
+    });
 
-    actualizarSeleccionBatch();
+    /*
+     * Mostrar u ocultar la fila.
+     */
 
-  }
+    fila.hidden = !visible;
+    fila.style.display = visible ? "" : "none";
 
+    /*
+     * Si deja de estar visible,
+     * quitarla de la selección masiva.
+     */
+
+    if (!visible) {
+
+      const checkbox = fila.querySelector(
+        ".item-batch-checkbox"
+      );
+
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+
+    }
+
+  });
+
+  actualizarSeleccionBatch();
+
+}
 
   function limpiarFiltrosSitiosBatch() {
 
@@ -3441,6 +3426,16 @@ Detalle Batch Semanal
             );
 
 
+          if (row) {
+
+            row.dataset.permiso =
+              data.estado_permiso;
+
+            aplicarFiltrosSitiosBatch();
+
+          }
+
+
           const estadoLabel =
             row?.querySelector(
               ".estado-batch-label"
@@ -3480,7 +3475,8 @@ Detalle Batch Semanal
 
     }
   );
-
+  
+ 
   /* ======================================================== */
   /* FILTROS AUTOMÁTICOS DE CANDIDATOS                        */
   /* ======================================================== */

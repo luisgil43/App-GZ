@@ -1258,6 +1258,10 @@ Planificación Diaria
                     </div>
 
 
+                    <!-- GZ_CLIMA_SITIOS_V1 — PENDIENTES -->
+                    {% include "planificacion/diaria/_clima_sitio.html" with sitio_batch_id=item.id sitio_clima=item.sitio_planificado.sitio %}
+
+
                     <span
                       class="
                         shrink-0
@@ -1284,6 +1288,78 @@ Planificación Diaria
 
                   <div class="mt-3 grid gap-2">
 
+                    <!-- WARNING OPERACIONAL -->
+                    <form
+                      method="post"
+                      action="{% url 'planificacion:alternar_warning_sitio_planificacion_diaria' batch.id item.id %}"
+                      class="w-full"
+                    >
+                      {% csrf_token %}
+
+                      <button
+                        type="submit"
+                        aria-pressed="{% if item.warning_operacional %}true{% else %}false{% endif %}"
+                        title="{% if item.warning_operacional %}Desactivar Warning{% else %}Activar Warning{% endif %}"
+                        class="
+                          flex
+                          w-full
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-xl
+                          border
+                          px-3
+                          py-2
+                          text-xs
+                          font-black
+                          transition
+                          {% if item.warning_operacional %}
+                            border-amber-400
+                            bg-yellow-300
+                            text-amber-950
+                            hover:bg-yellow-200
+                          {% else %}
+                            border-slate-200
+                            bg-white
+                            text-slate-600
+                            hover:bg-slate-100
+                          {% endif %}
+                        "
+                      >
+                        ⚠️ Warning
+                        {% if item.warning_operacional %}
+                          <span class="text-[10px]">ACTIVO</span>
+                        {% endif %}
+                      </button>
+                    </form>
+
+                    {% if item.warning_operacional %}
+
+                      <button
+                        type="button"
+                        disabled
+                        title="Programación bloqueada por Warning operacional"
+                        class="
+                          inline-flex
+                          w-full
+                          cursor-not-allowed
+                          items-center
+                          justify-center
+                          rounded-xl
+                          border border-slate-200
+                          bg-slate-100
+                          px-3
+                          py-2
+                          text-xs
+                          font-black
+                          text-slate-400
+                        "
+                      >
+                        Programar manualmente
+                      </button>
+
+                    {% else %}
+
                     <a
                       href="{% url 'planificacion:programar_sitio_manual_planificacion_diaria' batch.id item.id %}"
                       class="
@@ -1306,6 +1382,8 @@ Planificación Diaria
                     >
                       Programar manualmente
                     </a>
+
+                    {% endif %}
 
 
                     <a
@@ -1349,7 +1427,39 @@ Planificación Diaria
                       Mover de semana
 
                     </a>
+                      <!-- ======================================= -->
+                      <!-- BITÁCORA DEL SITIO                      -->
+                      <!-- ======================================= -->
 
+                      <button
+                        type="button"
+                        data-bitacora-sitio="{{ item.sitio_planificado.sitio.pk }}"
+  onclick="abrirBitacoraSitio('{{ item.sitio_planificado.sitio.pk }}', this);"
+                        class="
+                          inline-flex
+                          w-full
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-xl
+                          border border-cyan-200
+                          bg-cyan-50
+                          px-3
+                          py-2
+                          text-xs
+                          font-black
+                          text-cyan-800
+                          transition
+                          hover:border-cyan-300
+                          hover:bg-cyan-100
+                        "
+                      >
+                        <span>📋 Bitácora</span>
+  <span
+    data-bitacora-contador
+    class="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white {% if item.total_bitacora %}bg-blue-600{% else %}bg-slate-400{% endif %}"
+  >{{ item.total_bitacora }}</span>
+                      </button>
                   </div>
 
                 </div>
@@ -2177,6 +2287,9 @@ Planificación Diaria
 
                                 {% endif %}
 
+                                <!-- GZ_CLIMA_SITIOS_V1 — JORNADAS -->
+                                {% include "planificacion/diaria/_clima_sitio.html" with sitio_batch_id=fila.sitio_batch.id sitio_clima=fila.sitio fecha_clima=fila.fecha|date:'Y-m-d' %}
+
                               </div>
 
 
@@ -2790,6 +2903,40 @@ Planificación Diaria
                           <!-- ====================================== -->
 
                           <div class="mt-3 space-y-2">
+                          
+                          <!-- ==================================== -->
+                          <!-- BITÁCORA DEL SITIO                   -->
+                          <!-- ==================================== -->
+
+                          <button
+                            type="button"
+                            data-bitacora-sitio="{{ fila.sitio.pk }}"
+  onclick="abrirBitacoraSitio('{{ fila.sitio.pk }}', this);"
+                            class="
+                              inline-flex
+                              w-full
+                              items-center
+                              justify-center
+                              gap-2
+                              rounded-xl
+                              border border-cyan-200
+                              bg-cyan-50
+                              px-3
+                              py-2
+                              text-xs
+                              font-black
+                              text-cyan-800
+                              transition
+                              hover:border-cyan-300
+                              hover:bg-cyan-100
+                            "
+                          >
+                            <span>📋 Bitácora</span>
+  <span
+    data-bitacora-contador
+    class="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white {% if fila.total_bitacora %}bg-blue-600{% else %}bg-slate-400{% endif %}"
+  >{{ fila.total_bitacora }}</span>
+                          </button>
 
                             <!-- ==================================== -->
                             <!-- ACCIÓN OPERACIONAL PRINCIPAL         -->
@@ -3219,81 +3366,117 @@ Planificación Diaria
 
             </div>
 
+            <!-- ==================================== -->
+            <!-- BITÁCORA DEL SITIO FINALIZADO        -->
+            <!-- ==================================== -->
 
+            <div class="mt-3">
+
+              <button
+                type="button"
+                data-bitacora-sitio="{{ fila.sitio.pk }}"
+  onclick="abrirBitacoraSitio('{{ fila.sitio.pk }}', this);"
+                class="
+                  inline-flex
+                  w-full
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border border-cyan-200
+                  bg-white
+                  px-3
+                  py-2
+                  text-xs
+                  font-black
+                  text-cyan-800
+                  transition
+                  hover:border-cyan-300
+                  hover:bg-cyan-50
+                "
+              >
+                <span>📋 Bitácora</span>
+  <span
+    data-bitacora-contador
+    class="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white {% if fila.total_bitacora %}bg-blue-600{% else %}bg-slate-400{% endif %}"
+  >{{ fila.total_bitacora }}</span>
+              </button>
+
+            </div>
             <!-- ============================================ -->
-<!-- QUITAR TAMBIÉN SI ESTÁ FINALIZADO           -->
-<!-- ============================================ -->
+            <!-- QUITAR TAMBIÉN SI ESTÁ FINALIZADO           -->
+            <!-- ============================================ -->
 
-{% if fila.puede_quitar_planificacion %}
+            {% if fila.puede_quitar_planificacion %}
 
-  <div class="mt-3">
+              <div class="mt-3">
 
-    <form
-      method="post"
-      action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
-    >
-      {% csrf_token %}
+                <form
+                  method="post"
+                  action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
+                >
+                  {% csrf_token %}
 
-      <button
-        type="submit"
-        class="
-          inline-flex
-          w-full
-          items-center
-          justify-center
-          gap-2
-          rounded-xl
-          border border-red-200
-          bg-white
-          px-3
-          py-2
-          text-xs
-          font-black
-          text-red-600
-          transition
-          hover:border-red-300
-          hover:bg-red-50
-          hover:text-red-700
-        "
-      >
+                  <button
+                    type="submit"
+                    class="
+                      inline-flex
+                      w-full
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-xl
+                      border border-red-200
+                      bg-white
+                      px-3
+                      py-2
+                      text-xs
+                      font-black
+                      text-red-600
+                      transition
+                      hover:border-red-300
+                      hover:bg-red-50
+                      hover:text-red-700
+                    "
+                  >
 
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          class="h-4 w-4"
-          aria-hidden="true"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M6 18 18 6M6 6l12 12"
-          />
-        </svg>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 18 18 6M6 6l12 12"
+                      />
+                    </svg>
 
-        Quitar de esta jornada
+                    Quitar de esta jornada
 
-      </button>
+                  </button>
 
-    </form>
+                </form>
 
-  </div>
+              </div>
 
-{% endif %}
+            {% endif %}
 
-          </div>
+                      </div>
 
-        {% endif %}
+                    {% endif %}
 
-      {% endfor %}
+                  {% endfor %}
 
-    </div>
+                </div>
 
-  </div>
+              </div>
 
-{% endif %}
+            {% endif %}
 
                 </article>
 
@@ -5423,4 +5606,198 @@ Planificación Diaria
 
 })();
 </script>
+
+<!-- GZ_CLIMA_SITIOS_V1 -->
+<script>
+(function () {
+  "use strict";
+
+  const elementos = Array.from(
+    document.querySelectorAll("[data-gz-clima]")
+  );
+
+  if (!elementos.length) return;
+
+  const INTERVALO = 30 * 60 * 1000;
+  const CONCURRENCIA = 4;
+
+  function prepararMapa(elemento) {
+    const latitudTexto = elemento.dataset.lat;
+    const longitudTexto = elemento.dataset.lon;
+
+    if (!latitudTexto || !longitudTexto) return;
+
+    const latitud = Number(latitudTexto);
+    const longitud = Number(longitudTexto);
+
+    if (
+      !Number.isFinite(latitud) ||
+      !Number.isFinite(longitud) ||
+      Math.abs(latitud) > 90 ||
+      Math.abs(longitud) > 180
+    ) {
+      return;
+    }
+
+    const enlace = elemento.querySelector(".gz-clima-enlace");
+
+    enlace.href =
+      "https://www.windy.com/?rain," +
+      latitud.toFixed(5) + "," +
+      longitud.toFixed(5) + ",10,d:picker";
+
+    enlace.style.pointerEvents = "auto";
+    enlace.title =
+      "Abrir mapa meteorológico externo de este sitio";
+  }
+
+  function mostrar(elemento, principal, detalle, disponible) {
+    const valor = elemento.querySelector(".gz-clima-valor");
+    const descripcion = elemento.querySelector(".gz-clima-detalle");
+    const enlace = elemento.querySelector(".gz-clima-enlace");
+
+    valor.textContent = principal;
+    descripcion.textContent = detalle;
+
+    enlace.classList.toggle("bg-sky-50", disponible);
+    enlace.classList.toggle("border-sky-200", disponible);
+    enlace.classList.toggle("bg-slate-50", !disponible);
+    enlace.classList.toggle("border-slate-200", !disponible);
+  }
+
+  function horaChile(texto) {
+    if (!texto) return "";
+
+    const fecha = new Date(texto);
+
+    if (Number.isNaN(fecha.getTime())) return "";
+
+    return new Intl.DateTimeFormat("es-CL", {
+      timeZone: "America/Santiago",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false
+    }).format(fecha);
+  }
+
+  async function consultar(elemento) {
+    const direccion = elemento.dataset.url;
+
+    if (!direccion) {
+      mostrar(
+        elemento,
+        "🌦️ Sin datos",
+        "Dirección no disponible",
+        false
+      );
+      return;
+    }
+
+    const url = new URL(direccion, window.location.origin);
+
+    if (elemento.dataset.fecha) {
+      url.searchParams.set("fecha", elemento.dataset.fecha);
+    }
+
+    try {
+      const respuesta = await fetch(url, {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: {
+          "Accept": "application/json"
+        }
+      });
+
+      if (!respuesta.ok) {
+        throw new Error("HTTP " + respuesta.status);
+      }
+
+      const datos = await respuesta.json();
+
+      if (
+        !datos.disponible ||
+        typeof datos.temperatura !== "number" ||
+        !Number.isFinite(datos.temperatura)
+      ) {
+        mostrar(
+          elemento,
+          "🌦️ Sin datos",
+          datos.mensaje || "Clima no disponible",
+          false
+        );
+        return;
+      }
+
+      const temperatura = Math.round(datos.temperatura) + " °C";
+      const condicion = datos.condicion || "Pronóstico";
+      const hora = horaChile(datos.hora_pronostico);
+
+      mostrar(
+        elemento,
+        (datos.icono || "🌡️") + " " + temperatura,
+        condicion + (hora ? " · " + hora : ""),
+        true
+      );
+
+      elemento.querySelector(".gz-clima-enlace").title =
+        condicion + " · " + temperatura +
+        (hora ? " · " + hora : "") +
+        " · Fuente: MET Norway · Abrir mapa";
+
+    } catch (error) {
+      mostrar(
+        elemento,
+        "🌦️ Sin datos",
+        "Clima no disponible",
+        false
+      );
+    }
+  }
+
+  let ejecutando = false;
+
+  async function actualizar() {
+    if (ejecutando || document.hidden) return;
+
+    ejecutando = true;
+
+    try {
+      let indice = 0;
+
+      async function trabajador() {
+        while (indice < elementos.length) {
+          const elemento = elementos[indice++];
+          await consultar(elemento);
+        }
+      }
+
+      await Promise.all(
+        Array.from(
+          {
+            length: Math.min(CONCURRENCIA, elementos.length)
+          },
+          () => trabajador()
+        )
+      );
+
+    } finally {
+      ejecutando = false;
+    }
+  }
+
+  elementos.forEach(prepararMapa);
+
+  actualizar();
+
+  window.setInterval(actualizar, INTERVALO);
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) {
+      actualizar();
+    }
+  });
+})();
+</script>
+
+{% include "planificacion/diaria/_bitacora_sitio.html" %}
 {% endblock %}
