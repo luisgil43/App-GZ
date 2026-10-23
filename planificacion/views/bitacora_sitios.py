@@ -1,3 +1,4 @@
+from zoneinfo import ZoneInfo
 # ============================================================
 # GZ SERVICES — BITÁCORA OPERACIONAL POR SITIO
 # ============================================================
@@ -7,7 +8,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
-from operaciones.models import SitioMovil
+from operaciones.models import SitioMovil, ServicioCotizado
+from django.http import HttpResponseForbidden
 from planificacion.models import BitacoraSitio
 from usuarios.decoradores import rol_requerido
 
@@ -19,10 +21,66 @@ ROLES_BITACORA_SITIOS = [
     "admin",
     "pm",
     "supervisor",
+    "usuario",
 ]
 
 
 # ============================================================
+
+# GZ_BITACORA_TECNICOS_V1
+def _tecnico_autorizado_para_bitacora(usuario, sitio):
+    """
+    Autoriza solamente sitios de servicios asignados al técnico.
+    """
+    if not getattr(usuario, "is_authenticated", False):
+        return False
+
+    if getattr(usuario, "rol", None) != "usuario":
+        return False
+
+    servicios = ServicioCotizado.objects.filter(
+        trabajadores_asignados=usuario,
+    )
+
+    if servicios.filter(
+        sitio_planificado__sitio_id=sitio.pk,
+    ).exists():
+        return True
+
+    identificador = str(sitio.id_claro or "").strip()
+
+    if not identificador:
+        return False
+
+    if SitioMovil.objects.filter(
+        id_claro=identificador,
+    ).count() != 1:
+        return False
+
+    return servicios.filter(
+        sitio_planificado__isnull=True,
+        id_claro=identificador,
+    ).exists()
+
+
+def _puede_acceder_bitacora(usuario, sitio):
+    if not getattr(usuario, "is_authenticated", False):
+        return False
+
+    rol = getattr(usuario, "rol", None)
+
+    if rol in ("admin", "pm", "supervisor"):
+        return True
+
+    if rol == "usuario":
+        return _tecnico_autorizado_para_bitacora(
+            usuario,
+            sitio,
+        )
+
+    return False
+
+
 # CONSULTAR BITÁCORA
 # ============================================================
 
@@ -41,6 +99,12 @@ def consultar_bitacora_sitio(request, sitio_id):
         SitioMovil,
         pk=sitio_id,
     )
+
+    if not _puede_acceder_bitacora(request.user, sitio):
+        return HttpResponseForbidden(
+            "No tienes autorización para acceder "
+            "a la bitácora de este sitio."
+        )
 
     anotaciones = (
         BitacoraSitio.objects.filter(
@@ -63,7 +127,7 @@ def consultar_bitacora_sitio(request, sitio_id):
                 "id": anotacion.pk,
                 "contenido": anotacion.contenido,
                 "usuario": nombre_usuario,
-                "fecha": anotacion.creado_en.strftime("%d/%m/%Y %H:%M"),
+                "fecha": timezone.localtime(anotacion.creado_en, ZoneInfo("America/Santiago")).strftime("%d/%m/%Y %H:%M"),
             }
         )
 
@@ -101,6 +165,12 @@ def registrar_bitacora_sitio(request, sitio_id):
         SitioMovil,
         pk=sitio_id,
     )
+
+    if not _puede_acceder_bitacora(request.user, sitio):
+        return HttpResponseForbidden(
+            "No tienes autorización para acceder "
+            "a la bitácora de este sitio."
+        )
 
     contenido = request.POST.get("contenido", "").strip()
 
@@ -142,7 +212,7 @@ def registrar_bitacora_sitio(request, sitio_id):
                 "id": anotacion.pk,
                 "contenido": anotacion.contenido,
                 "usuario": nombre_usuario,
-                "fecha": anotacion.creado_en.strftime("%d/%m/%Y %H:%M"),
+                "fecha": timezone.localtime(anotacion.creado_en, ZoneInfo("America/Santiago")).strftime("%d/%m/%Y %H:%M"),
             },
         },
         status=201,

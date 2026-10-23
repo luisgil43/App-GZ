@@ -879,6 +879,26 @@
                   <!-- ACCIONES -->
                   <td class="space-x-2 p-3">
 
+                    <!-- GZ_BITACORA_TECNICOS_V1 -->
+                    {% if item.bitacora_sitio_id %}
+                      <button
+                        type="button"
+                        data-bitacora-sitio="{{ item.bitacora_sitio_id }}"
+                        onclick="abrirBitacoraSitio('{{ item.bitacora_sitio_id }}', this);"
+                        class="mb-1 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-[13px] font-bold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100"
+                        title="Consultar y registrar anotaciones del sitio"
+                      >
+                        <span>📋 Bitácora</span>
+
+                        <span
+                          data-bitacora-contador
+                          class="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-black text-white {% if item.total_bitacora %}bg-blue-600{% else %}bg-slate-400{% endif %}"
+                        >
+                          {{ item.total_bitacora }}
+                        </span>
+                      </button>
+                    {% endif %}
+
                     {% if item.puedo_aceptar %}
 
                       <a
@@ -1860,5 +1880,9 @@
 
 })();
 </script>
+
+
+<!-- GZ_BITACORA_TECNICOS_V1 — MODAL COMPARTIDO -->
+{% include "planificacion/diaria/_bitacora_sitio.html" %}
 
 {% endblock %}

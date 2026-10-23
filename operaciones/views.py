@@ -6676,6 +6676,7 @@ def mis_servicios_tecnico(request):
             "tecnico_finalizo",
             "supervisor_aprobo",
             "supervisor_rechazo",
+            "sitio_planificado__sitio",
         )
         .distinct()
     )
@@ -7094,6 +7095,85 @@ def mis_servicios_tecnico(request):
                 "nombre_tecnico_finalizo": (nombre_tecnico_finalizo),
             }
         )
+
+    # ============================================================
+    # GZ_BITACORA_TECNICOS_V1
+    # BITÁCORA COMPARTIDA POR SITIO
+    # ============================================================
+
+    from django.db.models import Count as _CountBitacoraTecnico
+    from planificacion.models import BitacoraSitio as _BitacoraTecnico
+
+    ids_legacy = {
+        str(info["servicio"].id_claro).strip()
+        for info in servicios_info
+        if (
+            not info["servicio"].sitio_planificado_id
+            and info["servicio"].id_claro
+        )
+    }
+
+    ids_legacy_unicos = set()
+
+    if ids_legacy:
+        registros_legacy = (
+            SitioMovil.objects
+            .filter(id_claro__in=ids_legacy)
+            .values("id_claro")
+            .annotate(total=_CountBitacoraTecnico("pk"))
+        )
+
+        ids_legacy_unicos = {
+            registro["id_claro"]
+            for registro in registros_legacy
+            if registro["total"] == 1
+        }
+
+    ids_sitios_bitacora = set()
+
+    for info in servicios_info:
+        servicio = info["servicio"]
+        sitio_bitacora = None
+
+        if servicio.sitio_planificado_id:
+            sitio_bitacora = servicio.sitio_planificado.sitio
+
+        else:
+            id_claro = str(
+                servicio.id_claro or ""
+            ).strip()
+
+            if id_claro in ids_legacy_unicos:
+                sitio_bitacora = info.get("sitio")
+
+        info["bitacora_sitio_id"] = (
+            sitio_bitacora.pk if sitio_bitacora else None
+        )
+
+        info["total_bitacora"] = 0
+
+        if sitio_bitacora:
+            ids_sitios_bitacora.add(sitio_bitacora.pk)
+
+    if ids_sitios_bitacora:
+        totales = {
+            registro["sitio_id"]: registro["total"]
+            for registro in (
+                _BitacoraTecnico.objects
+                .filter(sitio_id__in=ids_sitios_bitacora)
+                .values("sitio_id")
+                .annotate(total=_CountBitacoraTecnico("pk"))
+            )
+        }
+
+        for info in servicios_info:
+            sitio_id = info["bitacora_sitio_id"]
+
+            if sitio_id:
+                info["total_bitacora"] = totales.get(
+                    sitio_id,
+                    0,
+                )
 
     # ============================================================
     # CONTEXTO
