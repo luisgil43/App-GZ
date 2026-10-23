@@ -35,7 +35,7 @@ def _tecnico_autorizado_para_bitacora(usuario, sitio):
     if not getattr(usuario, "is_authenticated", False):
         return False
 
-    if getattr(usuario, "rol", None) != "usuario":
+    if "usuario" not in _roles_bitacora(usuario):
         return False
 
     servicios = ServicioCotizado.objects.filter(
@@ -63,22 +63,43 @@ def _tecnico_autorizado_para_bitacora(usuario, sitio):
     ).exists()
 
 
-def _puede_acceder_bitacora(usuario, sitio):
+def _roles_bitacora(usuario):
     if not getattr(usuario, "is_authenticated", False):
-        return False
+        return set()
 
-    rol = getattr(usuario, "rol", None)
+    if getattr(usuario, "is_superuser", False):
+        return {"admin"}
 
-    if rol in ("admin", "pm", "supervisor"):
+    if not hasattr(usuario, "roles"):
+        return set()
+
+    return set(
+        usuario.roles.values_list("nombre", flat=True)
+    )
+
+
+def _puede_acceder_bitacora(usuario, sitio):
+    roles = _roles_bitacora(usuario)
+
+    if roles.intersection({"admin", "pm", "supervisor"}):
         return True
 
-    if rol == "usuario":
+    if "usuario" in roles:
         return _tecnico_autorizado_para_bitacora(
             usuario,
             sitio,
         )
 
     return False
+
+
+def _puede_escribir_bitacora(usuario):
+    return bool(
+        _roles_bitacora(usuario).intersection(
+            {"admin", "pm", "supervisor"}
+        )
+    )
+
 
 
 # CONSULTAR BITÁCORA
@@ -160,6 +181,16 @@ def registrar_bitacora_sitio(request, sitio_id):
     Las anotaciones son independientes y no modifican
     el estado de permisos, planificación u operaciones.
     """
+
+    # GZ_BITACORA_ESCRITURA_ADMIN_V3
+    if not _puede_escribir_bitacora(request.user):
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "Tu cuenta solo puede consultar la bitácora.",
+            },
+            status=403,
+        )
 
     sitio = get_object_or_404(
         SitioMovil,

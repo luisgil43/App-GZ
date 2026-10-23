@@ -130,6 +130,8 @@
          NUEVA ANOTACIÓN — SIEMPRE VISIBLE
          ===================================================== -->
 
+    {# GZ_BITACORA_MODAL_SOLO_LECTURA_V3 #}
+    <div {% if bitacora_solo_lectura %}hidden{% endif %}>
     <form
       id="bitacora-formulario"
       class="shrink-0 border-t border-slate-200 bg-white p-4 sm:p-5"
@@ -186,6 +188,7 @@
       </div>
 
     </form>
+    </div>
 
   </div>
 
