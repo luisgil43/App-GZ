@@ -1,0 +1,186 @@
+<!-- GZ_VISOR_SITIO_MOVIL_V1 -->
+<div
+  id="gz-modal-detalle-sitio"
+  data-url-template="{% url 'planificacion:consultar_detalle_sitio_movil' 0 %}"
+  class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/60 p-3 sm:p-6"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="gz-detalle-sitio-titulo"
+>
+  <div class="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+    <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+      <div class="min-w-0">
+        <p class="text-xs font-bold uppercase tracking-wide text-blue-600">
+          Información del sitio móvil
+        </p>
+        <h2
+          id="gz-detalle-sitio-titulo"
+          class="truncate text-lg font-black text-slate-900"
+        >
+          Consultando sitio...
+        </h2>
+      </div>
+
+      <button
+        type="button"
+        id="gz-cerrar-detalle-sitio"
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xl font-bold text-slate-600 hover:bg-slate-200"
+        aria-label="Cerrar información del sitio"
+      >
+        ×
+      </button>
+    </div>
+
+    <div
+      id="gz-detalle-sitio-contenido"
+      class="min-h-32 flex-1 overflow-y-auto p-5"
+    >
+      Selecciona un sitio para consultar su información.
+    </div>
+
+    <div class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-right">
+      <button
+        type="button"
+        id="gz-cerrar-detalle-sitio-pie"
+        class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700"
+      >
+        Cerrar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const modal = document.getElementById("gz-modal-detalle-sitio");
+  const contenido = document.getElementById("gz-detalle-sitio-contenido");
+  const titulo = document.getElementById("gz-detalle-sitio-titulo");
+
+  if (!modal || !contenido || !titulo) return;
+
+  const cache = new Map();
+  let solicitudActual = 0;
+
+  function texto(valor) {
+    if (valor === null || valor === undefined || valor === "") {
+      return "—";
+    }
+    return String(valor);
+  }
+
+  function crearCampo(campo) {
+    const caja = document.createElement("div");
+    caja.className =
+      "rounded-xl border border-slate-200 bg-slate-50 p-3";
+
+    const etiqueta = document.createElement("div");
+    etiqueta.className =
+      "mb-1 text-[11px] font-black uppercase tracking-wide text-slate-500";
+    etiqueta.textContent = campo.etiqueta;
+
+    const valor = document.createElement("div");
+    valor.className =
+      "break-words whitespace-pre-wrap text-sm font-semibold text-slate-800";
+    valor.textContent = texto(campo.valor);
+
+    caja.appendChild(etiqueta);
+    caja.appendChild(valor);
+
+    return caja;
+  }
+
+  function mostrarDatos(datos) {
+    titulo.textContent = datos.titulo || "Información del sitio";
+    contenido.replaceChildren();
+
+    const cuadrícula = document.createElement("div");
+    cuadrícula.className =
+      "grid grid-cols-1 gap-3 sm:grid-cols-2";
+
+    for (const campo of datos.campos || []) {
+      cuadrícula.appendChild(crearCampo(campo));
+    }
+
+    contenido.appendChild(cuadrícula);
+  }
+
+  function cerrar() {
+    solicitudActual += 1;
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    document.body.style.overflow = "";
+  }
+
+  window.abrirDetalleSitioMovil = async function (sitioId) {
+    if (!sitioId) return;
+
+    const solicitud = ++solicitudActual;
+
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    document.body.style.overflow = "hidden";
+
+    titulo.textContent = "Información del sitio";
+    contenido.textContent = "Cargando información del sitio...";
+
+    if (cache.has(String(sitioId))) {
+      mostrarDatos(cache.get(String(sitioId)));
+      return;
+    }
+
+    try {
+      const plantilla = modal.dataset.urlTemplate;
+      const url = plantilla.replace("/0/", "/" + sitioId + "/");
+
+      const respuesta = await fetch(url, {
+        method: "GET",
+        credentials: "same-origin",
+        headers: {
+          "Accept": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+
+      if (!respuesta.ok) {
+        throw new Error(
+          respuesta.status === 403
+            ? "No tienes autorización para consultar este sitio."
+            : "No se pudo consultar la información del sitio."
+        );
+      }
+
+      const datos = await respuesta.json();
+
+      if (solicitud !== solicitudActual) return;
+
+      cache.set(String(sitioId), datos);
+      mostrarDatos(datos);
+
+    } catch (error) {
+      if (solicitud !== solicitudActual) return;
+      contenido.textContent = error.message;
+    }
+  };
+
+  document.getElementById(
+    "gz-cerrar-detalle-sitio"
+  ).addEventListener("click", cerrar);
+
+  document.getElementById(
+    "gz-cerrar-detalle-sitio-pie"
+  ).addEventListener("click", cerrar);
+
+  modal.addEventListener("click", function (evento) {
+    if (evento.target === modal) cerrar();
+  });
+
+  document.addEventListener("keydown", function (evento) {
+    if (evento.key === "Escape" && !modal.classList.contains("hidden")) {
+      cerrar();
+    }
+  });
+})();
+</script>

@@ -1,3 +1,4 @@
+from planificacion.views.detalle_sitio_movil import consultar_detalle_sitio_movil
 from django.urls import path
 
 from planificacion.views import (actualizar_permiso_inline,
@@ -59,6 +60,13 @@ from planificacion.views.planificacion_diaria import alternar_warning_sitio_plan
 from planificacion.views.clima_sitios import clima_sitio_planificacion_diaria
 
 urlpatterns = [
+    # GZ_VISOR_SITIO_MOVIL_V1
+    path(
+        "sitio-movil/<int:sitio_id>/detalle/",
+        consultar_detalle_sitio_movil,
+        name="consultar_detalle_sitio_movil",
+    ),
+
     # CLIMA METEOROLÓGICO POR SITIO
     path(
         "semanal/<int:batch_id>/diaria/sitio/"

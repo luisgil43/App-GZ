@@ -1500,6 +1500,17 @@ Detalle Batch Semanal
                     "
                   >
                     {{ item.sitio_planificado.sitio.id_claro|default:"—" }}
+                    <!-- GZ_VISOR_SITIO_MOVIL_V1 — SEMANAL -->
+                    {% if item.sitio_planificado.sitio.pk %}
+                    <button
+                      type="button"
+                      onclick="abrirDetalleSitioMovil('{{ item.sitio_planificado.sitio.pk }}')"
+                      title="Consultar información completa del sitio"
+                      aria-label="Consultar información del sitio"
+                      class="ml-2 inline-flex h-7 w-7 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-sm text-blue-700 hover:bg-blue-100"
+                    >📖</button>
+                    {% endif %}
+
                   </td>
 
 
@@ -4493,5 +4504,6 @@ Detalle Batch Semanal
 
 <!-- GZ_BITACORA_SEMANAL_V1 — MODAL COMPARTIDO -->
 {% include "planificacion/diaria/_bitacora_sitio.html" %}
+{% include "planificacion/_detalle_sitio_movil.html" %}
 
 {% endblock %}

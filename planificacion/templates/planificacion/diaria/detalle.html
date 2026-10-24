@@ -1009,6 +1009,34 @@ Planificación Diaria
                           {{ item.sitio_planificado.sitio.id_claro|default:item.sitio_planificado.sitio.id_sites }}
                         </div>
 
+                        <!-- GZ_VISOR_SITIO_MOVIL_PENDIENTES_V1 -->
+                        {% if item.sitio_planificado.sitio.pk %}
+                        <button
+                          type="button"
+                          onclick="abrirDetalleSitioMovil('{{ item.sitio_planificado.sitio.pk }}')"
+                          title="Consultar información completa del sitio"
+                          aria-label="Consultar información del sitio {{ item.sitio_planificado.sitio.id_claro|default:item.sitio_planificado.sitio.id_sites }}"
+                          class="
+                            inline-flex
+                            h-7
+                            w-7
+                            shrink-0
+                            items-center
+                            justify-center
+                            rounded-md
+                            border border-blue-200
+                            bg-blue-50
+                            text-sm
+                            text-blue-700
+                            transition
+                            hover:bg-blue-100
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-blue-300
+                          "
+                        >📖</button>
+                        {% endif %}
+
 
                         {% if item.es_prioridad %}
 
@@ -2215,6 +2243,17 @@ Planificación Diaria
                                 >
                                   {{ fila.id_claro }}
                                 </span>
+                                <!-- GZ_VISOR_SITIO_MOVIL_V1 — DIARIA -->
+                                {% if fila.sitio.pk %}
+                                <button
+                                  type="button"
+                                  onclick="abrirDetalleSitioMovil('{{ fila.sitio.pk }}')"
+                                  title="Consultar información completa del sitio"
+                                  aria-label="Consultar información del sitio {{ fila.id_claro }}"
+                                  class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 text-sm text-blue-700 transition hover:bg-blue-100"
+                                >📖</button>
+                                {% endif %}
+
 
 
                                 <!-- ID NEW -->
@@ -5800,4 +5839,5 @@ Planificación Diaria
 </script>
 
 {% include "planificacion/diaria/_bitacora_sitio.html" %}
+{% include "planificacion/_detalle_sitio_movil.html" %}
 {% endblock %}
