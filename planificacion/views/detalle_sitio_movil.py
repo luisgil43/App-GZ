@@ -9,6 +9,54 @@ from operaciones.models import SitioMovil
 from usuarios.decoradores import rol_requerido
 
 
+
+# GZ_CONTACTOS_VISOR_V2
+def _contactos_activos_para_visor(sitio):
+    from planificacion.models import ContactoSitio
+
+    campos = [
+        ("propietario", "Propietario / contacto"),
+        ("tipo_contacto", "Tipo de contacto"),
+        ("telefono", "Teléfono"),
+        ("correo", "Correo electrónico"),
+        ("fecha_informacion", "Fecha de información"),
+        ("responsable", "Responsable"),
+        ("observaciones", "Observaciones"),
+        ("accion", "Acción / indicaciones"),
+    ]
+
+    contactos = (
+        ContactoSitio.objects
+        .filter(sitio_id=sitio.pk, activo=True)
+        .order_by("prioridad_contacto", "id")
+    )
+
+    resultado = []
+
+    for contacto in contactos:
+        informacion = []
+
+        for campo, etiqueta in campos:
+            valor = getattr(contacto, campo, None)
+
+            if campo == "fecha_informacion" and valor:
+                valor = valor.strftime("%d/%m/%Y")
+
+            informacion.append({
+                "campo": campo,
+                "etiqueta": etiqueta,
+                "valor": valor,
+            })
+
+        resultado.append({
+            "id": contacto.pk,
+            "prioridad": contacto.prioridad_contacto,
+            "campos": informacion,
+        })
+
+    return resultado
+
+
 @login_required
 @rol_requerido("admin", "pm", "supervisor", "facturacion")
 @require_GET
@@ -57,6 +105,7 @@ def consultar_detalle_sitio_movil(request, sitio_id):
         {
             "ok": True,
             "sitio_id": sitio.pk,
+            "contactos": _contactos_activos_para_visor(sitio),
             "titulo": sitio.nombre or sitio.id_claro or sitio.id_sites,
             "campos": informacion,
         }
@@ -142,6 +191,7 @@ def consultar_detalle_sitio_movil_tecnico(request, sitio_id):
     return JsonResponse({
         "ok": True,
         "sitio_id": sitio.pk,
+            "contactos": _contactos_activos_para_visor(sitio),
         "titulo": sitio.nombre or sitio.id_claro or sitio.id_sites,
         "campos": [
             {

@@ -888,6 +888,21 @@
             return;
         }
 
+        /*
+         * GZ_FIX_SUBMENU_MOVIL_PLANIFICACION_V1
+         *
+         * Los enlaces que despliegan submenús no representan
+         * navegación y no deben cerrar el sidebar móvil.
+         *
+         * Esto incluye Planificación dentro de Operaciones.
+         */
+        if (
+            getSubmenuFromTrigger(link) ||
+            link.getAttribute("href") === "#"
+        ) {
+            return;
+        }
+
         closeMobileSidebar();
     }
 

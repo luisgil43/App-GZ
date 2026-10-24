@@ -92,19 +92,138 @@
     return caja;
   }
 
+
+  // GZ_CONTACTOS_VISOR_V2
+
+  function crearTituloSeccion(nombre) {
+    const tituloSeccion = document.createElement("h3");
+    tituloSeccion.className =
+      "mb-3 text-base font-black text-slate-900";
+    tituloSeccion.textContent = nombre;
+    return tituloSeccion;
+  }
+
+  function crearCampoContacto(campo) {
+    const caja = document.createElement("div");
+    caja.className =
+      "rounded-xl border border-slate-200 bg-white p-3";
+
+    const etiqueta = document.createElement("div");
+    etiqueta.className =
+      "mb-1 text-[11px] font-black uppercase " +
+      "tracking-wide text-slate-500";
+    etiqueta.textContent = campo.etiqueta;
+
+    const valor = document.createElement("div");
+    valor.className =
+      "break-words whitespace-pre-wrap text-sm " +
+      "font-semibold text-slate-800";
+
+    if (campo.campo === "telefono" && campo.valor) {
+      const original = String(campo.valor).trim();
+      const numero = original.replace(/[^\\d+]/g, "");
+
+      if (/^\\+?\\d{6,15}$/.test(numero)) {
+        const enlace = document.createElement("a");
+        enlace.href = "tel:" + numero;
+        enlace.textContent = "📞 " + original;
+        enlace.title = "Llamar al " + original;
+        enlace.className =
+          "inline-flex max-w-full items-center " +
+          "break-all rounded-lg border border-blue-200 " +
+          "bg-blue-50 px-3 py-2 font-bold text-blue-700 " +
+          "underline hover:bg-blue-100";
+        valor.appendChild(enlace);
+      } else {
+        valor.textContent = original;
+      }
+    } else {
+      // El correo electrónico permanece como texto normal.
+      valor.textContent = texto(campo.valor);
+    }
+
+    caja.appendChild(etiqueta);
+    caja.appendChild(valor);
+    return caja;
+  }
+
   function mostrarDatos(datos) {
-    titulo.textContent = datos.titulo || "Información del sitio";
+    titulo.textContent =
+      datos.titulo || "Información del sitio";
+
     contenido.replaceChildren();
 
-    const cuadrícula = document.createElement("div");
-    cuadrícula.className =
+    // CONTACTOS PRIMERO
+    const seccionContactos = document.createElement("section");
+    seccionContactos.className = "mb-7";
+
+    seccionContactos.appendChild(
+      crearTituloSeccion("📞 Información de contacto")
+    );
+
+    const contactos = Array.isArray(datos.contactos)
+      ? datos.contactos
+      : [];
+
+    if (!contactos.length) {
+      const aviso = document.createElement("p");
+      aviso.className =
+        "rounded-xl border border-amber-200 " +
+        "bg-amber-50 p-4 text-sm text-amber-800";
+      aviso.textContent =
+        "No hay contactos activos vinculados a este sitio.";
+      seccionContactos.appendChild(aviso);
+    }
+
+    contactos.forEach(function(contacto, indice) {
+      const tarjeta = document.createElement("div");
+      tarjeta.className =
+        "mb-3 rounded-2xl border border-blue-200 " +
+        "bg-blue-50/40 p-4";
+
+      const encabezado = document.createElement("div");
+      encabezado.className =
+        "mb-3 text-sm font-black text-blue-800";
+
+      encabezado.textContent =
+        "Contacto " + (indice + 1) +
+        (Number(contacto.prioridad) === 1
+          ? " · Principal"
+          : "");
+
+      tarjeta.appendChild(encabezado);
+
+      const cuadricula = document.createElement("div");
+      cuadricula.className =
+        "grid grid-cols-1 gap-3 sm:grid-cols-2";
+
+      (contacto.campos || []).forEach(function(campo) {
+        cuadricula.appendChild(crearCampoContacto(campo));
+      });
+
+      tarjeta.appendChild(cuadricula);
+      seccionContactos.appendChild(tarjeta);
+    });
+
+    contenido.appendChild(seccionContactos);
+
+    // INFORMACIÓN DEL SITIO DESPUÉS
+    const seccionSitio = document.createElement("section");
+
+    seccionSitio.appendChild(
+      crearTituloSeccion("📍 Información del sitio")
+    );
+
+    const cuadriculaSitio = document.createElement("div");
+    cuadriculaSitio.className =
       "grid grid-cols-1 gap-3 sm:grid-cols-2";
 
     for (const campo of datos.campos || []) {
-      cuadrícula.appendChild(crearCampo(campo));
+      cuadriculaSitio.appendChild(crearCampo(campo));
     }
 
-    contenido.appendChild(cuadrícula);
+    seccionSitio.appendChild(cuadriculaSitio);
+    contenido.appendChild(seccionSitio);
   }
 
   function cerrar() {
