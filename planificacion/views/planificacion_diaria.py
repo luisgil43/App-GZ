@@ -2838,3 +2838,90 @@ def alternar_warning_sitio_planificacion_diaria(
         "planificacion:detalle_planificacion_diaria",
         batch_id=batch_id,
     )
+
+
+# GZ_COMPARTIR_JORNADA_V2
+@require_GET
+@rol_requerido(*ROLES_PLANIFICACION_DIARIA)
+def compartir_jornada_planificacion_diaria(request, batch_id, fecha):
+    """
+    Consulta de solo lectura para compartir los sitios de una jornada.
+    No altera estados, asignaciones ni registros.
+    """
+    from datetime import date
+    from django.http import JsonResponse
+
+    try:
+        fecha_obj = date.fromisoformat(fecha)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Fecha inválida."}, status=400)
+
+    batch = get_object_or_404(
+        BatchPlanificacionSemanal,
+        pk=batch_id,
+    )
+
+    if not batch.fecha_inicio <= fecha_obj <= batch.fecha_fin:
+        return JsonResponse(
+            {"error": "Fecha fuera de la planificación."},
+            status=400,
+        )
+
+    registros = (
+        SitioSalidaPlanificacionDiaria.objects
+        .filter(
+            salida__batch=batch,
+            salida__fecha=fecha_obj,
+        )
+        .exclude(
+            estado__in=["retirado", "cancelado", "reprogramado"]
+        )
+        .select_related(
+            "sitio_batch__sitio_planificado__sitio",
+        )
+        .order_by(
+            "salida__orden",
+            "salida__id",
+            "orden",
+            "id",
+        )
+    )
+
+    def valor(dato):
+        if dato is None:
+            return "Sin datos"
+        texto = str(dato).strip()
+        return texto if texto else "Sin datos"
+
+    sitios = []
+    vistos = set()
+
+    for registro in registros:
+        sitio = registro.sitio
+
+        if sitio.pk in vistos:
+            continue
+
+        vistos.add(sitio.pk)
+
+        sitios.append({
+            "id_sitio": valor(sitio.id_claro or sitio.id_sites),
+            "construccion": valor(sitio.tipo_construccion),
+            "altura": valor(sitio.altura),
+            "tipo_zona": valor(sitio.tipo_zona),
+            "candado_bt": valor(sitio.candado_bt),
+            "acceso": valor(sitio.condiciones_acceso),
+            "claves": valor(sitio.claves),
+            "llaves": valor(sitio.llaves),
+            "cantidad_llaves": valor(sitio.cantidad_llaves),
+            "observaciones": valor(sitio.observaciones_generales),
+        })
+
+    respuesta = JsonResponse({
+        "fecha": fecha_obj.strftime("%d/%m/%Y"),
+        "total": len(sitios),
+        "sitios": sitios,
+    })
+
+    respuesta["Cache-Control"] = "no-store"
+    return respuesta

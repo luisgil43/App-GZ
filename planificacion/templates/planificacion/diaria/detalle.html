@@ -1748,7 +1748,19 @@ Planificación Diaria
 
 
                   <!-- =============================================== -->
-                  <!-- MAPA DEL DÍA                                     -->
+                  
+                  <!-- GZ_COMPARTIR_JORNADA_BOTON_V2 -->
+                  <button
+                    type="button"
+                    data-gz-compartir-jornada
+                    data-url="{% url 'planificacion:compartir_jornada_planificacion_diaria' batch.id dia.fecha|date:'Y-m-d' %}"
+                    class="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-300 bg-cyan-500 px-3.5 py-2 text-xs font-black text-white shadow-sm transition hover:bg-cyan-600"
+                  >
+                    <span aria-hidden="true">↗</span>
+                    Compartir jornada
+                  </button>
+
+<!-- MAPA DEL DÍA                                     -->
                   <!-- =============================================== -->
 
                   <a
@@ -5840,4 +5852,220 @@ Planificación Diaria
 
 {% include "planificacion/diaria/_bitacora_sitio.html" %}
 {% include "planificacion/_detalle_sitio_movil.html" %}
+
+<!-- GZ_COMPARTIR_JORNADA_MODAL_V2 -->
+<div id="gz-compartir-jornada-modal"
+     class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/70 p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="gz-compartir-jornada-titulo">
+
+  <div class="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <div>
+        <h2 id="gz-compartir-jornada-titulo"
+            class="text-lg font-black text-slate-900">
+          Compartir jornada
+        </h2>
+        <p class="text-xs text-slate-500">
+          Todos los sitios programados para esta fecha.
+        </p>
+      </div>
+
+      <button type="button"
+              id="gz-compartir-cerrar"
+              class="rounded-lg px-3 py-2 font-bold text-slate-600 hover:bg-slate-100"
+              aria-label="Cerrar">
+        ✕
+      </button>
+    </div>
+
+    <div class="min-h-0 flex-1 overflow-y-auto p-5">
+      <p id="gz-compartir-estado"
+         class="mb-3 text-sm text-slate-600"
+         role="status"></p>
+
+      <textarea
+        id="gz-compartir-texto"
+        readonly
+        spellcheck="false"
+        class="h-80 w-full resize-y rounded-xl border border-slate-300 bg-slate-50 p-4 font-mono text-sm leading-6 text-slate-800"
+        aria-label="Mensaje de jornada"
+      ></textarea>
+    </div>
+
+    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-4">
+
+      <button type="button"
+              id="gz-compartir-copiar"
+              disabled
+              class="rounded-xl bg-slate-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 disabled:opacity-40">
+        Copiar todo
+      </button>
+
+      <button type="button"
+              id="gz-compartir-whatsapp"
+              disabled
+              class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-40">
+        WhatsApp
+      </button>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* GZ_COMPARTIR_JORNADA_JS_V2 */
+(() => {
+  const modal = document.getElementById("gz-compartir-jornada-modal");
+  const texto = document.getElementById("gz-compartir-texto");
+  const estado = document.getElementById("gz-compartir-estado");
+  const copiar = document.getElementById("gz-compartir-copiar");
+  const whatsapp = document.getElementById("gz-compartir-whatsapp");
+  const cerrar = document.getElementById("gz-compartir-cerrar");
+
+  if (!modal || !texto || !estado || !copiar || !whatsapp || !cerrar) {
+    return;
+  }
+
+  const campos = [
+    ["Construcción", "construccion"],
+    ["Altura", "altura"],
+    ["Tipo de Zona", "tipo_zona"],
+    ["Candado BT", "candado_bt"],
+    ["Acceso", "acceso"],
+    ["Claves", "claves"],
+    ["Llaves", "llaves"],
+    ["Cantidad Llaves", "cantidad_llaves"],
+    ["Observaciones", "observaciones"]
+  ];
+
+  let solicitudActual = 0;
+  let overflowAnterior = "";
+
+  function construirMensaje(datos) {
+    const lineas = [
+      "📋 *PLANIFICACIÓN DIARIA*",
+      "📅 " + datos.fecha,
+      ""
+    ];
+
+    datos.sitios.forEach((sitio) => {
+      lineas.push("━━━━━━━━━━━━━━━━");
+      lineas.push("📍 *SITIO: " + sitio.id_sitio + "*");
+      lineas.push("");
+
+      campos.forEach(([etiqueta, clave]) => {
+        lineas.push(etiqueta + ": " + sitio[clave]);
+      });
+
+      lineas.push("");
+    });
+
+    lineas.push("━━━━━━━━━━━━━━━━");
+    lineas.push("*Total de sitios: " + datos.total + "*");
+
+    return lineas.join("\n");
+  }
+
+  function abrir() {
+    overflowAnterior = document.body.style.overflow;
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    document.body.style.overflow = "hidden";
+  }
+
+  function ocultar() {
+    solicitudActual++;
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    document.body.style.overflow = overflowAnterior;
+  }
+
+  document.querySelectorAll("[data-gz-compartir-jornada]").forEach((boton) => {
+    boton.addEventListener("click", async () => {
+      const solicitud = ++solicitudActual;
+
+      abrir();
+
+      texto.value = "";
+      estado.textContent = "Consultando sitios de la jornada...";
+      copiar.disabled = true;
+      whatsapp.disabled = true;
+
+      try {
+        const respuesta = await fetch(boton.dataset.url, {
+          credentials: "same-origin",
+          headers: {"Accept": "application/json"},
+          cache: "no-store"
+        });
+
+        if (!respuesta.ok) {
+          throw new Error("No se pudo consultar la jornada.");
+        }
+
+        const datos = await respuesta.json();
+
+        if (solicitud !== solicitudActual) {
+          return;
+        }
+
+        if (!datos.sitios || !datos.sitios.length) {
+          estado.textContent = "No hay sitios programados para esta fecha.";
+          return;
+        }
+
+        texto.value = construirMensaje(datos);
+        estado.textContent = datos.total + " sitio(s) incluidos.";
+
+        copiar.disabled = false;
+        whatsapp.disabled = false;
+
+      } catch (error) {
+        if (solicitud === solicitudActual) {
+          estado.textContent = error.message;
+        }
+      }
+    });
+  });
+
+  cerrar.addEventListener("click", ocultar);
+
+  modal.addEventListener("click", (evento) => {
+    if (evento.target === modal) {
+      ocultar();
+    }
+  });
+
+  document.addEventListener("keydown", (evento) => {
+    if (evento.key === "Escape" && !modal.classList.contains("hidden")) {
+      ocultar();
+    }
+  });
+
+  copiar.addEventListener("click", async () => {
+    if (!texto.value) return;
+
+    try {
+      await navigator.clipboard.writeText(texto.value);
+      estado.textContent = "Información copiada correctamente.";
+    } catch (error) {
+      texto.focus();
+      texto.select();
+      estado.textContent = "Texto seleccionado. Utiliza Cmd+C para copiar.";
+    }
+  });
+
+  whatsapp.addEventListener("click", () => {
+    if (!texto.value) return;
+
+    const enlace = "https://api.whatsapp.com/send?text="
+      + encodeURIComponent(texto.value);
+
+    window.open(enlace, "_blank", "noopener,noreferrer");
+  });
+})();
+</script>
+
 {% endblock %}

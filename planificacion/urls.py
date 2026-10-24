@@ -59,7 +59,19 @@ from planificacion.views.planificacion_diaria import alternar_warning_sitio_plan
 
 from planificacion.views.clima_sitios import clima_sitio_planificacion_diaria
 
+
+# GZ_COMPARTIR_JORNADA_URL_V2
+from planificacion.views.planificacion_diaria import (
+    compartir_jornada_planificacion_diaria,
+)
+
 urlpatterns = [
+    path(
+        "diaria/<int:batch_id>/compartir/<str:fecha>/",
+        compartir_jornada_planificacion_diaria,
+        name="compartir_jornada_planificacion_diaria",
+    ),
+
     # GZ_VISOR_SITIO_TECNICOS_V1
     path(
         "sitio-movil/<int:sitio_id>/detalle-tecnico/",
