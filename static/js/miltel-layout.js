@@ -659,6 +659,44 @@
                 ARROW_ROTATED_CLASS,
                 open
             );
+
+            /*
+             * Rotación explícita para los submenús
+             * desplegados mediante enlaces.
+             */
+            if (
+                trigger.matches("a") &&
+                trigger.nextElementSibling === submenu
+            ) {
+                arrow.style.display = "inline-block";
+                arrow.style.transform = open
+                    ? "rotate(90deg)"
+                    : "rotate(0deg)";
+                arrow.style.transition =
+                    "transform 200ms ease";
+            }
+        }
+
+        /*
+         * GZ_PLANIFICACION_FLECHA_ESTADO_V3
+         * Indicador explícito del submenú Planificación.
+         * No afecta otros menús.
+         */
+        if (
+            trigger.matches(
+                '[data-gz-planificacion-toggle]'
+            ) &&
+            arrow
+        ) {
+            // GZ_PLANIFICACION_FLECHA_UNIFICADA_V4
+            arrow.textContent = open ? "▼" : "▶";
+            arrow.classList.remove(ARROW_ROTATED_CLASS);
+            arrow.style.setProperty(
+                "transform",
+                "none",
+                "important"
+            );
+            arrow.style.transition = "none";
         }
 
         trigger.setAttribute(
@@ -717,7 +755,8 @@
                 [
                     "[data-miltel-submenu-toggle]",
                     "button + .submenu",
-                    "div + .submenu"
+                    "div + .submenu",
+                    "a + .submenu" /* GZ_PLANIFICACION_SUBMENU_V2 */
                 ].join(",")
             );
 
