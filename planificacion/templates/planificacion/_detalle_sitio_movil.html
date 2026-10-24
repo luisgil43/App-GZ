@@ -1,7 +1,7 @@
 <!-- GZ_VISOR_SITIO_MOVIL_V1 -->
 <div
   id="gz-modal-detalle-sitio"
-  data-url-template="{% url 'planificacion:consultar_detalle_sitio_movil' 0 %}"
+  data-url-template="{% if url_detalle_sitio %}{{ url_detalle_sitio }}{% else %}{% url 'planificacion:consultar_detalle_sitio_movil' 0 %}{% endif %}"
   class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/60 p-3 sm:p-6"
   role="dialog"
   aria-modal="true"
