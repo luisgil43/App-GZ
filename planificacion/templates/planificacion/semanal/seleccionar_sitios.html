@@ -178,6 +178,12 @@ Seleccionar sitios · {{ batch.codigo_semana }}
         {% if google_maps_api_key %}
 
           <div
+            id="leyenda-actividades"
+            class="flex flex-wrap gap-2 border-b border-slate-200 bg-white p-3"
+            aria-label="Leyenda de actividades"
+          ></div>
+
+          <div
             id="mapa-seleccion"
             style="width:100%;height:720px;"
           ></div>
@@ -320,6 +326,72 @@ Seleccionar sitios · {{ batch.codigo_semana }}
         }
       )
   );
+
+  // Colores estables por nombre de actividad.
+  // Admiten nuevas actividades sin cambios manuales.
+  const coloresActividades = [
+    "#0d9488",
+    "#ea580c",
+    "#7c3aed",
+    "#0891b2",
+    "#be185d",
+    "#65a30d",
+    "#b45309",
+    "#4f46e5",
+    "#dc2626",
+    "#0284c7",
+    "#15803d",
+    "#9333ea"
+  ];
+
+  const nombresActividades = [...new Set(
+    candidatos.flatMap(
+      candidato => candidato.actividades || []
+    )
+  )].sort((a, b) => a.localeCompare(b));
+
+  const colorPorActividad = new Map(
+    nombresActividades.map(
+      (nombre, indice) => [
+        nombre,
+        coloresActividades[indice % coloresActividades.length]
+      ]
+    )
+  );
+
+  function colorCandidato(candidato) {
+    const actividad = (candidato.actividades || [])[0];
+
+    return actividad
+      ? colorPorActividad.get(actividad) || "#64748b"
+      : "#64748b";
+  }
+
+  function renderizarLeyendaActividades() {
+    const leyenda = document.getElementById(
+      "leyenda-actividades"
+    );
+
+    if (!leyenda) return;
+
+    const actividades = [
+      ...nombresActividades,
+      "Sin actividad asignada"
+    ];
+
+    leyenda.innerHTML = actividades.map(nombre => {
+      const color = nombre === "Sin actividad asignada"
+        ? "#64748b"
+        : colorPorActividad.get(nombre);
+
+      return `
+        <span class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold text-slate-700">
+          <span style="background:${color};width:12px;height:12px;border-radius:50%;display:inline-block"></span>
+          ${escaparHtml(nombre)}
+        </span>
+      `;
+    }).join("");
+  }
 
   const marcadores = new Map();
 
@@ -885,17 +957,14 @@ Seleccionar sitios · {{ batch.codigo_semana }}
     etiqueta.style.boxShadow =
       "0 1px 3px rgba(0,0,0,.18)";
 
+    const colorActividad = colorCandidato(candidato);
+
     const pin =
       new PinElement({
-        background:
-          seleccionado
-            ? "#2563eb"
-            : "#64748b",
+        background: colorActividad,
 
         borderColor:
-          seleccionado
-            ? "#1d4ed8"
-            : "#475569",
+          seleccionado ? "#0f172a" : colorActividad,
 
         glyphColor:
           "#ffffff",
@@ -989,7 +1058,7 @@ Seleccionar sitios · {{ batch.codigo_semana }}
             content:
               construirContenidoMarcador(
                 candidato,
-                false
+                candidatoSeleccionado(candidato)
               ),
             title:
               candidato.id_claro
@@ -1134,6 +1203,7 @@ Seleccionar sitios · {{ batch.codigo_semana }}
   );
 
 
+  renderizarLeyendaActividades();
   renderizarFiltrosPrefijos();
   renderizarLista();
   actualizarResumen();

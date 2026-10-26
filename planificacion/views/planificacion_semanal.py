@@ -3512,6 +3512,28 @@ def seleccionar_sitios_creacion_batch(
     candidatos_mapa = []
     candidatos_sin_coordenadas = []
 
+    # Actividades vinculadas directamente a esta asignación mensual.
+    # No se infieren actividades a partir del ID CLARO.
+    ids_candidatos = list(
+        candidatos.values_list("pk", flat=True)
+    )
+
+    actividades_por_sitio = {}
+
+    for sitio_id, actividad_nombre in (
+        ServicioCotizado.objects.filter(
+            sitio_planificado_id__in=ids_candidatos,
+            actividad__isnull=False,
+        ).values_list(
+            "sitio_planificado_id",
+            "actividad__nombre",
+        )
+    ):
+        if actividad_nombre:
+            actividades_por_sitio.setdefault(
+                sitio_id, set()
+            ).add(actividad_nombre)
+
     for sitio_planificado in candidatos:
 
         sitio = sitio_planificado.sitio
@@ -3557,6 +3579,11 @@ def seleccionar_sitios_creacion_batch(
             "seleccionado": (
                 sitio_planificado.pk
                 in ids_manuales_actuales
+            ),
+            "actividades": sorted(
+                actividades_por_sitio.get(
+                    sitio_planificado.pk, set()
+                )
             ),
             "id_claro": id_claro,
             "nombre": sitio.nombre or "",
