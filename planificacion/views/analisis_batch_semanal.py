@@ -1,3 +1,4 @@
+import copy
 from django.conf import settings
 from django.contrib import messages
 from django.db.models.deletion import ProtectedError
@@ -134,7 +135,7 @@ def analizar_batch_semanal_view(
             "batch": batch,
             "mensual": (batch.planificacion),
             "analisis": resultado,
-            "propuestas": (
+            "propuestas": enriquecer_actividades_propuestas(
                 resultado.get(
                     "propuestas",
                     [],
@@ -343,3 +344,78 @@ def aplicar_propuesta_batch_view(
         ("planificacion:" "detalle_planificacion_semanal"),
         batch_id=batch.pk,
     )
+
+
+def enriquecer_actividades_propuestas(propuestas):
+    """
+    Agrega actividades únicamente para visualización.
+
+    No altera propuestas guardadas ni ejecuta el motor.
+    """
+    from operaciones.models import ServicioCotizado
+
+    propuestas = copy.deepcopy(propuestas)
+
+    ids = {
+        sitio.get("sitio_planificado_id")
+        for propuesta in propuestas
+        for sitio in propuesta.get("principales", [])
+        if sitio.get("sitio_planificado_id") is not None
+    }
+
+    actividades_por_sitio = {}
+
+    if ids:
+        registros = (
+            ServicioCotizado.objects.filter(
+                sitio_planificado_id__in=ids,
+                actividad__isnull=False,
+            )
+            .values_list(
+                "sitio_planificado_id",
+                "actividad__nombre",
+            )
+        )
+
+        for sitio_id, nombre in registros:
+            nombre = (nombre or "").strip()
+
+            if nombre:
+                actividades_por_sitio.setdefault(
+                    sitio_id,
+                    set(),
+                ).add(nombre)
+
+    for propuesta in propuestas:
+        conteos = {}
+
+        for sitio in propuesta.get("principales", []):
+            nombres = sorted(
+                actividades_por_sitio.get(
+                    sitio.get("sitio_planificado_id"),
+                    set(),
+                )
+            )
+
+            sitio["actividades"] = nombres
+
+            for nombre in (
+                nombres or ["Sin actividad registrada"]
+            ):
+                conteos[nombre] = conteos.get(nombre, 0) + 1
+
+        propuesta["resumen_actividades"] = [
+            {
+                "nombre": nombre,
+                "cantidad": cantidad,
+            }
+            for nombre, cantidad in sorted(
+                conteos.items(),
+                key=lambda elemento: (
+                    -elemento[1],
+                    elemento[0],
+                ),
+            )
+        ]
+
+    return propuestas

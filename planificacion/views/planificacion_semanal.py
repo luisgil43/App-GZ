@@ -709,11 +709,11 @@ def descargar_excel_batch(
 
     completo:
         Exportación interna.
-        Conserva todas las columnas actuales de A hasta Q.
+        Conserva las columnas originales A-Q y añade Actividad en R.
 
     cliente:
         Exportación para enviar al cliente.
-        Conserva únicamente las columnas de A hasta K.
+        Conserva las columnas originales A-K y añade Actividad en L.
 
     Si no se indica el parámetro ?tipo=, se mantiene por
     compatibilidad el comportamiento histórico y se genera
@@ -749,6 +749,42 @@ def descargar_excel_batch(
     )
 
     # --------------------------------------------------------
+    # ACTIVIDADES REALES POR SITIO PLANIFICADO
+    # --------------------------------------------------------
+
+    from operaciones.models import ServicioCotizado
+
+    ids_sitios = list(
+        items.values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    actividades_por_sitio = {}
+
+    if ids_sitios:
+        registros_actividad = (
+            ServicioCotizado.objects.filter(
+                sitio_planificado_id__in=ids_sitios,
+                actividad__isnull=False,
+            )
+            .values_list(
+                "sitio_planificado_id",
+                "actividad__nombre",
+            )
+        )
+
+        for sitio_id, nombre in registros_actividad:
+            nombre = (nombre or "").strip()
+
+            if nombre:
+                actividades_por_sitio.setdefault(
+                    sitio_id,
+                    set(),
+                ).add(nombre)
+
+    # --------------------------------------------------------
     # TIPO DE EXPORTACIÓN
     # --------------------------------------------------------
 
@@ -780,9 +816,9 @@ def descargar_excel_batch(
     # --------------------------------------------------------
 
     if exportacion_cliente:
-        ultima_columna = "K"
+        ultima_columna = "L"
     else:
-        ultima_columna = "Q"
+        ultima_columna = "R"
 
     # --------------------------------------------------------
     # TÍTULO
@@ -840,12 +876,16 @@ def descargar_excel_batch(
         "Cluster",
         "Estado batch",
         "Observaciones",
+        "Actividad",
     ]
 
     if exportacion_cliente:
 
         # A hasta K.
-        encabezados = encabezados_completos[:11]
+        encabezados = (
+            encabezados_completos[:11]
+            + ["Actividad"]
+        )
 
     else:
 
@@ -890,6 +930,15 @@ def descargar_excel_batch(
         sitio_planificado = item.sitio_planificado
 
         sitio = sitio_planificado.sitio
+
+        actividad_sitio = ", ".join(
+            sorted(
+                actividades_por_sitio.get(
+                    sitio_planificado.pk,
+                    set(),
+                )
+            )
+        )
 
         valores_completos = [
             ("Reserva" if item.es_reserva else "Principal"),
@@ -945,12 +994,16 @@ def descargar_excel_batch(
                 sitio,
                 "observaciones_generales",
             ),
+            actividad_sitio,
         ]
 
         if exportacion_cliente:
 
             # A hasta K.
-            valores = valores_completos[:11]
+            valores = (
+                valores_completos[:11]
+                + [actividad_sitio]
+            )
 
         else:
 
