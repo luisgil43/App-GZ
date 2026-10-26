@@ -49,27 +49,33 @@ MESES_PRODUCCION = (
 
 
 def _validar_servicio_pendiente(servicio):
+    """
+    Permite mover servicios pendientes sin compromiso operacional.
+
+    Las referencias administrativas y las notificaciones no
+    constituyen, por sí solas, ejecución del servicio.
+    """
     if servicio.estado != "aprobado_pendiente":
         raise ValidationError(
             f"El servicio {servicio.pk} tiene estado "
             f"{servicio.estado} y no puede trasladarse."
         )
 
-    campos_personal = (
+    campos_ejecucion = (
         "tecnico_aceptado_id",
         "tecnico_finalizo_id",
-        "supervisor_asigna_id",
         "supervisor_aprobo_id",
         "supervisor_rechazo_id",
+        "fecha_aprobacion_supervisor",
     )
 
     if any(
         getattr(servicio, campo, None) is not None
-        for campo in campos_personal
+        for campo in campos_ejecucion
     ):
         raise ValidationError(
-            f"El servicio {servicio.pk} tiene asignaciones "
-            "o intervención operacional registrada."
+            f"El servicio {servicio.pk} tiene intervención "
+            "operacional registrada."
         )
 
     if servicio.trabajadores_asignados.exists():
@@ -92,22 +98,29 @@ def _validar_servicio_pendiente(servicio):
             "o evidencias asociados."
         )
 
-    for relacion in servicio._meta.related_objects:
-        nombre = relacion.get_accessor_name()
+    relaciones_administrativas = {
+        "notificaciones",
+        "alertas_clima_bot",
+    }
 
+    relaciones_protegidas = (
+        relacion.get_accessor_name()
+        for relacion in servicio._meta.related_objects
+        if relacion.get_accessor_name()
+        not in relaciones_administrativas
+    )
+
+    for nombre in relaciones_protegidas:
         try:
             relacionados = getattr(servicio, nombre)
-        except (
-            AttributeError,
-            relacion.related_model.DoesNotExist,
-        ):
+        except AttributeError:
             continue
 
         if hasattr(relacionados, "exists"):
             if relacionados.exists():
                 raise ValidationError(
                     f"El servicio {servicio.pk} tiene registros "
-                    f"relacionados en {nombre}."
+                    f"operacionales en {nombre}."
                 )
         elif relacionados is not None:
             raise ValidationError(
@@ -127,27 +140,65 @@ def _validar_origen(sitio):
             "El sitio tiene un estado de planificación protegido."
         )
 
-    participaciones = SitioBatchSemanal.objects.filter(
-        sitio_planificado=sitio,
-    ).exclude(
-        estado__in=ESTADOS_SEMANA_INACTIVOS,
-    )
-
-    if participaciones.exists():
-        raise ValidationError(
-            "El sitio pertenece a una semana activa. "
-            "Primero debe resolverse su asignación semanal."
-        )
-
     if sitio.fecha_planificada is not None:
         raise ValidationError(
             "El sitio tiene una fecha planificada. "
             "Debe resolverse antes del traslado."
         )
 
-    servicios = (
-        ServicioCotizado.objects
+    from planificacion.modelos import (
+        SitioSalidaPlanificacionDiaria,
+        PrioridadPlanificacionDiaria,
+    )
+
+    participaciones = list(
+        SitioBatchSemanal.objects.select_for_update()
+        .filter(sitio_planificado=sitio)
+        .order_by("pk")
+    )
+
+    ids_participaciones = [
+        participacion.pk
+        for participacion in participaciones
+    ]
+
+    estados_diarios_historicos = {
+        "retirado",
+        "cancelado",
+        "reprogramado",
+    }
+
+    salidas_activas = list(
+        SitioSalidaPlanificacionDiaria.objects
         .select_for_update()
+        .filter(sitio_batch_id__in=ids_participaciones)
+        .exclude(estado__in=estados_diarios_historicos)
+        .order_by("pk")
+    )
+
+    if salidas_activas:
+        raise ValidationError(
+            "El sitio tiene una participación diaria vigente. "
+            "Debe resolverse antes del traslado."
+        )
+
+    prioridades_activas = list(
+        PrioridadPlanificacionDiaria.objects
+        .select_for_update()
+        .filter(
+            sitio_batch_id__in=ids_participaciones,
+            estado="activa",
+        )
+        .order_by("pk")
+    )
+
+    if prioridades_activas:
+        raise ValidationError(
+            "El sitio tiene una prioridad diaria activa."
+        )
+
+    servicios = list(
+        ServicioCotizado.objects.select_for_update()
         .filter(sitio_planificado=sitio)
         .order_by("pk")
     )
@@ -155,7 +206,8 @@ def _validar_origen(sitio):
     for servicio in servicios:
         _validar_servicio_pendiente(servicio)
 
-    return list(servicios)
+    return servicios, participaciones
+
 
 
 def _estado_destino(permiso):
@@ -220,7 +272,7 @@ def trasladar_sitio_mes_manual(
             "una planificación mensual cerrada."
         )
 
-    servicios_pendientes = _validar_origen(origen)
+    servicios_pendientes, participaciones_semanales = _validar_origen(origen)
 
     destino_planificacion = (
         PlanificacionMensual.objects
@@ -303,6 +355,24 @@ def trasladar_sitio_mes_manual(
             update_fields=[
                 "sitio_planificado",
                 "mes_produccion",
+            ]
+        )
+
+    for participacion in participaciones_semanales:
+        if participacion.estado in ESTADOS_SEMANA_INACTIVOS:
+            continue
+
+        participacion.estado = "excluido"
+        participacion.motivo_exclusion = (
+            "Sitio trasladado manualmente a "
+            f"{mes_destino:02d}/{anio_destino}. "
+            "Se conserva el historial semanal."
+        )
+        participacion.save(
+            update_fields=[
+                "estado",
+                "motivo_exclusion",
+                "actualizado_en",
             ]
         )
 
