@@ -1,3 +1,4 @@
+from operaciones.models import ServicioCotizado
 # GZ_BITACORA_SEMANAL_V1 — IMPORTACIONES GLOBALES
 from django.db.models import Count, IntegerField, OuterRef, Subquery, Value
 from django.db.models.functions import Coalesce
@@ -1055,6 +1056,47 @@ def mapa_batches_mensuales(
 
     puntos = []
 
+    # Actividades asociadas a los sitios de la planificación.
+    actividades_por_sitio = {}
+
+    registros_actividad = (
+        ServicioCotizado.objects.filter(
+            sitio_planificado_id__in=(
+                list(
+                    SitioBatchSemanal.objects.filter(
+                        batch__in=batches,
+                    )
+                    .exclude(
+                        estado__in=["excluido", "reemplazado"],
+                    )
+                    .values_list(
+                        "sitio_planificado_id",
+                        flat=True,
+                    )
+                )
+                +
+                list(
+                    SitioPlanificado.objects.filter(
+                        planificacion=mensual,
+                    )
+                    .values_list("id", flat=True)
+                )
+            ),
+            actividad__isnull=False,
+        )
+        .values_list(
+            "sitio_planificado_id",
+            "actividad__nombre",
+        )
+    )
+
+    for sitio_id, nombre in registros_actividad:
+        if nombre and nombre.strip():
+            actividades_por_sitio.setdefault(
+                sitio_id,
+                set(),
+            ).add(nombre.strip())
+
     resumen_batches = []
 
     for batch in batches:
@@ -1108,6 +1150,12 @@ def mapa_batches_mensuales(
                     "fecha": (batch.fecha_inicio.strftime("%d/%m/%Y")),
                     "id_claro": (sitio.id_claro or ""),
                     "nombre": (sitio.nombre or ""),
+                    "actividades": sorted(
+                        actividades_por_sitio.get(
+                            sitio_planificado.pk,
+                            set(),
+                        )
+                    ),
                     "comuna": (sitio.comuna or ""),
                     "tipo_zona": (sitio.tipo_zona or ""),
                     "lat": latitud,
@@ -1185,6 +1233,12 @@ def mapa_batches_mensuales(
                 "fecha": "",
                 "id_claro": sitio.id_claro or "",
                 "nombre": sitio.nombre or "",
+                "actividades": sorted(
+                    actividades_por_sitio.get(
+                        sitio_planificado.pk,
+                        set(),
+                    )
+                ),
                 "comuna": sitio.comuna or "",
                 "tipo_zona": sitio.tipo_zona or "",
                 "lat": latitud,

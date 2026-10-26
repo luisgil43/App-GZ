@@ -1,5 +1,7 @@
 from collections import defaultdict
 
+from operaciones.models import ServicioCotizado
+
 from planificacion.models import SitioBatchSemanal
 from planificacion.services.motor_batch_semanal.perimetros import convex_hull
 
@@ -157,6 +159,32 @@ def construir_mapa_batch_semanal(
     )
 
     # ========================================================
+    # ACTIVIDADES POR SITIO MENSUAL
+    # ========================================================
+
+    ids_sitios = list(
+        items.values_list(
+            "sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    actividades_por_sitio = defaultdict(set)
+
+    for sitio_id, nombre in (
+        ServicioCotizado.objects.filter(
+            sitio_planificado_id__in=ids_sitios,
+            actividad__isnull=False,
+        )
+        .values_list(
+            "sitio_planificado_id",
+            "actividad__nombre",
+        )
+    ):
+        if nombre and nombre.strip():
+            actividades_por_sitio[sitio_id].add(nombre.strip())
+
+    # ========================================================
     # AGRUPACIÓN POR CLUSTER
     # ========================================================
 
@@ -179,6 +207,12 @@ def construir_mapa_batch_semanal(
             "sitio_planificado_id": (item.sitio_planificado_id),
             "id_claro": (sitio.id_claro or sitio.id_sites or ""),
             "nombre": (sitio.nombre or ""),
+            "actividades": sorted(
+                actividades_por_sitio.get(
+                    sitio_planificado.pk,
+                    set(),
+                )
+            ),
             "comuna": (sitio.comuna or ""),
             "tipo_zona": (sitio.tipo_zona or ""),
             "direccion": (

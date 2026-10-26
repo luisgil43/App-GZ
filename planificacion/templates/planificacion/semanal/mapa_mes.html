@@ -538,6 +538,10 @@ Mapa mensual de batches
                       ${punto.nombre || "-"}
                       <br>
 
+                      <strong>Actividad:</strong>
+                      ${(punto.actividades || []).join(", ") || "Sin actividad registrada"}
+                      <br>
+
                       <strong>Comuna:</strong>
                       ${punto.comuna || "-"}
                       <br>

@@ -432,6 +432,14 @@ async function inicializarMapaBatch() {
               >
 
               <div>
+                <strong>Actividad:</strong>
+                ${escaparHtml(
+                  (sitio.actividades || []).join(", ")
+                  || "Sin actividad registrada"
+                )}
+              </div>
+
+              <div>
                 <strong>Comuna:</strong>
                 ${escaparHtml(sitio.comuna || "—")}
               </div>
@@ -639,7 +647,15 @@ async function inicializarMapaBatch() {
           >
 
           <div>
-            <strong>Comuna:</strong>
+            <strong>Actividad:</strong>
+                ${escaparHtml(
+                  (sitio.actividades || []).join(", ")
+                  || "Sin actividad registrada"
+                )}
+              </div>
+
+              <div>
+                <strong>Comuna:</strong>
             ${escaparHtml(sitio.comuna || "—")}
           </div>
 
