@@ -158,6 +158,17 @@ def lista_asignacion_mensual(
     )
 
     # ========================================================
+    # DESTINOS MENSUALES DISPONIBLES
+    # ========================================================
+
+    meses_destino_movimiento = (
+        PlanificacionMensual.objects
+        .exclude(pk=planificacion.pk)
+        .exclude(estado="cerrada")
+        .order_by("-anio", "-mes")
+    )
+
+    # ========================================================
     # RENDER
     # ========================================================
 
@@ -170,6 +181,7 @@ def lista_asignacion_mensual(
             "opciones_completar": opciones_completar,
             "oportunidad_completar": oportunidad_principal,
             "batches_destino_movimiento": (batches_destino_movimiento),
+            "meses_destino_movimiento": meses_destino_movimiento,
         },
     )
 

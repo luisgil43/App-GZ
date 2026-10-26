@@ -1209,7 +1209,22 @@ Planificación Mensual
     </p>
 
 
-    <button
+    
+<!-- MILTEL: EXPORTACIÓN MENSUAL -->
+<div id="exportacion-mensual-controles">
+  <button
+    type="button"
+    id="exportar-planificacion-excel"
+    style="background:#047857"
+  >
+    Exportar a Excel
+  </button>
+
+  
+</div>
+<!-- FIN MILTEL: EXPORTACIÓN MENSUAL -->
+
+<button
       type="button"
       id="limpiar-filtros-planificacion"
       class="
@@ -1239,77 +1254,64 @@ Planificación Mensual
 <!-- ACCIONES MASIVAS DE PERMISOS                          -->
 <!-- ====================================================== -->
 
-<div
-  id="barra-permisos-masivos"
-  class="
-    mt-5
-    rounded-2xl
-    border border-slate-200
-    bg-white
-    px-4 py-3
-    shadow-sm
-    sm:px-5
-  "
->
 
-  <div
-    class="
-      flex
-      flex-col
-      gap-3
-      lg:flex-row
-      lg:items-center
-      lg:justify-between
-    "
-  >
+<!-- MILTEL: BARRA DE ACCIONES MASIVAS V4 -->
+<div id="barra-permisos-masivos" class="miltel-barra-masiva">
+
+  <div class="miltel-barra-encabezado">
 
     <div>
-
-      <div class="flex flex-wrap items-center gap-2">
-
-        <span
-          id="cantidad-sitios-seleccionados"
-          class="
-            inline-flex
-            h-8
-            min-w-8
-            items-center
-            justify-center
-            rounded-full
-            bg-cyan-50
-            px-2
-            text-xs
-            font-black
-            text-cyan-700
-          "
-        >
-          0
-        </span>
-
-        <p class="text-sm font-black text-slate-800">
-          Sitios seleccionados
-        </p>
-
+      <div class="miltel-seleccion-titulo">
+        <span id="cantidad-sitios-seleccionados">0</span>
+        <strong>Sitios seleccionados</strong>
       </div>
 
-      <p class="mt-1 text-xs text-slate-500">
-        Selecciona uno o varios sitios para cambiar su permiso al mismo tiempo.
+      <p>
+        Selecciona los sitios de la tabla y elige la acción que deseas realizar.
       </p>
-
     </div>
 
+    <button
+        type="button"
+        id="limpiar-seleccion-sitios"
+        disabled
+        class="
+          inline-flex
+          items-center
+          justify-center
+          rounded-xl
+          border border-slate-300
+          bg-white
+          px-4
+          py-2.5
+          text-sm
+          font-bold
+          text-slate-600
+          transition
+          hover:bg-slate-50
+          disabled:cursor-not-allowed
+          disabled:opacity-40
+        "
+      >
+        Limpiar selección
+      </button>
 
-    <div
-      class="
-        flex
-        flex-col
-        gap-2
-        sm:flex-row
-        sm:items-center
-      "
-    >
+  </div>
 
-      <select
+  <div class="miltel-tarjetas-acciones">
+
+    <section class="miltel-tarjeta miltel-tarjeta-permisos">
+
+      <div class="miltel-tarjeta-encabezado">
+        <span class="miltel-tarjeta-numero">01</span>
+        <div>
+          <h3>Gestión de permisos</h3>
+          <p>Cambiar el estado de permiso de varios sitios.</p>
+        </div>
+      </div>
+
+      <div class="miltel-tarjeta-controles">
+        <select
         id="permiso-masivo-select"
         class="bulk-permisos-select"
       >
@@ -1347,9 +1349,7 @@ Planificación Mensual
         </option>
 
       </select>
-
-
-      <button
+        <button
         type="button"
         id="aplicar-permiso-masivo"
         disabled
@@ -1391,14 +1391,21 @@ Planificación Mensual
         </span>
 
       </button>
-      <div
-        class="
-          flex
-          items-center
-          gap-2
-        "
-      >
+      </div>
 
+    </section>
+
+    <section class="miltel-tarjeta miltel-tarjeta-semana">
+
+      <div class="miltel-tarjeta-encabezado">
+        <span class="miltel-tarjeta-numero">02</span>
+        <div>
+          <h3>Cambiar de semana</h3>
+          <p>Reasignar los sitios a una semana existente.</p>
+        </div>
+      </div>
+
+      <div class="miltel-tarjeta-controles">
         <select
           id="semana-destino-masivo"
           class="bulk-permisos-select"
@@ -1419,8 +1426,6 @@ Planificación Mensual
           {% endfor %}
 
         </select>
-
-
         <button
           type="button"
           id="mover-semana-masivo"
@@ -1447,39 +1452,66 @@ Planificación Mensual
         >
           Mover seleccionados
         </button>
-
       </div>
 
-      <button
-        type="button"
-        id="limpiar-seleccion-sitios"
-        disabled
-        class="
-          inline-flex
-          items-center
-          justify-center
-          rounded-xl
-          border border-slate-300
-          bg-white
-          px-4
-          py-2.5
-          text-sm
-          font-bold
-          text-slate-600
-          transition
-          hover:bg-slate-50
-          disabled:cursor-not-allowed
-          disabled:opacity-40
-        "
-      >
-        Limpiar selección
-      </button>
+    </section>
 
-    </div>
+    <section
+      id="control-mover-mes"
+      class="miltel-tarjeta miltel-tarjeta-mes"
+    >
+
+      <div class="miltel-tarjeta-encabezado">
+        <span class="miltel-tarjeta-numero">03</span>
+        <div>
+          <h3>Cambiar de mes</h3>
+          <p>Trasladar los sitios a un mes creado y disponible.</p>
+        </div>
+      </div>
+
+      <div class="miltel-tarjeta-controles">
+        <select
+      id="mes-destino-masivo"
+      class="bulk-permisos-select"
+    >
+      <option value="">Seleccionar mes</option>
+
+      {% for destino in meses_destino_movimiento %}
+        <option
+          value="{{ destino.mes }}"
+          data-anio="{{ destino.anio }}"
+        >
+          {{ destino.mes|stringformat:"02d" }}/{{ destino.anio }}
+        </option>
+      {% empty %}
+        <option value="" disabled>
+          No hay otros meses disponibles
+        </option>
+      {% endfor %}
+    </select>
+
+        <input
+          id="anio-destino-masivo"
+          type="hidden"
+          value=""
+        >
+
+        <button
+      id="mover-mes-masivo"
+      type="button"
+      disabled
+      class="miltel-boton-accion miltel-boton-mes"
+    >
+      Mover a mes
+    </button>
+      </div>
+
+    </section>
 
   </div>
 
 </div>
+<!-- FIN MILTEL: BARRA DE ACCIONES MASIVAS V4 -->
 
 <form
   id="form-mover-semana-masivo"
@@ -1499,6 +1531,22 @@ Planificación Mensual
   <div id="mover-semana-sitios-inputs"></div>
 
 </form>
+
+<!-- MILTEL: FORMULARIO MOVER A MES -->
+<form
+  id="form-mover-mes-masivo"
+  method="post"
+  action="{% url 'planificacion:mover_sitios_mes_masivo' planificacion.pk %}"
+  class="hidden"
+>
+  {% csrf_token %}
+  <input type="hidden" name="mes_destino" id="mover-mes-valor-mes">
+  <input type="hidden" name="anio_destino" id="mover-mes-valor-anio">
+  <input type="hidden" name="mantener_permiso" id="mover-mes-mantener-permiso">
+  <div id="mover-mes-sitios-inputs"></div>
+</form>
+<!-- FIN MILTEL: FORMULARIO MOVER A MES -->
+
 <!-- ====================================================== -->
 <!-- TABLA                                                 -->
 <!-- ====================================================== -->
@@ -4276,5 +4324,752 @@ Planificación Mensual
 
 })();
 </script>
+
+<!-- MILTEL: SCRIPT MOVER A MES -->
+<style>
+#miltel-modal-mes[hidden] { display:none !important; }
+
+#miltel-modal-mes {
+    position:fixed;
+    inset:0;
+    z-index:99999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    background:rgba(15,23,42,.65);
+    backdrop-filter:blur(5px);
+}
+
+#miltel-modal-mes .modal-panel {
+    width:min(100%,520px);
+    max-height:calc(100vh - 40px);
+    overflow:auto;
+    background:white;
+    border-radius:20px;
+    box-shadow:0 30px 90px rgba(0,0,0,.25);
+    padding:28px;
+}
+
+#miltel-modal-mes .modal-header {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+}
+
+#miltel-modal-mes h2 {
+    margin:0;
+    color:#0f172a;
+    font-size:22px;
+    font-weight:900;
+}
+
+#miltel-modal-mes .descripcion {
+    margin:8px 0 22px;
+    color:#64748b;
+    font-size:13px;
+    line-height:1.6;
+}
+
+#miltel-modal-mes .cerrar {
+    border:1px solid #e2e8f0;
+    border-radius:9px;
+    background:white;
+    width:34px;
+    height:34px;
+    cursor:pointer;
+    font-size:22px;
+    color:#64748b;
+}
+
+#miltel-modal-mes .resumen {
+    display:flex;
+    justify-content:space-between;
+    gap:15px;
+    padding:17px;
+    margin-bottom:23px;
+    background:#ecfdf5;
+    border:1px solid #a7f3d0;
+    border-radius:12px;
+}
+
+#miltel-modal-mes .resumen span {
+    display:block;
+    color:#047857;
+    font-size:11px;
+    font-weight:800;
+    margin-bottom:5px;
+}
+
+#miltel-modal-mes .resumen strong {
+    color:#064e3b;
+    font-size:16px;
+    font-weight:900;
+}
+
+#miltel-modal-mes .pregunta {
+    color:#0f172a;
+    font-size:14px;
+    font-weight:900;
+    margin-bottom:12px;
+}
+
+#miltel-modal-mes .opcion {
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    padding:15px;
+    margin-bottom:10px;
+    border:1px solid #e2e8f0;
+    border-radius:12px;
+    cursor:pointer;
+}
+
+#miltel-modal-mes .opcion:has(input:checked) {
+    border-color:#059669;
+    background:#f0fdf4;
+}
+
+#miltel-modal-mes .opcion input {
+    margin-top:3px;
+    accent-color:#059669;
+}
+
+#miltel-modal-mes .opcion strong {
+    display:block;
+    color:#0f172a;
+    font-size:13px;
+    font-weight:900;
+}
+
+#miltel-modal-mes .opcion small {
+    display:block;
+    color:#64748b;
+    font-size:12px;
+    line-height:1.5;
+    margin-top:5px;
+}
+
+#miltel-modal-mes .aviso {
+    padding:13px;
+    margin-top:20px;
+    background:#fffbeb;
+    border:1px solid #fde68a;
+    border-radius:11px;
+    color:#92400e;
+    font-size:12px;
+    line-height:1.6;
+}
+
+#miltel-modal-mes .acciones {
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:25px;
+    padding-top:20px;
+    border-top:1px solid #e2e8f0;
+}
+
+#miltel-modal-mes .acciones button {
+    padding:12px 19px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+#miltel-modal-mes .cancelar {
+    border:1px solid #cbd5e1;
+    background:white;
+    color:#475569;
+}
+
+#miltel-modal-mes .confirmar {
+    border:1px solid #047857;
+    background:#047857;
+    color:white;
+}
+
+#miltel-modal-mes .confirmar:disabled {
+    opacity:.5;
+    cursor:wait;
+}
+
+@media(max-width:520px) {
+    #miltel-modal-mes .modal-panel { padding:20px; }
+    #miltel-modal-mes .acciones { flex-direction:column-reverse; }
+    #miltel-modal-mes .acciones button { width:100%; }
+}
+</style>
+
+<div
+    id="miltel-modal-mes"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="miltel-modal-mes-titulo"
+    hidden
+>
+    <div class="modal-panel">
+        <div class="modal-header">
+            <h2 id="miltel-modal-mes-titulo">
+                Mover sitios a otro mes
+            </h2>
+            <button
+                type="button"
+                class="cerrar"
+                id="miltel-modal-mes-cerrar"
+                aria-label="Cerrar"
+            >&times;</button>
+        </div>
+
+        <p class="descripcion">
+            Confirma el mes de destino y cómo deseas
+            gestionar los permisos de los sitios seleccionados.
+        </p>
+
+        <div class="resumen">
+            <div>
+                <span>SITIOS SELECCIONADOS</span>
+                <strong id="miltel-modal-mes-cantidad">0</strong>
+            </div>
+            <div>
+                <span>MES DE DESTINO</span>
+                <strong id="miltel-modal-mes-destino">--/----</strong>
+            </div>
+        </div>
+
+        <p class="pregunta">
+            ¿Qué deseas hacer con los permisos?
+        </p>
+
+        <label class="opcion">
+            <input
+                type="radio"
+                name="miltel-permiso-traslado"
+                value="si"
+                checked
+            >
+            <span>
+                <strong>Conservar permisos actuales</strong>
+                <small>
+                    Los sitios trasladados mantendrán su
+                    estado de permiso actual.
+                </small>
+            </span>
+        </label>
+
+        <label class="opcion">
+            <input
+                type="radio"
+                name="miltel-permiso-traslado"
+                value="no"
+            >
+            <span>
+                <strong>Reiniciar permisos a Sin gestión</strong>
+                <small>
+                    Los sitios trasladados comenzarán
+                    nuevamente la gestión de permisos.
+                </small>
+            </span>
+        </label>
+
+        <div class="aviso">
+            <strong>Importante:</strong>
+            Los sitios con operaciones protegidas no se
+            trasladarán. Se conservarán sus datos e historial.
+        </div>
+
+        <div class="acciones">
+            <button
+                type="button"
+                class="cancelar"
+                id="miltel-modal-mes-cancelar"
+            >Cancelar</button>
+
+            <button
+                type="button"
+                class="confirmar"
+                id="miltel-modal-mes-confirmar"
+            >Confirmar traslado</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const boton = document.getElementById('mover-mes-masivo');
+    const mes = document.getElementById('mes-destino-masivo');
+    const anio = document.getElementById('anio-destino-masivo');
+    const formulario = document.getElementById('form-mover-mes-masivo');
+    const contenedor = document.getElementById('mover-mes-sitios-inputs');
+    const modal = document.getElementById('miltel-modal-mes');
+    const confirmar = document.getElementById('miltel-modal-mes-confirmar');
+    const cancelar = document.getElementById('miltel-modal-mes-cancelar');
+    const cerrar = document.getElementById('miltel-modal-mes-cerrar');
+
+    if (!boton || !mes || !anio || !formulario ||
+        !contenedor || !modal || !confirmar) {
+        return;
+    }
+
+    let enviando = false;
+    let seleccionPreparada = [];
+    let focoAnterior = null;
+
+    function seleccionados() {
+        return Array.from(
+            document.querySelectorAll('[data-sitio-checkbox]:checked')
+        ).filter(function (checkbox) {
+            return !checkbox.disabled;
+        });
+    }
+
+    function destinoValido() {
+        const opcion = mes.options[mes.selectedIndex];
+        const m = Number(mes.value);
+        const a = Number(anio.value);
+
+        return (
+            mes.value !== '' &&
+            anio.value !== '' &&
+            opcion &&
+            opcion.dataset.anio === anio.value &&
+            Number.isInteger(m) &&
+            m >= 1 && m <= 12 &&
+            Number.isInteger(a) &&
+            a >= 2000 && a <= 2100
+        );
+    }
+
+    function actualizar() {
+        boton.disabled = (
+            enviando ||
+            seleccionados().length === 0 ||
+            !destinoValido()
+        );
+    }
+
+    function abrir() {
+        if (enviando || !destinoValido()) return;
+
+        seleccionPreparada = seleccionados();
+        if (!seleccionPreparada.length) return;
+
+        document.getElementById(
+            'miltel-modal-mes-cantidad'
+        ).textContent = seleccionPreparada.length;
+
+        document.getElementById(
+            'miltel-modal-mes-destino'
+        ).textContent = mes.options[
+            mes.selectedIndex
+        ].textContent.trim();
+
+        const conservar = modal.querySelector(
+            'input[name="miltel-permiso-traslado"][value="si"]'
+        );
+
+        if (conservar) conservar.checked = true;
+
+        focoAnterior = document.activeElement;
+        modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        confirmar.focus();
+    }
+
+    function ocultar() {
+        if (enviando) return;
+
+        modal.hidden = true;
+        document.body.style.overflow = '';
+
+        if (focoAnterior && focoAnterior.focus) {
+            focoAnterior.focus();
+        }
+    }
+
+    function enviar() {
+        if (enviando || modal.hidden || !destinoValido()) return;
+
+        const actuales = seleccionados().map(function (item) {
+            return item.value;
+        });
+
+        const preparados = seleccionPreparada.map(function (item) {
+            return item.value;
+        });
+
+        if (
+            !actuales.length ||
+            actuales.length !== preparados.length ||
+            actuales.some(function (id) {
+                return !preparados.includes(id);
+            })
+        ) {
+            ocultar();
+            actualizar();
+            return;
+        }
+
+        const permiso = modal.querySelector(
+            'input[name="miltel-permiso-traslado"]:checked'
+        );
+
+        if (!permiso || !['si', 'no'].includes(permiso.value)) return;
+
+        document.getElementById(
+            'mover-mes-valor-mes'
+        ).value = mes.value;
+
+        document.getElementById(
+            'mover-mes-valor-anio'
+        ).value = anio.value;
+
+        document.getElementById(
+            'mover-mes-mantener-permiso'
+        ).value = permiso.value;
+
+        contenedor.replaceChildren();
+
+        preparados.forEach(function (id) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'sitio_ids';
+            input.value = id;
+            contenedor.appendChild(input);
+        });
+
+        enviando = true;
+        boton.disabled = true;
+        confirmar.disabled = true;
+        confirmar.textContent = 'Trasladando...';
+
+        formulario.submit();
+    }
+
+    document.addEventListener('change', function (evento) {
+        if (
+            evento.target.matches('[data-sitio-checkbox]') ||
+            evento.target.id === 'seleccionar-todos-sitios'
+        ) {
+            window.setTimeout(actualizar, 0);
+        }
+    });
+
+    mes.addEventListener('change', actualizar);
+    anio.addEventListener('input', actualizar);
+
+    const contador = document.getElementById(
+        'cantidad-sitios-seleccionados'
+    );
+
+    if (contador) {
+        new MutationObserver(actualizar).observe(contador, {
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
+    }
+
+    boton.addEventListener('click', abrir);
+    confirmar.addEventListener('click', enviar);
+    cancelar.addEventListener('click', ocultar);
+    cerrar.addEventListener('click', ocultar);
+
+    modal.addEventListener('click', function (evento) {
+        if (evento.target === modal) ocultar();
+    });
+
+    document.addEventListener('keydown', function (evento) {
+        if (modal.hidden) return;
+
+        if (evento.key === 'Escape') {
+            evento.preventDefault();
+            ocultar();
+        }
+    });
+
+    actualizar();
+})();
+</script>
+<!-- FIN MILTEL: SCRIPT MOVER A MES -->
+
+
+
+
+
+
+<!-- MILTEL: SINCRONIZACIÓN DE MES EXISTENTE -->
+<script>
+(function () {
+  const selector = document.getElementById('mes-destino-masivo');
+  const anio = document.getElementById('anio-destino-masivo');
+
+  if (!selector || !anio) return;
+
+  function sincronizar() {
+    const opcion = selector.options[selector.selectedIndex];
+    anio.value = opcion ? (opcion.dataset.anio || '') : '';
+    anio.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  selector.addEventListener('change', sincronizar);
+  sincronizar();
+})();
+</script>
+<!-- FIN MILTEL: SINCRONIZACIÓN DE MES EXISTENTE -->
+
+
+<!-- MILTEL: SCRIPT EXPORTACIÓN MENSUAL -->
+<script>
+(function () {
+  'use strict';
+
+  const urlBase =
+    "{% url 'planificacion:exportar_asignacion_mensual' planificacion.pk %}";
+
+  const filtros = {
+    id_claro: 'filtro-id-claro',
+    condicion_acceso: 'filtro-condicion-acceso',
+    permiso: 'filtro-permiso',
+    estado: 'filtro-estado'
+  };
+
+  function exportar(formato) {
+    const parametros = new URLSearchParams();
+    parametros.set('formato', formato);
+
+    Object.entries(filtros).forEach(function ([nombre, id]) {
+      const elemento = document.getElementById(id);
+      if (elemento && elemento.value) {
+        parametros.set(nombre, elemento.value);
+      }
+    });
+
+    window.location.assign(
+      urlBase + '?' + parametros.toString()
+    );
+  }
+
+  const excel = document.getElementById(
+    'exportar-planificacion-excel'
+  );
+
+  const csv = document.getElementById(
+    'exportar-planificacion-csv'
+  );
+
+  if (excel) {
+    excel.addEventListener('click', function () {
+      exportar('xlsx');
+    });
+  }
+
+  if (csv) {
+    csv.addEventListener('click', function () {
+      exportar('csv');
+    });
+  }
+})();
+</script>
+<!-- FIN MILTEL: SCRIPT EXPORTACIÓN MENSUAL -->
+
+
+
+
+
+
+<!-- MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
+<style>
+  #barra-permisos-masivos.miltel-barra-masiva {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+  }
+
+  .miltel-barra-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .miltel-seleccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #0f172a;
+  }
+
+  #cantidad-sitios-seleccionados {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-weight: 900;
+  }
+
+  .miltel-barra-encabezado p {
+    margin: 5px 0 0;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .miltel-tarjetas-acciones {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .miltel-tarjeta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    background: #f8fafc;
+  }
+
+  .miltel-tarjeta-permisos {
+    border-color: #bae6fd;
+    background: #f0f9ff;
+  }
+
+  .miltel-tarjeta-semana {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  .miltel-tarjeta-mes {
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+  }
+
+  .miltel-tarjeta-encabezado {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .miltel-tarjeta-numero {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: white;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .miltel-tarjeta h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: #0f172a;
+  }
+
+  .miltel-tarjeta p {
+    margin: 5px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #64748b;
+  }
+
+  .miltel-tarjeta-controles {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+  }
+
+  .miltel-tarjeta-controles select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    border-radius: 10px;
+    background: white;
+  }
+
+  .miltel-tarjeta-controles button {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 900;
+    color: white;
+  }
+
+  .miltel-tarjeta-permisos button {
+    background: linear-gradient(90deg, #0891b2, #2563eb);
+  }
+
+  .miltel-tarjeta-semana button {
+    background: #2563eb;
+  }
+
+  .miltel-tarjeta-mes button {
+    background: #059669;
+  }
+
+  .miltel-tarjeta-controles button:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+
+  #exportacion-mensual-controles {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 10px;
+  }
+
+  #exportar-planificacion-excel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 16px;
+    border: 1px solid #047857;
+    border-radius: 9px;
+    background: #047857 !important;
+    color: white !important;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #exportar-planificacion-excel:hover {
+    background: #065f46 !important;
+  }
+
+  @media (max-width: 1050px) {
+    .miltel-tarjetas-acciones {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<!-- FIN MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
 
 {% endblock %}

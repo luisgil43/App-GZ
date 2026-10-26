@@ -16,6 +16,8 @@ from planificacion.views import (actualizar_permiso_inline,
                                  regeocodificar_cuadrilla)
 from planificacion.views.analisis_batch_semanal import (
     analizar_batch_semanal_view, aplicar_propuesta_batch_view)
+from planificacion.views.traslado_mes_manual import mover_sitios_mes_masivo
+from planificacion.views.exportacion_mensual import exportar_asignacion_mensual
 from planificacion.views.asignacion_mensual import (
     descartar_continuidad_semanal, mover_sitios_semana_masivo)
 from planificacion.views.asignacion_operativa import (
@@ -210,6 +212,16 @@ urlpatterns = [
         "mensual/<int:pk>/mover-sitios-semana/",
         mover_sitios_semana_masivo,
         name="mover_sitios_semana_masivo",
+    ),
+    path(
+        "mensual/<int:pk>/mover-sitios-mes/",
+        mover_sitios_mes_masivo,
+        name="mover_sitios_mes_masivo",
+    ),
+    path(
+        "mensual/<int:pk>/exportar/",
+        exportar_asignacion_mensual,
+        name="exportar_asignacion_mensual",
     ),
     # ========================================================
     # FLUJO DEL BATCH SEMANAL
