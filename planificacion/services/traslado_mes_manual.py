@@ -98,9 +98,25 @@ def _validar_servicio_pendiente(servicio):
             "o evidencias asociados."
         )
 
+    # Una sesión fotográfica vacía puede existir desde la
+    # preparación administrativa del servicio. No constituye
+    # por sí sola evidencia de ejecución.
+    try:
+        sesion = servicio.sesion_fotos
+    except ServicioCotizado.sesion_fotos.RelatedObjectDoesNotExist:
+        sesion = None
+
+    if sesion is not None:
+        if sesion.asignaciones.exists():
+            raise ValidationError(
+                f"El servicio {servicio.pk} tiene asignaciones "
+                "en su sesión fotográfica."
+            )
+
     relaciones_administrativas = {
         "notificaciones",
         "alertas_clima_bot",
+        "sesion_fotos",
     }
 
     relaciones_protegidas = (
