@@ -58,6 +58,51 @@ Planificación Semanal
 
 
         <!-- ================================================ -->
+        <!-- EXPORTAR MES                                     -->
+        <!-- ================================================ -->
+
+        <a
+          href="{% url 'planificacion:exportar_asignacion_mensual' mensual.id %}?formato=xlsx"
+          class="
+            inline-flex
+            items-center
+            justify-center
+            gap-2
+            rounded-xl
+            border border-emerald-200
+            bg-emerald-50
+            px-4 py-2.5
+            text-sm
+            font-semibold
+            text-emerald-700
+            shadow-sm
+            transition
+            hover:bg-emerald-100
+          "
+          title="Descargar todos los sitios activos del mes en Excel"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path d="M12 3v12"></path>
+            <path d="m7 10 5 5 5-5"></path>
+            <path d="M5 17v3h14v-3"></path>
+          </svg>
+
+          Exportar mes
+
+        </a>
+
+
+        <!-- ================================================ -->
         <!-- MAPA DEL MES                                     -->
         <!-- ================================================ -->
 

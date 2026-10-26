@@ -10,7 +10,13 @@ from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
 
-from planificacion.models import PlanificacionMensual, SitioPlanificado
+from planificacion.models import (
+    BatchPlanificacionSemanal,
+    PlanificacionMensual,
+    SitioBatchSemanal,
+    SitioPlanificado,
+)
+from operaciones.models import ServicioCotizado
 from usuarios.decoradores import rol_requerido
 
 
@@ -27,6 +33,10 @@ COLUMNAS = [
     "ESTADO",
     "FECHA PLANIFICADA",
     "ALERTA",
+    "ACTIVIDAD",
+    "SEMANA",
+    "BATCH",
+    "ESTADO DEL BATCH",
 ]
 
 
@@ -89,12 +99,36 @@ def contacto_acceso(item):
     return " | ".join(partes)
 
 
-def construir_fila(item):
+def construir_fila(item, actividades_por_sitio=None, batches_por_sitio=None):
     sitio = item.sitio
 
     fecha = item.fecha_planificada
     if isinstance(fecha, date):
         fecha = fecha.strftime("%d/%m/%Y")
+
+    actividades_por_sitio = actividades_por_sitio or {}
+    batches_por_sitio = batches_por_sitio or {}
+
+    actividades = ", ".join(
+        sorted(actividades_por_sitio.get(item.pk, set()))
+    )
+
+    participaciones = batches_por_sitio.get(item.pk, [])
+
+    semanas = " | ".join(
+        participacion["semana"]
+        for participacion in participaciones
+    )
+
+    nombres_batches = " | ".join(
+        participacion["nombre"]
+        for participacion in participaciones
+    )
+
+    estados_batches = " | ".join(
+        participacion["estado"]
+        for participacion in participaciones
+    )
 
     valores = [
         obtener_valor(sitio, "id_claro"),
@@ -109,6 +143,10 @@ def construir_fila(item):
         etiqueta_campo(item, "estado"),
         fecha or "",
         obtener_valor(item, "alerta_motor"),
+        actividades,
+        semanas,
+        nombres_batches,
+        estados_batches,
     ]
 
     return [texto_seguro(valor) for valor in valores]
@@ -191,10 +229,87 @@ def exportar_asignacion_mensual(request, pk):
         )
     )
 
-    filas = [
-        construir_fila(item)
+    sitios_filtrados = [
+        item
         for item in queryset.iterator(chunk_size=500)
         if coincide_filtros(item, filtros)
+    ]
+
+    ids_planificados = [item.pk for item in sitios_filtrados]
+
+    actividades_por_sitio = {}
+    batches_por_sitio = {}
+
+    if ids_planificados:
+        registros_actividad = (
+            ServicioCotizado.objects.filter(
+                sitio_planificado_id__in=ids_planificados,
+                actividad__isnull=False,
+            )
+            .values_list(
+                "sitio_planificado_id",
+                "actividad__nombre",
+            )
+        )
+
+        for sitio_id, nombre in registros_actividad:
+            nombre = (nombre or "").strip()
+
+            if nombre:
+                actividades_por_sitio.setdefault(
+                    sitio_id, set()
+                ).add(nombre)
+
+        participaciones = (
+            SitioBatchSemanal.objects.filter(
+                sitio_planificado_id__in=ids_planificados,
+            )
+            .exclude(
+                estado__in=["excluido", "reemplazado"],
+            )
+            .select_related("batch")
+            .order_by(
+                "batch__fecha_inicio",
+                "batch_id",
+                "pk",
+            )
+        )
+
+        for participacion in participaciones:
+            batch = participacion.batch
+
+            fecha_inicio = batch.fecha_inicio
+            semana = (
+                f"W{fecha_inicio.isocalendar().week:02d}"
+                if fecha_inicio
+                else ""
+            )
+
+            nombre_batch = (
+                batch.nombre
+                or (
+                    f"Semana {fecha_inicio:%d/%m/%Y}"
+                    if fecha_inicio
+                    else str(batch.pk)
+                )
+            )
+
+            batches_por_sitio.setdefault(
+                participacion.sitio_planificado_id,
+                [],
+            ).append({
+                "semana": semana,
+                "nombre": nombre_batch,
+                "estado": participacion.get_estado_display(),
+            })
+
+    filas = [
+        construir_fila(
+            item,
+            actividades_por_sitio,
+            batches_por_sitio,
+        )
+        for item in sitios_filtrados
     ]
 
     nombre = (
@@ -263,6 +378,7 @@ def exportar_asignacion_mensual(request, pk):
     anchos = [
         17, 32, 23, 23, 19, 42,
         44, 31, 22, 22, 21, 48,
+        34, 18, 35, 28,
     ]
 
     for indice, ancho in enumerate(anchos, start=1):
