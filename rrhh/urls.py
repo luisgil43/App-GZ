@@ -12,6 +12,11 @@ urlpatterns = [
         name="descargar_contrato",
     ),
 
+    path(
+        "contratos-trabajo/unificado/<int:trabajador_id>/",
+        views.descargar_contratos_unificados,
+        name="descargar_contratos_unificados",
+    ),
     path("contratos-trabajo/", views.listar_contratos_admin, name="contratos_trabajo"),
     path("mis-contratos/", views.listar_contratos_usuario, name="mis_contratos"),
     path("contratos-trabajo/crear/", views.crear_contrato, name="crear_contrato"),

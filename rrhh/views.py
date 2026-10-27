@@ -738,6 +738,148 @@ def ver_contrato(request, contrato_id):
 
 
 
+
+@staff_member_required
+@rol_requerido("admin", "pm", "rrhh")
+def descargar_contratos_unificados(request, trabajador_id):
+    """
+    Descarga todos los documentos laborales de un trabajador
+    en un único PDF, sin modificar sus archivos originales.
+    """
+    from io import BytesIO
+
+    from PyPDF2 import PdfMerger
+
+    documentos = list(
+        ContratoTrabajo.objects.filter(
+            tecnico_id=trabajador_id,
+        )
+        .select_related("tecnico", "tipo_documento_laboral")
+        .order_by("fecha_inicio", "pk")
+    )
+
+    # Orden documental:
+    # 1. Contratos de trabajo.
+    # 2. Anexos de contrato.
+    # 3. Finiquitos.
+    # 4. Otros documentos.
+    # Dentro de cada grupo: del más antiguo al más reciente.
+    prioridad_tipo = {
+        1: 0,
+        2: 1,
+        3: 2,
+    }
+
+    documentos.sort(
+        key=lambda documento: (
+            prioridad_tipo.get(
+                documento.tipo_documento_laboral_id,
+                3,
+            ),
+            documento.fecha_inicio or date.min,
+            documento.pk,
+        )
+    )
+
+    if not documentos:
+        raise Http404("No existen documentos laborales.")
+
+    if any(not documento.archivo for documento in documentos):
+        raise Http404(
+            "El historial contiene documentos sin archivo."
+        )
+
+    merger = PdfMerger()
+    archivos_abiertos = []
+
+    try:
+        for documento in documentos:
+            try:
+                archivo = documento.archivo.open("rb")
+                archivos_abiertos.append(archivo)
+                merger.append(archivo)
+
+            except Exception:
+                logger.exception(
+                    "Error incorporando documento laboral %s",
+                    documento.pk,
+                )
+                raise Http404(
+                    "No fue posible unificar todos los documentos."
+                )
+
+        salida = BytesIO()
+        merger.write(salida)
+        contenido = salida.getvalue()
+
+        if not contenido:
+            raise Http404("El PDF unificado está vacío.")
+
+        trabajador = documentos[0].tecnico
+
+        # Nombre completo del trabajador para la descarga.
+        nombres = (
+            getattr(trabajador, "first_name", "") or ""
+        ).strip()
+
+        apellidos = (
+            getattr(trabajador, "last_name", "") or ""
+        ).strip()
+
+        nombre_completo = " ".join(
+            parte for parte in (nombres, apellidos) if parte
+        )
+
+        if not nombre_completo:
+            nombre_completo = (
+                getattr(trabajador, "get_full_name", lambda: "")()
+                or ""
+            ).strip()
+
+        if not nombre_completo:
+            nombre_completo = f"Trabajador {trabajador_id}"
+
+        nombre_completo = re.sub(
+            r'[\\/:*?"<>|\\r\\n]+',
+            " ",
+            nombre_completo,
+        )
+
+        nombre_completo = " ".join(nombre_completo.split())
+
+        nombre_archivo = (
+            f"Documentos Laborales - {nombre_completo}.pdf"
+        )
+
+        respuesta = HttpResponse(
+            contenido,
+            content_type="application/pdf",
+        )
+
+        from django.utils.http import content_disposition_header
+
+        respuesta["Content-Disposition"] = (
+            content_disposition_header(
+                as_attachment=True,
+                filename=nombre_archivo,
+            )
+        )
+
+        respuesta["Content-Length"] = str(len(contenido))
+
+        return respuesta
+
+    finally:
+        merger.close()
+
+        for archivo in archivos_abiertos:
+            try:
+                archivo.close()
+            except Exception:
+                pass
+
+
+
 @login_required
 def descargar_contrato(request, contrato_id):
     from pathlib import Path

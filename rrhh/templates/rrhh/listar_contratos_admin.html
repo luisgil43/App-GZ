@@ -311,6 +311,17 @@
 
                 <!-- Documento -->
                 <td class="px-4 py-3">
+                  {% if grupo.cantidad_documentos > 1 %}
+                    <div class="mb-2">
+                      <a
+                        href="{% url 'rrhh:descargar_contratos_unificados' trabajador.id %}"
+                        class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                        title="Descargar todos los documentos laborales en un solo PDF"
+                      >
+                        📑 Descargar unificado
+                      </a>
+                    </div>
+                  {% endif %}
                   {% if contrato.archivo %}
                     <a href="{% url 'rrhh:descargar_contrato' contrato.id %}"
                        class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-bold">
