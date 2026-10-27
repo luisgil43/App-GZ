@@ -31,6 +31,10 @@ from planificacion.services.planificacion_diaria import (
     obtener_sitios_pendientes_planificacion_diaria,
     sincronizar_estado_batch_desde_planificacion_diaria,
     sincronizar_estado_salida)
+from planificacion.services.retiro_asignacion_operacional import (
+    ErrorRetiroAsignacionOperacional,
+    retirar_asignacion_operacional,
+)
 from usuarios.decoradores import rol_requerido
 
 # GZ_ACTIVIDADES_PLANIFICACION_DIARIA_V1
@@ -1931,6 +1935,20 @@ def quitar_sitio_planificacion_diaria(
         pk=sitio_salida_id,
     )
 
+    if sitio_salida.estado in {
+        "retirado",
+        "cancelado",
+        "reprogramado",
+    }:
+        messages.error(
+            request,
+            "Este sitio ya no pertenece a una jornada activa.",
+        )
+        return redirect(
+            "planificacion:detalle_planificacion_diaria",
+            batch_id=sitio_salida.salida.batch_id,
+        )
+
     salida = sitio_salida.salida
 
     batch = salida.batch
@@ -1944,34 +1962,57 @@ def quitar_sitio_planificacion_diaria(
     identificador = sitio.id_claro or sitio.id_sites or f"Sitio {sitio.pk}"
 
     # ========================================================
-    # ESTADO OPERACIONAL REAL ANTES DEL RETIRO
-    # ========================================================
-
-    estado_operacional = obtener_estado_operacional_sitio(
-        sitio_planificado,
-    )
-
-    estado_planificacion_operacional = estado_operacional.get(
-        "estado_planificacion",
-    )
-
-    # ========================================================
-    # ¿PUEDE VOLVER AL POOL DE PLANIFICACIÓN?
+    # RETIRO OPERACIONAL EN LA MISMA TRANSACCIÓN
     # ========================================================
     #
-    # Estos estados ya implican un compromiso real en
-    # Operaciones.
+    # El servicio identifica el SitioPlanificado y el mes
+    # de producción exacto.
     #
-    # No debemos devolver el sitio a "listo_planificar"
-    # porque podría terminar duplicado.
+    # Cualquier excepción revierte también el retiro diario.
     # ========================================================
 
-    existe_compromiso_operacional = estado_planificacion_operacional in {
-        "asignado",
-        "en_ejecucion",
-        "revision",
-        "finalizado",
-    }
+    try:
+        servicio_operacional, asignacion_liberada = (
+            retirar_asignacion_operacional(
+                sitio_planificado=sitio_planificado,
+                usuario=request.user,
+                participacion_retirada=sitio_salida,
+            )
+        )
+    except ErrorRetiroAsignacionOperacional as error:
+        transaction.set_rollback(True)
+        messages.error(request, str(error))
+        return redirect(
+            "planificacion:detalle_planificacion_diaria",
+            batch_id=batch.pk,
+        )
+
+    # Si otra jornada activa conserva el sitio, no se debe
+    # liberar la asignación ni devolverlo al pool.
+    otras_jornadas_activas = (
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            sitio_batch__sitio_planificado_id=sitio_planificado.pk,
+        )
+        .exclude(
+            pk=sitio_salida.pk,
+        )
+        .exclude(
+            estado__in=[
+                "retirado",
+                "cancelado",
+                "reprogramado",
+            ],
+        )
+        .exists()
+    )
+
+    existe_compromiso_operacional = (
+        otras_jornadas_activas
+        or (
+            servicio_operacional is not None
+            and servicio_operacional.estado != "aprobado_pendiente"
+        )
+    )
 
     # ========================================================
     # RETIRAR PARTICIPACIÓN
@@ -2076,15 +2117,28 @@ def quitar_sitio_planificacion_diaria(
 
         salida.delete()
 
-        if existe_compromiso_operacional:
+        if asignacion_liberada:
 
             messages.success(
                 request,
                 (
                     f"{identificador} fue quitado de la jornada "
                     f"del {fecha_salida:%d/%m/%Y}. "
-                    "Su estado real en Operaciones permanece "
-                    "sin modificaciones."
+                    "Los técnicos fueron desasignados en Operaciones "
+                    "y el servicio quedó aprobado, pendiente por asignar. "
+                    "La salida vacía fue eliminada."
+                ),
+            )
+
+        elif existe_compromiso_operacional:
+
+            messages.success(
+                request,
+                (
+                    f"{identificador} fue quitado de la jornada "
+                    f"del {fecha_salida:%d/%m/%Y}. "
+                    "Conserva su asignación en Operaciones "
+                    "porque permanece en otra jornada activa."
                 ),
             )
 
@@ -2231,15 +2285,27 @@ def quitar_sitio_planificacion_diaria(
     # MENSAJE
     # ========================================================
 
-    if existe_compromiso_operacional:
+    if asignacion_liberada:
 
         messages.success(
             request,
             (
                 f"{identificador} fue quitado de la jornada "
                 f"del {salida.fecha:%d/%m/%Y}. "
-                "Su estado real en Operaciones permanece "
-                "sin modificaciones."
+                "Los técnicos fueron desasignados en Operaciones "
+                "y el servicio quedó aprobado, pendiente por asignar."
+            ),
+        )
+
+    elif existe_compromiso_operacional:
+
+        messages.success(
+            request,
+            (
+                f"{identificador} fue quitado de la jornada "
+                f"del {salida.fecha:%d/%m/%Y}. "
+                "Conserva su asignación en Operaciones "
+                "porque permanece en otra jornada activa."
             ),
         )
 

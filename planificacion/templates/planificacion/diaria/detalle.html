@@ -3192,6 +3192,12 @@ Planificación Diaria
                             {% if fila.puede_quitar_planificacion %}
 
                             <form
+              class="js-form-retirar-jornada"
+              data-sitio="{{ fila.id_claro|default:'Sitio sin identificador' }}"
+              data-du="{{ fila.du|default:'No disponible' }}"
+              data-cuadrilla="{{ salida_ui.cuadrilla_nombre|default:'No disponible' }}"
+              data-tecnicos="{{ fila.tecnicos|default:'No disponibles' }}"
+
                               method="post"
                               action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
                             >
@@ -3503,6 +3509,12 @@ Planificación Diaria
               <div class="mt-3">
 
                 <form
+              class="js-form-retirar-jornada"
+              data-sitio="{{ fila.id_claro|default:'Sitio sin identificador' }}"
+              data-du="{{ fila.du|default:'No disponible' }}"
+              data-cuadrilla="{{ salida_ui.cuadrilla_nombre|default:'No disponible' }}"
+              data-tecnicos="{{ fila.tecnicos|default:'No disponibles' }}"
+
                   method="post"
                   action="{% url 'planificacion:quitar_sitio_planificacion_diaria' fila.sitio_salida.id %}"
                 >
@@ -3586,6 +3598,189 @@ Planificación Diaria
   </div>
 
 </div>
+
+
+<!-- ======================================================== -->
+<!-- MODAL CONFIRMAR RETIRO DE JORNADA                         -->
+<!-- ======================================================== -->
+
+<div
+  id="modal-confirmar-retiro-jornada"
+  class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-[2px]"
+  role="dialog"
+  aria-modal="true"
+  aria-hidden="true"
+  aria-labelledby="modal-retiro-titulo"
+>
+  <div
+    class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+  >
+    <div class="p-6 sm:p-7">
+
+      <div class="mb-5 flex items-center gap-3">
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            class="h-6 w-6"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+          </svg>
+        </div>
+
+        <div>
+          <div class="text-[10px] font-black uppercase tracking-widest text-red-600">
+            Planificación diaria
+          </div>
+          <h3 id="modal-retiro-titulo" class="text-xl font-black text-slate-900">
+            ¿Quitar de esta jornada?
+          </h3>
+        </div>
+      </div>
+
+      <p class="mb-4 text-sm leading-6 text-slate-600">
+        Revisa la información antes de confirmar.
+      </p>
+
+      <div class="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
+        <div><span class="font-bold text-slate-600">Sitio:</span> <span id="retiro-sitio" class="text-slate-900"></span></div>
+        <div><span class="font-bold text-slate-600">DU:</span> <span id="retiro-du" class="text-slate-900"></span></div>
+        <div><span class="font-bold text-slate-600">Cuadrilla:</span> <span id="retiro-cuadrilla" class="text-slate-900"></span></div>
+        <div><span class="font-bold text-slate-600">Técnicos:</span> <span id="retiro-tecnicos" class="text-slate-900"></span></div>
+      </div>
+
+      <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+        <strong>Importante:</strong> el sitio se retirará de esta jornada.
+        Si corresponde liberar su asignación operacional, los técnicos
+        serán desasignados y el servicio volverá a
+        <strong>«Aprobada, pendiente por asignar»</strong>.
+        Si existe otra jornada activa, se conservarán las asignaciones.
+        Los servicios finalizados y los pagos protegidos no pueden
+        modificarse mediante esta acción.
+      </div>
+
+      <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button
+          id="cancelar-retiro-jornada"
+          type="button"
+          class="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+        >
+          Cancelar
+        </button>
+
+        <button
+          id="confirmar-retiro-jornada"
+          type="button"
+          class="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white hover:bg-red-700"
+        >
+          Confirmar retiro
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const modal = document.getElementById(
+    "modal-confirmar-retiro-jornada"
+  );
+
+  const cancelar = document.getElementById(
+    "cancelar-retiro-jornada"
+  );
+
+  const confirmar = document.getElementById(
+    "confirmar-retiro-jornada"
+  );
+
+  if (!modal || !cancelar || !confirmar) {
+    return;
+  }
+
+  let formularioPendiente = null;
+  let botonAnterior = null;
+
+  function cerrar() {
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+    formularioPendiente = null;
+
+    if (botonAnterior) {
+      botonAnterior.focus();
+      botonAnterior = null;
+    }
+  }
+
+  document.querySelectorAll(
+    ".js-form-retirar-jornada"
+  ).forEach(function (formulario) {
+
+    formulario.addEventListener("submit", function (evento) {
+      evento.preventDefault();
+
+      formularioPendiente = formulario;
+      botonAnterior = document.activeElement;
+
+      const campos = {
+        "retiro-sitio": formulario.dataset.sitio,
+        "retiro-du": formulario.dataset.du,
+        "retiro-cuadrilla": formulario.dataset.cuadrilla,
+        "retiro-tecnicos": formulario.dataset.tecnicos
+      };
+
+      Object.keys(campos).forEach(function (id) {
+        const elemento = document.getElementById(id);
+
+        if (elemento) {
+          elemento.textContent = campos[id] || "No disponible";
+        }
+      });
+
+      modal.classList.remove("hidden");
+      modal.setAttribute("aria-hidden", "false");
+      cancelar.focus();
+    });
+  });
+
+  cancelar.addEventListener("click", cerrar);
+
+  confirmar.addEventListener("click", function () {
+    if (!formularioPendiente) {
+      return;
+    }
+
+    const formulario = formularioPendiente;
+    formularioPendiente = null;
+
+    confirmar.disabled = true;
+    confirmar.textContent = "Procesando...";
+
+    HTMLFormElement.prototype.submit.call(formulario);
+  });
+
+  modal.addEventListener("click", function (evento) {
+    if (evento.target === modal) {
+      cerrar();
+    }
+  });
+
+  document.addEventListener("keydown", function (evento) {
+    if (
+      evento.key === "Escape"
+      && !modal.classList.contains("hidden")
+    ) {
+      cerrar();
+    }
+  });
+})();
+</script>
 
 <!-- ======================================================== -->
 <!-- MODAL TRASLADAR AL MES SIGUIENTE                        -->

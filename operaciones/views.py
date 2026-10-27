@@ -5502,7 +5502,7 @@ def listar_servicios_supervisor(request):
 
 
 @login_required
-@rol_requerido("supervisor", "admin", "pm")
+@rol_requerido("admin")
 @require_POST
 def reabrir_servicio(request, pk):
     servicio = get_object_or_404(ServicioCotizado, pk=pk)

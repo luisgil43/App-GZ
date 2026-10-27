@@ -487,6 +487,10 @@ def analizar_programacion_manual(
 
     advertencias = []
 
+    # Solo determinadas condiciones requieren una
+    # confirmación operacional explícita.
+    requiere_confirmacion_operacional = False
+
     identificador = _identificador_sitio(
         sitio_batch,
     )
@@ -570,6 +574,7 @@ def analizar_programacion_manual(
         )
 
     elif sitio_rural and admite_rural is None:
+        requiere_confirmacion_operacional = True
         advertencias.append(
             (
                 f"{identificador}: el sitio es rural y no fue "
@@ -631,14 +636,21 @@ def analizar_programacion_manual(
     ):
         capacidad_objetivo = CAPACIDAD_DIARIA_NORMAL
 
+    # La capacidad diaria objetivo es una referencia para el
+    # motor automático, no un límite de programación manual.
+    #
+    # Un usuario autorizado puede programar 4, 5 o más sitios
+    # en la misma cuadrilla y fecha.
+    #
+    # Las restantes validaciones operacionales se conservan.
     if cantidad_resultante > capacidad_objetivo:
-        errores.append(
+        advertencias.append(
             (
-                f"La cuadrilla ya posee {cantidad_actual} "
-                f"sitio(s) el {fecha:%d/%m/%Y}. "
-                f"Agregar {identificador} superaría la "
-                f"capacidad diaria objetivo de "
-                f"{capacidad_objetivo} sitio(s)."
+                f"La cuadrilla tendrá {cantidad_resultante} "
+                f"sitio(s) el {fecha:%d/%m/%Y}, superando "
+                f"la referencia diaria de "
+                f"{capacidad_objetivo} sitio(s). "
+                "La programación manual está permitida."
             )
         )
 
@@ -647,6 +659,7 @@ def analizar_programacion_manual(
     # ========================================================
 
     if cantidad_resultante == 1:
+        requiere_confirmacion_operacional = True
         advertencias.append(
             (
                 f"{identificador} quedará como único sitio "
@@ -661,6 +674,7 @@ def analizar_programacion_manual(
     # ========================================================
 
     elif cantidad_resultante == 2:
+        requiere_confirmacion_operacional = True
         advertencias.append(
             (
                 "La salida quedará con 2 sitios. "
@@ -677,6 +691,7 @@ def analizar_programacion_manual(
         salida_existente is None
         or participacion_actual.salida_id != salida_existente.pk
     ):
+        requiere_confirmacion_operacional = True
         advertencias.append(
             (
                 f"{identificador} actualmente pertenece a "
@@ -702,7 +717,9 @@ def analizar_programacion_manual(
             )
         )
 
-    requiere_confirmacion = bool(advertencias)
+    # Superar la capacidad objetivo o incorporar un sitio
+    # a una salida existente genera información, no un bloqueo.
+    requiere_confirmacion = requiere_confirmacion_operacional
 
     return {
         "errores": errores,
@@ -889,10 +906,17 @@ def _actualizar_metricas_basicas_salida(
             disponibilidad,
         )
 
-        calculo = encontrar_mejor_salida(
-            sitios=motores,
-            configuracion_cuadrilla=configuracion,
-        )
+        # La programación manual puede superar la referencia
+        # de tres sitios sin cambiar el límite del motor automático.
+        #
+        # Con cuatro o más sitios no ejecutamos el simulador
+        # global: conservamos el orden manual y utilizamos
+        # las métricas básicas del bloque de respaldo inferior.
+        if cantidad <= 3:
+            calculo = encontrar_mejor_salida(
+                sitios=motores,
+                configuracion_cuadrilla=configuracion,
+            )
 
     # ========================================================
     # CÁLCULO GEOGRÁFICO COMPLETO
@@ -1026,6 +1050,14 @@ def _actualizar_metricas_basicas_salida(
         minutos_por_sitio = 180
 
     minutos_trabajo = cantidad * minutos_por_sitio
+
+    # Para cuatro o más sitios manuales no existe una nueva
+    # simulación geográfica validada. Evitar reutilizar una
+    # distancia calculada para una ruta anterior de tres sitios.
+    if cantidad > 3:
+        salida.minutos_viaje_estimados = 0
+        salida.distancia_directa_km = None
+        salida.distancia_vial_estimada_km = None
 
     salida.minutos_trabajo_estimados = minutos_trabajo
 
