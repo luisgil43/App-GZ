@@ -3,6 +3,7 @@ from django.db.models import Count
 # planificacion/views/planificacion_diaria.py
 
 from collections import defaultdict
+from operaciones.models import ServicioCotizado
 from datetime import timedelta
 
 from django.contrib import messages
@@ -31,6 +32,50 @@ from planificacion.services.planificacion_diaria import (
     sincronizar_estado_batch_desde_planificacion_diaria,
     sincronizar_estado_salida)
 from usuarios.decoradores import rol_requerido
+
+# GZ_ACTIVIDADES_PLANIFICACION_DIARIA_V1
+def _actividades_por_sitio_planificado(ids):
+    """
+    Consulta actividades reales de la planificación mensual.
+    No infiere actividades mediante ID CLARO.
+    No modifica registros.
+    """
+    ids = {
+        identificador
+        for identificador in ids
+        if identificador is not None
+    }
+
+    if not ids:
+        return {}
+
+    actividades = {}
+
+    registros = (
+        ServicioCotizado.objects.filter(
+            sitio_planificado_id__in=ids,
+            actividad__isnull=False,
+        )
+        .values_list(
+            "sitio_planificado_id",
+            "actividad__nombre",
+        )
+    )
+
+    for sitio_id, nombre in registros:
+        nombre = (nombre or "").strip()
+
+        if nombre:
+            actividades.setdefault(
+                sitio_id,
+                set(),
+            ).add(nombre)
+
+    return {
+        sitio_id: sorted(nombres)
+        for sitio_id, nombres in actividades.items()
+    }
+
 
 # ============================================================
 # ROLES
@@ -1291,6 +1336,35 @@ def detalle_planificacion_diaria(
 
         item.tiene_alertas_contacto_ui = (
             info_contactos["tiene_alertas"]
+        )
+
+    # GZ_ACTIVIDADES_TARJETAS_DIARIAS_V1
+    ids_actividad = {
+        fila["sitio_planificado"].pk
+        for salida_ui in salidas_ui
+        for fila in salida_ui["sitios"]
+    }
+
+    ids_actividad.update(
+        item.sitio_planificado_id
+        for item in pendientes_planificar
+    )
+
+    actividades_por_sitio = _actividades_por_sitio_planificado(
+        ids_actividad
+    )
+
+    for salida_ui in salidas_ui:
+        for fila in salida_ui["sitios"]:
+            fila["actividades"] = actividades_por_sitio.get(
+                fila["sitio_planificado"].pk,
+                [],
+            )
+
+    for item in pendientes_planificar:
+        item.actividades_ui = actividades_por_sitio.get(
+            item.sitio_planificado_id,
+            [],
         )
 
     # ========================================================
@@ -2893,6 +2967,18 @@ def compartir_jornada_planificacion_diaria(request, batch_id, fecha):
         texto = str(dato).strip()
         return texto if texto else "Sin datos"
 
+    # GZ_ACTIVIDADES_COMPARTIR_JORNADA_V1
+    ids_actividad_compartir = list(
+        registros.values_list(
+            "sitio_batch__sitio_planificado_id",
+            flat=True,
+        )
+    )
+
+    actividades_compartir = _actividades_por_sitio_planificado(
+        ids_actividad_compartir
+    )
+
     sitios = []
     vistos = set()
 
@@ -2906,6 +2992,10 @@ def compartir_jornada_planificacion_diaria(request, batch_id, fecha):
 
         sitios.append({
             "id_sitio": valor(sitio.id_claro or sitio.id_sites),
+            "actividades": actividades_compartir.get(
+                registro.sitio_batch.sitio_planificado_id,
+                [],
+            ),
             "construccion": valor(sitio.tipo_construccion),
             "altura": valor(sitio.altura),
             "tipo_zona": valor(sitio.tipo_zona),

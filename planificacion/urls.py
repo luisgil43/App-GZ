@@ -19,7 +19,8 @@ from planificacion.views.analisis_batch_semanal import (
 from planificacion.views.traslado_mes_manual import mover_sitios_mes_masivo
 from planificacion.views.exportacion_mensual import exportar_asignacion_mensual
 from planificacion.views.asignacion_mensual import (
-    descartar_continuidad_semanal, mover_sitios_semana_masivo)
+    descartar_continuidad_semanal, mover_sitios_semana_masivo,
+    eliminar_sitio_asignacion_mensual)
 from planificacion.views.asignacion_operativa import (
     confirmar_asignacion_dia, confirmar_asignacion_salida,
     preview_asignacion_dia, preview_asignacion_salida)
@@ -146,6 +147,12 @@ urlpatterns = [
         "mensual/<int:pk>/",
         lista_asignacion_mensual,
         name="lista_asignacion_mensual",
+    ),
+    # GZ_ELIMINAR_SITIO_MENSUAL_V1
+    path(
+        "mensual/<int:pk>/sitio/<int:sitio_id>/eliminar/",
+        eliminar_sitio_asignacion_mensual,
+        name="eliminar_sitio_asignacion_mensual",
     ),
     path(
         "mensual/<int:pk>/importar/",

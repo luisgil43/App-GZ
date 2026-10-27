@@ -1104,6 +1104,20 @@ Planificación Diaria
                       </div>
 
 
+                      <!-- GZ_ACTIVIDADES_TARJETA_PENDIENTE_V1 -->
+                      <div class="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-2.5 py-2">
+                        <div class="text-[9px] font-black uppercase tracking-wide text-indigo-700">
+                          Actividad{% if item.actividades_ui|length != 1 %}es{% endif %}
+                        </div>
+                        <div class="mt-1 text-xs font-semibold text-indigo-900">
+                          {% for actividad in item.actividades_ui %}
+                            {% if not forloop.first %} · {% endif %}{{ actividad }}
+                          {% empty %}
+                            Sin actividad registrada
+                          {% endfor %}
+                        </div>
+                      </div>
+
                       <!-- ======================================= -->
                       <!-- ACCESO                                  -->
                       <!-- ======================================= -->
@@ -2380,6 +2394,20 @@ Planificación Diaria
 
                               </div>
 
+                              <!-- GZ_ACTIVIDADES_TARJETA_ASIGNADA_V1 -->
+                              <div class="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-2.5 py-2">
+                                <div class="text-[9px] font-black uppercase tracking-wide text-indigo-700">
+                                  Actividad{% if fila.actividades|length != 1 %}es{% endif %}
+                                </div>
+                                <div class="mt-1 text-xs font-semibold text-indigo-900">
+                                  {% for actividad in fila.actividades %}
+                                    {% if not forloop.first %} · {% endif %}{{ actividad }}
+                                  {% empty %}
+                                    Sin actividad registrada
+                                  {% endfor %}
+                                </div>
+                              </div>
+
 
                               <!-- ================================================ -->
                               <!-- CONDICIÓN DE ACCESO                              -->
@@ -3389,6 +3417,18 @@ Planificación Diaria
                   "
                 >
                   {{ fila.nombre|default:"Sin nombre" }}
+                </div>
+
+                <!-- GZ_ACTIVIDADES_TARJETA_FINALIZADA_V1 -->
+                <div class="mt-2 text-[11px] text-indigo-800">
+                  <span class="font-black">
+                    Actividad{% if fila.actividades|length != 1 %}es{% endif %}:
+                  </span>
+                  {% for actividad in fila.actividades %}
+                    {% if not forloop.first %} · {% endif %}{{ actividad }}
+                  {% empty %}
+                    Sin actividad registrada
+                  {% endfor %}
                 </div>
 
 
@@ -5930,6 +5970,7 @@ Planificación Diaria
   }
 
   const campos = [
+    ["Actividad", "actividades"],
     ["Construcción", "construccion"],
     ["Altura", "altura"],
     ["Tipo de Zona", "tipo_zona"],
@@ -5957,7 +5998,11 @@ Planificación Diaria
       lineas.push("");
 
       campos.forEach(([etiqueta, clave]) => {
-        lineas.push(etiqueta + ": " + sitio[clave]);
+        const valor = clave === "actividades"
+          ? ((sitio.actividades || []).join(" · ") || "Sin actividad registrada")
+          : sitio[clave];
+
+        lineas.push(etiqueta + ": " + valor);
       });
 
       lineas.push("");

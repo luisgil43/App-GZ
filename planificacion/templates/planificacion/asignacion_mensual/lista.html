@@ -1639,6 +1639,11 @@ Planificación Mensual
             ALERTA
           </th>
 
+          <!-- GZ_ELIMINAR_SITIO_MENSUAL_V1 -->
+          <th class="px-4 py-3 text-center">
+            ACCIONES
+          </th>
+
         </tr>
 
       </thead>
@@ -2537,6 +2542,25 @@ Planificación Mensual
 
             </td>
 
+            <!-- GZ_ELIMINAR_SITIO_MENSUAL_V1 -->
+            <td class="px-4 py-3 text-center">
+              <form
+                method="post"
+                action="{% url 'planificacion:eliminar_sitio_asignacion_mensual' planificacion.pk item.pk %}"
+                data-eliminar-sitio-form
+                data-sitio-id="{{ item.sitio.id_claro|default:'Sin ID' }}"
+                data-sitio-nombre="{{ item.sitio.nombre|default:'Sitio sin nombre' }}"
+              >
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100"
+                >
+                  Eliminar
+                </button>
+              </form>
+            </td>
+
           </tr>
 
         {% empty %}
@@ -2544,7 +2568,7 @@ Planificación Mensual
           <tr>
 
             <td
-              colspan="13"
+              colspan="14"
               class="px-4 py-14 text-center"
             >
 
@@ -2612,6 +2636,307 @@ Planificación Mensual
 
 </div>
 
+
+
+<!-- GZ_MODAL_ELIMINAR_SITIO_MENSUAL_V1 -->
+<div
+  id="gz-modal-eliminar-sitio"
+  class="fixed inset-0 z-[9999] hidden items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="gz-modal-eliminar-titulo"
+>
+  <div
+    class="w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl"
+    data-modal-contenido
+  >
+    <div class="px-6 pb-4 pt-7 sm:px-8">
+
+      <div class="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="27"
+          height="27"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18"/>
+          <path d="M8 6V4h8v2"/>
+          <path d="M19 6l-1 14H6L5 6"/>
+          <path d="M10 11v5"/>
+          <path d="M14 11v5"/>
+        </svg>
+      </div>
+
+      <h2
+        id="gz-modal-eliminar-titulo"
+        class="text-xl font-black text-slate-900"
+      >
+        ¿Eliminar sitio?
+      </h2>
+
+      <p class="mt-3 text-sm leading-6 text-slate-600">
+        Estás a punto de retirar este sitio de la planificación mensual.
+      </p>
+
+      <div class="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">
+          ID Claro
+        </p>
+
+        <p
+          id="gz-modal-eliminar-id"
+          class="mt-1 text-base font-black text-slate-900"
+        ></p>
+
+        <p
+          id="gz-modal-eliminar-nombre"
+          class="mt-1 break-words text-sm text-slate-600"
+        ></p>
+      </div>
+
+      <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+        <p class="text-xs leading-5 text-amber-900">
+          Si el sitio tiene una salida diaria programada, la eliminación
+          será bloqueada. Los registros históricos se conservarán.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 px-6 py-5 sm:flex-row sm:justify-end sm:px-8">
+      <button
+        type="button"
+        id="gz-modal-eliminar-cancelar"
+        class="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="gz-modal-eliminar-confirmar"
+        class="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700"
+      >
+        Eliminar sitio
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* GZ_MODAL_ELIMINAR_SITIO_MENSUAL_V2 */
+(function () {
+  "use strict";
+
+  function iniciarModalEliminar() {
+    const modal = document.getElementById(
+      "gz-modal-eliminar-sitio"
+    );
+
+    const botonCancelar = document.getElementById(
+      "gz-modal-eliminar-cancelar"
+    );
+
+    const botonConfirmar = document.getElementById(
+      "gz-modal-eliminar-confirmar"
+    );
+
+    const textoId = document.getElementById(
+      "gz-modal-eliminar-id"
+    );
+
+    const textoNombre = document.getElementById(
+      "gz-modal-eliminar-nombre"
+    );
+
+    if (
+      !modal ||
+      !botonCancelar ||
+      !botonConfirmar ||
+      !textoId ||
+      !textoNombre
+    ) {
+      console.error(
+        "GZ Services: faltan elementos del modal de eliminación."
+      );
+      return;
+    }
+
+    if (modal.dataset.inicializado === "1") {
+      return;
+    }
+
+    modal.dataset.inicializado = "1";
+
+    // Evitar restricciones de posición de la tabla.
+    if (modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+
+    let formularioActivo = null;
+    let botonOrigen = null;
+    let enviando = false;
+
+    function cerrarModal() {
+      if (enviando) {
+        return;
+      }
+
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+
+      formularioActivo = null;
+
+      if (botonOrigen && botonOrigen.isConnected) {
+        botonOrigen.focus();
+      }
+
+      botonOrigen = null;
+    }
+
+    function abrirModal(formulario, boton) {
+      if (enviando) {
+        return;
+      }
+
+      formularioActivo = formulario;
+      botonOrigen = boton;
+
+      textoId.textContent =
+        formulario.dataset.sitioId || "—";
+
+      textoNombre.textContent =
+        formulario.dataset.sitioNombre || "—";
+
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+
+      botonCancelar.focus();
+    }
+
+    // Interceptar directamente el botón Eliminar.
+    document.addEventListener(
+      "click",
+      function (evento) {
+        const boton = evento.target.closest(
+          '[data-eliminar-sitio-form] button[type="submit"]'
+        );
+
+        if (!boton) {
+          return;
+        }
+
+        const formulario = boton.closest(
+          "[data-eliminar-sitio-form]"
+        );
+
+        if (!formulario) {
+          return;
+        }
+
+        evento.preventDefault();
+        evento.stopPropagation();
+
+        abrirModal(formulario, boton);
+      },
+      true
+    );
+
+    // Protección adicional contra envíos sin confirmación.
+    document.addEventListener(
+      "submit",
+      function (evento) {
+        const formulario = evento.target;
+
+        if (
+          !formulario.matches ||
+          !formulario.matches("[data-eliminar-sitio-form]")
+        ) {
+          return;
+        }
+
+        if (formulario.dataset.modalConfirmado === "1") {
+          return;
+        }
+
+        evento.preventDefault();
+        evento.stopPropagation();
+
+        abrirModal(
+          formulario,
+          formulario.querySelector('button[type="submit"]')
+        );
+      },
+      true
+    );
+
+    botonCancelar.addEventListener(
+      "click",
+      cerrarModal
+    );
+
+    botonConfirmar.addEventListener(
+      "click",
+      function () {
+        if (!formularioActivo || enviando) {
+          return;
+        }
+
+        const formulario = formularioActivo;
+
+        enviando = true;
+
+        botonConfirmar.disabled = true;
+        botonConfirmar.textContent = "Procesando...";
+
+        formulario.dataset.modalConfirmado = "1";
+
+        // Enviar el POST únicamente después de confirmar.
+        HTMLFormElement.prototype.submit.call(formulario);
+      }
+    );
+
+    modal.addEventListener(
+      "click",
+      function (evento) {
+        if (evento.target === modal) {
+          cerrarModal();
+        }
+      }
+    );
+
+    document.addEventListener(
+      "keydown",
+      function (evento) {
+        if (
+          evento.key === "Escape" &&
+          !modal.classList.contains("hidden")
+        ) {
+          cerrarModal();
+        }
+      }
+    );
+
+    console.info(
+      "GZ Services: modal de eliminación inicializado."
+    );
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      iniciarModalEliminar,
+      { once: true }
+    );
+  } else {
+    iniciarModalEliminar();
+  }
+})();
+</script>
 
 <!-- ====================================================== -->
 <!-- JAVASCRIPT PERMISOS                                   -->
@@ -5071,5 +5396,86 @@ Planificación Mensual
   }
 </style>
 <!-- FIN MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
+
+
+<!-- GZ_LOCALIZAR_SITIO_DESDE_BUSCADOR_GLOBAL_V2 -->
+<script>
+(function () {
+  'use strict';
+
+  function localizarSitioGlobal() {
+    const parametros = new URLSearchParams(
+      window.location.search
+    );
+
+    const sitioId = parametros.get('buscar_sitio_id');
+
+    if (!sitioId || !/^\d+$/.test(sitioId)) {
+      return;
+    }
+
+    const fila = document.getElementById(
+      'sitio-planificado-row-' + sitioId
+    );
+
+    const filtro = document.getElementById(
+      'filtro-id-claro'
+    );
+
+    if (!fila || !filtro) {
+      return;
+    }
+
+    const idClaro = fila.dataset.idClaro || '';
+
+    if (idClaro) {
+      filtro.value = idClaro;
+
+      filtro.dispatchEvent(
+        new Event('input', { bubbles: true })
+      );
+    }
+
+    window.setTimeout(function () {
+      if (fila.classList.contains('fila-filtrada-oculta')) {
+        return;
+      }
+
+      fila.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest'
+      });
+
+      const colorOriginal = fila.style.backgroundColor;
+      const transicionOriginal = fila.style.transition;
+
+      fila.style.transition =
+        'background-color 0.35s ease';
+
+      fila.style.backgroundColor = '#cffafe';
+
+      window.setTimeout(function () {
+        fila.style.backgroundColor = colorOriginal;
+
+        window.setTimeout(function () {
+          fila.style.transition = transicionOriginal;
+        }, 400);
+      }, 3500);
+    }, 350);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener(
+      'DOMContentLoaded',
+      localizarSitioGlobal,
+      { once: true }
+    );
+  } else {
+    localizarSitioGlobal();
+  }
+})();
+</script>
+<!-- FIN_LOCALIZACION_GLOBAL_SITIO_V2 -->
 
 {% endblock %}

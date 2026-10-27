@@ -7,7 +7,8 @@ from django.views.decorators.http import require_POST
 
 from planificacion.forms.planificacion_mensual import PlanificacionMensualForm
 from planificacion.models import (BatchPlanificacionSemanal,
-                                  PlanificacionMensual)
+                                  PlanificacionMensual,
+                                  SitioPlanificado)
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
@@ -84,11 +85,35 @@ def planificaciones_mensuales(request):
         )
     )
 
+    # GZ_BUSCADOR_GLOBAL_MENSUAL_V1
+    busqueda_sitio = request.GET.get("buscar_sitio", "").strip()[:120]
+    resultados_sitios = []
+
+    if len(busqueda_sitio) >= 2:
+        resultados_sitios = list(
+            SitioPlanificado.objects.filter(
+                activo_en_mes=True,
+            )
+            .filter(
+                Q(sitio__id_claro__icontains=busqueda_sitio)
+                | Q(sitio__nombre__icontains=busqueda_sitio)
+            )
+            .select_related("sitio", "planificacion")
+            .order_by(
+                "-planificacion__anio",
+                "-planificacion__mes",
+                "sitio__id_claro",
+                "pk",
+            )[:50]
+        )
+
     return render(
         request,
         "planificacion/mensual/lista_meses.html",
         {
             "planificaciones": planificaciones,
+            "busqueda_sitio": busqueda_sitio,
+            "resultados_sitios": resultados_sitios,
         },
     )
 

@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -11,6 +12,7 @@ from django.views.decorators.http import require_POST
 from planificacion.forms.asignacion_mensual import \
     ImportarAsignacionMensualForm
 from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
+                                  SitioSalidaPlanificacionDiaria,
                                   PlanificacionMensual, SitioBatchSemanal,
                                   SitioPlanificado)
 from planificacion.services.asignacion_mensual_importer import (
@@ -30,6 +32,100 @@ def _preview_cache_key(
     token,
 ):
     return "gz:planificacion:" f"asignacion_mensual:" f"{user_id}:{token}"
+
+
+
+# GZ_ELIMINAR_SITIO_MENSUAL_V1
+@login_required
+@require_POST
+@rol_requerido("admin", "pm", "supervisor")
+@transaction.atomic
+def eliminar_sitio_asignacion_mensual(request, pk, sitio_id):
+    """Retira del mes sin borrar registros históricos ni operaciones."""
+
+    planificacion = get_object_or_404(
+        PlanificacionMensual,
+        pk=pk,
+    )
+
+    sitio_planificado = get_object_or_404(
+        SitioPlanificado.objects.select_for_update().select_related("sitio"),
+        pk=sitio_id,
+        planificacion=planificacion,
+        activo_en_mes=True,
+    )
+
+    identificador = (
+        sitio_planificado.sitio.id_claro
+        or f"Sitio {sitio_planificado.sitio_id}"
+    )
+
+    salidas = (
+        SitioSalidaPlanificacionDiaria.objects
+        .filter(
+            sitio_batch__sitio_planificado=sitio_planificado,
+        )
+        .select_related(
+            "salida",
+            "salida__batch",
+        )
+        .order_by(
+            "salida__fecha",
+            "salida_id",
+        )
+    )
+
+    estados_inactivos = {
+        "retirado",
+        "cancelado",
+        "reprogramado",
+    }
+
+    bloqueadas = [
+        participacion
+        for participacion in salidas
+        if participacion.estado not in estados_inactivos
+    ]
+
+    if bloqueadas:
+        detalles = []
+
+        for participacion in bloqueadas[:5]:
+            salida = participacion.salida
+            fecha = salida.fecha.strftime("%d/%m/%Y")
+
+            detalles.append(
+                f"{fecha} (semana desde "
+                f"{salida.batch.fecha_inicio.strftime('%d/%m/%Y')})"
+            )
+
+        mensaje = (
+            f"No se puede eliminar el sitio {identificador}. "
+            "Tiene una salida diaria programada: "
+            + "; ".join(detalles)
+            + ". Retira primero la programación desde Jornada Operacional."
+        )
+
+        messages.error(request, mensaje)
+
+        return redirect(
+            "planificacion:lista_asignacion_mensual",
+            pk=planificacion.pk,
+        )
+
+    sitio_planificado.activo_en_mes = False
+    sitio_planificado.save(update_fields=["activo_en_mes"])
+
+    messages.success(
+        request,
+        f"El sitio {identificador} fue retirado de la planificación mensual. "
+        "Sus registros históricos permanecen conservados.",
+    )
+
+    return redirect(
+        "planificacion:lista_asignacion_mensual",
+        pk=planificacion.pk,
+    )
 
 
 # ============================================================
