@@ -1128,7 +1128,14 @@ def _clasificar_sitio_mapa_operacional(
     # GESTIÓN DE PERMISO
     # ========================================================
 
-    if item_batch.estado == "gestion_permiso":
+    if (
+        sitio_planificado.estado_permiso in {
+            "por_solicitar",
+            "solicitado",
+            "en_espera",
+        }
+        or item_batch.estado == "gestion_permiso"
+    ):
 
         return {
             "codigo": "G",

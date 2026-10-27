@@ -262,32 +262,51 @@ def _build_mensaje_asignacion(
     region = _clean_info(getattr(servicio, "region", "")) or "Sin región"
     detalle = _clean_info(getattr(servicio, "detalle_tarea", "")) or "Sin detalle"
 
-    # ====== Monto MMOO POR TÉCNICO (con decimales) ======
-    monto_total = (
-        getattr(servicio, "monto_mmoo", None)
-        or getattr(servicio, "monto_cotizado", None)
-        or Decimal("0")
-    )
+    # ====== Monto mostrado en el portal del técnico ======
+    # Priorizar el importe individual registrado para cualquier modalidad.
+    # No modificar ni recalcular importes previamente asignados.
+    from operaciones.models import MontoTecnicoServicio
+    from operaciones.services.tarifas import obtener_monto_tecnico
 
-    if not isinstance(monto_total, Decimal):
-        try:
-            monto_total = Decimal(str(monto_total))
-        except Exception:
-            monto_total = Decimal("0")
+    monto_registrado = MontoTecnicoServicio.objects.filter(
+        servicio=servicio,
+        tecnico=tecnico,
+    ).first()
 
-    num_tecnicos = servicio.trabajadores_asignados.count() or 1
+    if monto_registrado is not None:
+        monto_por_tecnico = Decimal(str(monto_registrado.monto or 0))
 
-    try:
-        monto_por_tecnico = (monto_total / Decimal(num_tecnicos)).quantize(
-            Decimal("0.01"),
-            rounding=ROUND_HALF_UP,
+    elif (getattr(servicio, "modalidad_pago_tecnicos", None) or "").strip() in (
+        "tarifa_actividad",
+        "mmoo_cotizacion",
+    ):
+        # No inventar importes para modalidades con registro obligatorio.
+        monto_por_tecnico = None
+        logger.warning(
+            "Servicio %s sin monto individual registrado para técnico %s.",
+            getattr(servicio, "pk", None),
+            getattr(tecnico, "pk", None),
         )
-    except Exception:
-        monto_por_tecnico = Decimal("0.00")
 
-    # Formato tipo 1.500,50
-    monto_txt_raw = f"{monto_por_tecnico:,.2f}"
-    monto_txt = monto_txt_raw.replace(",", "X").replace(".", ",").replace("X", ".")
+    else:
+        # Compatibilidad con servicios históricos sin importe registrado.
+        try:
+            monto_por_tecnico = obtener_monto_tecnico(servicio, tecnico)
+        except (ValueError, ArithmeticError):
+            logger.exception(
+                "No se pudo obtener el monto histórico del servicio %s "
+                "para técnico %s.",
+                getattr(servicio, "pk", None),
+                getattr(tecnico, "pk", None),
+            )
+            monto_por_tecnico = None
+
+    if monto_por_tecnico is not None:
+        monto_txt_raw = f"{monto_por_tecnico:,.2f}"
+        monto_txt = monto_txt_raw.replace(",", "X").replace(".", ",").replace("X", ".")
+        linea_monto = f"Monto MMOO (por técnico): ${monto_txt}\n"
+    else:
+        linea_monto = "Monto MMOO: consultar importe en la aplicación.\n"
 
     asignador_txt = actor.get_full_name() if actor else "Sistema"
 
@@ -379,7 +398,7 @@ def _build_mensaje_asignacion(
         f"ID Claro: {id_claro}\n"
         f"Región: {region}\n"
         f"Detalle: {detalle}\n"
-        f"Monto MMOO (por técnico): ${monto_txt}\n"
+        f"{linea_monto}"
     )
 
     # ==========================================================
