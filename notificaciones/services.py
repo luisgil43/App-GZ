@@ -161,31 +161,56 @@ def enviar_telegram(
 
     api_url = f"https://api.telegram.org/bot{token}/sendMessage"
 
-    payload = {
-        "chat_id": chat_id,
-        "text": mensaje,
-        # 👇 Sin Markdown para evitar errores "can't parse entities"
-        "disable_web_page_preview": True,
-    }
+    # TELEGRAM_FULL_MESSAGE_V1
+    # Conservar íntegramente el contenido, sin abreviar ni eliminar texto.
+    # Telegram admite hasta 4096 caracteres por mensaje.
+    limite = 4000
+    texto_completo = str(mensaje)
+
+    partes = [
+        texto_completo[i:i + limite]
+        for i in range(0, len(texto_completo), limite)
+    ] or [""]
 
     try:
-        resp = requests.post(api_url, json=payload, timeout=10)
-        try:
-            data = resp.json()
-        except Exception:
-            data = None
+        for numero, parte in enumerate(partes, start=1):
+            payload = {
+                "chat_id": chat_id,
+                "text": parte,
+                # Sin Markdown para evitar errores de entidades.
+                "disable_web_page_preview": True,
+            }
 
-        if resp.status_code == 200 and isinstance(data, dict) and data.get("ok"):
-            log.mark_sent()
-        else:
-            description = ""
-            if isinstance(data, dict):
-                description = data.get("description") or ""
-            if not description:
-                description = resp.text[:500]
-            log.mark_error(
-                f"Error API Telegram ({resp.status_code}): {description}"
+            resp = requests.post(
+                api_url,
+                json=payload,
+                timeout=10,
             )
+
+            try:
+                data = resp.json()
+            except Exception:
+                data = None
+
+            if not (
+                resp.status_code == 200
+                and isinstance(data, dict)
+                and data.get("ok")
+            ):
+                description = ""
+                if isinstance(data, dict):
+                    description = data.get("description") or ""
+                if not description:
+                    description = resp.text[:500]
+
+                log.mark_error(
+                    f"Telegram rechazó la parte "
+                    f"{numero}/{len(partes)} "
+                    f"({resp.status_code}): {description}"
+                )
+                break
+        else:
+            log.mark_sent()
 
         logger.info(
             "Telegram notificación tipo=%s usuario_id=%s servicio_id=%s status=%s",

@@ -455,3 +455,40 @@ class BotRutaDireccionFrecuente(models.Model):
     def __str__(self):
         label = self.nombre or self.direccion or self.tipo
         return f"{self.usuario} - {self.tipo} - {label}"
+
+
+class TelegramActivationToken(models.Model):
+    """
+    Token de activación Telegram de un solo uso.
+
+    Se almacena exclusivamente el hash SHA-256 del token.
+    """
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="telegram_activation_tokens",
+    )
+
+    token_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+    )
+
+    creado_en = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    expira_en = models.DateTimeField()
+
+    utilizado_en = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-creado_en"]
+
+    def __str__(self):
+        return f"Activación Telegram #{self.pk}"

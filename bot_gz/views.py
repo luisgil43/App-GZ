@@ -200,31 +200,27 @@ def training_edit_message(request, pk: int):
     return render(request, "bot_gz/training_edit_message.html", ctx)
 
 @login_required(login_url='usuarios:login')
-@rol_requerido('usuario')
 def activar_telegram(request):
     """
-    Genera un token temporal y muestra el link t.me/<bot>?start=<token>
-    Solo funciona si el usuario tiene telegram_activo=True (seguridad).
+    Genera un enlace temporal para vincular Telegram.
+    Solo admite cuentas activas de GZ SERVICES.
     """
     u = request.user
 
-    # Seguridad: solo si está habilitado por admin
-    if not getattr(u, "telegram_activo", False):
-        messages.error(request, "Telegram no está habilitado para tu usuario. Contacta a administración.")
-        return redirect("dashboard:inicio")  # ajusta si tu home de usuario es otro
+    # TELEGRAM_SELF_ACTIVATION_V1
+    if not u.is_active:
+        messages.error(request, "Tu cuenta está desactivada.")
+        return redirect("dashboard:inicio")
 
     bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "").strip()
     if not bot_username:
         messages.error(request, "Falta configurar TELEGRAM_BOT_USERNAME en settings.")
         return redirect("dashboard:inicio")
 
-    # token corto + seguro
-    token = secrets.token_urlsafe(16)
+    # TELEGRAM_PERSISTENT_ACTIVATION_V4
+    from .services import crear_token_activacion_telegram
 
-    # guardamos en cache (sin migraciones)
-    # 20 minutos de validez
-    cache_key = f"tg_link:{token}"
-    cache.set(cache_key, u.id, timeout=20 * 60)
+    token = crear_token_activacion_telegram(u)
 
     link = f"https://t.me/{bot_username}?start={token}"
 

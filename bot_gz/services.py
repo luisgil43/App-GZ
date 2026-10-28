@@ -37,6 +37,70 @@ from .services_tecnico import \
 logger = logging.getLogger(__name__)
 
 
+
+# TELEGRAM_PERSISTENT_ACTIVATION_V4
+def crear_token_activacion_telegram(usuario):
+    """
+    Crea un token aleatorio de un solo uso.
+
+    Solo su hash SHA-256 se almacena en la base de datos.
+    """
+    import hashlib
+    import secrets
+    from datetime import timedelta
+
+    from .models import TelegramActivationToken
+
+    token = secrets.token_urlsafe(24)
+
+    if len(token) > 64:
+        raise RuntimeError(
+            "Token incompatible con Telegram."
+        )
+
+    TelegramActivationToken.objects.create(
+        usuario=usuario,
+        token_hash=hashlib.sha256(
+            token.encode("utf-8")
+        ).hexdigest(),
+        expira_en=timezone.now() + timedelta(minutes=20),
+    )
+
+    return token
+
+
+def obtener_usuario_token_telegram(token):
+    """
+    Busca el usuario asociado a un token.
+
+    La validez y el consumo definitivo se comprueban
+    posteriormente dentro de la transacción.
+    """
+    import hashlib
+
+    from .models import TelegramActivationToken
+
+    if not isinstance(token, str) or len(token) != 32:
+        return None
+
+    token_hash = hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
+
+    registro = (
+        TelegramActivationToken.objects
+        .filter(
+            token_hash=token_hash,
+            utilizado_en__isnull=True,
+            expira_en__gt=timezone.now(),
+        )
+        .values_list("usuario_id", flat=True)
+        .first()
+    )
+
+    return registro
+
+
 def _get_bot_token() -> Optional[str]:
     """
     Lee el token del bot desde settings.
@@ -1365,9 +1429,14 @@ def send_telegram_message(
 
 def _respuesta_sin_usuario(chat_id: str) -> str:
     return (
-        "👋 Hola. Todavía no tengo vinculado este chat de Telegram con tu usuario de GZ Services.\n\n"
-        "Pídele al administrador que configure tu `telegram_chat_id` en tu ficha de usuario "
-        "para que pueda mostrarte tu información personal (liquidaciones, contratos, proyectos, etc.)."
+        "👋 Hola. Este chat de Telegram todavía no está vinculado "
+        "con tu cuenta de GZ SERVICES.\\n\\n"
+        "Para activarlo:\\n"
+        "1. Ingresa a GZ SERVICES con tu usuario.\\n"
+        "2. Selecciona *Activar Telegram*.\\n"
+        "3. Abre el enlace de activación desde tu teléfono.\\n\\n"
+        "La vinculación se realizará automáticamente. "
+        "No necesitas proporcionar tu chat ID al administrador."
     )
 
 
@@ -2210,7 +2279,7 @@ def _find_sitio_by_any_id(kind: str, value: str) -> Tuple[Optional[SitioMovil], 
     return None, "id_sites_new"
 
 
-def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
+def _handler_info_sitio_id_claro(texto_usuario: str, usuario: CustomUser) -> str:
     key = _extract_site_key(texto_usuario)
 
     if not key:
@@ -2235,6 +2304,29 @@ def _handler_info_sitio_id_claro(texto_usuario: str) -> str:
             f"No encontré un sitio con ese ID `{value}`.\n\n"
             "Prueba enviándome el *ID CLARO* (ej: `13_094`). "
             "Si no lo tienes, dime el *ID SITES* o el *ID NEW*."
+        )
+
+    # TELEGRAM_SITE_ACCESS_V1
+    # Un identificador conocido no concede acceso al sitio.
+    # La autorización debe derivarse de servicios asignados al usuario.
+    servicios_autorizados = ServicioCotizado.objects.filter(
+        trabajadores_asignados=usuario,
+    )
+
+    from django.db.models import Q
+
+    filtros_sitio = Q(sitio_planificado__sitio_id=sitio.pk)
+
+    if sitio.id_claro:
+        filtros_sitio |= Q(id_claro__iexact=sitio.id_claro)
+
+    if sitio.id_sites_new:
+        filtros_sitio |= Q(id_new__iexact=sitio.id_sites_new)
+
+    if not servicios_autorizados.filter(filtros_sitio).exists():
+        return (
+            "🔒 No tienes una asignación autorizada para consultar "
+            "la información técnica de ese sitio."
         )
 
     msg = "📡 *Información del Sitio*\n\n"
@@ -3919,7 +4011,7 @@ def _resolver_texto_generico_sin_intent(
         _ok()
 
         if site_hit:
-            return _handler_info_sitio_id_claro(texto_usuario)
+            return _handler_info_sitio_id_claro(texto_usuario, usuario)
 
         return _handler_opciones_sitio()
 
@@ -3930,7 +4022,7 @@ def _resolver_texto_generico_sin_intent(
 
     if site_hit:
         _ok()
-        return _handler_info_sitio_id_claro(texto_usuario)
+        return _handler_info_sitio_id_claro(texto_usuario, usuario)
 
     if {"produccion", "producción"} & tokens:
         _ok()
@@ -4141,7 +4233,7 @@ def run_intent(
         inbound_log.status = "ok"
         inbound_log.marcar_para_entrenamiento = False
         inbound_log.save(update_fields=["status", "marcar_para_entrenamiento"])
-        return _handler_info_sitio_id_claro(texto_usuario)
+        return _handler_info_sitio_id_claro(texto_usuario, usuario)
 
     # ============================
     # Sin intent: resolver palabras genéricas del menú
@@ -4188,7 +4280,7 @@ def run_intent(
         return _handler_mi_produccion(usuario, texto_usuario)
 
     if slug == "info_sitio_id_claro":
-        return _handler_info_sitio_id_claro(texto_usuario)
+        return _handler_info_sitio_id_claro(texto_usuario, usuario)
 
     if slug == "mis_proyectos_pendientes":
         return _handler_mis_proyectos(usuario, texto_usuario)
@@ -4589,36 +4681,127 @@ def handle_telegram_update(update: dict) -> None:
         start_token = parts[1].strip() if len(parts) > 1 else ""
 
         if start_token:
-            cache_key = f"tg_link:{start_token}"
-            user_id = cache.get(cache_key)
 
-            if user_id:
-                u = CustomUser.objects.filter(id=user_id).first()
-                if u:
-                    u.telegram_chat_id = chat_id
-                    u.telegram_activo = True
-                    u.save(update_fields=["telegram_chat_id", "telegram_activo"])
+            # TELEGRAM_PERSISTENT_ATOMIC_ACTIVATION_V4
+            user_id = obtener_usuario_token_telegram(start_token)
 
-                    cache.delete(cache_key)
+            if user_id is not None:
+                import hashlib
+                from .models import TelegramActivationToken
 
-                    sesion, _ = get_or_create_session(chat_id, from_user)
-                    if sesion.usuario_id != u.id:
-                        sesion.usuario = u
-                        sesion.save(update_fields=["usuario"])
+                vinculacion_correcta = False
+                chat_ocupado = False
+                usuario_vinculado = None
+                sesion_vinculada = None
 
+                token_hash = hashlib.sha256(
+                    start_token.encode("utf-8")
+                ).hexdigest()
+
+                with transaction.atomic():
+                    registro = (
+                        TelegramActivationToken.objects
+                        .select_for_update()
+                        .filter(
+                            token_hash=token_hash,
+                            utilizado_en__isnull=True,
+                            expira_en__gt=timezone.now(),
+                        )
+                        .first()
+                    )
+
+                    if registro:
+                        u = (
+                            CustomUser.objects
+                            .select_for_update()
+                            .filter(
+                                pk=registro.usuario_id,
+                                is_active=True,
+                            )
+                            .first()
+                        )
+
+                        if u:
+                            otros = list(
+                                CustomUser.objects
+                                .select_for_update()
+                                .filter(
+                                    telegram_chat_id=str(chat_id)
+                                )
+                                .exclude(pk=u.pk)
+                            )
+
+                            if otros:
+                                chat_ocupado = True
+                            else:
+                                chat_anterior = str(
+                                    u.telegram_chat_id or ""
+                                )
+
+                                if (
+                                    chat_anterior
+                                    and chat_anterior != str(chat_id)
+                                ):
+                                    BotSession.objects.filter(
+                                        chat_id=chat_anterior,
+                                    ).update(usuario=None)
+
+                                u.telegram_chat_id = str(chat_id)
+                                u.telegram_activo = True
+                                u.save(
+                                    update_fields=[
+                                        "telegram_chat_id",
+                                        "telegram_activo",
+                                    ]
+                                )
+
+                                sesion_vinculada, _ = (
+                                    get_or_create_session(
+                                        chat_id,
+                                        from_user,
+                                    )
+                                )
+
+                                if sesion_vinculada.usuario_id != u.pk:
+                                    sesion_vinculada.usuario = u
+                                    sesion_vinculada.save(
+                                        update_fields=["usuario"]
+                                    )
+
+                                registro.utilizado_en = timezone.now()
+                                registro.save(
+                                    update_fields=["utilizado_en"]
+                                )
+
+                                usuario_vinculado = u
+                                vinculacion_correcta = True
+
+                if chat_ocupado:
                     send_telegram_message(
                         chat_id,
-                        "✅ Listo, tu cuenta quedó vinculada con Telegram.\n\n"
-                        "Ahora puedes pedirme: `mis liquidaciones`, `mi contrato`, `asignación`, `producción`, etc.",
-                        sesion=sesion,
-                        usuario=u,
+                        "⚠️ Este Telegram ya está asociado a otra cuenta. "
+                        "Contacta a administración para restablecer "
+                        "la vinculación anterior.",
+                        usuario=None,
+                        intent=None,
+                        marcar_para_entrenamiento=False,
+                    )
+                    return
+
+                if vinculacion_correcta:
+                    send_telegram_message(
+                        chat_id,
+                        "✅ Listo, tu cuenta quedó vinculada con Telegram.\\n\\n"
+                        "Ya puedes utilizar las funciones disponibles "
+                        "del bot según los permisos de tu cuenta.",
+                        sesion=sesion_vinculada,
+                        usuario=usuario_vinculado,
                         intent=None,
                         meta={"linked_by": "start_token"},
                         marcar_para_entrenamiento=False,
                         reply_markup=_ik_main_menu(),
                     )
                     return
-
             sesion, usuario = get_or_create_session(chat_id, from_user)
             send_telegram_message(
                 chat_id,
@@ -4638,6 +4821,27 @@ def handle_telegram_update(update: dict) -> None:
     sesion, usuario = get_or_create_session(chat_id, from_user)
     sesion.ultima_interaccion = timezone.now()
     sesion.save(update_fields=["ultima_interaccion"])
+
+    # TELEGRAM_ACCESS_GUARD_V1
+    # Bloquear consultas antes de cualquier procesamiento operativo.
+    if (
+        usuario is None
+        or not usuario.is_active
+        or not usuario.telegram_activo
+        or str(usuario.telegram_chat_id or "") != str(chat_id)
+    ):
+        send_telegram_message(
+            chat_id,
+            "🔒 Tu cuenta de Telegram no está vinculada o habilitada.\n\n"
+            "Ingresa a GZ SERVICES con tu usuario y utiliza "
+            "la opción *Activar Telegram* para vincularla.",
+            sesion=sesion,
+            usuario=None,
+            intent=None,
+            meta={"access_denied": "telegram_not_linked"},
+            marcar_para_entrenamiento=False,
+        )
+        return
 
     has_file = bool(message.get("document") or message.get("photo"))
     has_location = bool(message.get("location"))
