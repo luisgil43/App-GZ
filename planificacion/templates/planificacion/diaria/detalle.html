@@ -3706,57 +3706,122 @@ Planificación Diaria
 
   let formularioPendiente = null;
   let botonAnterior = null;
+  let enviando = false;
 
   function cerrar() {
+    if (enviando) {
+      return;
+    }
+
     modal.classList.add("hidden");
     modal.setAttribute("aria-hidden", "true");
     formularioPendiente = null;
 
-    if (botonAnterior) {
+    if (botonAnterior && botonAnterior.isConnected) {
       botonAnterior.focus();
-      botonAnterior = null;
     }
+
+    botonAnterior = null;
+  }
+
+  function formatearTecnicos(valor) {
+    const texto = String(valor || "").trim();
+
+    if (!texto) {
+      return "No disponibles";
+    }
+
+    if (texto.startsWith("[") && texto.endsWith("]")) {
+      const nombres = texto
+        .slice(1, -1)
+        .split(/',\\s*'|",\\s*"/)
+        .map(function (nombre) {
+          return nombre.replace(/^['"]|['"]$/g, "").trim();
+        })
+        .filter(Boolean);
+
+      if (nombres.length) {
+        return nombres.join(", ");
+      }
+    }
+
+    return texto;
+  }
+
+  function abrir(formulario, boton) {
+    if (enviando) {
+      return;
+    }
+
+    formularioPendiente = formulario;
+    botonAnterior = boton || null;
+
+    const campos = {
+      "retiro-sitio": formulario.dataset.sitio,
+      "retiro-du": formulario.dataset.du,
+      "retiro-cuadrilla": formulario.dataset.cuadrilla,
+      "retiro-tecnicos": formatearTecnicos(
+        formulario.dataset.tecnicos
+      )
+    };
+
+    Object.keys(campos).forEach(function (id) {
+      const elemento = document.getElementById(id);
+
+      if (elemento) {
+        elemento.textContent = campos[id] || "No disponible";
+      }
+    });
+
+    confirmar.disabled = false;
+    confirmar.textContent = "Confirmar retiro";
+
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+
+    cancelar.focus();
   }
 
   document.querySelectorAll(
     ".js-form-retirar-jornada"
   ).forEach(function (formulario) {
 
+    const boton = formulario.querySelector(
+      'button[type="submit"]'
+    );
+
+    if (!boton) {
+      return;
+    }
+
+    boton.addEventListener("click", function (evento) {
+      evento.preventDefault();
+      evento.stopPropagation();
+      abrir(formulario, boton);
+    });
+
     formulario.addEventListener("submit", function (evento) {
       evento.preventDefault();
-
-      formularioPendiente = formulario;
-      botonAnterior = document.activeElement;
-
-      const campos = {
-        "retiro-sitio": formulario.dataset.sitio,
-        "retiro-du": formulario.dataset.du,
-        "retiro-cuadrilla": formulario.dataset.cuadrilla,
-        "retiro-tecnicos": formulario.dataset.tecnicos
-      };
-
-      Object.keys(campos).forEach(function (id) {
-        const elemento = document.getElementById(id);
-
-        if (elemento) {
-          elemento.textContent = campos[id] || "No disponible";
-        }
-      });
-
-      modal.classList.remove("hidden");
-      modal.setAttribute("aria-hidden", "false");
-      cancelar.focus();
+      evento.stopPropagation();
+      abrir(formulario, boton);
     });
   });
 
-  cancelar.addEventListener("click", cerrar);
+  cancelar.addEventListener("click", function (evento) {
+    evento.preventDefault();
+    cerrar();
+  });
 
-  confirmar.addEventListener("click", function () {
-    if (!formularioPendiente) {
+  confirmar.addEventListener("click", function (evento) {
+    evento.preventDefault();
+
+    if (!formularioPendiente || enviando) {
       return;
     }
 
     const formulario = formularioPendiente;
+
+    enviando = true;
     formularioPendiente = null;
 
     confirmar.disabled = true;
@@ -3776,6 +3841,7 @@ Planificación Diaria
       evento.key === "Escape"
       && !modal.classList.contains("hidden")
     ) {
+      evento.preventDefault();
       cerrar();
     }
   });
