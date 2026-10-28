@@ -4985,6 +4985,26 @@ def listar_servicios_supervisor(request):
     """
 
     import json
+    from django.utils.crypto import salted_hmac
+
+    # Identificador derivado de la sesión autenticada.
+    # No se expone la clave real de sesión al navegador.
+    session_key = request.session.session_key or ""
+    mmOo_session_token = (
+        salted_hmac(
+            "gz-services-mmoo-session",
+            session_key,
+        ).hexdigest()
+        if session_key
+        else ""
+    )
+
+    # Acceso económico: únicamente perfiles autorizados.
+    puede_ver_mmoo = bool(
+        request.user.es_admin_general
+        or request.user.es_pm
+        or request.user.es_facturacion
+    )
     from urllib.parse import urlencode
 
     from django.core.paginator import Paginator
@@ -5214,6 +5234,8 @@ def listar_servicios_supervisor(request):
             return actividad_label(servicio)
 
         if col == "7":
+            if not puede_ver_mmoo:
+                return ""
             return money_label(servicio.monto_mmoo)
 
         if col == "8":
@@ -5272,6 +5294,10 @@ def listar_servicios_supervisor(request):
 
     if not isinstance(excel_filters, dict):
         excel_filters = {}
+
+    if not puede_ver_mmoo:
+        # No aceptar filtros económicos manipulados en la URL.
+        excel_filters.pop("7", None)
 
     servicios_base_excel = list(servicios)
 
@@ -5334,6 +5360,8 @@ def listar_servicios_supervisor(request):
     excel_global = {}
 
     for col in range(12):
+        if col == 7 and not puede_ver_mmoo:
+            continue
         vals = set()
 
         for servicio in servicios_base_excel:
@@ -5496,6 +5524,8 @@ def listar_servicios_supervisor(request):
             },
             "estado_choices": ServicioCotizado.ESTADOS,
             "excel_global_json": excel_global_json,
+            "puede_ver_mmoo": puede_ver_mmoo,
+            "mmoo_session_token": mmOo_session_token,
             "qs_keep": qs_keep,
         },
     )
@@ -6185,6 +6215,12 @@ def exportar_servicios_supervisor(request):
     - No modifica información en la base de datos.
     """
 
+    puede_ver_mmoo = bool(
+        request.user.es_admin_general
+        or request.user.es_pm
+        or request.user.es_facturacion
+    )
+
     servicios = (
         ServicioCotizado.objects.filter(
             estado__in=[
@@ -6241,8 +6277,7 @@ def exportar_servicios_supervisor(request):
         # REGISTRO
         # ----------------------------------------------------
 
-        data.append(
-            {
+        fila = {
                 "DU": f"DU{s.du}",
                 "ID Claro": s.id_claro,
                 "Región": s.region,
@@ -6251,7 +6286,7 @@ def exportar_servicios_supervisor(request):
                 "Detalle Tarea": s.detalle_tarea,
                 # Nueva columna
                 "Actividad": actividad,
-                "Monto MMOO": (float(s.monto_mmoo) if s.monto_mmoo is not None else 0),
+
                 "Asignados": asignados,
                 "Fecha Fin": fecha_fin,
                 "Estado": dict(s.ESTADOS).get(
@@ -6259,7 +6294,12 @@ def exportar_servicios_supervisor(request):
                     s.estado,
                 ),
             }
-        )
+        if puede_ver_mmoo:
+            fila["Monto MMOO"] = (
+                float(s.monto_mmoo)
+                if s.monto_mmoo is not None else 0
+            )
+        data.append(fila)
 
     # ========================================================
     # COLUMNAS DEL EXCEL
@@ -6273,11 +6313,13 @@ def exportar_servicios_supervisor(request):
         "ID NEW",
         "Detalle Tarea",
         "Actividad",
-        "Monto MMOO",
         "Asignados",
         "Fecha Fin",
         "Estado",
     ]
+
+    if puede_ver_mmoo:
+        columnas.insert(7, "Monto MMOO")
 
     # ========================================================
     # DATAFRAME
@@ -7212,10 +7254,24 @@ def mis_servicios_tecnico(request):
         ),
     ]
 
+    from django.utils.crypto import salted_hmac
+
+    session_key = request.session.session_key or ""
+
+    mmoo_tecnico_session_token = (
+        salted_hmac(
+            "gz-services-mmoo-tecnico",
+            session_key,
+        ).hexdigest()
+        if session_key
+        else ""
+    )
+
     return render(
         request,
         "operaciones/mis_servicios_tecnico.html",
         {
+            "mmoo_tecnico_session_token": mmoo_tecnico_session_token,
             "servicios_info": servicios_info,
             "pagina": pagina,
             "paginator": paginator,

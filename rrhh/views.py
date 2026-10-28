@@ -153,7 +153,7 @@ def aplicar_impacto_documento_laboral(documento: ContratoTrabajo):
 
 
 @staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@rol_requerido('admin', 'pm', 'rrhh', 'supervisor')
 def listar_contratos_admin(request):
     """
     Lista de documentos laborales para admin/PM/RRHH.
@@ -2325,15 +2325,15 @@ def eliminar_tipo_documento(request, pk):
     return redirect('rrhh:crear_tipo_documento')
 
 
-@staff_member_required
-@rol_requerido('rrhh', 'admin', 'pm')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def listar_firmas(request):
     usuarios = CustomUser.objects.all()
     return render(request, 'rrhh/listar_firmas.html', {'usuarios': usuarios})
 
 
-@staff_member_required
-@rol_requerido('rrhh', 'admin', 'pm')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def eliminar_firma(request, user_id):
     user = get_object_or_404(CustomUser, id=user_id)
 
@@ -2358,12 +2358,11 @@ def eliminar_firma(request, user_id):
     return redirect('rrhh:listar_firmas')
 
 
-@staff_member_required
-@rol_requerido('rrhh', 'admin', 'pm')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def registrar_firma_admin(request, user_id):
     from usuarios.models import CustomUser  # Asegúrate de importar el modelo
-    if not request.user.is_staff:
-        return redirect('no_autorizado')  # O cualquier lógica de permiso
+    # Acceso validado por rol_requerido.
 
     usuario = CustomUser.objects.get(id=user_id)
     try:

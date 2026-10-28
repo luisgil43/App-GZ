@@ -674,8 +674,18 @@
             </th>
 
             <th class="p-3 text-center">
-              MONTO MMOO
-            </th>
+  <div class="inline-flex items-center justify-center gap-2">
+    <span>MONTO MMOO</span>
+    <button
+                  type="button"
+                  id="toggleMmooTecnico"
+                  class="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-sm hover:bg-slate-100"
+                  aria-label="Mostrar valores de Monto MMOO"
+                  aria-pressed="false"
+                  title="Mostrar valores de Monto MMOO"
+                >🙈</button>
+  </div>
+</th>
 
             <th class="p-3 text-center">
               TÉCNICO QUE ACEPTÓ
@@ -861,7 +871,8 @@
                   </td>
 
                   <td class="p-3 font-semibold text-emerald-700 whitespace-nowrap">
-                    $ {{ monto }} CLP
+                    <span data-mmoo-tecnico-value class="hidden">$ {{ monto }} CLP</span>
+                    <span data-mmoo-tecnico-hidden class="text-slate-400">••••••</span>
                   </td>
 
                   <td class="p-3">
@@ -1899,5 +1910,92 @@
 <!-- GZ_VISOR_SITIO_TECNICOS_V1 — VISOR COMPARTIDO -->
 {% url 'planificacion:consultar_detalle_sitio_movil_tecnico' 0 as url_detalle_sitio_tecnico %}
 {% include "planificacion/_detalle_sitio_movil.html" with url_detalle_sitio=url_detalle_sitio_tecnico %}
+
+
+<!-- GZ_MMOO_TECNICO_SESSION_V1 -->
+<script>
+(function () {
+  "use strict";
+
+  const sessionToken = "{{ mmoo_tecnico_session_token|escapejs }}";
+
+  const storageKey = sessionToken
+    ? "gz:mmoo:tecnico:visible:" + sessionToken
+    : null;
+
+  function isVisible() {
+    if (!storageKey) return false;
+
+    try {
+      return sessionStorage.getItem(storageKey) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveVisibility(visible) {
+    if (!storageKey) return;
+
+    try {
+      sessionStorage.setItem(storageKey, visible ? "1" : "0");
+    } catch (error) {}
+  }
+
+  function applyVisibility() {
+    const visible = isVisible();
+
+    document.querySelectorAll(
+      "[data-mmoo-tecnico-value]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", !visible);
+    });
+
+    document.querySelectorAll(
+      "[data-mmoo-tecnico-hidden]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", visible);
+    });
+
+    const button = document.getElementById("toggleMmooTecnico");
+
+    if (button) {
+      button.textContent = visible ? "👁️" : "🙈";
+      button.setAttribute("aria-pressed", String(visible));
+
+      button.setAttribute(
+        "aria-label",
+        visible
+          ? "Ocultar valores de Monto MMOO"
+          : "Mostrar valores de Monto MMOO"
+      );
+
+      button.title = visible
+        ? "Ocultar valores de Monto MMOO"
+        : "Mostrar valores de Monto MMOO";
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    const button = event.target.closest("#toggleMmooTecnico");
+
+    if (!button) return;
+
+    event.preventDefault();
+    saveVisibility(!isVisible());
+    applyVisibility();
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      applyVisibility,
+      { once: true }
+    );
+  } else {
+    applyVisibility();
+  }
+})();
+</script>
+<!-- /GZ_MMOO_TECNICO_SESSION_V1 -->
 
 {% endblock %}

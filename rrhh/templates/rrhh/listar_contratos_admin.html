@@ -23,7 +23,8 @@
           </p>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-3">
+        {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+<div class="flex flex-col sm:flex-row gap-3">
           <a href="{% url 'rrhh:crear_contrato' %}"
              class="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm text-sm font-bold">
             ➕ Añadir Documento Laboral
@@ -34,6 +35,7 @@
             ⚙️ Crear Tipo de Documento
           </a>
         </div>
+{% endif %}
 
       </div>
     </div>
@@ -282,7 +284,8 @@
                 </td>
 
                 <!-- Alertas -->
-                <td class="px-4 py-3">
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+<td class="px-4 py-3">
                   {% if contrato.tipo_documento_laboral and contrato.tipo_documento_laboral.cierra_relacion_laboral %}
                     <span class="inline-flex px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200">
                       No aplica
@@ -308,10 +311,14 @@
                     </form>
                   {% endif %}
                 </td>
+{% else %}
+<td class="px-4 py-3 text-slate-400">Solo lectura</td>
+{% endif %}
 
                 <!-- Documento -->
                 <td class="px-4 py-3">
-                  {% if grupo.cantidad_documentos > 1 %}
+                  {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+{% if grupo.cantidad_documentos > 1 %}
                     <div class="mb-2">
                       <a
                         href="{% url 'rrhh:descargar_contratos_unificados' trabajador.id %}"
@@ -322,6 +329,7 @@
                       </a>
                     </div>
                   {% endif %}
+{% endif %}
                   {% if contrato.archivo %}
                     <a href="{% url 'rrhh:descargar_contrato' contrato.id %}"
                        class="inline-flex items-center gap-2 text-emerald-700 hover:text-emerald-800 font-bold">
@@ -333,7 +341,8 @@
                 </td>
 
                 <!-- Acciones -->
-                <td class="px-4 py-3 text-right">
+                {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+<td class="px-4 py-3 text-right">
                   <div class="inline-flex items-center gap-2">
                     <a href="{% url 'rrhh:editar_contrato' contrato.id %}"
                        class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 text-xs font-bold">
@@ -346,6 +355,9 @@
                     </a>
                   </div>
                 </td>
+{% else %}
+<td class="px-4 py-3 text-right text-slate-400">Solo lectura</td>
+{% endif %}
               </tr>
 
               <!-- Fila desplegable con historial -->
@@ -489,7 +501,8 @@
                                 {% endif %}
                               </td>
 
-                              <td class="px-4 py-3 text-right">
+                              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_rrhh %}
+<td class="px-4 py-3 text-right">
                                 <div class="inline-flex items-center gap-2">
                                   <a href="{% url 'rrhh:editar_contrato' doc.id %}"
                                      class="inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 text-xs font-bold">
@@ -502,6 +515,9 @@
                                   </a>
                                 </div>
                               </td>
+{% else %}
+<td class="px-4 py-3 text-right text-slate-400">Solo lectura</td>
+{% endif %}
 
                             </tr>
                           {% endfor %}

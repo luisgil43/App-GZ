@@ -68,6 +68,7 @@ def _monto_firmado_por_estado(monto, estado: str) -> Decimal:
 
 
 @login_required
+@rol_requerido("admin", "pm", "facturacion")
 def produccion_admin(request):
     """
     Producción aprobada (por técnico) + ajustes (bono/adelanto/descuento).
@@ -451,6 +452,7 @@ def produccion_admin(request):
 
 
 @login_required
+@rol_requerido("admin", "pm", "facturacion")
 def exportar_produccion_admin(request):
     """
     Exporta a Excel la producción administrativa respetando filtros.
@@ -707,6 +709,7 @@ def exportar_produccion_admin(request):
 
 
 @login_required
+@rol_requerido("admin", "pm", "facturacion")
 def produccion_totales_a_pagar(request):
     """
     Totales a pagar por TÉCNICO (MENSUAL) a partir de
@@ -1129,6 +1132,7 @@ def produccion_totales_a_pagar(request):
 
 
 @login_required
+@rol_requerido("admin", "pm", "facturacion")
 def exportar_totales_produccion(request):
     """
     Exporta a Excel los totales a pagar (mensual) por técnico
@@ -2190,10 +2194,24 @@ def user_monthly_payments(request):
 
     can_approve_today = today.day >= 26
 
+    from django.utils.crypto import salted_hmac
+
+    session_key = request.session.session_key or ""
+
+    pagos_mensuales_session_token = (
+        salted_hmac(
+            "gz-services-pagos-mensuales-visibilidad",
+            session_key,
+        ).hexdigest()
+        if session_key
+        else ""
+    )
+
     return render(
         request,
         "operaciones/pagos_usuario_mensual.html",
         {
+            "pagos_mensuales_session_token": pagos_mensuales_session_token,
             "current_month": current_month,
             "mine": mine,
             "can_approve_today": can_approve_today,
@@ -2594,10 +2612,24 @@ def produccion_tecnico(request):
 
     pagina = paginator.get_page(request.GET.get("page") or 1)
 
+    from django.utils.crypto import salted_hmac
+
+    session_key = request.session.session_key or ""
+
+    mi_total_session_token = (
+        salted_hmac(
+            "gz-services-mi-produccion-total",
+            session_key,
+        ).hexdigest()
+        if session_key
+        else ""
+    )
+
     return render(
         request,
         "operaciones/produccion_tecnico.html",
         {
+            "mi_total_session_token": mi_total_session_token,
             "current_month": current_month,
             "current_month_label": current_month_label,
             "total_current_month": total_current_month,

@@ -278,7 +278,7 @@ def _build_mensaje_asignacion(
     Construye título y mensaje para la asignación de un servicio.
     Intenta agregar nombre/dirección del sitio, Construcción, Altura,
     datos de acceso (Candado BT, Acceso, Claves, Llaves, Cantidad Llaves),
-    link a Google Maps y calcula el MONTO MMOO POR TÉCNICO con decimales.
+    link a Google Maps, sin incluir importes económicos.
     """
     du_raw = getattr(servicio, "du", None)
     du_txt = f"DU{str(du_raw).zfill(8)}" if du_raw else "Sin DU"
@@ -286,52 +286,6 @@ def _build_mensaje_asignacion(
     id_claro = _clean_info(getattr(servicio, "id_claro", "")) or "Sin ID Claro"
     region = _clean_info(getattr(servicio, "region", "")) or "Sin región"
     detalle = _clean_info(getattr(servicio, "detalle_tarea", "")) or "Sin detalle"
-
-    # ====== Monto mostrado en el portal del técnico ======
-    # Priorizar el importe individual registrado para cualquier modalidad.
-    # No modificar ni recalcular importes previamente asignados.
-    from operaciones.models import MontoTecnicoServicio
-    from operaciones.services.tarifas import obtener_monto_tecnico
-
-    monto_registrado = MontoTecnicoServicio.objects.filter(
-        servicio=servicio,
-        tecnico=tecnico,
-    ).first()
-
-    if monto_registrado is not None:
-        monto_por_tecnico = Decimal(str(monto_registrado.monto or 0))
-
-    elif (getattr(servicio, "modalidad_pago_tecnicos", None) or "").strip() in (
-        "tarifa_actividad",
-        "mmoo_cotizacion",
-    ):
-        # No inventar importes para modalidades con registro obligatorio.
-        monto_por_tecnico = None
-        logger.warning(
-            "Servicio %s sin monto individual registrado para técnico %s.",
-            getattr(servicio, "pk", None),
-            getattr(tecnico, "pk", None),
-        )
-
-    else:
-        # Compatibilidad con servicios históricos sin importe registrado.
-        try:
-            monto_por_tecnico = obtener_monto_tecnico(servicio, tecnico)
-        except (ValueError, ArithmeticError):
-            logger.exception(
-                "No se pudo obtener el monto histórico del servicio %s "
-                "para técnico %s.",
-                getattr(servicio, "pk", None),
-                getattr(tecnico, "pk", None),
-            )
-            monto_por_tecnico = None
-
-    if monto_por_tecnico is not None:
-        monto_txt_raw = f"{monto_por_tecnico:,.2f}"
-        monto_txt = monto_txt_raw.replace(",", "X").replace(".", ",").replace("X", ".")
-        linea_monto = f"Monto MMOO (por técnico): ${monto_txt}\n"
-    else:
-        linea_monto = "Monto MMOO: consultar importe en la aplicación.\n"
 
     asignador_txt = actor.get_full_name() if actor else "Sistema"
 
@@ -423,7 +377,6 @@ def _build_mensaje_asignacion(
         f"ID Claro: {id_claro}\n"
         f"Región: {region}\n"
         f"Detalle: {detalle}\n"
-        f"{linea_monto}"
     )
 
     # ==========================================================

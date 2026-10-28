@@ -465,7 +465,7 @@
         <!-- OPERACIONES                                            -->
         <!-- ====================================================== -->
 
-        {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
+        {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm or request.user.es_facturacion %}
 
           <li class="group">
 
@@ -490,11 +490,13 @@
               <!-- HORAS EXTRAS                                      -->
               <!-- ================================================== -->
 
-              <li>
+              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+<li>
                 <a href="#">
                   Horas extras
                 </a>
               </li>
+{% endif %}
 
 
               <!-- ================================================== -->
@@ -565,18 +567,20 @@
               <!-- PRODUCCIONES                                      -->
               <!-- ================================================== -->
 
-              <li>
+              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+<li>
                 <a href="{% url 'operaciones:produccion_admin' %}">
                   Producciones
                 </a>
               </li>
+{% endif %}
 
 
               <!-- ================================================== -->
               <!-- TARIFAS — SOLO ADMIN Y PM                          -->
               <!-- ================================================== -->
 
-              {% if request.user.es_admin_general or request.user.es_pm %}
+              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
 
                 <li>
                   <a href="{% url 'operaciones:administrar_tarifas' %}">
@@ -602,11 +606,13 @@
               <!-- CREAR SERVICIOS                                   -->
               <!-- ================================================== -->
 
-              <li>
+              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+<li>
                 <a href="{% url 'operaciones:listar_servicios_pm' %}">
                   Crear Servicios
                 </a>
               </li>
+{% endif %}
 
 
               <!-- ================================================== -->
@@ -624,11 +630,13 @@
               <!-- RESUMEN OPERATIVO                                 -->
               <!-- ================================================== -->
 
-              <li>
+              {% if request.user.es_admin_general or request.user.es_pm or request.user.es_facturacion %}
+<li>
                 <a href="{% url 'operaciones:resumen_operativo' %}">
                   Resumen Operativo
                 </a>
               </li>
+{% endif %}
 
             </ul>
 
@@ -731,7 +739,7 @@
         {% endif %}
 
         <!-- RR.HH -->
-        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
+        {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor or request.user.es_facturacion %}
 
           <li class="group">
 
@@ -751,13 +759,17 @@
 
             <ul class="submenu hidden space-y-1">
 
-              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm %}
-
+                            {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_facturacion %}
                 <li>
                   <a href="{% url 'liquidaciones:admin_lista' %}">
                     Liquidaciones
                   </a>
                 </li>
+              {% endif %}
+
+{% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_supervisor %}
+
+
 
                 <li>
                   <a href="{% url 'rrhh:contratos_trabajo' %}">
@@ -767,15 +779,7 @@
 
               {% endif %}
 
-              {% if request.user.es_supervisor %}
-
-                <li>
-                  <a href="{% url 'rrhh:revisar_supervisor' %}">
-                    Solicitudes de vacaciones
-                  </a>
-                </li>
-
-              {% elif request.user.es_pm %}
+              {% if request.user.es_pm %}
 
                 <li>
                   <a href="{% url 'rrhh:revisar_pm' %}">
@@ -833,18 +837,26 @@
                   </a>
                 </li>
 
+
+
+
+
+              {% endif %}
+
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_facturacion %}
                 <li>
                   <a href="{% url 'rrhh:listar_firmas' %}">
                     Registro de firmas
                   </a>
                 </li>
+              {% endif %}
 
+              {% if request.user.es_admin_general or request.user.es_rrhh or request.user.es_pm or request.user.es_facturacion %}
                 <li>
                   <a href="{% url 'usuarios:subir_firma_representante' %}">
                     Subir Firma Representante Legal
                   </a>
                 </li>
-
               {% endif %}
 
             </ul>

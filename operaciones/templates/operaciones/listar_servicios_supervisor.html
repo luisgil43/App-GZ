@@ -529,6 +529,7 @@
           </span>
         </label>
 
+
         <div class="max-h-72 space-y-1 overflow-y-auto text-sm">
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
@@ -565,11 +566,13 @@
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="6" checked>
             <span>ACTIVIDAD</span>
           </label>
+          {% if puede_ver_mmoo %}
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="7" checked>
             <span>MONTO MMOO</span>
           </label>
+          {% endif %}
 
           <label class="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50">
             <input type="checkbox" class="col-toggle accent-cyan-600" data-col="8" checked>
@@ -734,6 +737,8 @@
     <table id="servicios-supervisor-table"
            data-columns-table="servicios-supervisor"
            data-columns-offset="0"
+           data-mmoo-visible="{{ puede_ver_mmoo|yesno:'1,0' }}"
+           data-mmoo-session="{{ mmoo_session_token }}"
            class="
   table-auto
   w-full
@@ -786,12 +791,24 @@
               <span>ACTIVIDAD</span><span class="excel-arrow text-gray-500">▼</span>
             </button>
           </th>
+          {% if puede_ver_mmoo %}
 
           <th class="px-2 py-3" data-excel-col data-excel-key="7">
-            <button type="button" class="excel-header-btn flex items-center gap-1">
-              <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
-            </button>
+            <div class="flex items-center justify-center gap-2">
+              <button type="button" class="excel-header-btn flex items-center gap-1">
+                <span>MONTO MMOO</span><span class="excel-arrow text-gray-500">▼</span>
+              </button>
+              <button
+                type="button"
+                id="toggleMmooVisibility"
+                class="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-sm hover:bg-slate-100"
+                aria-label="Mostrar valores de Monto MMOO"
+                aria-pressed="false"
+                title="Mostrar valores de Monto MMOO"
+              >🙈</button>
+            </div>
           </th>
+          {% endif %}
 
           <th class="px-2 py-3" data-excel-col data-excel-key="8">
             <button type="button" class="excel-header-btn flex items-center gap-1">
@@ -858,9 +875,12 @@
                 {% endif %}
               </td>
 
-              <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap">
-                $ {{ servicio.monto_mmoo|miles }} CLP
+              {% if puede_ver_mmoo %}
+              <td class="p-2 font-semibold text-emerald-700 whitespace-nowrap" data-mmoo-cell>
+                <span data-mmoo-value class="hidden">$ {{ servicio.monto_mmoo|miles }} CLP</span>
+                <span data-mmoo-hidden class="text-slate-400">••••••</span>
               </td>
+              {% endif %}
 
               <td class="p-2 text-left">
                 {% for tecnico in servicio.trabajadores_asignados.all %}
@@ -1384,6 +1404,34 @@
     return 'cols:' + tableId + ':v2';
   }
 
+  function getMmooSessionKey() {
+    const table = getTable();
+    if (!table || !table.dataset.mmooSession) return null;
+
+    return 'mmoo:visible:' + table.dataset.mmooSession;
+  }
+
+  function isMmooVisible() {
+    const key = getMmooSessionKey();
+
+    if (!key) return false;
+
+    try {
+      return sessionStorage.getItem(key) === '1';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function saveMmooVisibility(visible) {
+    const key = getMmooSessionKey();
+    if (!key) return;
+
+    try {
+      sessionStorage.setItem(key, visible ? '1' : '0');
+    } catch (e) {}
+  }
+
   function loadState() {
     try {
       const raw = localStorage.getItem(getStorageKey());
@@ -1418,8 +1466,10 @@
         return;
       }
 
-      const logicalIdx = realIdx - offset;
-      const visible = state[logicalIdx] !== false;
+      const logicalIdx = realIdx - offset + ((table.dataset.mmooVisible === '0' && realIdx >= 7) ? 1 : 0);
+      const visible = logicalIdx === 7
+        ? true
+        : state[logicalIdx] !== false;
 
       th.style.display = visible ? '' : 'none';
     });
@@ -1433,11 +1483,23 @@
           return;
         }
 
-        const logicalIdx = realIdx - offset;
-        const visible = state[logicalIdx] !== false;
+        const logicalIdx = realIdx - offset + ((table.dataset.mmooVisible === '0' && realIdx >= 7) ? 1 : 0);
+        const visible = logicalIdx === 7
+          ? true
+          : state[logicalIdx] !== false;
 
         td.style.display = visible ? '' : 'none';
       });
+    });
+
+    const mmOoVisible = isMmooVisible();
+
+    table.querySelectorAll('[data-mmoo-value]').forEach((element) => {
+      element.classList.toggle('hidden', !mmOoVisible);
+    });
+
+    table.querySelectorAll('[data-mmoo-hidden]').forEach((element) => {
+      element.classList.toggle('hidden', mmOoVisible);
     });
 
     const checks = panel.querySelectorAll('.col-toggle');
@@ -1457,11 +1519,35 @@
     if (master) {
       master.checked = allOn;
     }
+
+    const mmOoButton = document.getElementById('toggleMmooVisibility');
+
+    if (mmOoButton) {
+      const mmOoVisible = isMmooVisible();
+
+      mmOoButton.textContent = mmOoVisible ? '👁️' : '🙈';
+      mmOoButton.setAttribute('aria-pressed', String(mmOoVisible));
+      mmOoButton.setAttribute(
+        'aria-label',
+        mmOoVisible ? 'Ocultar Monto MMOO' : 'Mostrar Monto MMOO'
+      );
+      mmOoButton.title = mmOoVisible
+        ? 'Ocultar Monto MMOO'
+        : 'Mostrar Monto MMOO';
+    }
   }
 
   function bindToggles() {
     const checks = panel.querySelectorAll('.col-toggle');
     const master = panel.querySelector('#col-toggle-all');
+    const mmOoButton = document.getElementById('toggleMmooVisibility');
+
+    if (mmOoButton) {
+      mmOoButton.addEventListener('click', () => {
+        saveMmooVisibility(!isMmooVisible());
+        applyVisibility();
+      });
+    }
 
     checks.forEach((cb) => {
       cb.addEventListener('change', () => {

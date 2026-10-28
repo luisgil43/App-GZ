@@ -1,3 +1,5 @@
+from django.contrib.auth.decorators import login_required
+from usuarios.decoradores import rol_requerido
 # operaciones/views_resumen.py
 from decimal import Decimal
 from urllib.parse import urlencode
@@ -96,6 +98,8 @@ def _build_resumen_data(request):
     return meses_disponibles, mes_sel, secciones, total_global_count, total_global_uf
 
 
+@login_required
+@rol_requerido("admin", "pm", "facturacion")
 def resumen_operativo(request):
     meses_disponibles, mes_sel, secciones, total_count, total_uf = _build_resumen_data(request)
 
@@ -111,6 +115,8 @@ def resumen_operativo(request):
     return render(request, "operaciones/resumen_operativo.html", contexto)
 
 
+@login_required
+@rol_requerido("admin", "pm", "facturacion")
 def export_resumen_operativo_xlsx(request):
     """
     Exporta a Excel el mismo resumen que se ve en pantalla, respetando ?mes=.

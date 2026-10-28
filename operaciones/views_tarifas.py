@@ -783,7 +783,7 @@ def obtener_historial_cambios_actividad():
 
 
 @login_required
-@rol_requerido("admin", "pm")
+@rol_requerido("admin", "pm", "facturacion")
 def administrar_tarifas(request):
     """
     Pantalla principal de administración.

@@ -24,7 +24,19 @@
         <tr>
           <th class="w-10"></th>
           <th class="p-2 text-left">Mes</th>
-          <th class="p-2 text-right">Total</th>
+          <th class="p-2 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <span>Total</span>
+              <button
+                type="button"
+                id="togglePagosMensualesTotal"
+                class="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-sm hover:bg-slate-100"
+                aria-label="Mostrar totales y subtotales"
+                aria-pressed="false"
+                title="Mostrar totales y subtotales"
+              >🙈</button>
+            </div>
+          </th>
           <th class="p-2 text-left">Estado</th>
           <th class="p-2 text-left">Mes pagado</th>
           <th class="p-2 text-left">Comprobante</th>
@@ -48,7 +60,10 @@
           <td class="p-2">{{ r.month }}</td>
 
           <!-- Total -->
-         <td class="p-2 text-right">$ {{ r.amount|formato_clp }} CLP</td>
+         <td class="p-2 text-right">
+            <span data-pagos-monto-visible class="hidden">$ {{ r.amount|formato_clp }} CLP</span>
+            <span data-pagos-monto-oculto class="text-slate-400">••••••</span>
+          </td>
 
           <!-- Estado (badges estilo Hyperlink) -->
           <td class="p-2">
@@ -131,7 +146,10 @@
                         {% endif %}
                       {% endwith %}
                     </td>
-                 <td class="p-2 text-right">$ {{ d.subtotal|formato_clp }} CLP</td>
+                 <td class="p-2 text-right">
+                    <span data-pagos-monto-visible class="hidden">$ {{ d.subtotal|formato_clp }} CLP</span>
+                    <span data-pagos-monto-oculto class="text-slate-400">••••••</span>
+                  </td>
                   </tr>
                   {% empty %}
                   <tr><td colspan="2" class="p-2 text-center text-gray-500">Sin desglose.</td></tr>
@@ -233,4 +251,99 @@
     document.getElementById('reject-form').reset();
   }
 </script>
+
+<!-- GZ_PAGOS_MENSUALES_OJO_V1 -->
+<script>
+(function () {
+  "use strict";
+
+  const sessionToken = "{{ pagos_mensuales_session_token|escapejs }}";
+
+  const storageKey = sessionToken
+    ? "gz:pagos-mensuales:visible:" + sessionToken
+    : null;
+
+  function isVisible() {
+    if (!storageKey) return false;
+
+    try {
+      return sessionStorage.getItem(storageKey) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveVisibility(visible) {
+    if (!storageKey) return;
+
+    try {
+      sessionStorage.setItem(
+        storageKey,
+        visible ? "1" : "0"
+      );
+    } catch (error) {}
+  }
+
+  function applyVisibility() {
+    const visible = isVisible();
+
+    document.querySelectorAll(
+      "[data-pagos-monto-visible]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", !visible);
+    });
+
+    document.querySelectorAll(
+      "[data-pagos-monto-oculto]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", visible);
+    });
+
+    const button = document.getElementById(
+      "togglePagosMensualesTotal"
+    );
+
+    if (button) {
+      button.textContent = visible ? "👁️" : "🙈";
+
+      button.setAttribute(
+        "aria-pressed",
+        String(visible)
+      );
+
+      const label = visible
+        ? "Ocultar totales y subtotales"
+        : "Mostrar totales y subtotales";
+
+      button.setAttribute("aria-label", label);
+      button.title = label;
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    const button = event.target.closest(
+      "#togglePagosMensualesTotal"
+    );
+
+    if (!button) return;
+
+    event.preventDefault();
+
+    saveVisibility(!isVisible());
+    applyVisibility();
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      applyVisibility,
+      { once: true }
+    );
+  } else {
+    applyVisibility();
+  }
+})();
+</script>
+<!-- /GZ_PAGOS_MENSUALES_OJO_V1 -->
+
 {% endblock %}

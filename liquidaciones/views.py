@@ -51,8 +51,8 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def admin_lista_liquidaciones(request):
     try:
         # Base queryset
@@ -599,8 +599,8 @@ MESES_ESPANOL = {
 }
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def carga_masiva_liquidaciones(request):
     """
     Flujo en dos pasos:
@@ -953,8 +953,8 @@ def preview_pdf_carga_masiva(request, index: int):
 
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def crear_liquidacion(request):
 
     if request.method == 'POST':
@@ -1001,8 +1001,8 @@ class UsuarioAutocomplete(AutoResponseView):
         return str(item.pk)
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def eliminar_liquidacion(request, pk):
     liquidacion = get_object_or_404(Liquidacion, pk=pk)
 
@@ -1014,8 +1014,8 @@ def eliminar_liquidacion(request, pk):
     return render(request, "liquidaciones/eliminar_confirmacion.html", {"liquidacion": liquidacion})
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def editar_liquidacion(request, pk):
     liquidacion = get_object_or_404(Liquidacion, pk=pk)
     antigua_ruta_pdf = (
@@ -1055,8 +1055,8 @@ def editar_liquidacion(request, pk):
     })
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def ver_pdf_firmado_admin(request, pk):
     try:
         liquidacion = Liquidacion.objects.get(pk=pk)
@@ -1081,8 +1081,8 @@ def ver_pdf_firmado_admin(request, pk):
         return redirect('liquidaciones:admin_lista')
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def ver_pdf_admin(request, pk):
     try:
         liquidacion = Liquidacion.objects.get(pk=pk)
@@ -1123,8 +1123,8 @@ def _nombre_pdf_descarga(nombre):
 
 
 
-@staff_member_required
-@rol_requerido('admin', 'pm', 'rrhh')
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def descargar_pdf_firmado_admin(request, pk):
     """Descarga directa del PDF firmado desde el panel administrativo."""
     liquidacion = get_object_or_404(Liquidacion, pk=pk)

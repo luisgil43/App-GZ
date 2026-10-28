@@ -1,3 +1,4 @@
+from usuarios.decoradores import rol_requerido
 import base64
 import logging
 from datetime import timedelta
@@ -359,7 +360,8 @@ def no_autorizado_view(request):
     return render(request, 'usuarios/no_autorizado.html', status=403)
 
 
-@staff_member_required
+@login_required
+@rol_requerido('admin', 'pm', 'rrhh', 'facturacion')
 def subir_firma_representante(request):
     if request.method == 'POST':
         data_url = request.POST.get('firma_digital')

@@ -15,7 +15,10 @@
       <div class="text-sm text-gray-600">
         Mes actual: <b>{{ current_month_label|default:"—" }}</b>
         · Total del mes (CLP):
-        <b>$ {{ total_current_month|default:0|formato_clp }}</b>
+        <b>
+          <span data-mi-total-value class="hidden">$ {{ total_current_month|default:0|formato_clp }}</span>
+          <span data-mi-total-hidden class="text-slate-400">••••••</span>
+        </b>
       </div>
 
       <a href="{% url 'operaciones:user_monthly_payments' %}"
@@ -106,7 +109,19 @@
           <th class="p-2 text-left">Región</th>
           <th class="p-2 text-left">Mes producción</th>
           <th class="p-2 text-left">Estado</th>
-          <th class="p-2 text-right">Mi total</th>
+          <th class="p-2 text-right">
+            <div class="flex items-center justify-end gap-2">
+              <span>Mi total</span>
+              <button
+                type="button"
+                id="toggleMiTotalProduccion"
+                class="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-sm hover:bg-slate-100"
+                aria-label="Mostrar importes de Mi total"
+                aria-pressed="false"
+                title="Mostrar importes de Mi total"
+              >🙈</button>
+            </div>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -154,7 +169,10 @@
   </div>
 </td>
 
-          <td class="p-2 text-right">$ {{ r.monto_tecnico|formato_clp }} CLP</td>
+          <td class="p-2 text-right">
+            <span data-mi-total-value class="hidden">$ {{ r.monto_tecnico|formato_clp }} CLP</span>
+            <span data-mi-total-hidden class="text-slate-400">••••••</span>
+          </td>
         </tr>
 
        <!-- Detalle simple -->
@@ -358,4 +376,102 @@
   bindOutsideClickToClose();
 })();
 </script>
+
+<!-- GZ_MI_PRODUCCION_TOTAL_OJO_V1 -->
+<script>
+(function () {
+  "use strict";
+
+  const sessionToken = "{{ mi_total_session_token|escapejs }}";
+
+  const storageKey = sessionToken
+    ? "gz:mi-produccion:total:visible:" + sessionToken
+    : null;
+
+  function isVisible() {
+    if (!storageKey) return false;
+
+    try {
+      return sessionStorage.getItem(storageKey) === "1";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveVisibility(visible) {
+    if (!storageKey) return;
+
+    try {
+      sessionStorage.setItem(
+        storageKey,
+        visible ? "1" : "0"
+      );
+    } catch (error) {}
+  }
+
+  function applyVisibility() {
+    const visible = isVisible();
+
+    document.querySelectorAll(
+      "[data-mi-total-value]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", !visible);
+    });
+
+    document.querySelectorAll(
+      "[data-mi-total-hidden]"
+    ).forEach(function (element) {
+      element.classList.toggle("hidden", visible);
+    });
+
+    const button = document.getElementById(
+      "toggleMiTotalProduccion"
+    );
+
+    if (button) {
+      button.textContent = visible ? "👁️" : "🙈";
+      button.setAttribute(
+        "aria-pressed",
+        String(visible)
+      );
+
+      button.setAttribute(
+        "aria-label",
+        visible
+          ? "Ocultar importes de Mi total"
+          : "Mostrar importes de Mi total"
+      );
+
+      button.title = visible
+        ? "Ocultar importes de Mi total"
+        : "Mostrar importes de Mi total";
+    }
+  }
+
+  document.addEventListener("click", function (event) {
+    const button = event.target.closest(
+      "#toggleMiTotalProduccion"
+    );
+
+    if (!button) return;
+
+    event.preventDefault();
+
+    saveVisibility(!isVisible());
+    applyVisibility();
+  });
+
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      applyVisibility,
+      { once: true }
+    );
+  } else {
+    applyVisibility();
+  }
+})();
+</script>
+<!-- /GZ_MI_PRODUCCION_TOTAL_OJO_V1 -->
+
 {% endblock %}
