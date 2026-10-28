@@ -2462,6 +2462,37 @@ Planificación Mensual
 
               </div>
 
+              <!-- GZ_BITACORA_MENSUAL_V1 -->
+              <button
+                type="button"
+                data-bitacora-sitio="{{ item.sitio.pk }}"
+                onclick="abrirBitacoraSitio('{{ item.sitio.pk }}', this);"
+                class="
+                  mt-2 inline-flex w-full items-center justify-center
+                  gap-2 rounded-lg border border-cyan-200 bg-cyan-50
+                  px-2 py-2 text-xs font-black text-cyan-800
+                  transition hover:border-cyan-300 hover:bg-cyan-100
+                "
+                title="Abrir historial de bitácora del sitio"
+              >
+                <span>📋 Bitácora</span>
+
+                <span
+                  data-bitacora-contador
+                  class="
+                    inline-flex h-5 min-w-5 items-center justify-center
+                    rounded-full px-1.5 text-[10px] font-black text-white
+                    {% if item.total_bitacora %}
+                      bg-blue-600
+                    {% else %}
+                      bg-slate-400
+                    {% endif %}
+                  "
+                >
+                  {{ item.total_bitacora }}
+                </span>
+              </button>
+
             </td>
 
 
@@ -5477,5 +5508,8 @@ Planificación Mensual
 })();
 </script>
 <!-- FIN_LOCALIZACION_GLOBAL_SITIO_V2 -->
+
+<!-- GZ_BITACORA_MENSUAL_V1 — MODAL COMPARTIDO -->
+{% include "planificacion/diaria/_bitacora_sitio.html" %}
 
 {% endblock %}

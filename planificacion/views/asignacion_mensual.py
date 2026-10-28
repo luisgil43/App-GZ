@@ -5,13 +5,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Count, IntegerField, OuterRef, Prefetch, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from planificacion.forms.asignacion_mensual import \
     ImportarAsignacionMensualForm
-from planificacion.models import (BatchPlanificacionSemanal, ContactoSitio,
+from planificacion.models import (BitacoraSitio, BatchPlanificacionSemanal, ContactoSitio,
                                   SitioSalidaPlanificacionDiaria,
                                   PlanificacionMensual, SitioBatchSemanal,
                                   SitioPlanificado)
@@ -173,6 +174,19 @@ def lista_asignacion_mensual(
     # SITIOS DEL MES
     # ========================================================
 
+    # GZ_BITACORA_MENSUAL_V1
+    # Conteo asociado al SitioMovil original, compartido
+    # con la planificación semanal y diaria.
+    subconsulta_bitacora = (
+        BitacoraSitio.objects.filter(
+            sitio_id=OuterRef("sitio_id"),
+        )
+        .order_by()
+        .values("sitio_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
+
     sitios = (
         SitioPlanificado.objects.filter(
             planificacion=planificacion,
@@ -183,6 +197,16 @@ def lista_asignacion_mensual(
         )
         .prefetch_related(
             contactos_prefetch,
+        )
+        .annotate(
+            total_bitacora=Coalesce(
+                Subquery(
+                    subconsulta_bitacora,
+                    output_field=IntegerField(),
+                ),
+                Value(0),
+                output_field=IntegerField(),
+            ),
         )
         .order_by(
             "sitio__region",

@@ -1963,6 +1963,7 @@ def obtener_resumen_batch(
     sin_tipo_zona = 0
 
     total_activos = 0
+    total_gestion_permiso = 0
 
     for item in items:
 
@@ -1986,6 +1987,13 @@ def obtener_resumen_batch(
         sitio = sitio_planificado.sitio
 
         contador_permisos[sitio_planificado.estado_permiso] += 1
+
+        if sitio_planificado.estado_permiso in {
+            "por_solicitar",
+            "solicitado",
+            "en_espera",
+        }:
+            total_gestion_permiso += 1
 
         if sitio.comuna:
             contador_comunas[sitio.comuna] += 1
@@ -2023,7 +2031,7 @@ def obtener_resumen_batch(
         "reservas": reservas,
         "candidatos": (contador_estados["candidato"]),
         "seleccionados": (contador_estados["seleccionado"]),
-        "gestion_permiso": (contador_estados["gestion_permiso"]),
+        "gestion_permiso": total_gestion_permiso,
         "disponibles": (contador_estados["disponible"]),
         "rechazados": (contador_estados["rechazado"]),
         "sin_respuesta": (contador_estados["sin_respuesta"]),
