@@ -124,11 +124,9 @@ def retirar_asignacion_operacional(
         )
 
     if not servicios_mes:
-        if existen_otros_meses:
-            raise ErrorRetiroAsignacionOperacional(
-                "Los servicios vinculados pertenecen a otro mes "
-                "o tienen un mes de producción no válido."
-            )
+        # No existe un servicio operacional del mes de esta
+        # planificación que deba desasignarse.
+        # Los servicios de otros meses permanecen intactos.
         return None, False
 
     servicio = servicios_mes[0]
