@@ -510,7 +510,8 @@ def configurar_requisitos(request, servicio_id):
 @rol_requerido('supervisor', 'admin', 'pm')
 def import_requirements_page(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
-    sesion = _get_or_create_sesion(servicio)
+    # Mostrar el formulario no necesita crear una sesión en la base de datos.
+    sesion = SesionFotos.objects.filter(servicio=servicio).first()
     return render(
         request,
         "operaciones/fotos_importar_requisitos.html",
@@ -561,103 +562,368 @@ def download_requirements_template(request, servicio_id, ext):
 
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
+@require_POST
 def importar_requisitos(request, servicio_id):
     import csv
     import io
 
+    from collections import defaultdict
+
+    from django.core import signing
+    from django.core.signing import BadSignature, SignatureExpired
     from openpyxl import load_workbook
 
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
-    sesion = _get_or_create_sesion(servicio)
+    salt = "gz-requisitos-preview-v1"
 
-    f = request.FILES.get("file")
-    if not f:
-        messages.error(request, "Selecciona un archivo CSV o XLSX.")
-        return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+    def volver_con_error(mensaje):
+        messages.error(request, mensaje)
+        return redirect(
+            "operaciones:fotos_import_requirements_page",
+            servicio_id=servicio_id,
+        )
 
-    ext = (f.name.rsplit(".", 1)[-1] or "").lower()
-    normalized = []  # [(order, name, mandatory), ...]
+    def validar_duplicados(filas):
+        grupos = defaultdict(list)
 
-    # ---- Parseo del archivo
-    try:
-        if ext == "csv":
-            raw = f.read().decode("utf-8", errors="ignore")
-            lines = raw.splitlines()
-            first = lines[0].lower() if lines else ""
-            if "name" in first:
-                reader = csv.DictReader(io.StringIO(raw))
-                for row in reader:
-                    name = (row.get("name") or "").strip()
-                    if not name:
-                        continue
-                    order = int(row.get("order")) if (row.get("order") or "").strip().isdigit() else len(normalized)
-                    mval = str(row.get("mandatory") or "1").strip().lower()
-                    mandatory = mval in ("1", "true", "si", "sí", "yes", "y")
-                    normalized.append((order, name, mandatory))
-            else:
-                reader = csv.reader(io.StringIO(raw))
-                for row in reader:
-                    if not row:
-                        continue
-                    name = (row[0] or "").strip()
-                    if not name:
-                        continue
-                    normalized.append((len(normalized), name, True))
+        for item in filas:
+            grupos[_norm_title(item["name"])].append(item["fila"])
 
-        elif ext in ("xlsx", "xls"):
-            wb = load_workbook(f, data_only=True)
-            ws = wb.active
-            rows = list(ws.iter_rows(values_only=True))
-            if not rows:
-                messages.warning(request, "La planilla está vacía.")
-                return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+        referencias = {}
 
-            header = [str(x).strip().lower() if x is not None else "" for x in rows[0]]
-            headered = "name" in header
-            start = 1 if headered else 0
+        for posiciones in grupos.values():
+            if len(posiciones) < 2:
+                continue
 
-            if headered:
-                i_name = header.index("name")
-                i_order = header.index("order") if "order" in header else None
-                i_mand = header.index("mandatory") if "mandatory" in header else None
+            for posicion in posiciones:
+                referencias[posicion] = [
+                    otra for otra in posiciones if otra != posicion
+                ]
 
-                for r in rows[start:]:
-                    name = (str(r[i_name]) if i_name < len(r) and r[i_name] is not None else "").strip()
-                    if not name:
-                        continue
-                    if i_order is not None and i_order < len(r) and r[i_order] not in (None, ""):
+        return referencias
+
+    confirmar = request.POST.get("accion") == "confirmar"
+
+    if confirmar:
+        token = request.POST.get("preview_token") or ""
+
+        if not token:
+            return volver_con_error(
+                "La vista previa no está disponible. Selecciona nuevamente el archivo."
+            )
+
+        try:
+            payload = signing.loads(
+                token,
+                salt=salt,
+                max_age=1800,
+            )
+        except SignatureExpired:
+            return volver_con_error(
+                "La vista previa caducó. Selecciona nuevamente el archivo."
+            )
+        except (BadSignature, ValueError, TypeError):
+            return volver_con_error(
+                "La confirmación no es válida. Selecciona nuevamente el archivo."
+            )
+
+        if (
+            not isinstance(payload, dict)
+            or payload.get("servicio_id") != servicio.pk
+            or payload.get("usuario_id") != request.user.pk
+        ):
+            return volver_con_error(
+                "Esta vista previa no corresponde al usuario o servicio actual."
+            )
+
+        filas = payload.get("filas")
+
+        if not isinstance(filas, list) or not (1 <= len(filas) <= 10000):
+            return volver_con_error("Los requerimientos de la vista previa no son válidos.")
+
+        try:
+            for item in filas:
+                if (
+                    not isinstance(item, dict)
+                    or type(item.get("fila")) is not int
+                    or item["fila"] < 1
+                    or type(item.get("order")) is not int
+                    or not isinstance(item.get("name"), str)
+                    or not item["name"].strip()
+                    or type(item.get("mandatory")) is not bool
+                ):
+                    raise ValueError("Fila inválida")
+
+            if len({item["fila"] for item in filas}) != len(filas):
+                raise ValueError("Números de fila repetidos")
+
+        except (KeyError, TypeError, ValueError):
+            return volver_con_error("La vista previa contiene datos inválidos.")
+
+        if validar_duplicados(filas):
+            return volver_con_error(
+                "Importación cancelada: existen títulos duplicados. "
+                "Corrige el archivo y vuelve a revisarlo."
+            )
+
+        normalized = [
+            (item["order"], item["name"], item["mandatory"])
+            for item in filas
+        ]
+
+        # Se crea la sesión únicamente al confirmar una importación válida.
+        sesion = _get_or_create_sesion(servicio)
+
+    else:
+        archivo = request.FILES.get("file")
+
+        if not archivo:
+            return volver_con_error("Selecciona un archivo CSV o XLSX.")
+
+        extension = (
+            archivo.name.rsplit(".", 1)[-1].lower()
+            if "." in archivo.name else ""
+        )
+
+        if extension not in ("csv", "xlsx"):
+            return volver_con_error(
+                "Formato no soportado. Utiliza un archivo CSV o XLSX."
+            )
+
+        if archivo.size > 10 * 1024 * 1024:
+            return volver_con_error(
+                "El archivo supera el máximo permitido de 10 MB."
+            )
+
+        filas = []
+
+        try:
+            if extension == "csv":
+                raw = archivo.read().decode("utf-8-sig")
+                lector_inicial = csv.reader(io.StringIO(raw))
+                cabecera = next(lector_inicial, [])
+
+                tiene_cabecera = any(
+                    str(valor).strip().lower() == "name"
+                    for valor in cabecera
+                )
+
+                if tiene_cabecera:
+                    lector = csv.DictReader(io.StringIO(raw))
+
+                    if lector.fieldnames:
+                        lector.fieldnames = [
+                            str(valor).strip().lower()
+                            for valor in lector.fieldnames
+                        ]
+
+                    for registro in lector:
+                        numero_fila = lector.line_num
+                        nombre = (registro.get("name") or "").strip()
+
+                        if not nombre:
+                            continue
+
+                        orden_texto = str(registro.get("order") or "").strip()
                         try:
-                            order = int(r[i_order])
-                        except Exception:
-                            order = len(normalized)
-                    else:
-                        order = len(normalized)
+                            orden = int(orden_texto)
+                        except ValueError:
+                            orden = len(filas)
 
-                    if i_mand is not None and i_mand < len(r) and r[i_mand] not in (None, ""):
-                        mval = str(r[i_mand]).strip().lower()
-                        mandatory = mval in ("1", "true", "si", "sí", "yes", "y")
-                    else:
-                        mandatory = True
-                    normalized.append((order, name, mandatory))
+                        obligatorio_texto = str(
+                            registro.get("mandatory") or "1"
+                        ).strip().lower()
+
+                        filas.append({
+                            "fila": numero_fila,
+                            "order": orden,
+                            "name": nombre,
+                            "mandatory": obligatorio_texto in (
+                                "1", "true", "si", "sí", "yes", "y"
+                            ),
+                        })
+                else:
+                    lector = csv.reader(io.StringIO(raw))
+
+                    for registro in lector:
+                        if not registro or not str(registro[0]).strip():
+                            continue
+
+                        filas.append({
+                            "fila": lector.line_num,
+                            "order": len(filas),
+                            "name": str(registro[0]).strip(),
+                            "mandatory": True,
+                        })
+
             else:
-                for r in rows:
-                    if not r:
-                        continue
-                    name = (str(r[0]) if r[0] is not None else "").strip()
-                    if not name:
-                        continue
-                    normalized.append((len(normalized), name, True))
-        else:
-            messages.error(request, "Tipo de archivo no soportado. Usa .csv o .xlsx.")
-            return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+                libro = load_workbook(archivo, data_only=True, read_only=True)
 
-    except Exception as e:
-        messages.error(request, f"No se pudo leer el archivo: {e}")
-        return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+                try:
+                    hoja = libro.active
+                    iterator = hoja.iter_rows(values_only=True)
+                    cabecera = next(iterator, None)
 
-    if not normalized:
-        messages.warning(request, "No se encontraron filas válidas.")
-        return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+                    if cabecera is None:
+                        return volver_con_error("La planilla está vacía.")
+
+                    titulos = [
+                        str(valor).strip().lower()
+                        if valor is not None else ""
+                        for valor in cabecera
+                    ]
+
+                    tiene_cabecera = "name" in titulos
+
+                    if tiene_cabecera:
+                        indice_nombre = titulos.index("name")
+                        indice_orden = (
+                            titulos.index("order")
+                            if "order" in titulos else None
+                        )
+                        indice_obligatorio = (
+                            titulos.index("mandatory")
+                            if "mandatory" in titulos else None
+                        )
+
+                        registros = enumerate(iterator, start=2)
+
+                    else:
+                        indice_nombre = 0
+                        indice_orden = None
+                        indice_obligatorio = None
+                        registros = enumerate(
+                            hoja.iter_rows(values_only=True),
+                            start=1,
+                        )
+
+                    for numero_fila, registro in registros:
+                        nombre = (
+                            str(registro[indice_nombre]).strip()
+                            if indice_nombre < len(registro)
+                            and registro[indice_nombre] is not None
+                            else ""
+                        )
+
+                        if not nombre:
+                            continue
+
+                        orden = len(filas)
+
+                        if (
+                            indice_orden is not None
+                            and indice_orden < len(registro)
+                            and registro[indice_orden] not in (None, "")
+                        ):
+                            try:
+                                orden = int(registro[indice_orden])
+                            except (ValueError, TypeError):
+                                pass
+
+                        obligatorio = True
+
+                        if (
+                            indice_obligatorio is not None
+                            and indice_obligatorio < len(registro)
+                            and registro[indice_obligatorio] not in (None, "")
+                        ):
+                            valor = str(
+                                registro[indice_obligatorio]
+                            ).strip().lower()
+
+                            obligatorio = valor in (
+                                "1", "true", "si", "sí", "yes", "y"
+                            )
+
+                        filas.append({
+                            "fila": numero_fila,
+                            "order": orden,
+                            "name": nombre,
+                            "mandatory": obligatorio,
+                        })
+                finally:
+                    libro.close()
+
+        except Exception as error:
+            return volver_con_error(
+                f"No se pudo leer el archivo: {error}"
+            )
+
+        if not filas:
+            return volver_con_error("No se encontraron requerimientos válidos.")
+
+        if len(filas) > 10000:
+            return volver_con_error(
+                "El archivo supera el máximo de 10.000 requerimientos."
+            )
+
+        referencias = validar_duplicados(filas)
+
+        # Consultar títulos existentes sin crear ni modificar requerimientos.
+        existentes = set(
+            _norm_title(titulo)
+            for titulo in RequisitoFoto.objects.filter(
+                tecnico_sesion__sesion__servicio=servicio,
+                activo=True,
+            ).values_list("titulo", flat=True)
+        )
+
+        vista_filas = []
+
+        for item in filas:
+            relacionadas = referencias.get(item["fila"], [])
+
+            vista_filas.append({
+                **item,
+                "duplicado": bool(relacionadas),
+                "relacionadas": relacionadas,
+                "existente": _norm_title(item["name"]) in existentes,
+            })
+
+        total_duplicados = sum(
+            1 for item in vista_filas if item["duplicado"]
+        )
+
+        total_existentes = sum(
+            1 for item in vista_filas
+            if item["existente"] and not item["duplicado"]
+        )
+
+        payload = {
+            "servicio_id": servicio.pk,
+            "usuario_id": request.user.pk,
+            "filas": filas,
+        }
+
+        token = signing.dumps(
+            payload,
+            salt=salt,
+            compress=True,
+        )
+
+        sesion = SesionFotos.objects.filter(servicio=servicio).first()
+
+        return render(
+            request,
+            "operaciones/fotos_importar_requisitos.html",
+            {
+                "servicio": servicio,
+                "sesion": sesion,
+                "preview": True,
+                "preview_filename": archivo.name,
+                "preview_rows": vista_filas,
+                "preview_total": len(vista_filas),
+                "preview_duplicates": total_duplicados,
+                "preview_existing": total_existentes,
+                "preview_new": (
+                    len(vista_filas)
+                    - total_duplicados
+                    - total_existentes
+                ),
+                "preview_token": token,
+                "preview_can_confirm": not referencias,
+            },
+        )
 
     # ---- Anexar / Reactivar (respetando índice único por (tecnico_sesion, titulo_norm))
     try:
@@ -693,6 +959,11 @@ def importar_requisitos(request, servicio_id):
                 for i, (_o, name, mandatory) in enumerate(normalized):
                     key = _norm_title(name)
                     exist = existentes_map.get(key)
+
+                    if exist is True:
+                        raise ValueError(
+                            "Título duplicado durante la confirmación: " + name
+                        )
 
                     if exist:
                         # si el modelo tiene 'activo' y está desactivado, reactivar + actualizar
