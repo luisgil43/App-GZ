@@ -6018,35 +6018,19 @@ def asignar_trabajadores(request, pk):
 
                     elif es_reasignacion_real:
 
-                        cotizacion.estado = "asignado"
-                        cotizacion.tecnico_aceptado = None
-                        cotizacion.tecnico_finalizo = None
-                        cotizacion.supervisor_aprobo = None
-                        cotizacion.supervisor_rechazo = None
-
-                        update_fields.extend(
-                            [
-                                "estado",
-                                "tecnico_aceptado",
-                                "tecnico_finalizo",
-                                "supervisor_aprobo",
-                                "supervisor_rechazo",
-                            ]
-                        )
-
-                        if hasattr(
-                            cotizacion,
-                            "fecha_aprobacion_supervisor",
-                        ):
-
-                            cotizacion.fecha_aprobacion_supervisor = None
-
-                            update_fields.append("fecha_aprobacion_supervisor")
+                        # Conservar íntegramente el estado de
+                        # los técnicos que siguen asignados.
+                        #
+                        # Las asignaciones nuevas ya se crean
+                        # con estado 'asignado' y sin aceptación.
+                        #
+                        # No reiniciar el estado general del
+                        # servicio ni borrar fechas previas.
 
                         _sincronizar_asignaciones_sesion(
                             cotizacion,
                             tecnicos_actuales_ids=final_ids,
-                            reset_para_ids=set(final_ids),
+                            reset_para_ids=set(added_ids),
                         )
 
                     # =========================================
@@ -6088,13 +6072,13 @@ def asignar_trabajadores(request, pk):
             # NOTIFICACIONES INTERNAS
             # ====================================================
 
-            if primera_asignacion or es_reasignacion_real:
+            # Notificar exclusivamente a técnicos nuevos.
+            # Quienes permanecen asignados no deben recibir
+            # una nueva notificación de asignación.
 
-                usuarios_a_notificar = list(CustomUser.objects.filter(id__in=final_ids))
-
-            else:
-
-                usuarios_a_notificar = list(CustomUser.objects.filter(id__in=added_ids))
+            usuarios_a_notificar = list(
+                CustomUser.objects.filter(id__in=added_ids)
+            )
 
             for trabajador in usuarios_a_notificar:
 
@@ -6159,9 +6143,9 @@ def asignar_trabajadores(request, pk):
 
                 messages.success(
                     request,
-                    "Servicio reasignado correctamente. "
-                    "El estado volvió a 'asignado' y los técnicos actuales "
-                    "deben aceptar nuevamente.",
+                    "Asignación actualizada correctamente. "
+                    "Los técnicos que permanecen conservaron "
+                    "sus estados y aceptaciones.",
                 )
 
             elif solo_agregando:
@@ -7356,14 +7340,36 @@ def aceptar_servicio(request, servicio_id):
     # Si ya estaba en otro estado distinto de 'asignado'
     # solo la "reiniciamos" a 'asignado' cuando venimos de un rechazo.
     if asignacion.estado != 'asignado':
-        if servicio.motivo_rechazo and servicio.estado in ['asignado', 'en_progreso', 'rechazado_supervisor']:
+        # Solo un rechazo individual vigente permite reaceptar.
+        reintento_valido = (
+            asignacion.estado == 'rechazado_supervisor'
+            and asignacion.reintento_habilitado
+            and servicio.estado in {
+                'asignado',
+                'en_progreso',
+                'rechazado_supervisor',
+            }
+        )
+
+        if reintento_valido:
             asignacion.estado = 'asignado'
-            if hasattr(asignacion, 'aceptado_en'):
-                asignacion.aceptado_en = None
-            asignacion.save(update_fields=['estado'] + (['aceptado_en'] if hasattr(asignacion, 'aceptado_en') else []))
+            asignacion.aceptado_en = None
+            asignacion.reintento_habilitado = False
+            asignacion.save(
+                update_fields=[
+                    'estado',
+                    'aceptado_en',
+                    'reintento_habilitado',
+                ]
+            )
         else:
-            messages.info(request, "Ya habías aceptado esta asignación.")
-            return redirect('operaciones:mis_servicios_tecnico')
+            messages.info(
+                request,
+                'Ya habías aceptado esta asignación.',
+            )
+            return redirect(
+                'operaciones:mis_servicios_tecnico'
+            )
 
     # Marcar mi aceptación
     asignacion.estado = 'en_proceso'
@@ -7495,7 +7501,7 @@ def finalizar_servicio(request, servicio_id):
     # 3) Si todo ok, mover a revisión de supervisor
     now_ = timezone.now()
     with transaction.atomic():
-        sesion.asignaciones.update(estado="en_revision_supervisor", finalizado_en=now_)
+        sesion.asignaciones.filter(tecnico_id__in=assigned_ids).update(estado="en_revision_supervisor", finalizado_en=now_)
         sesion.estado = "en_revision_supervisor"
         sesion.save(update_fields=["estado"])
 

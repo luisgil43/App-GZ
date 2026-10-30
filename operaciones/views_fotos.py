@@ -115,8 +115,6 @@ def _get_or_create_sesion(servicio: ServicioCotizado) -> SesionFotos:
         _dedupe_requisitos(a_nueva)
 
     # Limpia asignaciones huérfanas si se desasignó un técnico
-    actuales = {u.id for u in servicio.trabajadores_asignados.all()}
-    sesion.asignaciones.exclude(tecnico_id__in=actuales).delete()
     return sesion
 # ============================
 # SUPERVISOR — CONFIGURAR REQUISITOS
@@ -2074,6 +2072,15 @@ def upload_evidencias_fotos(request, pk):
     s = a.sesion
     servicio = s.servicio
 
+    # Verificar que el tecnico siga asignado.
+    # Una URL historica no autoriza nuevas fotos.
+    get_object_or_404(
+        ServicioCotizado,
+        pk=servicio.pk,
+        trabajadores_asignados=request.user,
+    )
+
+
     puede_subir = (a.estado == "en_proceso") or (
         a.estado == "rechazado_supervisor" and a.reintento_habilitado
     )
@@ -2256,7 +2263,7 @@ def upload_evidencias_fotos(request, pk):
 
     # ¿quién no ha aceptado?
     pendientes_aceptar = []
-    for asg in s.asignaciones.select_related("tecnico"):
+    for asg in s.asignaciones.filter(tecnico_id__in=servicio.trabajadores_asignados.values_list("id", flat=True)).select_related("tecnico"):
         accepted = bool(asg.aceptado_en) or asg.estado != "asignado"
         if not accepted:
             nombre = asg.tecnico.get_full_name() or asg.tecnico.username
@@ -2530,7 +2537,7 @@ def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs
             faltantes_global.append(b["titulo"])
 
     # Técnicos pendientes de aceptar (ajusta el estado según tu flujo)
-    pendientes_aceptar = s.asignaciones.filter(estado="asignado").exists()
+    pendientes_aceptar = s.asignaciones.filter(estado="asignado", tecnico_id__in=s.servicio.trabajadores_asignados.values_list("id", flat=True)).exists()
 
     can_finish = (len(faltantes_global) == 0) and (not pendientes_aceptar)
 
@@ -2724,7 +2731,7 @@ def revisar_sesion_fotos(request, servicio_id):
 
                 sesion.save(update_fields=["estado"])
 
-                sesion.asignaciones.update(estado="aprobado_supervisor")
+                sesion.asignaciones.filter(tecnico_id__in=servicio.trabajadores_asignados.values_list("id", flat=True)).update(estado="aprobado_supervisor")
 
                 messages.success(
                     request, "Proyecto aprobado. Informe y acta generados."
@@ -2737,7 +2744,9 @@ def revisar_sesion_fotos(request, servicio_id):
 
             sesion.save(update_fields=["estado"])
 
-            sesion.asignaciones.update(
+            sesion.asignaciones.filter(
+                tecnico_id__in=servicio.trabajadores_asignados.values_list("id", flat=True)
+            ).update(
                 estado="rechazado_supervisor",
                 reintento_habilitado=True,
             )

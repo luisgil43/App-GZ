@@ -2,12 +2,12 @@
 from .models import SesionFotoTecnico
 
 
-def ensure_sesion_y_asignaciones(servicio, reset_estados=True):
+def ensure_sesion_y_asignaciones(servicio, reset_estados=False):
     """
     - Garantiza que exista la sesión de fotos del servicio.
     - Para cada técnico asignado crea/ajusta su SesionFotoTecnico.
-    - Opcionalmente (reset_estados=True) fuerza estado 'asignado' para que aparezca el botón Aceptar.
-    - Quita asignaciones de técnicos que ya no estén asignados.
+    - Por defecto conserva las aceptaciones existentes; el reinicio requiere una solicitud explícita.
+    - Conserva las asignaciones históricas y sus fotografías.
     """
     sesion = _get_or_create_sesion(servicio)
 
@@ -36,8 +36,5 @@ def ensure_sesion_y_asignaciones(servicio, reset_estados=True):
             a.save()
 
     # (3) Eliminar/invalidar asignaciones de técnicos que ya no están asignados
-    for tid, a in actuales.items():
-        if tid not in asignados_ids:
-            a.delete()
 
     return sesion
