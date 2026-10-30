@@ -1,261 +1,889 @@
 {% extends "dashboard_admin/base.html" %}
 
-{% block title %}Importar Requerimientos — DU{{ servicio.du }}{% endblock %}
+{% block title %}
+Importar Requerimientos — DU{{ servicio.du }}
+{% endblock %}
 
 {% block dashboard_content %}
+
 <div class="max-w-7xl mx-auto mt-6 space-y-5">
 
+  <!-- ENCABEZADO -->
+
   <div class="bg-white rounded-2xl shadow p-6">
+
     <h2 class="text-2xl font-bold text-gray-800 text-center">
       📥 Importar Requerimientos
     </h2>
+
     <p class="text-sm text-gray-600 text-center mt-2">
       DU{{ servicio.du }} — {{ servicio.id_claro }}
     </p>
 
     <div class="flex flex-wrap justify-center gap-2 mt-5">
+
       <a href="{% url 'operaciones:fotos_download_requirements_template' servicio.id 'xlsx' %}"
          class="px-3 py-2 rounded-full text-sm border hover:bg-gray-50">
+
         ⬇️ Plantilla XLSX
+
       </a>
+
       <a href="{% url 'operaciones:fotos_download_requirements_template' servicio.id 'csv' %}"
          class="px-3 py-2 rounded-full text-sm border hover:bg-gray-50">
+
         ⬇️ Plantilla CSV
+
       </a>
+
       <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
          class="px-3 py-2 rounded-full text-sm border hover:bg-gray-50">
+
         ← Volver
+
       </a>
+
     </div>
+
   </div>
 
   {% if preview %}
+
+  <!-- VISTA PREVIA -->
+
   <div class="bg-white rounded-2xl shadow p-6">
-    <h3 class="text-xl font-bold text-gray-800">Vista previa de importación</h3>
+
+    <h3 class="text-xl font-bold text-gray-800">
+      Vista previa de importación
+    </h3>
 
     <p class="text-sm text-gray-600 mt-1 break-all">
-      Archivo: <strong>{{ preview_filename }}</strong>
+
+      Archivo:
+      <strong>{{ preview_filename }}</strong>
+
     </p>
+
+    <!-- RESUMEN -->
 
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+
       <div class="bg-slate-50 rounded-xl p-4">
-        <div class="text-xs text-slate-600">Total de filas</div>
-        <div class="text-2xl font-bold">{{ preview_total }}</div>
+
+        <div class="text-xs text-slate-600">
+          Total de filas
+        </div>
+
+        <div class="text-2xl font-bold">
+          {{ preview_total }}
+        </div>
+
       </div>
+
       <div class="bg-emerald-50 rounded-xl p-4">
-        <div class="text-xs text-emerald-700">Nuevos</div>
-        <div class="text-2xl font-bold text-emerald-700">{{ preview_new }}</div>
+
+        <div class="text-xs text-emerald-700">
+          Nuevos
+        </div>
+
+        <div class="text-2xl font-bold text-emerald-700">
+          {{ preview_new }}
+        </div>
+
       </div>
+
       <div class="bg-blue-50 rounded-xl p-4">
-        <div class="text-xs text-blue-700">Ya existentes</div>
-        <div class="text-2xl font-bold text-blue-700">{{ preview_existing }}</div>
+
+        <div class="text-xs text-blue-700">
+          Ya existentes
+        </div>
+
+        <div class="text-2xl font-bold text-blue-700">
+          {{ preview_existing }}
+        </div>
+
       </div>
+
       <div class="bg-red-50 rounded-xl p-4">
-        <div class="text-xs text-red-700">Filas duplicadas</div>
-        <div class="text-2xl font-bold text-red-700">{{ preview_duplicates }}</div>
+
+        <div class="text-xs text-red-700">
+          Filas duplicadas
+        </div>
+
+        <div class="text-2xl font-bold text-red-700">
+          {{ preview_duplicates }}
+        </div>
+
       </div>
+
     </div>
+
+    <!-- VALIDACIÓN -->
 
     {% if preview_duplicates %}
+
     <div class="mt-5 border border-red-300 bg-red-50 rounded-xl p-4 text-red-800">
-      <strong>⚠️ No se puede confirmar la importación.</strong>
-      Existen requerimientos con títulos repetidos dentro del archivo.
-      Revisa las filas señaladas en rojo, corrige el Excel y vuelve a seleccionarlo.
+
+      <strong>
+        ⚠️ No se puede confirmar la importación.
+      </strong>
+
+      <p class="mt-1">
+
+        Existen requerimientos con títulos repetidos dentro del archivo.
+
+        Revisa las filas señaladas en rojo.
+
+        Cada duplicado indica exactamente con qué fila está repetido.
+
+        Corrige el archivo y vuelve a seleccionarlo.
+
+      </p>
+
     </div>
+
     {% else %}
+
     <div class="mt-5 border border-emerald-300 bg-emerald-50 rounded-xl p-4 text-emerald-800">
+
       ✓ No se encontraron títulos duplicados dentro del archivo.
+
       Revisa los requerimientos antes de confirmar.
+
     </div>
+
     {% endif %}
 
-    <div class="mt-5 flex flex-wrap items-center justify-between gap-3">
+    <!-- FILTROS -->
+
+    <div class="mt-5 flex flex-wrap items-end justify-between gap-3">
+
       <h4 class="font-semibold text-gray-800">
-        Requerimientos del archivo ({{ preview_total }})
+
+        Requerimientos del archivo
+        ({{ preview_total }})
+
       </h4>
-      <div class="flex gap-2 items-center">
-        <label for="filtro-requisitos" class="text-sm text-gray-600">
-          Mostrar:
-        </label>
-        <select id="filtro-requisitos"
-                class="rounded-lg border px-3 py-2 text-sm">
-          <option value="todos">Todos</option>
-          <option value="duplicados">Solo duplicados</option>
-          <option value="existentes">Ya existentes</option>
-          <option value="nuevos">Nuevos</option>
-        </select>
+
+      <div class="flex flex-wrap gap-3 items-end">
+
+        <div>
+
+          <label for="filtro-requisitos"
+                 class="block text-xs text-gray-600 mb-1">
+
+            Mostrar
+
+          </label>
+
+          <select id="filtro-requisitos"
+                  class="rounded-lg border px-3 py-2 text-sm">
+
+            <option value="todos">Todos</option>
+            <option value="duplicados">Solo duplicados</option>
+            <option value="existentes">Ya existentes</option>
+            <option value="nuevos">Nuevos</option>
+
+          </select>
+
+        </div>
+
+        <div>
+
+          <label for="filtro-etapa-preview"
+                 class="block text-xs text-gray-600 mb-1">
+
+            Etapa
+
+          </label>
+
+          <select id="filtro-etapa-preview"
+                  class="rounded-lg border px-3 py-2 text-sm">
+
+            <option value="todos">Todas</option>
+            <option value="antes">Antes</option>
+            <option value="durante">Durante</option>
+            <option value="despues">Después</option>
+            <option value="">Sin etapa</option>
+
+          </select>
+
+        </div>
+
+        <div>
+
+          <label for="buscar-preview"
+                 class="block text-xs text-gray-600 mb-1">
+
+            Buscar
+
+          </label>
+
+          <input type="search"
+                 id="buscar-preview"
+                 placeholder="Buscar requerimiento..."
+                 class="rounded-lg border px-3 py-2 text-sm">
+
+        </div>
+
       </div>
+
     </div>
 
-    <div class="mt-3 border rounded-xl overflow-auto" style="max-height: 65vh;">
+    <!-- TABLA -->
+
+    <div class="mt-3 border rounded-xl overflow-auto"
+         style="max-height: 65vh;">
+
       <table class="min-w-full text-sm">
+
         <thead class="bg-gray-100 sticky top-0 z-10">
+
           <tr>
-            <th class="text-left p-3 whitespace-nowrap">Fila Excel</th>
-            <th class="text-left p-3 whitespace-nowrap">Orden</th>
-            <th class="text-left p-3">Requerimiento</th>
-            <th class="text-center p-3">Obligatorio</th>
-            <th class="text-left p-3">Estado</th>
+
+            <th class="text-left p-3 whitespace-nowrap">
+              Fila Excel
+            </th>
+
+            <th class="text-left p-3 whitespace-nowrap">
+              Orden
+            </th>
+
+            <th class="text-left p-3">
+              Requerimiento
+            </th>
+
+            <th class="text-left p-3">
+              Etapa
+            </th>
+
+            <th class="text-center p-3">
+              Obligatorio
+            </th>
+
+            <th class="text-left p-3">
+              Estado
+            </th>
+
           </tr>
+
         </thead>
-        <tbody>
+
+        <tbody id="preview-body">
+
           {% for item in preview_rows %}
+
           <tr id="fila-{{ item.fila }}"
               data-estado="{% if item.duplicado %}duplicados{% elif item.existente %}existentes{% else %}nuevos{% endif %}"
+              data-etapa="{{ item.etapa|default:'' }}"
+              data-nombre="{{ item.name }}"
               class="border-t {% if item.duplicado %}bg-red-100{% elif item.existente %}bg-blue-50{% else %}hover:bg-gray-50{% endif %}">
+
+            <!-- FILA EXCEL -->
+
             <td class="p-3 font-semibold whitespace-nowrap">
+
               {{ item.fila }}
+
             </td>
+
+            <!-- ORDEN -->
+
             <td class="p-3 whitespace-nowrap">
+
               {{ item.order }}
+
             </td>
+
+            <!-- REQUERIMIENTO -->
+
             <td class="p-3 min-w-72 break-words">
+
               {{ item.name }}
+
             </td>
+
+            <!-- ETAPA -->
+
+            <td class="p-3 whitespace-nowrap">
+
+              {% if item.etapa == "antes" %}
+
+                <span class="px-2 py-1 rounded-full bg-sky-50 text-sky-700 text-xs font-semibold">
+                  Antes
+                </span>
+
+              {% elif item.etapa == "durante" %}
+
+                <span class="px-2 py-1 rounded-full bg-amber-50 text-amber-700 text-xs font-semibold">
+                  Durante
+                </span>
+
+              {% elif item.etapa == "despues" %}
+
+                <span class="px-2 py-1 rounded-full bg-violet-50 text-violet-700 text-xs font-semibold">
+                  Después
+                </span>
+
+              {% else %}
+
+                <span class="text-gray-400 text-xs">
+                  Sin etapa
+                </span>
+
+              {% endif %}
+
+            </td>
+
+            <!-- OBLIGATORIO -->
+
             <td class="p-3 text-center whitespace-nowrap">
-              {% if item.mandatory %}Sí{% else %}No{% endif %}
+
+              {% if item.mandatory %}
+                Sí
+              {% else %}
+                No
+              {% endif %}
+
             </td>
+
+            <!-- ESTADO DE IMPORTACIÓN -->
+
             <td class="p-3 min-w-48">
+
               {% if item.duplicado %}
-                <span class="font-bold text-red-700">🔴 Duplicado</span>
+
+                <span class="font-bold text-red-700">
+
+                  🔴 Duplicado
+
+                </span>
+
                 <div class="text-red-800 mt-1">
+
                   Con la{% if item.relacionadas|length > 1 %}s{% endif %}
                   fila{% if item.relacionadas|length > 1 %}s{% endif %}
+
                   {% for otra in item.relacionadas %}
+
                     <a href="#fila-{{ otra }}"
-                       class="font-semibold underline hover:text-red-950">{{ otra }}</a>{% if not forloop.last %}, {% endif %}
+                       class="font-semibold underline hover:text-red-950">
+
+                      {{ otra }}
+
+                    </a>{% if not forloop.last %}, {% endif %}
+
                   {% endfor %}
+
                 </div>
+
               {% elif item.existente %}
+
                 <span class="font-semibold text-blue-700">
+
                   🔵 Ya existe en el servicio
+
                 </span>
+
               {% else %}
+
                 <span class="font-semibold text-emerald-700">
+
                   🟢 Nuevo
+
                 </span>
+
               {% endif %}
+
             </td>
+
           </tr>
+
           {% endfor %}
+
         </tbody>
+
       </table>
+
     </div>
 
+    <!-- ACLARACIONES -->
+
     <p class="mt-3 text-xs text-gray-500">
+
       «Fila Excel» representa la posición real dentro del archivo,
       incluyendo la fila de encabezados cuando existe.
+
       «Orden» corresponde al valor indicado en la columna order.
+
+      «Etapa» es opcional y permite clasificar los requerimientos
+      como Antes, Durante o Después.
+
     </p>
 
+    <!-- CONFIRMAR -->
+
     <div class="flex flex-wrap justify-center gap-3 mt-6">
+
       {% if preview_can_confirm %}
+
       <form method="post"
             action="{% url 'operaciones:fotos_importar_requisitos' servicio.id %}">
+
         {% csrf_token %}
-        <input type="hidden" name="accion" value="confirmar">
-        <input type="hidden" name="preview_token" value="{{ preview_token }}">
+
+        <input type="hidden"
+               name="accion"
+               value="confirmar">
+
+        <input type="hidden"
+               name="preview_token"
+               value="{{ preview_token }}">
+
         <button type="submit"
                 class="bg-emerald-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-emerald-700">
+
           ✓ Confirmar importación
+
         </button>
+
       </form>
+
       {% else %}
-      <button type="button" disabled
+
+      <button type="button"
+              disabled
               class="bg-gray-300 text-gray-600 px-6 py-3 rounded-full font-semibold cursor-not-allowed"
               title="Corrige los títulos duplicados antes de importar">
+
         ⛔ Confirmación bloqueada
+
       </button>
+
       {% endif %}
 
       <a href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}"
          class="px-6 py-3 rounded-full border font-semibold hover:bg-gray-50">
+
         ↻ Seleccionar archivo corregido
+
       </a>
+
     </div>
 
     <p class="text-center text-xs text-gray-500 mt-3">
+
       La vista previa no guarda requerimientos.
+
       La confirmación caduca después de 30 minutos.
+
     </p>
+
   </div>
 
   {% else %}
 
-  <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6">
-    <p class="text-gray-700 text-center mb-5">
-      Selecciona un archivo CSV o XLSX.
-      Primero podrás revisar todos los requerimientos y detectar títulos repetidos.
-      Ningún requerimiento se guardará hasta tu confirmación.
+  <!-- INSTRUCCIONES DE IMPORTACIÓN -->
+
+  <div class="bg-white rounded-2xl shadow p-6">
+
+    <h3 class="text-lg font-bold text-gray-800 mb-3">
+      📋 Instrucciones para preparar el archivo
+    </h3>
+
+    <p class="text-sm text-gray-600 mb-4">
+
+      La plantilla utiliza cuatro columnas.
+
+      La columna <strong>etapa</strong> es opcional:
+      puedes dejarla completamente en blanco.
+
     </p>
 
-    <form method="post" enctype="multipart/form-data"
+    <div class="overflow-x-auto border rounded-xl">
+
+      <table class="min-w-full text-sm">
+
+        <thead class="bg-gray-50">
+
+          <tr>
+
+            <th class="p-3 text-left">
+              Columna
+            </th>
+
+            <th class="p-3 text-left">
+              Descripción
+            </th>
+
+            <th class="p-3 text-left">
+              Valores permitidos
+            </th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          <tr class="border-t">
+
+            <td class="p-3 font-semibold">
+              name
+            </td>
+
+            <td class="p-3">
+              Nombre del requerimiento
+            </td>
+
+            <td class="p-3">
+              Texto obligatorio y sin duplicados
+            </td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3 font-semibold">
+              order
+            </td>
+
+            <td class="p-3">
+              Orden de presentación
+            </td>
+
+            <td class="p-3">
+              Número entero
+            </td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3 font-semibold">
+              mandatory
+            </td>
+
+            <td class="p-3">
+              Indica si la fotografía es obligatoria
+            </td>
+
+            <td class="p-3">
+              1 = Sí / 0 = No
+            </td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3 font-semibold">
+              etapa
+            </td>
+
+            <td class="p-3">
+              Clasificación de la fotografía
+            </td>
+
+            <td class="p-3">
+              antes / durante / despues / vacío
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    <!-- EJEMPLOS -->
+
+    <h4 class="font-semibold text-gray-800 mt-5 mb-2">
+      Ejemplo de archivo
+    </h4>
+
+    <div class="overflow-x-auto border rounded-xl">
+
+      <table class="min-w-full text-sm">
+
+        <thead class="bg-gray-50">
+
+          <tr>
+
+            <th class="p-3 text-left">name</th>
+            <th class="p-3 text-left">order</th>
+            <th class="p-3 text-left">mandatory</th>
+            <th class="p-3 text-left">etapa</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          <tr class="border-t">
+
+            <td class="p-3">
+              Foto general del sitio antes de intervención
+            </td>
+
+            <td class="p-3">0</td>
+            <td class="p-3">1</td>
+            <td class="p-3">antes</td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3">
+              Foto durante instalación
+            </td>
+
+            <td class="p-3">1</td>
+            <td class="p-3">1</td>
+            <td class="p-3">durante</td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3">
+              Foto después de intervención
+            </td>
+
+            <td class="p-3">2</td>
+            <td class="p-3">1</td>
+            <td class="p-3">despues</td>
+
+          </tr>
+
+          <tr class="border-t">
+
+            <td class="p-3">
+              Foto adicional del sitio
+            </td>
+
+            <td class="p-3">3</td>
+            <td class="p-3">0</td>
+
+            <td class="p-3 text-gray-400">
+              Vacío
+            </td>
+
+          </tr>
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    <div class="mt-4 border border-blue-200 bg-blue-50 rounded-xl p-4 text-sm text-blue-800">
+
+      <strong>Importante:</strong>
+
+      <p class="mt-1">
+
+        No es obligatorio clasificar todas las fotografías.
+
+        Si una fotografía no corresponde a Antes, Durante o Después,
+        deja la columna etapa vacía.
+
+      </p>
+
+      <p class="mt-2">
+
+        Puedes seguir utilizando archivos anteriores que no incluyan
+        la columna etapa. Esos requerimientos quedarán sin clasificación.
+
+      </p>
+
+    </div>
+
+  </div>
+
+  <!-- SELECCIONAR ARCHIVO -->
+
+  <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow p-6">
+
+    <p class="text-gray-700 text-center mb-5">
+
+      Selecciona un archivo CSV o XLSX.
+
+      Primero podrás revisar todos los requerimientos,
+      comprobar sus etapas y detectar títulos repetidos.
+
+      Ningún requerimiento se guardará hasta tu confirmación.
+
+    </p>
+
+    <form method="post"
+          enctype="multipart/form-data"
           action="{% url 'operaciones:fotos_importar_requisitos' servicio.id %}"
           class="space-y-5">
+
       {% csrf_token %}
 
       <div class="border-2 border-dashed rounded-xl p-6 text-center">
-        <input id="file" type="file" name="file"
-               accept=".csv,.xlsx" class="hidden" required>
+
+        <input id="file"
+               type="file"
+               name="file"
+               accept=".csv,.xlsx"
+               class="hidden"
+               required>
 
         <label for="file"
                class="inline-flex items-center gap-2 px-4 py-2 rounded-full border cursor-pointer hover:bg-gray-50">
+
           📄 Seleccionar archivo CSV / XLSX
+
         </label>
 
-        <p id="file-name" class="mt-3 text-sm text-gray-500">
+        <p id="file-name"
+           class="mt-3 text-sm text-gray-500">
+
           Ningún archivo seleccionado
+
         </p>
+
       </div>
 
       <div class="flex justify-center gap-3">
+
         <button type="submit"
                 class="bg-blue-600 text-white px-5 py-2.5 rounded-full hover:bg-blue-700 font-semibold">
+
           🔍 Revisar archivo
+
         </button>
 
         <a href="{% url 'operaciones:fotos_configurar_requisitos' servicio.id %}"
            class="px-5 py-2.5 rounded-full border hover:bg-gray-50">
+
           Cancelar
+
         </a>
+
       </div>
+
     </form>
 
     <p class="text-xs text-gray-500 mt-5">
+
       Formato esperado:
-      <code>name</code>, <code>order</code>, <code>mandatory</code> (1/0).
-      Si no incluyes order, se utilizará el orden de las filas.
+
+      <code>name</code>,
+      <code>order</code>,
+      <code>mandatory</code>,
+      <code>etapa</code>.
+
+      La columna etapa puede quedar en blanco.
+
     </p>
+
   </div>
 
   {% endif %}
+
 </div>
 
 <script>
 (function () {
+
+  // -----------------------------------------------
+  // NOMBRE DEL ARCHIVO
+  // -----------------------------------------------
+
   const input = document.getElementById("file");
   const fileName = document.getElementById("file-name");
 
   if (input && fileName) {
+
     input.addEventListener("change", function () {
+
       fileName.textContent = input.files.length
         ? input.files[0].name
         : "Ningún archivo seleccionado";
+
     });
+
   }
 
-  const filter = document.getElementById("filtro-requisitos");
+  // -----------------------------------------------
+  // FILTROS DE VISTA PREVIA
+  // -----------------------------------------------
 
-  if (filter) {
-    filter.addEventListener("change", function () {
-      const selected = filter.value;
+  const statusFilter = document.getElementById(
+    "filtro-requisitos"
+  );
 
-      document.querySelectorAll("tr[data-estado]").forEach(function (row) {
-        row.hidden = selected !== "todos"
-          && row.dataset.estado !== selected;
-      });
+  const stageFilter = document.getElementById(
+    "filtro-etapa-preview"
+  );
+
+  const searchFilter = document.getElementById(
+    "buscar-preview"
+  );
+
+  const rows = document.querySelectorAll(
+    "#preview-body tr[data-estado]"
+  );
+
+  function applyFilters() {
+
+    if (!statusFilter || !stageFilter) return;
+
+    const status = statusFilter.value;
+    const stage = stageFilter.value;
+
+    const search = searchFilter
+      ? searchFilter.value.toLocaleLowerCase("es").trim()
+      : "";
+
+    rows.forEach(function (row) {
+
+      const rowStatus = row.dataset.estado || "";
+      const rowStage = row.dataset.etapa || "";
+
+      const rowName = (
+        row.dataset.nombre || ""
+      ).toLocaleLowerCase("es");
+
+      const statusMatches =
+        status === "todos" || rowStatus === status;
+
+      const stageMatches =
+        stage === "todos" || rowStage === stage;
+
+      const searchMatches =
+        !search || rowName.includes(search);
+
+      const visible =
+        statusMatches &&
+        stageMatches &&
+        searchMatches;
+
+      row.hidden = !visible;
+      row.style.display = visible ? "" : "none";
+
     });
+
   }
+
+  if (statusFilter) {
+    statusFilter.addEventListener("change", applyFilters);
+  }
+
+  if (stageFilter) {
+    stageFilter.addEventListener("change", applyFilters);
+  }
+
+  if (searchFilter) {
+    searchFilter.addEventListener("input", applyFilters);
+  }
+
 })();
 </script>
+
 {% endblock %}

@@ -204,12 +204,20 @@ def _dedupe_requisitos(asig, allowed_norms: set | None = None):
 def configurar_requisitos(request, servicio_id):
     from django.utils.http import url_has_allowed_host_and_scheme
 
-    servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
+    servicio = get_object_or_404(
+        ServicioCotizado,
+        pk=servicio_id,
+    )
+
     sesion = _get_or_create_sesion(servicio)
 
     session_key = f"fotos_requisitos_next_{servicio_id}"
 
-    next_recibido = (request.POST.get("next") or request.GET.get("next") or "").strip()
+    next_recibido = (
+        request.POST.get("next")
+        or request.GET.get("next")
+        or ""
+    ).strip()
 
     if next_recibido and url_has_allowed_host_and_scheme(
         url=next_recibido,
@@ -224,76 +232,146 @@ def configurar_requisitos(request, servicio_id):
         )
 
     asignaciones = list(
-        sesion.asignaciones.select_related("tecnico").prefetch_related(
+        sesion.asignaciones
+        .select_related("tecnico")
+        .prefetch_related(
             Prefetch(
                 "requisitos",
-                queryset=RequisitoFoto.objects.filter(activo=True).order_by(
-                    "orden",
-                    "id",
-                ),
+                queryset=RequisitoFoto.objects.filter(
+                    activo=True,
+                ).order_by("orden", "id"),
             )
         )
     )
 
     canonical = []
 
-    if asignaciones and asignaciones[0].requisitos.exists():
-        canonical = list(asignaciones[0].requisitos.all())
+    for asignacion in asignaciones:
+        requisitos = list(asignacion.requisitos.all())
+
+        if requisitos:
+            canonical = requisitos
+            break
+
+    # --------------------------------------------------
+    # GUARDAR Y REPLICAR REQUERIMIENTOS
+    # --------------------------------------------------
 
     if request.method == "POST":
         try:
-            with transaction.atomic():
-                sesion.proyecto_especial = bool(request.POST.get("proyecto_especial"))
+            ids = request.POST.getlist("id[]")
+            names = request.POST.getlist("name[]")
+            orders = request.POST.getlist("order[]")
+            mand = request.POST.getlist("mandatory[]")
+            etapas = request.POST.getlist("etapa[]")
 
-                sesion.save(
-                    update_fields=[
-                        "proyecto_especial",
-                    ]
+            if not (
+                len(ids)
+                == len(names)
+                == len(orders)
+                == len(mand)
+                == len(etapas)
+            ):
+                raise ValueError(
+                    "Los campos de los requerimientos "
+                    "no están completos. Recarga la página "
+                    "e inténtalo nuevamente."
                 )
 
-                ids = request.POST.getlist("id[]")
-                names = request.POST.getlist("name[]")
-                orders = request.POST.getlist("order[]")
-                mand = request.POST.getlist("mandatory[]")
+            etapas_validas = {
+                "",
+                "antes",
+                "durante",
+                "despues",
+            }
 
-                desired = []
+            desired = []
+            posiciones = {}
 
-                for i, nm in enumerate(names):
-                    titulo = (nm or "").strip()
+            for i, nm in enumerate(names):
+                titulo = (nm or "").strip()
 
-                    if not titulo:
-                        continue
+                if not titulo:
+                    continue
 
-                    try:
-                        orden = int(orders[i]) if i < len(orders) else i
-                    except Exception:
-                        orden = i
+                try:
+                    orden = int(orders[i])
 
-                    obligatorio = mand[i] == "1" if i < len(mand) else True
+                    if orden < 0:
+                        raise ValueError
 
-                    rid = ids[i] if i < len(ids) else ""
+                except (ValueError, TypeError):
+                    raise ValueError(
+                        f"Orden inválido en la fila {i + 1}."
+                    )
 
-                    desired.append(
-                        (
-                            rid,
-                            orden,
-                            titulo,
-                            obligatorio,
-                            _norm_title(titulo),
+                obligatorio = mand[i] == "1"
+
+                rid = ids[i]
+
+                etapa = (etapas[i] or "").strip().lower()
+
+                if etapa == "después":
+                    etapa = "despues"
+
+                if etapa not in etapas_validas:
+                    raise ValueError(
+                        f"Etapa inválida en la fila {i + 1}: "
+                        f"{etapas[i]}"
+                    )
+
+                norm = _norm_title(titulo)
+
+                if norm in posiciones:
+                    raise ValueError(
+                        f"El requerimiento de la fila {i + 1} "
+                        f"está duplicado con la fila "
+                        f"{posiciones[norm]}: {titulo}"
+                    )
+
+                posiciones[norm] = i + 1
+
+                desired.append(
+                    (
+                        rid,
+                        orden,
+                        titulo,
+                        obligatorio,
+                        norm,
+                        etapa,
+                    )
+                )
+
+            desired_norms = {x[4] for x in desired}
+
+            with transaction.atomic():
+
+                sesion.proyecto_especial = bool(
+                    request.POST.get("proyecto_especial")
+                )
+
+                sesion.save(
+                    update_fields=["proyecto_especial"]
+                )
+
+                for a in asignaciones:
+
+                    existentes = list(
+                        RequisitoFoto.objects.filter(
+                            tecnico_sesion=a
                         )
                     )
 
-                desired_norms = {x[4] for x in desired}
-
-                for a in asignaciones:
-                    existentes = list(RequisitoFoto.objects.filter(tecnico_sesion=a))
-
-                    by_id = {str(r.id): r for r in existentes}
+                    by_id = {
+                        str(r.id): r
+                        for r in existentes
+                    }
 
                     by_norm = {}
 
                     for r in existentes:
                         key = _norm_title(r.titulo)
+
                         cur = by_norm.get(key)
 
                         if cur is None:
@@ -318,12 +396,20 @@ def configurar_requisitos(request, servicio_id):
                         titulo,
                         obligatorio,
                         norm,
+                        etapa,
                     ) in desired:
+
                         if rid and rid in by_id:
+
                             r = by_id[rid]
+
                             collision = by_norm.get(norm)
 
-                            if collision and collision.id != r.id:
+                            if (
+                                collision
+                                and collision.id != r.id
+                            ):
+
                                 c = collision
                                 upds = []
 
@@ -335,39 +421,31 @@ def configurar_requisitos(request, servicio_id):
                                     c.orden = orden
                                     upds.append("orden")
 
-                                if (
-                                    getattr(
-                                        c,
-                                        "titulo_norm",
-                                        None,
-                                    )
-                                    != norm
-                                ):
+                                if c.etapa != etapa:
+                                    c.etapa = etapa
+                                    upds.append("etapa")
+
+                                if c.titulo_norm != norm:
                                     c.titulo_norm = norm
                                     upds.append("titulo_norm")
 
-                                if hasattr(c, "activo") and not c.activo:
+                                if not c.activo:
                                     c.activo = True
                                     upds.append("activo")
 
                                 if upds:
                                     c.save(update_fields=upds)
 
-                                if getattr(
-                                    r,
-                                    "activo",
-                                    True,
-                                ):
+                                if r.activo:
                                     r.activo = False
                                     r.save(
-                                        update_fields=[
-                                            "activo",
-                                        ]
+                                        update_fields=["activo"]
                                     )
 
                                 vistos_ids.add(str(c.id))
 
                                 by_norm[norm] = c
+
                                 continue
 
                             cambios = []
@@ -384,70 +462,66 @@ def configurar_requisitos(request, servicio_id):
                                 r.obligatorio = obligatorio
                                 cambios.append("obligatorio")
 
-                            if (
-                                getattr(
-                                    r,
-                                    "titulo_norm",
-                                    None,
-                                )
-                                != norm
-                            ):
+                            if r.etapa != etapa:
+                                r.etapa = etapa
+                                cambios.append("etapa")
+
+                            if r.titulo_norm != norm:
                                 r.titulo_norm = norm
                                 cambios.append("titulo_norm")
 
-                            if hasattr(r, "activo") and not r.activo:
+                            if not r.activo:
                                 r.activo = True
                                 cambios.append("activo")
 
                             if cambios:
-                                r.save(update_fields=cambios)
+                                r.save(
+                                    update_fields=cambios
+                                )
 
                             vistos_ids.add(str(r.id))
 
                             by_norm[norm] = r
 
                         else:
+
                             exist = by_norm.get(norm)
 
                             if exist:
+
                                 cambios = []
 
                                 if exist.obligatorio != obligatorio:
                                     exist.obligatorio = obligatorio
-
                                     cambios.append("obligatorio")
 
                                 if exist.orden != orden:
                                     exist.orden = orden
                                     cambios.append("orden")
 
-                                if (
-                                    getattr(
-                                        exist,
-                                        "titulo_norm",
-                                        None,
-                                    )
-                                    != norm
-                                ):
+                                if exist.etapa != etapa:
+                                    exist.etapa = etapa
+                                    cambios.append("etapa")
+
+                                if exist.titulo_norm != norm:
                                     exist.titulo_norm = norm
                                     cambios.append("titulo_norm")
 
-                                if (
-                                    hasattr(
-                                        exist,
-                                        "activo",
-                                    )
-                                    and not exist.activo
-                                ):
+                                if not exist.activo:
                                     exist.activo = True
                                     cambios.append("activo")
 
                                 if cambios:
-                                    exist.save(update_fields=cambios)
+                                    exist.save(
+                                        update_fields=cambios
+                                    )
 
-                                vistos_ids.add(str(exist.id))
+                                vistos_ids.add(
+                                    str(exist.id)
+                                )
 
                             else:
+
                                 nuevo = RequisitoFoto.objects.create(
                                     tecnico_sesion=a,
                                     titulo=titulo,
@@ -455,24 +529,28 @@ def configurar_requisitos(request, servicio_id):
                                     descripcion="",
                                     obligatorio=obligatorio,
                                     orden=orden,
+                                    etapa=etapa,
                                     activo=True,
                                 )
 
-                                vistos_ids.add(str(nuevo.id))
+                                vistos_ids.add(
+                                    str(nuevo.id)
+                                )
 
                                 by_norm[norm] = nuevo
 
+                    # Desactivar requisitos retirados.
+                    # No eliminar fotografías ni evidencias.
+
                     for r in existentes:
-                        if str(r.id) not in vistos_ids and getattr(
-                            r,
-                            "activo",
-                            True,
+                        if (
+                            str(r.id) not in vistos_ids
+                            and r.activo
                         ):
                             r.activo = False
+
                             r.save(
-                                update_fields=[
-                                    "activo",
-                                ]
+                                update_fields=["activo"]
                             )
 
                     _dedupe_requisitos(
@@ -482,7 +560,8 @@ def configurar_requisitos(request, servicio_id):
 
             messages.success(
                 request,
-                "Requerimientos actualizados.",
+                "Requerimientos y etapas actualizados "
+                "correctamente.",
             )
 
             return redirect(next_url)
@@ -493,6 +572,90 @@ def configurar_requisitos(request, servicio_id):
                 f"No se pudo guardar la lista: {e}",
             )
 
+    # --------------------------------------------------
+    # ESTADO AUTOMÁTICO DE FOTOGRAFÍAS
+    # --------------------------------------------------
+    #
+    # Cada requerimiento necesita una sola fotografía.
+    #
+    # Si cualquiera de los técnicos asignados carga una
+    # evidencia vinculada al requerimiento, se considera
+    # completado para todo el servicio.
+    #
+    # La comparación usa el título normalizado para reunir
+    # las copias del mismo requerimiento entre técnicos.
+    #
+    # Este bloque es exclusivamente de lectura.
+    # --------------------------------------------------
+
+    requisitos_por_norm = {}
+
+    for asignacion in asignaciones:
+        for requisito in asignacion.requisitos.all():
+
+            if not requisito.activo:
+                continue
+
+            norm = _norm_title(requisito.titulo)
+
+            requisitos_por_norm.setdefault(
+                norm,
+                set(),
+            ).add(requisito.id)
+
+    todos_ids = set()
+
+    for ids in requisitos_por_norm.values():
+        todos_ids.update(ids)
+
+    requisitos_con_evidencia = set()
+
+    if todos_ids:
+
+        modelo_evidencia = (
+            RequisitoFoto._meta
+            .get_field("evidencias")
+            .related_model
+        )
+
+        requisitos_con_evidencia = set(
+            modelo_evidencia.objects.filter(
+                requisito_id__in=todos_ids,
+            ).values_list(
+                "requisito_id",
+                flat=True,
+            )
+        )
+
+    for requisito in canonical:
+
+        norm = _norm_title(requisito.titulo)
+
+        ids_equivalentes = requisitos_por_norm.get(
+            norm,
+            set(),
+        )
+
+        completada = bool(
+            ids_equivalentes & requisitos_con_evidencia
+        )
+
+        if completada:
+
+            requisito.estado_foto = "completada"
+
+            requisito.estado_detalle = (
+                "Fotografía cargada"
+            )
+
+        else:
+
+            requisito.estado_foto = "pendiente"
+
+            requisito.estado_detalle = (
+                "Sin fotografía"
+            )
+
     return render(
         request,
         "operaciones/fotos_configurar_requisitos.html",
@@ -500,90 +663,379 @@ def configurar_requisitos(request, servicio_id):
             "servicio": servicio,
             "sesion": sesion,
             "requirements": canonical,
-            "is_special": bool(sesion.proyecto_especial),
+            "is_special": bool(
+                sesion.proyecto_especial
+            ),
             "next_url": next_url,
         },
     )
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def import_requirements_page(request, servicio_id):
-    servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
-    # Mostrar el formulario no necesita crear una sesión en la base de datos.
+
+    servicio = get_object_or_404(
+        ServicioCotizado,
+        pk=servicio_id,
+    )
+
+    # Mostrar el formulario no necesita
+    # crear una sesión en la base de datos.
+
     sesion = SesionFotos.objects.filter(servicio=servicio).first()
+
     return render(
         request,
         "operaciones/fotos_importar_requisitos.html",
-        {"servicio": servicio, "sesion": sesion},
+        {
+            "servicio": servicio,
+            "sesion": sesion,
+        },
     )
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 def download_requirements_template(request, servicio_id, ext):
+    import csv
+    from io import BytesIO, StringIO
+
     ext = (ext or "").lower()
+
     filename_base = f"requisitos_template_servicio_{servicio_id}"
 
+    encabezados = [
+        "name",
+        "order",
+        "mandatory",
+        "etapa",
+    ]
+
+    ejemplos = [
+        [
+            "Foto general antes de intervención",
+            0,
+            1,
+            "antes",
+        ],
+        [
+            "Foto durante instalación",
+            1,
+            1,
+            "durante",
+        ],
+        [
+            "Foto después de intervención",
+            2,
+            1,
+            "despues",
+        ],
+        [
+            "Foto adicional del sitio",
+            3,
+            0,
+            "",
+        ],
+    ]
+
+    # --------------------------------------------------
+    # CSV
+    # --------------------------------------------------
+
     if ext == "csv":
-        content = (
-            "name,order,mandatory\n"
-            "Puerta frontal,0,1\n"
-            "Tablero eléctrico,1,1\n"
-            "Panorámica del sitio,2,0\n"
+
+        buffer = StringIO()
+
+        writer = csv.writer(
+            buffer,
+            lineterminator="\r\n",
         )
-        resp = HttpResponse(content, content_type="text/csv; charset=utf-8")
+
+        writer.writerow(encabezados)
+
+        writer.writerows(ejemplos)
+
+        # BOM para apertura adecuada en Excel.
+        contenido = "\ufeff" + buffer.getvalue()
+
+        resp = HttpResponse(
+            contenido,
+            content_type="text/csv; charset=utf-8",
+        )
+
         resp["Content-Disposition"] = f'attachment; filename="{filename_base}.csv"'
+
         return resp
 
-    if ext in ("xlsx", "xls"):
-        from io import BytesIO
+    # --------------------------------------------------
+    # XLSX
+    # --------------------------------------------------
+
+    if ext == "xlsx":
 
         from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.worksheet.datavalidation import DataValidation
+
         wb = Workbook()
+
+        # ----------------------------------------------
+        # HOJA REQUISITOS
+        # ----------------------------------------------
+
         ws = wb.active
         ws.title = "Requisitos"
-        ws.append(["name", "order", "mandatory"])
-        ws.append(["Puerta frontal", 0, 1])
-        ws.append(["Tablero eléctrico", 1, 1])
-        ws.append(["Panorámica del sitio", 2, 0])
+
+        ws.append(encabezados)
+
+        for ejemplo in ejemplos:
+            ws.append(ejemplo)
+
+        ws.freeze_panes = "A2"
+
+        ws.auto_filter.ref = "A1:D5"
+
+        anchos = {
+            "A": 65,
+            "B": 14,
+            "C": 17,
+            "D": 20,
+        }
+
+        for columna, ancho in anchos.items():
+
+            ws.column_dimensions[columna].width = ancho
+
+        azul = PatternFill(
+            fill_type="solid",
+            fgColor="1E3A8A",
+        )
+
+        for cell in ws[1]:
+
+            cell.fill = azul
+
+            cell.font = Font(
+                color="FFFFFF",
+                bold=True,
+            )
+
+            cell.alignment = Alignment(
+                horizontal="center",
+            )
+
+        # Selector opcional de etapas.
+        validacion_etapa = DataValidation(
+            type="list",
+            formula1='"antes,durante,despues"',
+            allow_blank=True,
+        )
+
+        validacion_etapa.error = (
+            "Selecciona antes, durante o despues, " "o deja la celda vacía."
+        )
+
+        validacion_etapa.errorTitle = "Etapa inválida"
+
+        validacion_etapa.showErrorMessage = True
+
+        ws.add_data_validation(validacion_etapa)
+
+        validacion_etapa.add("D2:D10001")
+
+        # Validación de obligatoriedad.
+        validacion_obligatorio = DataValidation(
+            type="list",
+            formula1='"1,0"',
+            allow_blank=False,
+        )
+
+        ws.add_data_validation(validacion_obligatorio)
+
+        validacion_obligatorio.add("C2:C10001")
+
+        # ----------------------------------------------
+        # HOJA INSTRUCCIONES
+        # ----------------------------------------------
+
+        instrucciones = wb.create_sheet("Instrucciones")
+
+        instrucciones.column_dimensions["A"].width = 23
+
+        instrucciones.column_dimensions["B"].width = 75
+
+        instrucciones.append(
+            [
+                "CAMPO",
+                "INSTRUCCIONES",
+            ]
+        )
+
+        filas_instrucciones = [
+            [
+                "name",
+                "Nombre del requerimiento. " "Es obligatorio y no debe repetirse.",
+            ],
+            [
+                "order",
+                "Número de orden de presentación. "
+                "Si está vacío, se utiliza el orden de las filas.",
+            ],
+            [
+                "mandatory",
+                "1 = fotografía obligatoria. " "0 = fotografía opcional.",
+            ],
+            [
+                "etapa",
+                "Clasificación opcional. "
+                "Valores permitidos: antes, durante y despues.",
+            ],
+            [
+                "Etapa vacía",
+                "Puedes dejar la etapa en blanco. "
+                "El requerimiento quedará sin clasificación.",
+            ],
+            [
+                "Antes",
+                "Fotografías previas al inicio de los trabajos.",
+            ],
+            [
+                "Durante",
+                "Fotografías tomadas mientras se ejecutan los trabajos.",
+            ],
+            [
+                "Después",
+                "Fotografías del trabajo terminado.",
+            ],
+            [
+                "Duplicados",
+                "No repitas nombres de requerimientos. "
+                "La vista previa indicará las filas duplicadas.",
+            ],
+            [
+                "Vista previa",
+                "El archivo será revisado antes de confirmar " "la importación.",
+            ],
+            [
+                "Archivos antiguos",
+                "También puedes importar archivos anteriores " "sin la columna etapa.",
+            ],
+        ]
+
+        for fila in filas_instrucciones:
+            instrucciones.append(fila)
+
+        for cell in instrucciones[1]:
+
+            cell.fill = azul
+
+            cell.font = Font(
+                color="FFFFFF",
+                bold=True,
+            )
+
+        for row in instrucciones.iter_rows(
+            min_row=2,
+        ):
+
+            row[1].alignment = Alignment(
+                wrap_text=True,
+                vertical="top",
+            )
+
+        instrucciones.freeze_panes = "A2"
+
+        instrucciones.auto_filter.ref = f"A1:B{instrucciones.max_row}"
+
+        # ----------------------------------------------
+        # DESCARGAR
+        # ----------------------------------------------
+
         bio = BytesIO()
+
         wb.save(bio)
+
         bio.seek(0)
+
         resp = HttpResponse(
             bio.getvalue(),
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            content_type=(
+                "application/vnd.openxmlformats-officedocument." "spreadsheetml.sheet"
+            ),
         )
+
         resp["Content-Disposition"] = f'attachment; filename="{filename_base}.xlsx"'
+
         return resp
 
-    return HttpResponseBadRequest("Formato no soportado. Usa csv o xlsx.")
+    return HttpResponseBadRequest("Formato no soportado. Usa CSV o XLSX.")
 
 
 @login_required
-@rol_requerido('supervisor', 'admin', 'pm')
+@rol_requerido("supervisor", "admin", "pm")
 @require_POST
 def importar_requisitos(request, servicio_id):
     import csv
     import io
-
+    import unicodedata
     from collections import defaultdict
 
     from django.core import signing
     from django.core.signing import BadSignature, SignatureExpired
     from openpyxl import load_workbook
 
-    servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
+    servicio = get_object_or_404(
+        ServicioCotizado,
+        pk=servicio_id,
+    )
+
     salt = "gz-requisitos-preview-v1"
+
+    ETAPAS_VALIDAS = {
+        "",
+        "antes",
+        "durante",
+        "despues",
+    }
+
+    # --------------------------------------------------
+    # UTILIDADES
+    # --------------------------------------------------
 
     def volver_con_error(mensaje):
         messages.error(request, mensaje)
+
         return redirect(
             "operaciones:fotos_import_requirements_page",
             servicio_id=servicio_id,
         )
 
+    def normalizar_etapa(valor, numero_fila):
+
+        texto = str(valor if valor is not None else "").strip().lower()
+
+        texto = "".join(
+            caracter
+            for caracter in unicodedata.normalize(
+                "NFKD",
+                texto,
+            )
+            if not unicodedata.combining(caracter)
+        )
+
+        if texto not in ETAPAS_VALIDAS:
+            raise ValueError(
+                f"Etapa inválida en la fila {numero_fila}: "
+                f"'{valor}'. "
+                "Valores permitidos: antes, durante, "
+                "despues o vacío."
+            )
+
+        return texto
+
     def validar_duplicados(filas):
+
         grupos = defaultdict(list)
 
         for item in filas:
@@ -592,39 +1044,98 @@ def importar_requisitos(request, servicio_id):
         referencias = {}
 
         for posiciones in grupos.values():
+
             if len(posiciones) < 2:
                 continue
 
             for posicion in posiciones:
+
                 referencias[posicion] = [
                     otra for otra in posiciones if otra != posicion
                 ]
 
         return referencias
 
+    def validar_filas(filas):
+
+        if not isinstance(filas, list):
+            raise ValueError("La lista de requerimientos no es válida.")
+
+        if not 1 <= len(filas) <= 10000:
+            raise ValueError("Cantidad de requerimientos inválida.")
+
+        numeros = set()
+
+        for item in filas:
+
+            if not isinstance(item, dict):
+                raise ValueError("Se encontró una fila inválida.")
+
+            fila = item.get("fila")
+            orden = item.get("order")
+            nombre = item.get("name")
+            obligatorio = item.get("mandatory")
+            etapa = item.get("etapa", "")
+
+            if (
+                type(fila) is not int
+                or fila < 1
+                or type(orden) is not int
+                or orden < 0
+                or not isinstance(nombre, str)
+                or not nombre.strip()
+                or type(obligatorio) is not bool
+            ):
+                raise ValueError("Datos inválidos en la vista previa.")
+
+            if fila in numeros:
+                raise ValueError(f"Número de fila repetido: {fila}")
+
+            numeros.add(fila)
+
+            if not isinstance(etapa, str):
+                raise ValueError(f"Etapa inválida en la fila {fila}.")
+
+            item["etapa"] = normalizar_etapa(
+                etapa,
+                fila,
+            )
+
+    # --------------------------------------------------
+    # CONFIRMACIÓN DE IMPORTACIÓN
+    # --------------------------------------------------
+
     confirmar = request.POST.get("accion") == "confirmar"
 
     if confirmar:
+
         token = request.POST.get("preview_token") or ""
 
         if not token:
+
             return volver_con_error(
-                "La vista previa no está disponible. Selecciona nuevamente el archivo."
+                "La vista previa no está disponible. "
+                "Selecciona nuevamente el archivo."
             )
 
         try:
+
             payload = signing.loads(
                 token,
                 salt=salt,
                 max_age=1800,
             )
+
         except SignatureExpired:
+
             return volver_con_error(
-                "La vista previa caducó. Selecciona nuevamente el archivo."
+                "La vista previa caducó. " "Selecciona nuevamente el archivo."
             )
+
         except (BadSignature, ValueError, TypeError):
+
             return volver_con_error(
-                "La confirmación no es válida. Selecciona nuevamente el archivo."
+                "La confirmación no es válida. " "Selecciona nuevamente el archivo."
             )
 
         if (
@@ -632,172 +1143,240 @@ def importar_requisitos(request, servicio_id):
             or payload.get("servicio_id") != servicio.pk
             or payload.get("usuario_id") != request.user.pk
         ):
+
             return volver_con_error(
-                "Esta vista previa no corresponde al usuario o servicio actual."
+                "Esta vista previa no corresponde " "al usuario o servicio actual."
             )
 
         filas = payload.get("filas")
 
-        if not isinstance(filas, list) or not (1 <= len(filas) <= 10000):
-            return volver_con_error("Los requerimientos de la vista previa no son válidos.")
-
         try:
-            for item in filas:
-                if (
-                    not isinstance(item, dict)
-                    or type(item.get("fila")) is not int
-                    or item["fila"] < 1
-                    or type(item.get("order")) is not int
-                    or not isinstance(item.get("name"), str)
-                    or not item["name"].strip()
-                    or type(item.get("mandatory")) is not bool
-                ):
-                    raise ValueError("Fila inválida")
+            validar_filas(filas)
 
-            if len({item["fila"] for item in filas}) != len(filas):
-                raise ValueError("Números de fila repetidos")
+        except (ValueError, TypeError, KeyError) as error:
 
-        except (KeyError, TypeError, ValueError):
-            return volver_con_error("La vista previa contiene datos inválidos.")
+            return volver_con_error(f"No se puede confirmar: {error}")
 
         if validar_duplicados(filas):
+
             return volver_con_error(
-                "Importación cancelada: existen títulos duplicados. "
+                "Importación cancelada: existen "
+                "requerimientos con títulos duplicados. "
                 "Corrige el archivo y vuelve a revisarlo."
             )
 
-        normalized = [
-            (item["order"], item["name"], item["mandatory"])
-            for item in filas
-        ]
-
-        # Se crea la sesión únicamente al confirmar una importación válida.
-        sesion = _get_or_create_sesion(servicio)
+    # --------------------------------------------------
+    # ANALIZAR ARCHIVO
+    # --------------------------------------------------
 
     else:
+
         archivo = request.FILES.get("file")
 
         if not archivo:
+
             return volver_con_error("Selecciona un archivo CSV o XLSX.")
 
         extension = (
-            archivo.name.rsplit(".", 1)[-1].lower()
-            if "." in archivo.name else ""
+            archivo.name.rsplit(".", 1)[-1].lower() if "." in archivo.name else ""
         )
 
         if extension not in ("csv", "xlsx"):
-            return volver_con_error(
-                "Formato no soportado. Utiliza un archivo CSV o XLSX."
-            )
+
+            return volver_con_error("Formato no soportado. " "Utiliza CSV o XLSX.")
 
         if archivo.size > 10 * 1024 * 1024:
+
             return volver_con_error(
-                "El archivo supera el máximo permitido de 10 MB."
+                "El archivo supera el máximo " "permitido de 10 MB."
             )
 
         filas = []
 
         try:
+
+            # ------------------------------------------
+            # CSV
+            # ------------------------------------------
+
             if extension == "csv":
+
                 raw = archivo.read().decode("utf-8-sig")
+
                 lector_inicial = csv.reader(io.StringIO(raw))
-                cabecera = next(lector_inicial, [])
+
+                cabecera = next(
+                    lector_inicial,
+                    [],
+                )
 
                 tiene_cabecera = any(
-                    str(valor).strip().lower() == "name"
-                    for valor in cabecera
+                    str(valor).strip().lower() == "name" for valor in cabecera
                 )
 
                 if tiene_cabecera:
+
                     lector = csv.DictReader(io.StringIO(raw))
 
                     if lector.fieldnames:
+
                         lector.fieldnames = [
-                            str(valor).strip().lower()
-                            for valor in lector.fieldnames
+                            str(valor).strip().lower() for valor in lector.fieldnames
                         ]
 
                     for registro in lector:
+
                         numero_fila = lector.line_num
+
                         nombre = (registro.get("name") or "").strip()
 
                         if not nombre:
                             continue
 
                         orden_texto = str(registro.get("order") or "").strip()
+
                         try:
                             orden = int(orden_texto)
+
+                            if orden < 0:
+                                raise ValueError
+
                         except ValueError:
                             orden = len(filas)
 
-                        obligatorio_texto = str(
-                            registro.get("mandatory") or "1"
-                        ).strip().lower()
+                        obligatorio_texto = (
+                            str(
+                                registro.get("mandatory")
+                                if registro.get("mandatory") is not None
+                                else "1"
+                            )
+                            .strip()
+                            .lower()
+                        )
 
-                        filas.append({
-                            "fila": numero_fila,
-                            "order": orden,
-                            "name": nombre,
-                            "mandatory": obligatorio_texto in (
-                                "1", "true", "si", "sí", "yes", "y"
-                            ),
-                        })
+                        obligatorio = obligatorio_texto in (
+                            "1",
+                            "true",
+                            "si",
+                            "sí",
+                            "yes",
+                            "y",
+                        )
+
+                        etapa = normalizar_etapa(
+                            registro.get("etapa", ""),
+                            numero_fila,
+                        )
+
+                        filas.append(
+                            {
+                                "fila": numero_fila,
+                                "order": orden,
+                                "name": nombre,
+                                "mandatory": obligatorio,
+                                "etapa": etapa,
+                            }
+                        )
+
                 else:
+
                     lector = csv.reader(io.StringIO(raw))
 
                     for registro in lector:
-                        if not registro or not str(registro[0]).strip():
+
+                        if not registro:
                             continue
 
-                        filas.append({
-                            "fila": lector.line_num,
-                            "order": len(filas),
-                            "name": str(registro[0]).strip(),
-                            "mandatory": True,
-                        })
+                        nombre = str(registro[0]).strip()
+
+                        if not nombre:
+                            continue
+
+                        filas.append(
+                            {
+                                "fila": lector.line_num,
+                                "order": len(filas),
+                                "name": nombre,
+                                "mandatory": True,
+                                "etapa": "",
+                            }
+                        )
+
+            # ------------------------------------------
+            # EXCEL XLSX
+            # ------------------------------------------
 
             else:
-                libro = load_workbook(archivo, data_only=True, read_only=True)
+
+                libro = load_workbook(
+                    archivo,
+                    data_only=True,
+                    read_only=True,
+                )
 
                 try:
-                    hoja = libro.active
+
+                    hoja = (
+                        libro["Requisitos"]
+                        if ("Requisitos" in libro.sheetnames)
+                        else libro.active
+                    )
+
                     iterator = hoja.iter_rows(values_only=True)
-                    cabecera = next(iterator, None)
+
+                    cabecera = next(
+                        iterator,
+                        None,
+                    )
 
                     if cabecera is None:
+
                         return volver_con_error("La planilla está vacía.")
 
                     titulos = [
-                        str(valor).strip().lower()
-                        if valor is not None else ""
+                        str(valor).strip().lower() if valor is not None else ""
                         for valor in cabecera
                     ]
 
                     tiene_cabecera = "name" in titulos
 
                     if tiene_cabecera:
+
                         indice_nombre = titulos.index("name")
+
                         indice_orden = (
-                            titulos.index("order")
-                            if "order" in titulos else None
+                            titulos.index("order") if "order" in titulos else None
                         )
+
                         indice_obligatorio = (
                             titulos.index("mandatory")
-                            if "mandatory" in titulos else None
+                            if "mandatory" in titulos
+                            else None
                         )
 
-                        registros = enumerate(iterator, start=2)
+                        indice_etapa = (
+                            titulos.index("etapa") if "etapa" in titulos else None
+                        )
+
+                        registros = enumerate(
+                            iterator,
+                            start=2,
+                        )
 
                     else:
+
                         indice_nombre = 0
                         indice_orden = None
                         indice_obligatorio = None
+                        indice_etapa = None
+
                         registros = enumerate(
                             hoja.iter_rows(values_only=True),
                             start=1,
                         )
 
                     for numero_fila, registro in registros:
+
                         nombre = (
                             str(registro[indice_nombre]).strip()
                             if indice_nombre < len(registro)
@@ -815,10 +1394,17 @@ def importar_requisitos(request, servicio_id):
                             and indice_orden < len(registro)
                             and registro[indice_orden] not in (None, "")
                         ):
+
                             try:
+
                                 orden = int(registro[indice_orden])
+
+                                if orden < 0:
+                                    raise ValueError
+
                             except (ValueError, TypeError):
-                                pass
+
+                                orden = len(filas)
 
                         obligatorio = True
 
@@ -827,67 +1413,110 @@ def importar_requisitos(request, servicio_id):
                             and indice_obligatorio < len(registro)
                             and registro[indice_obligatorio] not in (None, "")
                         ):
-                            valor = str(
-                                registro[indice_obligatorio]
-                            ).strip().lower()
+
+                            valor = str(registro[indice_obligatorio]).strip().lower()
 
                             obligatorio = valor in (
-                                "1", "true", "si", "sí", "yes", "y"
+                                "1",
+                                "true",
+                                "si",
+                                "sí",
+                                "yes",
+                                "y",
                             )
 
-                        filas.append({
-                            "fila": numero_fila,
-                            "order": orden,
-                            "name": nombre,
-                            "mandatory": obligatorio,
-                        })
+                        valor_etapa = ""
+
+                        if indice_etapa is not None and indice_etapa < len(registro):
+
+                            valor_etapa = registro[indice_etapa]
+
+                        etapa = normalizar_etapa(
+                            valor_etapa,
+                            numero_fila,
+                        )
+
+                        filas.append(
+                            {
+                                "fila": numero_fila,
+                                "order": orden,
+                                "name": nombre,
+                                "mandatory": obligatorio,
+                                "etapa": etapa,
+                            }
+                        )
+
                 finally:
                     libro.close()
 
         except Exception as error:
-            return volver_con_error(
-                f"No se pudo leer el archivo: {error}"
-            )
+
+            return volver_con_error(f"No se pudo leer el archivo: {error}")
 
         if not filas:
+
             return volver_con_error("No se encontraron requerimientos válidos.")
 
         if len(filas) > 10000:
+
             return volver_con_error(
-                "El archivo supera el máximo de 10.000 requerimientos."
+                "El archivo supera el máximo " "de 10.000 requerimientos."
             )
+
+        try:
+            validar_filas(filas)
+
+        except ValueError as error:
+
+            return volver_con_error(str(error))
+
+        # ------------------------------------------
+        # DETECTAR DUPLICADOS
+        # ------------------------------------------
 
         referencias = validar_duplicados(filas)
 
-        # Consultar títulos existentes sin crear ni modificar requerimientos.
+        # Consultar requerimientos existentes.
+        # No escribir nada durante la vista previa.
+
         existentes = set(
             _norm_title(titulo)
             for titulo in RequisitoFoto.objects.filter(
                 tecnico_sesion__sesion__servicio=servicio,
                 activo=True,
-            ).values_list("titulo", flat=True)
+            ).values_list(
+                "titulo",
+                flat=True,
+            )
         )
 
         vista_filas = []
 
         for item in filas:
-            relacionadas = referencias.get(item["fila"], [])
 
-            vista_filas.append({
-                **item,
-                "duplicado": bool(relacionadas),
-                "relacionadas": relacionadas,
-                "existente": _norm_title(item["name"]) in existentes,
-            })
+            relacionadas = referencias.get(
+                item["fila"],
+                [],
+            )
 
-        total_duplicados = sum(
-            1 for item in vista_filas if item["duplicado"]
-        )
+            vista_filas.append(
+                {
+                    **item,
+                    "duplicado": bool(relacionadas),
+                    "relacionadas": relacionadas,
+                    "existente": (_norm_title(item["name"]) in existentes),
+                }
+            )
+
+        total_duplicados = sum(1 for item in vista_filas if item["duplicado"])
 
         total_existentes = sum(
-            1 for item in vista_filas
-            if item["existente"] and not item["duplicado"]
+            1 for item in vista_filas if item["existente"] and not item["duplicado"]
         )
+
+        # ------------------------------------------
+        # FIRMA TEMPORAL
+        # ------------------------------------------
 
         payload = {
             "servicio_id": servicio.pk,
@@ -915,112 +1544,197 @@ def importar_requisitos(request, servicio_id):
                 "preview_total": len(vista_filas),
                 "preview_duplicates": total_duplicados,
                 "preview_existing": total_existentes,
-                "preview_new": (
-                    len(vista_filas)
-                    - total_duplicados
-                    - total_existentes
-                ),
+                "preview_new": (len(vista_filas) - total_duplicados - total_existentes),
                 "preview_token": token,
                 "preview_can_confirm": not referencias,
             },
         )
 
-    # ---- Anexar / Reactivar (respetando índice único por (tecnico_sesion, titulo_norm))
+    # --------------------------------------------------
+    # IMPORTACIÓN CONFIRMADA
+    # --------------------------------------------------
+
+    normalized = [
+        (
+            item["order"],
+            item["name"],
+            item["mandatory"],
+            item["etapa"],
+        )
+        for item in filas
+    ]
+
     try:
+
         with transaction.atomic():
+
+            sesion = _get_or_create_sesion(servicio)
+
             asignaciones = list(
-                sesion.asignaciones
-                .select_related("tecnico")
-                .prefetch_related("requisitos")
+                sesion.asignaciones.select_related("tecnico").prefetch_related(
+                    "requisitos"
+                )
             )
 
             total_creados = 0
             total_omitidos = 0
             total_reactivados = 0
+            total_actualizados = 0
 
             for a in asignaciones:
-                # punto de partida = último orden + 1 (solo activos si existe el flag)
+
                 qs_max = RequisitoFoto.objects.filter(tecnico_sesion=a)
+
                 if hasattr(RequisitoFoto, "activo"):
                     qs_max = qs_max.filter(activo=True)
-                max_orden = qs_max.aggregate(m=Max("orden")).get("m")
-                base = (max_orden or -1) + 1
 
-                # mapa por nombre normalizado -> requisito existente (activo o no)
+                max_orden = qs_max.aggregate(m=Max("orden")).get("m")
+
+                base = max_orden + 1 if max_orden is not None else 0
+
                 existentes_map = {}
-                for x in RequisitoFoto.objects.filter(tecnico_sesion=a).only("id", "titulo", "titulo_norm", "obligatorio", "orden"):
+
+                for x in RequisitoFoto.objects.filter(tecnico_sesion=a):
+
                     existentes_map[_norm_title(x.titulo)] = x
 
                 nuevos = []
+
                 omitidos_local = 0
                 reactivados_local = 0
+                actualizados_local = 0
 
-                # respetamos el orden del archivo, pero “desplazado” al final
-                for i, (_o, name, mandatory) in enumerate(normalized):
+                for i, (
+                    _orden,
+                    name,
+                    mandatory,
+                    etapa,
+                ) in enumerate(normalized):
+
                     key = _norm_title(name)
+
                     exist = existentes_map.get(key)
 
                     if exist is True:
+
                         raise ValueError(
-                            "Título duplicado durante la confirmación: " + name
+                            "Título duplicado durante " "la confirmación: " + name
                         )
 
                     if exist:
-                        # si el modelo tiene 'activo' y está desactivado, reactivar + actualizar
-                        if hasattr(exist, "activo") and getattr(exist, "activo") is False:
-                            cambios = []
-                            if exist.obligatorio != mandatory:
-                                exist.obligatorio = mandatory; cambios.append("obligatorio")
-                            if exist.orden != (base + i):
-                                exist.orden = (base + i); cambios.append("orden")
-                            # ⬇️ asegurar que el normalizado coincide con el import
-                            if getattr(exist, "titulo_norm", None) != key:
-                                exist.titulo_norm = key; cambios.append("titulo_norm")
-                            exist.activo = True; cambios.append("activo")
-                            if cambios:
-                                exist.save(update_fields=cambios)
+
+                        cambios = []
+
+                        if exist.etapa != etapa:
+
+                            exist.etapa = etapa
+
+                            cambios.append("etapa")
+
+                        if exist.obligatorio != mandatory:
+
+                            exist.obligatorio = mandatory
+
+                            cambios.append("obligatorio")
+
+                        if exist.titulo_norm != key:
+
+                            exist.titulo_norm = key
+
+                            cambios.append("titulo_norm")
+
+                        if not exist.activo:
+
+                            exist.activo = True
+
+                            cambios.append("activo")
+
+                            if exist.orden != base + i:
+
+                                exist.orden = base + i
+
+                                cambios.append("orden")
+
                             reactivados_local += 1
+
+                        elif cambios:
+
+                            actualizados_local += 1
+
                         else:
-                            # ya existe activo con ese nombre -> lo omitimos (no duplicamos)
-                            # (y, de paso, saneamos titulo_norm si está desalineado)
-                            if getattr(exist, "titulo_norm", None) != key:
-                                exist.titulo_norm = key
-                                exist.save(update_fields=["titulo_norm"])
+
                             omitidos_local += 1
+
+                        if cambios:
+
+                            exist.save(update_fields=cambios)
+
                         continue
 
-                    # crear nuevo al final (con titulo_norm)
-                    nuevos.append(
-                        RequisitoFoto(
-                            tecnico_sesion=a,
-                            titulo=name,
-                            titulo_norm=key,   # ⬅️ clave para el índice único
-                            descripcion="",
-                            obligatorio=mandatory,
-                            orden=base + i,
-                        )
+                    nuevo = RequisitoFoto(
+                        tecnico_sesion=a,
+                        titulo=name,
+                        titulo_norm=key,
+                        descripcion="",
+                        obligatorio=mandatory,
+                        orden=base + i,
+                        etapa=etapa,
+                        activo=True,
                     )
-                    # registra en el mapa para evitar duplicados dentro del mismo import
-                    existentes_map[key] = True  # marcador simple
+
+                    nuevos.append(nuevo)
+
+                    existentes_map[key] = True
 
                 if nuevos:
+
                     RequisitoFoto.objects.bulk_create(nuevos)
+
                     total_creados += len(nuevos)
+
                 total_omitidos += omitidos_local
+
                 total_reactivados += reactivados_local
 
-        msg = f"Importados: {total_creados} agregados"
-        if total_reactivados:
-            msg += f", {total_reactivados} reactivados"
-        if total_omitidos:
-            msg += f", {total_omitidos} omitidos por duplicado"
-        msg += "."
-        messages.success(request, msg)
-        return redirect('operaciones:fotos_configurar_requisitos', servicio_id=servicio_id)
+                total_actualizados += actualizados_local
 
-    except Exception as e:
-        messages.error(request, f"No se pudo aplicar la importación: {e}")
-        return redirect('operaciones:fotos_import_requirements_page', servicio_id=servicio_id)
+        mensaje = f"Importación completada: " f"{total_creados} agregados"
+
+        if total_reactivados:
+
+            mensaje += f", {total_reactivados} reactivados"
+
+        if total_actualizados:
+
+            mensaje += f", {total_actualizados} actualizados"
+
+        if total_omitidos:
+
+            mensaje += f", {total_omitidos} ya existentes"
+
+        mensaje += "."
+
+        messages.success(
+            request,
+            mensaje,
+        )
+
+        return redirect(
+            "operaciones:fotos_configurar_requisitos",
+            servicio_id=servicio_id,
+        )
+
+    except Exception as error:
+
+        messages.error(
+            request,
+            f"No se pudo aplicar la importación: {error}",
+        )
+
+        return redirect(
+            "operaciones:fotos_import_requirements_page",
+            servicio_id=servicio_id,
+        )
 
 
 # ============================
@@ -1440,45 +2154,64 @@ def upload_evidencias_fotos(request, pk):
     # ---------- GET: SYNC de requisitos ACTIVOS a nivel de sesión ----------
     # En vez de clonar solo cuando no hay ninguno, sincronizamos siempre lo faltante.
     # Canon = títulos activos de TODA la sesión, únicos por título normalizado.
-    canon_map = {}  # norm -> (titulo, obligatorio, orden)
-    for r in (RequisitoFoto.objects
-              .filter(tecnico_sesion__sesion=s, activo=True)
-              .order_by("orden", "id")
-              .values("titulo", "obligatorio", "orden")):
+    canon_map = {}
+    for r in (
+        RequisitoFoto.objects
+        .filter(tecnico_sesion__sesion=s, activo=True)
+        .order_by("orden", "id")
+        .values("titulo", "obligatorio", "orden", "etapa")
+    ):
         k = _norm_title(r["titulo"])
         if k not in canon_map:
-            canon_map[k] = (r["titulo"], r["obligatorio"], r["orden"])
+            canon_map[k] = (
+                r["titulo"], r["obligatorio"], r["orden"], r["etapa"] or ""
+            )
+        elif not canon_map[k][3] and r["etapa"]:
+            old = canon_map[k]
+            canon_map[k] = (old[0], old[1], old[2], r["etapa"])
 
-    mine = { _norm_title(x.titulo): x
-             for x in RequisitoFoto.objects.filter(tecnico_sesion=a) }
+    mine = {
+        _norm_title(x.titulo): x
+        for x in RequisitoFoto.objects.filter(tecnico_sesion=a)
+    }
 
     to_create = []
-    for k, (titulo, oblig, orden) in canon_map.items():
+    for k, (titulo, oblig, orden, etapa) in canon_map.items():
         if k not in mine:
             to_create.append(RequisitoFoto(
                 tecnico_sesion=a,
                 titulo=titulo,
+                titulo_norm=k,
                 descripcion="",
                 obligatorio=oblig,
                 orden=orden,
+                etapa=etapa,
                 activo=True,
             ))
         else:
             obj = mine[k]
             upds = []
-            if hasattr(obj, "activo") and not obj.activo:
-                obj.activo = True; upds.append("activo")
+            if not obj.activo:
+                obj.activo = True
+                upds.append("activo")
             if obj.obligatorio != oblig:
-                obj.obligatorio = oblig; upds.append("obligatorio")
+                obj.obligatorio = oblig
+                upds.append("obligatorio")
             if obj.orden != orden:
-                obj.orden = orden; upds.append("orden")
+                obj.orden = orden
+                upds.append("orden")
+            if obj.etapa != etapa:
+                obj.etapa = etapa
+                upds.append("etapa")
             if upds:
                 obj.save(update_fields=upds)
 
     if to_create:
         for r in to_create:
             r.titulo_norm = _norm_title(r.titulo)
-        RequisitoFoto.objects.bulk_create(to_create, ignore_conflicts=True)
+        RequisitoFoto.objects.bulk_create(
+            to_create, ignore_conflicts=True
+        )
     # ----------------------------------------------------------------------
 
     # Requisitos de ESTA asignación (solo activos) con conteo "mío"
@@ -2032,47 +2765,162 @@ def revisar_sesion_fotos(request, servicio_id):
         return redirect(f"{revisar_url}?next={next_url}")
 
     # ==========================================================
-    # EVIDENCIAS POR ASIGNACIÓN
+    # EVIDENCIAS Y REQUISITOS GLOBALES POR ETAPA
     # ==========================================================
+    # Un requerimiento se completa con una evidencia de
+    # cualquiera de los técnicos de la sesión.
+    # Nunca se cuenta dos veces por estar replicado.
+    # Este bloque solo consulta datos.
+    # ==========================================================
+
     evidencias_por_asig = []
+    canon_por_norm = {}
+    extras_revision = []
 
-    requisitos_con_evidencia = set()
+    for asignacion in asignaciones:
 
-    for a in asignaciones:
-        evs = list(_order_evidencias(a.evidencias.select_related("requisito")))
-
-        evidencias_por_asig.append((a, evs))
-
-        for ev in evs:
-            if ev.requisito_id:
-                requisitos_con_evidencia.add(ev.requisito_id)
-
-    # ==========================================================
-    # REQUISITOS CANÓNICOS DEL PROYECTO
-    # ==========================================================
-    requisitos_canonicos = []
-
-    if asignaciones:
-        requisitos_canonicos = list(
-            asignaciones[0]
-            .requisitos.filter(activo=True)
-            .order_by(
-                "orden",
-                "id",
+        evidencias_asignacion = list(
+            _order_evidencias(
+                asignacion.evidencias.select_related("requisito")
             )
         )
 
-    # ==========================================================
-    # FALTANTES GLOBALES
-    # ==========================================================
+        evidencias_por_asig.append(
+            (asignacion, evidencias_asignacion)
+        )
+
+        for requisito in asignacion.requisitos.all():
+
+            if not requisito.activo:
+                continue
+
+            clave = _norm_title(requisito.titulo)
+
+            if not clave:
+                continue
+
+            existente = canon_por_norm.get(clave)
+
+            if existente is None:
+                canon_por_norm[clave] = {
+                    "id": requisito.id,
+                    "titulo": requisito.titulo,
+                    "orden": requisito.orden,
+                    "obligatorio": requisito.obligatorio,
+                    "etapa": requisito.etapa or "",
+                    "evidencias": [],
+                }
+            else:
+                # Conservar una etapa válida si otra copia
+                # del mismo requisito todavía está sin etapa.
+                if not existente["etapa"] and requisito.etapa:
+                    existente["etapa"] = requisito.etapa
+
+                if (
+                    requisito.orden,
+                    requisito.id,
+                ) < (
+                    existente["orden"],
+                    existente["id"],
+                ):
+                    existente["id"] = requisito.id
+                    existente["orden"] = requisito.orden
+                    existente["titulo"] = requisito.titulo
+
+                existente["obligatorio"] = (
+                    existente["obligatorio"] or requisito.obligatorio
+                )
+
+    # Reunir fotos de TODOS los técnicos por título normalizado.
+    for asignacion, evidencias_asignacion in evidencias_por_asig:
+
+        for evidencia in evidencias_asignacion:
+
+            if evidencia.requisito_id:
+                clave = _norm_title(evidencia.requisito.titulo)
+                requisito = canon_por_norm.get(clave)
+
+                if requisito is not None:
+                    requisito["evidencias"].append({
+                        "foto": evidencia,
+                        "tecnico": asignacion.tecnico,
+                    })
+            else:
+                extras_revision.append({
+                    "foto": evidencia,
+                    "tecnico": asignacion.tecnico,
+                })
+
+    etapas_definidas = (
+        ("antes", "Antes"),
+        ("durante", "Durante"),
+        ("despues", "Después"),
+        ("", "Sin etapa"),
+    )
+
+    etapas_revision = []
     faltantes_global = []
 
-    for requisito in requisitos_canonicos:
-        if not requisito.obligatorio:
+    total_requisitos_revision = 0
+    total_completadas_revision = 0
+    total_pendientes_revision = 0
+
+    for codigo, nombre in etapas_definidas:
+
+        requisitos_etapa = [
+            requisito
+            for requisito in canon_por_norm.values()
+            if requisito["etapa"] == codigo
+        ]
+
+        if not requisitos_etapa:
             continue
 
-        if requisito.id not in requisitos_con_evidencia:
-            faltantes_global.append(requisito.titulo)
+        requisitos_etapa.sort(
+            key=lambda requisito: (
+                requisito["orden"],
+                requisito["id"],
+            )
+        )
+
+        completadas = 0
+        pendientes = 0
+
+        for requisito in requisitos_etapa:
+
+            requisito["completada"] = bool(
+                requisito["evidencias"]
+            )
+
+            if requisito["completada"]:
+                completadas += 1
+            else:
+                pendientes += 1
+
+                if requisito["obligatorio"]:
+                    faltantes_global.append({
+                        "id": requisito["id"],
+                        "titulo": requisito["titulo"],
+                        "etapa": nombre,
+                    })
+
+        total = len(requisitos_etapa)
+
+        etapas_revision.append({
+            "codigo": codigo or "sin-etapa",
+            "nombre": nombre,
+            "requisitos": requisitos_etapa,
+            "total": total,
+            "completadas": completadas,
+            "pendientes": pendientes,
+            "porcentaje": round(
+                100 * completadas / total
+            ) if total else 0,
+        })
+
+        total_requisitos_revision += total
+        total_completadas_revision += completadas
+        total_pendientes_revision += pendientes
 
     # ==========================================================
     # RENDER
@@ -2084,6 +2932,11 @@ def revisar_sesion_fotos(request, servicio_id):
             "servicio": servicio,
             "sesion": sesion,
             "evidencias_por_asig": evidencias_por_asig,
+            "etapas_revision": etapas_revision,
+            "extras_revision": extras_revision,
+            "total_requisitos_revision": total_requisitos_revision,
+            "total_completadas_revision": total_completadas_revision,
+            "total_pendientes_revision": total_pendientes_revision,
             "can_review": can_review,
             "faltantes_global": faltantes_global,
             "reporte_listo": bool(servicio.reporte_fotografico),

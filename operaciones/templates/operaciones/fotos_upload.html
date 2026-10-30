@@ -41,8 +41,39 @@
 {% endif %}
 
 <div id="faltantes-banner"
-     class="mt-3 p-3 rounded bg-yellow-50 text-yellow-800 text-sm {% if not faltantes_global %}hidden{% endif %}">
-  {% if faltantes_global %}Faltan fotos requeridas: {{ faltantes_global|join:", " }}.{% endif %}
+     class="mt-3 p-3 rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-900 text-sm">
+
+  <div class="font-semibold">
+    📸 Progreso general:
+    <span id="fotos-total-done">0</span>
+    de
+    <span id="fotos-total-req">0</span>
+    fotografías completadas
+  </div>
+
+  <div class="mt-2">
+    ⚠️ <strong id="faltantes-count">{{ faltantes_global|length }}</strong>
+    fotografías obligatorias pendientes
+  </div>
+
+  <button type="button"
+          id="faltantes-toggle"
+          aria-expanded="false"
+          aria-controls="faltantes-panel"
+          class="mt-3 px-3 py-2 rounded-lg bg-white border border-yellow-300 font-medium">
+    Ver pendientes
+  </button>
+
+  <div id="faltantes-panel" class="hidden mt-3">
+    <ol id="faltantes-list" class="space-y-2 break-words"></ol>
+
+    <button type="button"
+            id="faltantes-more"
+            class="hidden mt-3 px-3 py-2 rounded-lg bg-white border">
+      Mostrar 10 más
+    </button>
+  </div>
+
 </div>
 
 
@@ -50,9 +81,14 @@
   <div class="grid md:grid-cols-2 gap-6 mt-4">
     <div>
       <h2 class="font-semibold mb-2">Requisitos</h2>
-      <ul class="space-y-2">
+      <ul class="space-y-2" id="requisitos-lista">
         {% for r in requisitos %}
-<li class="border rounded p-3">
+<li class="border rounded p-3 requisito-tarjeta"
+    id="requisito-{{ r.id }}"
+    data-etapa="{{ r.etapa|default:'' }}"
+    data-titulo="{{ r.titulo }}"
+    data-obligatorio="{% if r.obligatorio %}1{% else %}0{% endif %}"
+    data-completado="{% if r.uploaded > 0 or r.completed_global %}1{% else %}0{% endif %}">
   <div class="flex items-center justify-between">
     <div class="font-medium">
       {{ r.orden }}. {{ r.titulo }} {% if r.obligatorio %}<span class="text-red-600">*</span>{% endif %}
@@ -1070,15 +1106,12 @@ async function bestEffortGps(form){
   if (!STATUS_URL) return;
 
   function updateMissingBanner(list){
-    var el = document.getElementById('faltantes-banner');
-    if (!el) return;
-    if (Array.isArray(list) && list.length){
-      el.classList.remove('hidden');
-      el.textContent = 'Faltan fotos requeridas: ' + list.join(', ') + '.';
-    } else {
-      el.classList.add('hidden');
-      el.textContent = '';
-    }
+    if (!Array.isArray(list)) return;
+
+    window.dispatchEvent(new CustomEvent(
+      "gz:fotos-faltantes",
+      { detail: { faltantes: list } }
+    ));
   }
 
   function setFinishEnabled(enabled){
@@ -1137,6 +1170,9 @@ async function bestEffortGps(form){
         updateReqFromServer(j.requisitos || []);
         setFinishEnabled(!!j.can_finish);
         updateMissingBanner(j.faltantes_global || []);
+        window.dispatchEvent(new Event(
+          "gz:fotos-estado-actualizado"
+        ));
 
     if ('extras_left' in j) {
    window.__EXTRAS_LEFT = j.extras_left;     // puede ser número o null (ilimitado)
@@ -1235,6 +1271,326 @@ async function bestEffortGps(form){
     }
   }
 };
+</script>
+
+
+<script id="gz-upload-stages-v2">
+document.addEventListener("DOMContentLoaded", function () {
+  const lista = document.getElementById("requisitos-lista");
+  if (!lista) return;
+
+  const tarjetas = Array.from(
+    lista.querySelectorAll(".requisito-tarjeta")
+  );
+
+  const aviso = document.getElementById("faltantes-banner");
+  const botonPendientes = document.getElementById("faltantes-toggle");
+  const panelPendientes = document.getElementById("faltantes-panel");
+  const listaPendientes = document.getElementById("faltantes-list");
+  const botonMas = document.getElementById("faltantes-more");
+  const cantidadPendientes = document.getElementById("faltantes-count");
+
+  const etapas = [
+    ["antes", "Antes"],
+    ["durante", "Durante"],
+    ["despues", "Después"],
+    ["", "Sin etapa"]
+  ];
+
+  const grupos = new Map();
+
+  const normalizar = texto => String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const tieneEtapas = tarjetas.some(
+    tarjeta => !!tarjeta.dataset.etapa
+  );
+
+  const claveSesion =
+    "gz-fotos-etapas-v2:" + window.location.pathname;
+
+  function guardarAbiertas() {
+    const abiertas = [];
+
+    grupos.forEach((grupo, key) => {
+      if (grupo.details.open) abiertas.push(key);
+    });
+
+    try {
+      sessionStorage.setItem(
+        claveSesion,
+        JSON.stringify(abiertas)
+      );
+    } catch (_) {}
+  }
+
+  // Los formularios AJAX existentes NO se reconstruyen.
+  // Solo movemos sus tarjetas originales dentro de etapas.
+  if (tieneEtapas) {
+    const contenedor = document.createElement("div");
+    contenedor.id = "gz-etapas";
+    contenedor.className = "space-y-3";
+
+    etapas.forEach(([clave, nombre]) => {
+      const elementos = tarjetas.filter(
+        tarjeta => (tarjeta.dataset.etapa || "") === clave
+      );
+
+      if (!elementos.length) return;
+
+      const detalles = document.createElement("details");
+      detalles.className =
+        "gz-etapa border rounded-xl overflow-hidden";
+      detalles.dataset.etapa = clave || "sin-etapa";
+
+      const titulo = document.createElement("summary");
+      titulo.className =
+        "cursor-pointer bg-gray-50 px-4 py-4 select-none";
+
+      const cabecera = document.createElement("div");
+      cabecera.className =
+        "flex flex-wrap items-center justify-between gap-2";
+
+      const nombreEl = document.createElement("strong");
+      nombreEl.textContent = "📁 " + nombre;
+
+      const numeros = document.createElement("span");
+      numeros.className = "text-sm text-gray-600";
+
+      cabecera.append(nombreEl, numeros);
+
+      const pista = document.createElement("div");
+      pista.className =
+        "h-2 bg-gray-200 rounded-full overflow-hidden mt-3";
+
+      const barra = document.createElement("div");
+      barra.className = "h-full bg-emerald-500";
+      barra.style.width = "0%";
+      pista.appendChild(barra);
+
+      titulo.append(cabecera, pista);
+
+      const contenido = document.createElement("ul");
+      contenido.className = "space-y-2 p-3";
+
+      elementos.forEach(
+        tarjeta => contenido.appendChild(tarjeta)
+      );
+
+      detalles.append(titulo, contenido);
+      contenedor.appendChild(detalles);
+
+      grupos.set(clave, {
+        details: detalles,
+        numeros,
+        barra,
+        elementos
+      });
+
+      detalles.addEventListener("toggle", guardarAbiertas);
+    });
+
+    // No ocultar tarjetas mientras tengan archivos en cola.
+    lista.replaceWith(contenedor);
+
+    try {
+      const guardadas = JSON.parse(
+        sessionStorage.getItem(claveSesion) || "[]"
+      );
+
+      grupos.forEach((grupo, clave) => {
+        grupo.details.open = guardadas.includes(clave);
+      });
+    } catch (_) {}
+  }
+
+  function completada(tarjeta) {
+    const distintivo = tarjeta.querySelector(
+      ".req-badge[data-state]"
+    );
+
+    if (distintivo) {
+      return distintivo.dataset.state === "done";
+    }
+
+    return tarjeta.dataset.completado === "1";
+  }
+
+  function actualizarProgreso() {
+    let completadas = 0;
+
+    tarjetas.forEach(tarjeta => {
+      if (completada(tarjeta)) completadas++;
+    });
+
+    const totalEl = document.getElementById("fotos-total-req");
+    const doneEl = document.getElementById("fotos-total-done");
+
+    if (totalEl) totalEl.textContent = tarjetas.length;
+    if (doneEl) doneEl.textContent = completadas;
+
+    grupos.forEach(grupo => {
+      const total = grupo.elementos.length;
+
+      const hechas = grupo.elementos.filter(
+        completada
+      ).length;
+
+      const faltan = total - hechas;
+
+      const porcentaje = total
+        ? Math.round(hechas * 100 / total)
+        : 0;
+
+      grupo.numeros.textContent =
+        `${hechas} completadas · ${faltan} pendientes · ${porcentaje}%`;
+
+      grupo.barra.style.width = porcentaje + "%";
+    });
+  }
+
+  let faltantes = [];
+  let limiteVisible = 10;
+
+  function mostrarPendientes() {
+    if (!listaPendientes || !botonMas) return;
+
+    listaPendientes.replaceChildren();
+
+    faltantes.slice(0, limiteVisible).forEach(nombre => {
+      const item = document.createElement("li");
+      const boton = document.createElement("button");
+
+      boton.type = "button";
+      boton.className =
+        "text-left underline hover:text-blue-700";
+      boton.textContent = nombre;
+
+      boton.addEventListener("click", function () {
+        const destino = tarjetas.find(
+          tarjeta =>
+            normalizar(tarjeta.dataset.titulo) === normalizar(nombre)
+        );
+
+        if (!destino) return;
+
+        const etapa = destino.closest("details.gz-etapa");
+
+        if (etapa) {
+          etapa.open = true;
+          guardarAbiertas();
+        }
+
+        requestAnimationFrame(function () {
+          destino.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+        });
+      });
+
+      item.appendChild(boton);
+      listaPendientes.appendChild(item);
+    });
+
+    const restantes = faltantes.length - limiteVisible;
+
+    botonMas.classList.toggle("hidden", restantes <= 0);
+
+    if (restantes > 0) {
+      botonMas.textContent =
+        `Mostrar 10 más (${restantes} restantes)`;
+    }
+  }
+
+  function actualizarFaltantes(nombres) {
+    // Se conservan los nombres que entrega el servidor,
+    // sin convertir la lista en una pared de texto.
+    faltantes = Array.isArray(nombres) ? nombres : [];
+
+    if (cantidadPendientes) {
+      cantidadPendientes.textContent = faltantes.length;
+    }
+
+    if (aviso) {
+      aviso.classList.toggle(
+        "border-emerald-200",
+        faltantes.length === 0
+      );
+    }
+
+    mostrarPendientes();
+    actualizarProgreso();
+  }
+
+  if (botonPendientes && panelPendientes) {
+    botonPendientes.addEventListener("click", function () {
+      const abrir = panelPendientes.classList.contains("hidden");
+
+      panelPendientes.classList.toggle("hidden", !abrir);
+
+      botonPendientes.setAttribute(
+        "aria-expanded",
+        abrir ? "true" : "false"
+      );
+
+      botonPendientes.textContent = abrir
+        ? "Ocultar pendientes"
+        : "Ver pendientes";
+    });
+  }
+
+  if (botonMas) {
+    botonMas.addEventListener("click", function () {
+      limiteVisible += 10;
+      mostrarPendientes();
+    });
+  }
+
+  window.addEventListener("gz:fotos-faltantes", function (evento) {
+    actualizarFaltantes(evento.detail.faltantes);
+  });
+
+  window.addEventListener(
+    "gz:fotos-estado-actualizado",
+    actualizarProgreso
+  );
+
+  // En una carga AJAX exitosa se actualizan los badges
+  // existentes. Las etapas siguen abiertas y no movemos
+  // el scroll de la página.
+  const observador = new MutationObserver(function (cambios) {
+    if (cambios.some(cambio =>
+      cambio.type === "attributes" &&
+      cambio.attributeName === "data-state"
+    )) {
+      actualizarProgreso();
+    }
+  });
+
+  tarjetas.forEach(tarjeta => {
+    tarjeta.querySelectorAll(".req-badge").forEach(distintivo => {
+      observador.observe(distintivo, {
+        attributes: true,
+        attributeFilter: ["data-state"]
+      });
+    });
+  });
+
+  // Estado inicial de los requerimientos visibles.
+  // El servidor enviará luego el estado global definitivo.
+  const iniciales = tarjetas
+    .filter(tarjeta =>
+      tarjeta.dataset.obligatorio === "1" && !completada(tarjeta)
+    )
+    .map(tarjeta => tarjeta.dataset.titulo);
+
+  actualizarFaltantes(iniciales);
+});
 </script>
 
 {% endblock %}

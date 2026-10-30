@@ -82,18 +82,79 @@
 </div>
 
 
-{% if faltantes_global %}
-  <div class="mb-6 p-4 rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-900">
-    <div class="font-semibold mb-1">
-      ⚠️ Faltan fotos requeridas
+
+<!-- gz-admin-stages-v1 -->
+<div class="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+
+  <div class="font-semibold text-gray-900">
+    📸 Progreso fotográfico del servicio
+  </div>
+
+  <div class="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+
+    <div class="rounded-lg bg-white border p-3">
+      <div class="text-gray-500">Requerimientos</div>
+      <div class="text-xl font-bold">
+        {{ total_requisitos_revision }}
+      </div>
     </div>
 
-    <div class="text-sm">
-      {{ faltantes_global|join:", " }}.
+    <div class="rounded-lg bg-green-50 border border-green-200 p-3">
+      <div class="text-green-800">🟢 Completados</div>
+      <div class="text-xl font-bold text-green-800">
+        {{ total_completadas_revision }}
+      </div>
+    </div>
+
+    <div class="rounded-lg bg-red-50 border border-red-200 p-3">
+      <div class="text-red-800">🔴 Pendientes</div>
+      <div class="text-xl font-bold text-red-800">
+        {{ total_pendientes_revision }}
+      </div>
     </div>
   </div>
-{% endif %}
- 
+
+  <div class="mt-4 text-sm">
+    ⚠️ <strong>{{ faltantes_global|length }}</strong>
+    fotografías obligatorias pendientes.
+  </div>
+
+  {% if faltantes_global %}
+    <button type="button"
+            id="admin-pendientes-toggle"
+            aria-expanded="false"
+            aria-controls="admin-pendientes-panel"
+            class="mt-3 px-3 py-2 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium">
+      Ver pendientes
+    </button>
+
+    <div id="admin-pendientes-panel"
+         class="hidden mt-3 rounded-lg border border-amber-200 bg-white p-3">
+
+      <ol id="admin-pendientes-list" class="space-y-2">
+        {% for faltante in faltantes_global %}
+          <li class="admin-pendiente-item {% if forloop.counter > 10 %}hidden{% endif %}">
+            <button type="button"
+                    data-ir-requisito="{{ faltante.id }}"
+                    class="text-left text-sm text-amber-900 hover:text-blue-700 underline">
+              {{ faltante.titulo }} — {{ faltante.etapa }}
+            </button>
+          </li>
+        {% endfor %}
+      </ol>
+
+      {% if faltantes_global|length > 10 %}
+        <button type="button"
+                id="admin-pendientes-mas"
+                class="mt-3 px-3 py-2 border rounded-lg bg-gray-50 hover:bg-gray-100 text-sm">
+          Mostrar 10 más
+        </button>
+      {% endif %}
+
+    </div>
+  {% endif %}
+
+</div>
 {% if reporte_listo %}
   {% if reporte_url or acta_url %}
     <div class="mb-6 p-3 rounded bg-blue-50 text-blue-800 text-sm flex items-center justify-between">
@@ -112,48 +173,86 @@
   {% endif %}
 {% endif %}
 
-  <!-- Técnicos -->
-  <div class="mb-4">
-    <h2 class="text-sm font-semibold text-gray-800 mb-2">Técnicos</h2>
-    <div class="flex flex-wrap gap-2">
-      {% for asig, _evs in evidencias_por_asig %}
-        <span class="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-50 border">
-          {{ asig.tecnico.get_full_name|default:asig.tecnico.username }}
-        </span>
-      {% empty %}
-        <span class="text-gray-500 text-sm">No hay técnicos asignados.</span>
-      {% endfor %}
-    </div>
-  </div>
 
-  <!-- Evidencias por técnico -->
-  {% for asig, evs in evidencias_por_asig %}
-    <section class="mb-8">
-      <div class="flex items-baseline justify-between">
-        <h3 class="text-lg font-semibold">
-          👷 {{ asig.tecnico.get_full_name|default:asig.tecnico.username }}
-        </h3>
-        <div class="text-xs text-gray-500">
-          Aceptado: {{ asig.aceptado_en|date:"Y-m-d H:i"|default:"—" }} ·
-          Finalizado: {{ asig.finalizado_en|date:"Y-m-d H:i"|default:"—" }}
-        </div>
-      </div>
+  <!-- Revisión consolidada por etapa -->
+  <div id="admin-revision-etapas" class="space-y-4">
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[70vh] overflow-auto mt-2">
-     {# ...dentro del grid de evidencias... #}
-{% for ev in evs %}
+    {% for etapa in etapas_revision %}
+
+      <details
+        class="admin-etapa border border-gray-200 rounded-xl overflow-hidden"
+        data-etapa="{{ etapa.codigo }}">
+
+        <summary class="cursor-pointer px-4 py-4 bg-gray-50 hover:bg-gray-100">
+
+          <div class="flex flex-wrap justify-between items-center gap-2">
+
+            <div class="font-bold text-gray-900">
+              📁 {{ etapa.nombre }}
+            </div>
+
+            <div class="text-sm text-gray-700">
+              🟢 {{ etapa.completadas }} completadas ·
+              🔴 {{ etapa.pendientes }} pendientes ·
+              {{ etapa.porcentaje }}%
+            </div>
+
+          </div>
+
+          <div class="mt-3 w-full h-2 rounded-full bg-gray-200 overflow-hidden">
+            <div class="h-full bg-green-500"
+                 style="width: {{ etapa.porcentaje }}%;"></div>
+          </div>
+
+        </summary>
+
+        <div class="p-3 sm:p-4 space-y-3">
+
+          {% for requisito in etapa.requisitos %}
+
+            <article id="admin-requisito-{{ requisito.id }}"
+                     class="admin-requisito rounded-lg border p-3 sm:p-4
+                            {% if requisito.completada %}border-green-200{% else %}border-red-200{% endif %}">
+
+              <div class="flex flex-wrap items-start justify-between gap-2">
+
+                <div class="font-semibold text-sm sm:text-base">
+                  {{ requisito.orden }}. {{ requisito.titulo }}
+                  {% if requisito.obligatorio %}
+                    <span class="text-red-600">*</span>
+                  {% endif %}
+                </div>
+
+                {% if requisito.completada %}
+                  <span class="text-xs px-2 py-1 rounded bg-green-100 text-green-800">
+                    🟢 Completada
+                  </span>
+                {% else %}
+                  <span class="text-xs px-2 py-1 rounded bg-red-100 text-red-800">
+                    🔴 Pendiente
+                  </span>
+                {% endif %}
+
+              </div>
+
+              {% if requisito.evidencias %}
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+
+                  {% for item in requisito.evidencias %}
+
   <figure class="border rounded p-2 relative">
     <div class="relative rounded overflow-hidden bg-black/5">
- {% if ev.lat and ev.lng %}
+ {% if item.foto.lat and item.foto.lng %}
   <div class="absolute top-2 left-2 z-10">
     <a target="_blank"
-       href="https://www.google.com/maps?q={{ ev.lat|unlocalize }},{{ ev.lng|unlocalize }}"
+       href="https://www.google.com/maps?q={{ item.foto.lat|unlocalize }},{{ item.foto.lng|unlocalize }}"
        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[11px] shadow">
-      📍 {{ ev.lat|floatformat:5|unlocalize }}, {{ ev.lng|floatformat:5|unlocalize }}
+      📍 {{ item.foto.lat|floatformat:5|unlocalize }}, {{ item.foto.lng|floatformat:5|unlocalize }}
     </a>
-    {% if ev.gps_accuracy_m %}
+    {% if item.foto.gps_accuracy_m %}
       <span class="ml-1 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px]">
-        ± {{ ev.gps_accuracy_m|floatformat:0|unlocalize }} m
+        ± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m
       </span>
     {% endif %}
   </div>
@@ -161,10 +260,10 @@
 
 
   {# Imagen completa (sin recorte) + click para abrir en pestaña nueva #}
-  <a href="{{ ev.imagen.url }}" target="_blank" rel="noopener"
+  <a href="{{ item.foto.imagen.url }}" target="_blank" rel="noopener"
      class="block group">
     <div class="w-full max-h-96 grid place-items-center p-2">
-      <img src="{{ ev.imagen.url }}"
+      <img src="{{ item.foto.imagen.url }}"
            alt="Foto"
            loading="lazy"
            class="max-w-full max-h-96 h-auto w-auto object-contain rounded
@@ -180,7 +279,7 @@
                    bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
             title="Eliminar esta foto"
             data-delete
-            data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' ev.id %}?next={{ next_url|default:''|urlencode }}">
+            data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' item.foto.id %}?next={{ next_url|default:''|urlencode }}">
       ✕
     </button>
   {% else %}
@@ -194,34 +293,154 @@
 </div>
 
     <figcaption class="text-xs mt-1">
-      <div class="font-medium">{{ ev.requisito.titulo|default:ev.titulo_manual|default:"Extra" }}</div>
-      <div>🕒 {{ ev.client_taken_at|default:ev.tomada_en|date:"Y-m-d H:i" }}</div>
+      <div class="font-semibold text-indigo-700 mb-1">
+        👷 {{ item.tecnico.get_full_name|default:item.tecnico.username }}
+      </div>
+      <div class="font-medium">{{ item.foto.requisito.titulo|default:item.foto.titulo_manual|default:"Extra" }}</div>
+      <div>🕒 {{ item.foto.client_taken_at|default:item.foto.tomada_en|date:"Y-m-d H:i" }}</div>
       <div class="text-gray-600">
-  {% if ev.lat and ev.lng %}
-    📍 {{ ev.lat|floatformat:5|unlocalize }}, {{ ev.lng|floatformat:5|unlocalize }}
+  {% if item.foto.lat and item.foto.lng %}
+    📍 {{ item.foto.lat|floatformat:5|unlocalize }}, {{ item.foto.lng|floatformat:5|unlocalize }}
     <a class="ml-1 text-blue-600 hover:underline" target="_blank"
-       href="https://www.google.com/maps?q={{ ev.lat|unlocalize }},{{ ev.lng|unlocalize }}">
+       href="https://www.google.com/maps?q={{ item.foto.lat|unlocalize }},{{ item.foto.lng|unlocalize }}">
       Abrir mapa
     </a>
-    {% if ev.gps_accuracy_m %}
-      <span class="ml-1 text-gray-400">± {{ ev.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
+    {% if item.foto.gps_accuracy_m %}
+      <span class="ml-1 text-gray-400">± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
     {% endif %}
   {% else %}
     <span class="text-gray-400">📍 Sin GPS</span>
   {% endif %}
 </div>
-      {% if ev.nota %}<div class="text-gray-600">{{ ev.nota }}</div>{% endif %}
+      {% if item.foto.nota %}<div class="text-gray-600">{{ item.foto.nota }}</div>{% endif %}
     </figcaption>
   </figure>
-{% empty %}
-  <div class="text-gray-500 text-sm">Este técnico aún no tiene fotos.</div>
-{% endfor %}
 
+                  {% endfor %}
+
+                </div>
+
+              {% else %}
+
+                <div class="mt-2 text-sm text-gray-500">
+                  Todavía no se ha cargado una fotografía para este requerimiento.
+                </div>
+
+              {% endif %}
+
+            </article>
+
+          {% endfor %}
+
+        </div>
+
+      </details>
+
+    {% empty %}
+
+      <div class="text-sm text-gray-500 p-4 border rounded-lg">
+        No hay requerimientos fotográficos configurados.
       </div>
-    </section>
-  {% empty %}
-    <div class="text-gray-500">No hay evidencias para mostrar.</div>
-  {% endfor %}
+
+    {% endfor %}
+
+    {% if extras_revision %}
+
+      <details class="admin-etapa border border-gray-200 rounded-xl overflow-hidden"
+               data-etapa="extras">
+
+        <summary class="cursor-pointer px-4 py-4 bg-gray-50 hover:bg-gray-100 font-bold">
+          📷 Fotografías extra — {{ extras_revision|length }}
+        </summary>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 p-3">
+
+          {% for item in extras_revision %}
+
+  <figure class="border rounded p-2 relative">
+    <div class="relative rounded overflow-hidden bg-black/5">
+ {% if item.foto.lat and item.foto.lng %}
+  <div class="absolute top-2 left-2 z-10">
+    <a target="_blank"
+       href="https://www.google.com/maps?q={{ item.foto.lat|unlocalize }},{{ item.foto.lng|unlocalize }}"
+       class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600/90 text-white text-[11px] shadow">
+      📍 {{ item.foto.lat|floatformat:5|unlocalize }}, {{ item.foto.lng|floatformat:5|unlocalize }}
+    </a>
+    {% if item.foto.gps_accuracy_m %}
+      <span class="ml-1 px-2 py-0.5 rounded-full bg-black/60 text-white text-[10px]">
+        ± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m
+      </span>
+    {% endif %}
+  </div>
+{% endif %}
+
+
+  {# Imagen completa (sin recorte) + click para abrir en pestaña nueva #}
+  <a href="{{ item.foto.imagen.url }}" target="_blank" rel="noopener"
+     class="block group">
+    <div class="w-full max-h-96 grid place-items-center p-2">
+      <img src="{{ item.foto.imagen.url }}"
+           alt="Foto"
+           loading="lazy"
+           class="max-w-full max-h-96 h-auto w-auto object-contain rounded
+                  transition-transform group-hover:scale-[1.01] cursor-zoom-in" />
+    </div>
+  </a>
+
+{# Botón X / candado #}
+{% if request.user.is_superuser or request.user.es_supervisor %}
+  {% if s.estado == 'en_revision_supervisor' or s.estado == 'en_progreso' or s.estado == 'rechazado_supervisor' %}
+    <button type="button"
+            class="absolute top-2 right-2 z-30 w-8 h-8 rounded-full flex items-center justify-center
+                   bg-red-600/90 hover:bg-red-700 text-white text-sm shadow"
+            title="Eliminar esta foto"
+            data-delete
+            data-action="{% url 'operaciones:fotos_borrar_evidencia_supervisor' item.foto.id %}?next={{ next_url|default:''|urlencode }}">
+      ✕
+    </button>
+  {% else %}
+    <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
+          title="Bloqueado">🔒</span>
+  {% endif %}
+{% else %}
+  <span class="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-300 text-white text-sm grid place-items-center"
+        title="Bloqueado">🔒</span>
+{% endif %}
+</div>
+
+    <figcaption class="text-xs mt-1">
+      <div class="font-semibold text-indigo-700 mb-1">
+        👷 {{ item.tecnico.get_full_name|default:item.tecnico.username }}
+      </div>
+      <div class="font-medium">{{ item.foto.requisito.titulo|default:item.foto.titulo_manual|default:"Extra" }}</div>
+      <div>🕒 {{ item.foto.client_taken_at|default:item.foto.tomada_en|date:"Y-m-d H:i" }}</div>
+      <div class="text-gray-600">
+  {% if item.foto.lat and item.foto.lng %}
+    📍 {{ item.foto.lat|floatformat:5|unlocalize }}, {{ item.foto.lng|floatformat:5|unlocalize }}
+    <a class="ml-1 text-blue-600 hover:underline" target="_blank"
+       href="https://www.google.com/maps?q={{ item.foto.lat|unlocalize }},{{ item.foto.lng|unlocalize }}">
+      Abrir mapa
+    </a>
+    {% if item.foto.gps_accuracy_m %}
+      <span class="ml-1 text-gray-400">± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
+    {% endif %}
+  {% else %}
+    <span class="text-gray-400">📍 Sin GPS</span>
+  {% endif %}
+</div>
+      {% if item.foto.nota %}<div class="text-gray-600">{{ item.foto.nota }}</div>{% endif %}
+    </figcaption>
+  </figure>
+
+          {% endfor %}
+
+        </div>
+
+      </details>
+
+    {% endif %}
+
+  </div>
 
   <p class="mt-4 text-xs text-gray-500">
     El reporte fotográfico es <b>único por proyecto</b> y se genera/actualiza al aprobar el supervisor.
@@ -349,5 +568,113 @@
     if (e.key === 'Escape') toggleRejectModal(false);
   });
 </script><!-- JS modal: abrir/cerrar, ESC y click afuera -->
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  const etapas = Array.from(
+    document.querySelectorAll("#admin-revision-etapas details.admin-etapa")
+  );
+
+  const clave = "gz-admin-etapas:" + window.location.pathname;
+
+  function guardarEtapas() {
+    const abiertas = etapas
+      .filter(etapa => etapa.open)
+      .map(etapa => etapa.dataset.etapa);
+
+    try {
+      sessionStorage.setItem(clave, JSON.stringify(abiertas));
+    } catch (_) {}
+  }
+
+  let guardadas = [];
+
+  try {
+    const datos = JSON.parse(sessionStorage.getItem(clave) || "[]");
+    if (Array.isArray(datos)) guardadas = datos;
+  } catch (_) {}
+
+  etapas.forEach(etapa => {
+    etapa.open = guardadas.includes(etapa.dataset.etapa);
+    etapa.addEventListener("toggle", guardarEtapas);
+  });
+
+  const toggle = document.getElementById("admin-pendientes-toggle");
+  const panel = document.getElementById("admin-pendientes-panel");
+  const mas = document.getElementById("admin-pendientes-mas");
+
+  const items = Array.from(
+    document.querySelectorAll(".admin-pendiente-item")
+  );
+
+  let visibles = 10;
+
+  function actualizarLista() {
+    items.forEach((item, index) => {
+      item.classList.toggle("hidden", index >= visibles);
+    });
+
+    if (mas) {
+      const restantes = Math.max(0, items.length - visibles);
+      mas.classList.toggle("hidden", restantes === 0);
+
+      if (restantes > 0) {
+        mas.textContent =
+          "Mostrar 10 más (" + restantes + " restantes)";
+      }
+    }
+  }
+
+  if (toggle && panel) {
+    toggle.addEventListener("click", function () {
+      const abrir = panel.classList.contains("hidden");
+
+      panel.classList.toggle("hidden", !abrir);
+      toggle.setAttribute("aria-expanded", abrir ? "true" : "false");
+      toggle.textContent = abrir
+        ? "Ocultar pendientes"
+        : "Ver pendientes";
+    });
+  }
+
+  if (mas) {
+    mas.addEventListener("click", function () {
+      visibles += 10;
+      actualizarLista();
+    });
+  }
+
+  document.querySelectorAll("[data-ir-requisito]").forEach(boton => {
+    boton.addEventListener("click", function () {
+
+      const id = boton.dataset.irRequisito;
+      const destino = document.getElementById(
+        "admin-requisito-" + id
+      );
+
+      if (!destino) return;
+
+      const etapa = destino.closest("details.admin-etapa");
+
+      if (etapa) {
+        etapa.open = true;
+        guardarEtapas();
+      }
+
+      requestAnimationFrame(function () {
+        destino.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+      });
+    });
+  });
+
+  actualizarLista();
+
+});
+</script>
 
 {% endblock %}

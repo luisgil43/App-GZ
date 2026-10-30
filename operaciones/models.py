@@ -523,6 +523,18 @@ class RequisitoFoto(models.Model):
     titulo = models.CharField(max_length=200)
     descripcion = models.TextField(blank=True, default="")
     obligatorio = models.BooleanField(default=True)
+    ETAPA_CHOICES = (
+        ("", "Sin etapa"),
+        ("antes", "Antes"),
+        ("durante", "Durante"),
+        ("despues", "Después"),
+    )
+    etapa = models.CharField(
+        max_length=10,
+        choices=ETAPA_CHOICES,
+        default="",
+        blank=True,
+    )
     orden = models.PositiveIntegerField(default=0)
     activo = models.BooleanField(default=True)
 
