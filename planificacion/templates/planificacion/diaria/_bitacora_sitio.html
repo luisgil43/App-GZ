@@ -3,6 +3,37 @@
      HISTORIAL AGRUPADO POR DÍA / LÍNEA DE TIEMPO
      ========================================================= -->
 
+
+<style>
+  @keyframes gz-bitacora-alarma-parpadeo {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.15;
+      transform: scale(0.88);
+    }
+  }
+
+  .gz-bitacora-alarma-indicador {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 16px;
+    font-size: 19px;
+    line-height: 1;
+    color: #d97706;
+    animation: gz-bitacora-alarma-parpadeo 1.2s infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .gz-bitacora-alarma-indicador {
+      animation: none;
+    }
+  }
+</style>
+
 <div
   id="modal-bitacora-sitio"
   class="fixed inset-0 z-[10010] hidden items-center justify-center bg-slate-950/60 p-3 sm:p-5"
@@ -130,6 +161,37 @@
          NUEVA ANOTACIÓN — SIEMPRE VISIBLE
          ===================================================== -->
 
+
+    <!-- ALARMA VISUAL DE GESTIÓN PENDIENTE -->
+    <div
+      id="bitacora-alarma-panel"
+      class="shrink-0 border-t border-amber-200 bg-amber-50 px-5 py-3"
+    >
+      <label class="flex cursor-pointer items-center gap-3">
+
+        <input
+          type="checkbox"
+          id="bitacora-alarma-checkbox"
+          class="h-5 w-5 shrink-0 accent-amber-600"
+          disabled
+        >
+
+        <span class="min-w-0">
+          <span class="block text-sm font-black text-amber-900">
+            ⚠️ Alarma — Gestión pendiente del coordinador
+          </span>
+
+          <span
+            id="bitacora-alarma-descripcion"
+            class="mt-1 block text-xs text-amber-800"
+          >
+            Consultando el estado de la alarma...
+          </span>
+        </span>
+
+      </label>
+    </div>
+
     {# GZ_BITACORA_MODAL_SOLO_LECTURA_V3 #}
     <div {% if bitacora_solo_lectura %}hidden{% endif %}>
     <form
@@ -219,6 +281,24 @@
   const buscar = document.getElementById("bitacora-buscar");
   const contador = document.getElementById("bitacora-contador-caracteres");
 
+  const alarmaCheckbox =
+    document.getElementById("bitacora-alarma-checkbox");
+
+  const alarmaDescripcion =
+    document.getElementById("bitacora-alarma-descripcion");
+
+  let guardandoAlarma = false;
+  let alarmaActiva = false;
+  let vencimientoAlarma = null;
+  let timerAlarma = null;
+  let puedeModificarAlarma = false;
+
+  // Estado visual de todos los sitios presentes en la página.
+  const alarmasPagina = new Map();
+
+  let timerAlarmasPagina = null;
+  let consultaAlarmasEnCurso = false;
+
   const cerrar = document.getElementById("bitacora-cerrar");
   const cancelar = document.getElementById("bitacora-cancelar");
 
@@ -241,6 +321,12 @@
 
   const urlRegistrar =
     "{% url 'planificacion:registrar_bitacora_sitio' 0 %}";
+
+  const urlAlarma =
+    "{% url 'planificacion:actualizar_alarma_bitacora_sitio' 0 %}";
+
+  const urlAlarmasPagina =
+    "{% url 'planificacion:consultar_alarmas_bitacora_sitios' %}";
 
 
   // =========================================================
@@ -713,6 +799,219 @@
 
   }
 
+
+  // =========================================================
+  // ALARMA VISUAL COMPARTIDA
+  // =========================================================
+
+  function actualizarIndicadoresAlarma(sitioId, activa) {
+
+    document.querySelectorAll(
+      "[data-bitacora-sitio]"
+    ).forEach(function (boton) {
+
+      if (Number(boton.dataset.bitacoraSitio) !== sitioId) {
+        return;
+      }
+
+      let indicador = boton.querySelector(
+        "[data-bitacora-alarma-indicador]"
+      );
+
+      if (!activa) {
+        if (indicador) {
+          indicador.remove();
+        }
+        return;
+      }
+
+      if (!indicador) {
+        indicador = document.createElement("span");
+
+        indicador.dataset.bitacoraAlarmaIndicador = "1";
+        indicador.className = "gz-bitacora-alarma-indicador";
+        indicador.textContent = "⚠️";
+        indicador.title = "Gestión pendiente del coordinador";
+
+        indicador.setAttribute(
+          "aria-label",
+          "Alarma activa: gestión pendiente"
+        );
+
+        boton.appendChild(indicador);
+      }
+
+    });
+
+  }
+
+
+  function cancelarTimerAlarma() {
+    if (timerAlarma !== null) {
+      clearTimeout(timerAlarma);
+      timerAlarma = null;
+    }
+  }
+
+
+  function actualizarEstadoAlarma(datos, puedeModificar) {
+
+    cancelarTimerAlarma();
+
+    alarmaActiva = Boolean(datos && datos.activa);
+    puedeModificarAlarma = Boolean(puedeModificar);
+
+    alarmaCheckbox.checked = alarmaActiva;
+    alarmaCheckbox.disabled = !puedeModificarAlarma;
+
+    vencimientoAlarma =
+      datos && datos.vence_en ? datos.vence_en : null;
+
+    if (alarmaActiva) {
+      alarmaDescripcion.textContent = vencimientoAlarma
+        ? "Gestión pendiente. Desactivación automática después de la jornada."
+        : "Gestión pendiente. Sin fecha de salida vigente.";
+    } else {
+      alarmaDescripcion.textContent =
+        "Sin alarma activa. No bloquea la planificación.";
+    }
+
+    if (sitioActual !== null) {
+
+      alarmasPagina.set(sitioActual, {
+        activa: alarmaActiva,
+        vence_en: vencimientoAlarma
+      });
+
+      actualizarIndicadoresAlarma(
+        sitioActual,
+        alarmaActiva
+      );
+
+      programarActualizacionAlarmasPagina();
+    }
+
+    if (alarmaActiva && vencimientoAlarma) {
+
+      const fecha = Date.parse(vencimientoAlarma);
+
+      if (Number.isFinite(fecha)) {
+
+        const restantes = fecha - Date.now();
+
+        if (restantes <= 0) {
+          if (sitioActual !== null) {
+            cargarHistorial(sitioActual);
+          }
+          return;
+        }
+
+        // El temporizador consulta de nuevo el estado real.
+        // No modifica por sí mismo las asignaciones.
+        timerAlarma = setTimeout(function () {
+          if (sitioActual !== null) {
+            cargarHistorial(sitioActual);
+          }
+        }, Math.min(restantes + 1000, 60000));
+
+      }
+    }
+
+  }
+
+
+  alarmaCheckbox.addEventListener(
+    "change",
+    async function () {
+
+      if (
+        sitioActual === null ||
+        guardandoAlarma ||
+        guardar.disabled ||
+        !puedeModificarAlarma
+      ) {
+        alarmaCheckbox.checked = alarmaActiva;
+        return;
+      }
+
+      const id = sitioActual;
+      const activar = alarmaCheckbox.checked;
+
+      guardandoAlarma = true;
+      alarmaCheckbox.disabled = true;
+
+      alarmaDescripcion.textContent =
+        "Guardando estado de alarma...";
+
+      try {
+
+        const datosFormulario = new FormData();
+
+        const token = formulario.querySelector(
+          'input[name="csrfmiddlewaretoken"]'
+        );
+
+        if (!token || !token.value) {
+          throw new Error("No se encontró el token de seguridad.");
+        }
+
+        datosFormulario.set(
+          "csrfmiddlewaretoken",
+          token.value
+        );
+
+        datosFormulario.set(
+          "activa",
+          activar ? "true" : "false"
+        );
+
+        const respuesta = await fetch(
+          urlSitio(urlAlarma, id),
+          {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest"
+            },
+            body: datosFormulario
+          }
+        );
+
+        const datos = await leerRespuesta(respuesta);
+
+        if (sitioActual !== id) {
+          return;
+        }
+
+        actualizarEstadoAlarma(datos.alarma, true);
+
+        mostrarMensaje(
+          datos.mensaje || "Estado de alarma actualizado."
+        );
+
+      } catch (error) {
+
+        alarmaCheckbox.checked = alarmaActiva;
+
+        mostrarMensaje(
+          error.message || "No se pudo actualizar la alarma.",
+          true
+        );
+
+      } finally {
+
+        guardandoAlarma = false;
+
+        if (sitioActual === id) {
+          alarmaCheckbox.disabled = !puedeModificarAlarma;
+        }
+
+      }
+
+    }
+  );
+
   // =========================================================
   // CONSULTAR BITÁCORA
   // =========================================================
@@ -760,6 +1059,11 @@
           : [];
 
             actualizarContadoresExternos(sitioId, datos.total);
+
+      actualizarEstadoAlarma(
+        datos.alarma,
+        Boolean(datos.puede_modificar_alarma)
+      );
 
       mostrarHistorial();
 
@@ -812,6 +1116,17 @@
 
     anotacionesActuales = [];
 
+    cancelarTimerAlarma();
+
+    alarmaActiva = false;
+    puedeModificarAlarma = false;
+
+    alarmaCheckbox.checked = false;
+    alarmaCheckbox.disabled = true;
+
+    alarmaDescripcion.textContent =
+      "Consultando el estado de la alarma...";
+
     buscar.value = "";
     contenido.value = "";
 
@@ -848,11 +1163,13 @@
 
   function cerrarBitacora() {
 
-    if (guardando) {
+    if (guardando || guardandoAlarma) {
       return;
     }
 
     solicitudActual++;
+
+    cancelarTimerAlarma();
 
     sitioActual = null;
 
@@ -1011,6 +1328,239 @@
     }
   );
 
+
+
+  // =========================================================
+  // ALARMAS AL CARGAR LA PÁGINA
+  // =========================================================
+
+  function obtenerIdsSitiosPagina() {
+
+    const ids = new Set();
+
+    document.querySelectorAll(
+      "[data-bitacora-sitio]"
+    ).forEach(function (boton) {
+
+      const id = Number(boton.dataset.bitacoraSitio);
+
+      if (Number.isSafeInteger(id) && id > 0) {
+        ids.add(id);
+      }
+
+    });
+
+    return Array.from(ids);
+  }
+
+
+  function programarActualizacionAlarmasPagina() {
+
+    if (timerAlarmasPagina !== null) {
+      clearTimeout(timerAlarmasPagina);
+      timerAlarmasPagina = null;
+    }
+
+    const ahora = Date.now();
+    let proximoVencimiento = null;
+
+    alarmasPagina.forEach(function (alarma) {
+
+      if (!alarma.activa || !alarma.vence_en) {
+        return;
+      }
+
+      const vencimiento = Date.parse(alarma.vence_en);
+
+      if (!Number.isFinite(vencimiento)) {
+        return;
+      }
+
+      if (
+        proximoVencimiento === null ||
+        vencimiento < proximoVencimiento
+      ) {
+        proximoVencimiento = vencimiento;
+      }
+
+    });
+
+    if (proximoVencimiento === null) {
+      return;
+    }
+
+    // Si ya llegó la hora, consultar el estado real.
+    // Si falta mucho, comprobarlo como máximo en 60 segundos.
+    const espera = Math.max(
+      1000,
+      Math.min(
+        proximoVencimiento - ahora + 1000,
+        60000
+      )
+    );
+
+    timerAlarmasPagina = setTimeout(function () {
+
+      timerAlarmasPagina = null;
+
+      consultarAlarmasPagina();
+
+    }, espera);
+  }
+
+
+  async function consultarAlarmasPagina() {
+
+    if (consultaAlarmasEnCurso) {
+      return;
+    }
+
+    const ids = obtenerIdsSitiosPagina();
+
+    if (!ids.length) {
+      return;
+    }
+
+    consultaAlarmasEnCurso = true;
+
+    let huboError = false;
+
+    try {
+
+      // La API admite como máximo 200 identificadores.
+      for (let inicio = 0; inicio < ids.length; inicio += 200) {
+
+        const grupo = ids.slice(inicio, inicio + 200);
+
+        const url =
+          urlAlarmasPagina +
+          "?ids=" +
+          encodeURIComponent(grupo.join(","));
+
+        const respuesta = await fetch(
+          url,
+          {
+            method: "GET",
+            credentials: "same-origin",
+            headers: {
+              "Accept": "application/json",
+              "X-Requested-With": "XMLHttpRequest"
+            }
+          }
+        );
+
+        const datos = await leerRespuesta(respuesta);
+
+        const alarmas = datos.alarmas || {};
+
+        grupo.forEach(function (id) {
+
+          // Un sitio no autorizado no aparece en la respuesta.
+          // No inferimos ni exponemos su estado.
+          if (!Object.prototype.hasOwnProperty.call(
+            alarmas,
+            String(id)
+          )) {
+            return;
+          }
+
+          const alarma = alarmas[String(id)];
+
+          alarmasPagina.set(id, {
+            activa: Boolean(alarma.activa),
+            vence_en: alarma.vence_en || null
+          });
+
+          actualizarIndicadoresAlarma(
+            id,
+            Boolean(alarma.activa)
+          );
+
+          // Mantener sincronizado el modal si está abierto.
+          if (sitioActual === id && !guardandoAlarma) {
+            actualizarEstadoAlarma(
+              alarma,
+              puedeModificarAlarma
+            );
+          }
+
+        });
+
+      }
+
+    } catch (error) {
+
+      huboError = true;
+
+      console.warn(
+        "No se pudieron actualizar las alarmas de bitácora:",
+        error
+      );
+
+    } finally {
+
+      consultaAlarmasEnCurso = false;
+
+      if (!huboError) {
+        programarActualizacionAlarmasPagina();
+      } else {
+
+        // Reintento limitado cuando existe una alarma
+        // cuyo estado debe comprobarse.
+        const hayAlarmas = Array.from(
+          alarmasPagina.values()
+        ).some(function (alarma) {
+          return alarma.activa;
+        });
+
+        if (hayAlarmas) {
+          if (timerAlarmasPagina !== null) {
+            clearTimeout(timerAlarmasPagina);
+          }
+
+          timerAlarmasPagina = setTimeout(
+            consultarAlarmasPagina,
+            60000
+          );
+        }
+
+      }
+
+    }
+
+  }
+
+
+  // Consulta inicial en todas las pantallas que utilizan
+  // el modal compartido, sin abrir ninguna bitácora.
+  if (document.readyState === "loading") {
+
+    document.addEventListener(
+      "DOMContentLoaded",
+      consultarAlarmasPagina,
+      { once: true }
+    );
+
+  } else {
+
+    consultarAlarmasPagina();
+
+  }
+
+
+  // Al regresar a la pestaña, actualizar los estados.
+  // Esto también cubre los vencimientos que ocurren
+  // mientras el navegador está suspendido.
+  document.addEventListener(
+    "visibilitychange",
+    function () {
+
+      if (!document.hidden) {
+        consultarAlarmasPagina();
+      }
+
+    }
+  );
 
   // =========================================================
   // EVENTOS DE CIERRE

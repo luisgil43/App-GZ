@@ -11,6 +11,10 @@ from django.views.decorators.http import require_GET, require_POST
 from operaciones.models import SitioMovil, ServicioCotizado
 from django.http import HttpResponseForbidden
 from planificacion.models import BitacoraSitio
+from planificacion.services.alarma_bitacora import (
+    estado_alarma_sitio,
+    fecha_salida_vigente,
+)
 from usuarios.decoradores import rol_requerido
 
 # ============================================================
@@ -161,6 +165,10 @@ def consultar_bitacora_sitio(request, sitio_id):
                 "nombre": sitio.nombre or "",
             },
             "total": len(historial),
+            "alarma": estado_alarma_sitio(sitio),
+            "puede_modificar_alarma": _puede_escribir_bitacora(
+                request.user
+            ),
             "anotaciones": historial,
         }
     )
@@ -248,3 +256,174 @@ def registrar_bitacora_sitio(request, sitio_id):
         },
         status=201,
     )
+
+
+
+# ============================================================
+# ACTIVAR / DESACTIVAR ALARMA DE BITÁCORA
+# ============================================================
+
+@require_POST
+@rol_requerido(*ROLES_BITACORA_SITIOS)
+@transaction.atomic
+def actualizar_alarma_bitacora_sitio(request, sitio_id):
+
+    if not _puede_escribir_bitacora(request.user):
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "No tienes permiso para modificar la alarma.",
+            },
+            status=403,
+        )
+
+    sitio = get_object_or_404(
+        SitioMovil.objects.select_for_update(),
+        pk=sitio_id,
+    )
+
+    if not _puede_acceder_bitacora(request.user, sitio):
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "No tienes acceso a este sitio.",
+            },
+            status=403,
+        )
+
+    valor = request.POST.get("activa")
+
+    if valor not in {"true", "false"}:
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "Estado de alarma no válido.",
+            },
+            status=400,
+        )
+
+    activar = valor == "true"
+
+    if activar:
+        sitio.bitacora_alarma_activa = True
+        sitio.bitacora_alarma_activada_en = timezone.now()
+        sitio.bitacora_alarma_fecha_salida = fecha_salida_vigente(
+            sitio.pk
+        )
+    else:
+        sitio.bitacora_alarma_activa = False
+        sitio.bitacora_alarma_fecha_salida = None
+
+    sitio.save(
+        update_fields=[
+            "bitacora_alarma_activa",
+            "bitacora_alarma_activada_en",
+            "bitacora_alarma_fecha_salida",
+        ]
+    )
+
+    alarma = estado_alarma_sitio(sitio)
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "alarma": alarma,
+            "mensaje": (
+                "Alarma activada."
+                if alarma["activa"]
+                else "Alarma desactivada."
+            ),
+        }
+    )
+
+
+
+# ============================================================
+# CONSULTA MASIVA DE ALARMAS VISUALES
+# ============================================================
+
+@require_GET
+@rol_requerido(*ROLES_BITACORA_SITIOS)
+def consultar_alarmas_bitacora_sitios(request):
+    """
+    Consulta las alarmas de los sitios autorizados.
+
+    No modifica anotaciones, planificación ni operaciones.
+    El estado de alarma se evalúa con su vencimiento real.
+    """
+
+    from planificacion.services.alarma_bitacora import (
+        estado_alarma_sitio,
+    )
+
+    valores = request.GET.get("ids", "").strip()
+
+    if not valores:
+        return JsonResponse({
+            "ok": True,
+            "alarmas": {},
+        })
+
+    partes = valores.split(",")
+
+    if len(partes) > 200:
+        return JsonResponse(
+            {
+                "ok": False,
+                "error": "Máximo 200 sitios por consulta.",
+            },
+            status=400,
+        )
+
+    ids = set()
+
+    for parte in partes:
+        valor = parte.strip()
+
+        if not valor.isdecimal():
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Identificador de sitio no válido.",
+                },
+                status=400,
+            )
+
+        identificador = int(valor)
+
+        if identificador <= 0:
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "error": "Identificador de sitio no válido.",
+                },
+                status=400,
+            )
+
+        ids.add(identificador)
+
+    sitios = SitioMovil.objects.filter(
+        pk__in=ids,
+    )
+
+    alarmas = {}
+
+    for sitio in sitios:
+
+        if not _puede_acceder_bitacora(
+            request.user,
+            sitio,
+        ):
+            continue
+
+        estado = estado_alarma_sitio(sitio)
+
+        alarmas[str(sitio.pk)] = {
+            "activa": bool(estado["activa"]),
+            "vence_en": estado.get("vence_en"),
+        }
+
+    return JsonResponse({
+        "ok": True,
+        "alarmas": alarmas,
+    })

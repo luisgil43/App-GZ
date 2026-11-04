@@ -187,6 +187,17 @@ class SitioMovil(models.Model):
     alarmas = models.TextField(blank=True, null=True)
     guardias = models.TextField(blank=True, null=True)
 
+    # Advertencia visual independiente de los bloqueos operacionales.
+    bitacora_alarma_activa = models.BooleanField(default=False)
+    bitacora_alarma_activada_en = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    bitacora_alarma_fecha_salida = models.DateField(
+        null=True,
+        blank=True,
+    )
+
     # Los dejamos por compatibilidad con información anterior.
     nivel = models.IntegerField(blank=True, null=True)
     descripcion = models.TextField(blank=True, null=True)

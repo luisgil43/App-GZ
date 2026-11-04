@@ -24,8 +24,12 @@ from planificacion.views.asignacion_mensual import (
 from planificacion.views.asignacion_operativa import (
     confirmar_asignacion_dia, confirmar_asignacion_salida,
     preview_asignacion_dia, preview_asignacion_salida)
-from planificacion.views.bitacora_sitios import (consultar_bitacora_sitio,
-                                                 registrar_bitacora_sitio)
+from planificacion.views.bitacora_sitios import (
+    consultar_bitacora_sitio,
+    registrar_bitacora_sitio,
+    actualizar_alarma_bitacora_sitio,
+    consultar_alarmas_bitacora_sitios,
+)
 from planificacion.views.completar_semana_anterior import (
     analizar_completar_semana, completar_semana_anterior,
     confirmar_completar_semanas)
@@ -510,5 +514,15 @@ urlpatterns = [
         "bitacora/sitio/<int:sitio_id>/registrar/",
         registrar_bitacora_sitio,
         name="registrar_bitacora_sitio",
+    ),
+    path(
+        "bitacora/sitio/<int:sitio_id>/alarma/",
+        actualizar_alarma_bitacora_sitio,
+        name="actualizar_alarma_bitacora_sitio",
+    ),
+    path(
+        "bitacora/alarmas/",
+        consultar_alarmas_bitacora_sitios,
+        name="consultar_alarmas_bitacora_sitios",
     ),
 ]
