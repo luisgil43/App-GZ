@@ -1104,6 +1104,32 @@ Planificación Diaria
                       </div>
 
 
+                    </div>
+
+
+                    <!-- GZ_CLIMA_SITIOS_V1 — PENDIENTES -->
+                    {% include "planificacion/diaria/_clima_sitio.html" with sitio_batch_id=item.id sitio_clima=item.sitio_planificado.sitio %}
+
+
+                    <span
+                      class="
+                        shrink-0
+                        rounded-full
+                        border border-emerald-200
+                        bg-emerald-50
+                        px-2
+                        py-1
+                        text-[10px]
+                        font-black
+                        text-emerald-700
+                      "
+                    >
+                      Aprobado
+                    </span>
+
+                  </div>
+
+
                       <!-- GZ_ACTIVIDADES_TARJETA_PENDIENTE_V1 -->
                       <div class="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/60 px-2.5 py-2">
                         <div class="text-[9px] font-black uppercase tracking-wide text-indigo-700">
@@ -1296,32 +1322,6 @@ Planificación Diaria
                         </div>
 
                       {% endif %}
-
-                    </div>
-
-
-                    <!-- GZ_CLIMA_SITIOS_V1 — PENDIENTES -->
-                    {% include "planificacion/diaria/_clima_sitio.html" with sitio_batch_id=item.id sitio_clima=item.sitio_planificado.sitio %}
-
-
-                    <span
-                      class="
-                        shrink-0
-                        rounded-full
-                        border border-emerald-200
-                        bg-emerald-50
-                        px-2
-                        py-1
-                        text-[10px]
-                        font-black
-                        text-emerald-700
-                      "
-                    >
-                      Aprobado
-                    </span>
-
-                  </div>
-
 
                   <!-- ======================================= -->
                   <!-- PROGRAMACIÓN MANUAL                     -->
