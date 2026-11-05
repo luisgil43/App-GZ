@@ -1543,7 +1543,11 @@
     const mmOoButton = document.getElementById('toggleMmooVisibility');
 
     if (mmOoButton) {
-      mmOoButton.addEventListener('click', () => {
+      document.addEventListener('click', (event) => {
+        const button = event.target.closest('#toggleMmooVisibility');
+
+        if (!button) return;
+
         saveMmooVisibility(!isMmooVisible());
         applyVisibility();
       });
