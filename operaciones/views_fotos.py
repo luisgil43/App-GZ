@@ -3749,7 +3749,7 @@ def _bytes_acta_aceptacion(servicio) -> bytes:
     intro = (
         f"En Santiago, con fecha <b>{fecha_txt}</b> la empresa <u><b>Grupo GZS Services</b></u> "
         f"representada por el señor Edgardo Zapata, hace entrega a <b>SITES CHILE S.A.</b>, "
-        f"representada por el señor Jean Paul Jofre Diaz, otorga la recepción de los siguientes servicios:"
+        f"representada por el señor Arturo Cabezas Meyes, otorga la recepción de los siguientes servicios:"
     )
     elems += [Paragraph(intro, normal_j), Spacer(1, 6)]
 
