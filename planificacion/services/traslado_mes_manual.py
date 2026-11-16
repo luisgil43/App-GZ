@@ -189,6 +189,9 @@ def _validar_origen(sitio):
         .select_for_update()
         .filter(sitio_batch_id__in=ids_participaciones)
         .exclude(estado__in=estados_diarios_historicos)
+        .exclude(
+            sitio_batch__estado__in=ESTADOS_SEMANA_INACTIVOS
+        )
         .order_by("pk")
     )
 
