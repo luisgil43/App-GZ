@@ -6,6 +6,197 @@ Planificación Mensual
 
 {% block dashboard_content %}
 
+<!-- MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
+<style>
+  #barra-permisos-masivos.miltel-barra-masiva {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: #ffffff;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
+  }
+
+  .miltel-barra-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .miltel-seleccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #0f172a;
+  }
+
+  #cantidad-sitios-seleccionados {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #ecfeff;
+    color: #0e7490;
+    font-weight: 900;
+  }
+
+  .miltel-barra-encabezado p {
+    margin: 5px 0 0;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .miltel-tarjetas-acciones {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .miltel-tarjeta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+    border: 1px solid #e2e8f0;
+    border-radius: 15px;
+    background: #f8fafc;
+  }
+
+  .miltel-tarjeta-permisos {
+    border-color: #bae6fd;
+    background: #f0f9ff;
+  }
+
+  .miltel-tarjeta-semana {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+  }
+
+  .miltel-tarjeta-mes {
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+  }
+
+  .miltel-tarjeta-encabezado {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .miltel-tarjeta-numero {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 9px;
+    background: white;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .miltel-tarjeta h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 900;
+    color: #0f172a;
+  }
+
+  .miltel-tarjeta p {
+    margin: 5px 0 0;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #64748b;
+  }
+
+  .miltel-tarjeta-controles {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+  }
+
+  .miltel-tarjeta-controles select {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    border-radius: 10px;
+    background: white;
+  }
+
+  .miltel-tarjeta-controles button {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 900;
+    color: white;
+  }
+
+  .miltel-tarjeta-permisos button {
+    background: linear-gradient(90deg, #0891b2, #2563eb);
+  }
+
+  .miltel-tarjeta-semana button {
+    background: #2563eb;
+  }
+
+  .miltel-tarjeta-mes button {
+    background: #059669;
+  }
+
+  .miltel-tarjeta-controles button:disabled {
+    opacity: .4;
+    cursor: not-allowed;
+  }
+
+  #exportacion-mensual-controles {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 10px;
+  }
+
+  #exportar-planificacion-excel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 16px;
+    border: 1px solid #047857;
+    border-radius: 9px;
+    background: #047857 !important;
+    color: white !important;
+    font-size: 12px;
+    font-weight: 900;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #exportar-planificacion-excel:hover {
+    background: #065f46 !important;
+  }
+
+  @media (max-width: 1050px) {
+    .miltel-tarjetas-acciones {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+<!-- FIN MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
+
+
 <div class="min-h-screen bg-slate-50 px-3 py-4 sm:p-6">
 
 <style>
@@ -5238,195 +5429,7 @@ Planificación Mensual
 
 
 
-<!-- MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
-<style>
-  #barra-permisos-masivos.miltel-barra-masiva {
-    margin-top: 20px;
-    padding: 20px;
-    border: 1px solid #e2e8f0;
-    border-radius: 18px;
-    background: #ffffff;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, .04);
-  }
 
-  .miltel-barra-encabezado {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-
-  .miltel-seleccion-titulo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 14px;
-    color: #0f172a;
-  }
-
-  #cantidad-sitios-seleccionados {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    min-width: 32px;
-    height: 32px;
-    padding: 0 8px;
-    border-radius: 999px;
-    background: #ecfeff;
-    color: #0e7490;
-    font-weight: 900;
-  }
-
-  .miltel-barra-encabezado p {
-    margin: 5px 0 0;
-    font-size: 12px;
-    color: #64748b;
-  }
-
-  .miltel-tarjetas-acciones {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  .miltel-tarjeta {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    padding: 18px;
-    border: 1px solid #e2e8f0;
-    border-radius: 15px;
-    background: #f8fafc;
-  }
-
-  .miltel-tarjeta-permisos {
-    border-color: #bae6fd;
-    background: #f0f9ff;
-  }
-
-  .miltel-tarjeta-semana {
-    border-color: #bfdbfe;
-    background: #eff6ff;
-  }
-
-  .miltel-tarjeta-mes {
-    border-color: #a7f3d0;
-    background: #ecfdf5;
-  }
-
-  .miltel-tarjeta-encabezado {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 18px;
-  }
-
-  .miltel-tarjeta-numero {
-    display: inline-flex;
-    justify-content: center;
-    align-items: center;
-    width: 30px;
-    height: 30px;
-    flex-shrink: 0;
-    border-radius: 9px;
-    background: white;
-    color: #334155;
-    font-size: 11px;
-    font-weight: 900;
-  }
-
-  .miltel-tarjeta h3 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 900;
-    color: #0f172a;
-  }
-
-  .miltel-tarjeta p {
-    margin: 5px 0 0;
-    font-size: 11px;
-    line-height: 1.5;
-    color: #64748b;
-  }
-
-  .miltel-tarjeta-controles {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: auto;
-  }
-
-  .miltel-tarjeta-controles select {
-    width: 100%;
-    min-width: 0;
-    min-height: 44px;
-    border-radius: 10px;
-    background: white;
-  }
-
-  .miltel-tarjeta-controles button {
-    width: 100%;
-    min-height: 44px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: 900;
-    color: white;
-  }
-
-  .miltel-tarjeta-permisos button {
-    background: linear-gradient(90deg, #0891b2, #2563eb);
-  }
-
-  .miltel-tarjeta-semana button {
-    background: #2563eb;
-  }
-
-  .miltel-tarjeta-mes button {
-    background: #059669;
-  }
-
-  .miltel-tarjeta-controles button:disabled {
-    opacity: .4;
-    cursor: not-allowed;
-  }
-
-  #exportacion-mensual-controles {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-    margin-right: 10px;
-  }
-
-  #exportar-planificacion-excel {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 36px;
-    padding: 8px 16px;
-    border: 1px solid #047857;
-    border-radius: 9px;
-    background: #047857 !important;
-    color: white !important;
-    font-size: 12px;
-    font-weight: 900;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-
-  #exportar-planificacion-excel:hover {
-    background: #065f46 !important;
-  }
-
-  @media (max-width: 1050px) {
-    .miltel-tarjetas-acciones {
-      grid-template-columns: 1fr;
-    }
-  }
-</style>
-<!-- FIN MILTEL: DISEÑO ACCIONES MASIVAS V4 -->
 
 
 <!-- GZ_LOCALIZAR_SITIO_DESDE_BUSCADOR_GLOBAL_V2 -->
