@@ -3512,8 +3512,7 @@ def seleccionar_sitios_creacion_batch(
     candidatos_mapa = []
     candidatos_sin_coordenadas = []
 
-    # Actividades vinculadas directamente a esta asignación mensual.
-    # No se infieren actividades a partir del ID CLARO.
+    # Priorizar actividades vinculadas directamente a la asignación.
     ids_candidatos = list(
         candidatos.values_list("pk", flat=True)
     )
@@ -3533,6 +3532,62 @@ def seleccionar_sitios_creacion_batch(
             actividades_por_sitio.setdefault(
                 sitio_id, set()
             ).add(actividad_nombre)
+
+    # Referencia visual para DU sin vínculo del mismo período mensual.
+    # La selección semanal y el vínculo del servicio se gestionan aparte.
+    from django.db.models.functions import Lower, Trim
+
+    mensual = batch.planificacion
+    meses = (
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    )
+
+    candidatos = list(candidatos)
+    pendientes_por_claro = {}
+    for fila in candidatos:
+        claro = (fila.sitio.id_claro or "").strip().lower()
+        if (
+            claro
+            and fila.planificacion_id == batch.planificacion_id
+            and fila.activo_en_mes
+            and fila.pk not in actividades_por_sitio
+        ):
+            pendientes_por_claro.setdefault(claro, []).append(fila.pk)
+
+    if pendientes_por_claro and 1 <= mensual.mes <= 12:
+        periodo = f"{meses[mensual.mes - 1]} {mensual.anio}".lower()
+        modelo_sitio = SitioPlanificado._meta.get_field("sitio").related_model
+        sitios_por_claro = {}
+        for claro in (
+            modelo_sitio.objects.annotate(claro_normalizado=Lower(Trim("id_claro")))
+            .filter(claro_normalizado__in=pendientes_por_claro)
+            .values_list("claro_normalizado", flat=True)
+        ):
+            sitios_por_claro[claro] = sitios_por_claro.get(claro, 0) + 1
+
+        servicios_por_claro = {}
+        for claro, vinculo, actividad in (
+            ServicioCotizado.objects.annotate(
+                claro_normalizado=Lower(Trim("id_claro")),
+                periodo_normalizado=Lower(Trim("mes_produccion")),
+            )
+            .filter(
+                claro_normalizado__in=pendientes_por_claro,
+                periodo_normalizado=periodo,
+            )
+            .values_list(
+                "claro_normalizado", "sitio_planificado_id", "actividad__nombre"
+            )
+        ):
+            servicios_por_claro.setdefault(claro, []).append((vinculo, actividad))
+
+        for claro, filas in pendientes_por_claro.items():
+            servicios = servicios_por_claro.get(claro, [])
+            if len(filas) == 1 and sitios_por_claro.get(claro) == 1 and len(servicios) == 1:
+                vinculo, actividad = servicios[0]
+                if vinculo is None and actividad:
+                    actividades_por_sitio[filas[0]] = {actividad}
 
     for sitio_planificado in candidatos:
 
