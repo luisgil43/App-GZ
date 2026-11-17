@@ -1,0 +1,161 @@
+<button type="button"
+        id="abrir-ubicacion-referencia"
+        class="px-4 py-2 rounded bg-indigo-600 text-white">
+  Ubicación de referencia
+</button>
+
+<style>
+  #ubicacion-referencia {
+    width: min(96vw, 1440px);
+    max-width: 96vw;
+    max-height: 94dvh;
+    overflow: auto;
+  }
+  #ubicacion-referencia .ubicacion-fotos {
+    display: grid;
+    gap: 1rem;
+  }
+  #ubicacion-referencia .ubicacion-lista {
+    max-height: min(50dvh, 32rem);
+    overflow-y: auto;
+  }
+  #referencia-previa {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+  #referencia-previa img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: min(58dvh, 44rem);
+  }
+  @media (min-width: 840px) {
+    #ubicacion-referencia .ubicacion-fotos {
+      grid-template-columns: minmax(17rem, 1fr) minmax(0, 2fr);
+    }
+  }
+</style>
+<dialog id="ubicacion-referencia" class="rounded-xl p-5">
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="accion" value="ubicacion_referencia">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <h2 class="font-bold text-lg">Agregar ubicación de referencia</h2>
+
+    {% if fotos_sin_referencia %}
+      <p class="my-2 text-sm">Selecciona las fotos del sitio. Omite las que ya tengan un sello visible.</p>
+      <div class="grid gap-2 sm:grid-cols-2">
+        <label>Latitud <input class="border rounded px-2 w-full" name="latitud" maxlength="24" required></label>
+        <label>Longitud <input class="border rounded px-2 w-full" name="longitud" maxlength="24" required></label>
+        <label class="sm:col-span-2">Dirección
+          <input class="border rounded px-2 w-full" name="direccion_referencia" maxlength="200" required>
+        </label>
+      </div>
+
+      <div class="mt-3 ubicacion-fotos">
+        <div class="ubicacion-lista border rounded p-2">
+          {% for foto in fotos_sin_referencia %}
+            <div class="flex items-start gap-2 border-b py-2">
+              <label class="flex flex-1 items-start gap-2 text-sm">
+              <input type="checkbox" name="foto_referencia" value="{{ foto.pk }}"
+                     data-imagen="{{ foto.imagen.url }}"
+                     data-fecha="{{ foto.client_taken_at|default:foto.tomada_en|date:'d M Y' }}">
+              <img src="{{ foto.imagen.url }}" loading="lazy" alt="" class="w-14 h-12 object-contain">
+              <span>
+                <strong class="block">
+                  {% if foto.requisito.etapa == "antes" %}Antes
+                  {% elif foto.requisito.etapa == "durante" %}Durante
+                  {% elif foto.requisito.etapa == "despues" %}Después
+                  {% elif foto.requisito.etapa %}{{ foto.requisito.get_etapa_display|default:foto.requisito.etapa }}
+                  {% else %}Sin etapa{% endif %}
+                </strong>
+                {{ foto.requisito.titulo|default:foto.titulo_manual|default:"Extra" }}<br>
+                {{ foto.client_taken_at|default:foto.tomada_en|date:"d M Y" }}
+              </span>
+              </label>
+              <button type="button" data-ver-foto="{{ foto.pk }}"
+                      class="shrink-0 rounded border px-2 py-1 text-sm">
+                Ver foto
+              </button>
+            </div>
+          {% endfor %}
+        </div>
+        <div>
+          <p class="mb-2 text-sm font-semibold">Vista previa de la foto</p>
+          <div id="referencia-previa" class="relative hidden">
+            <img alt="Foto en vista previa" class="rounded object-contain">
+            <div class="absolute top-2 inset-x-2 text-center text-sm font-bold text-white"
+                 style="text-shadow: 0 1px 4px #000, 0 1px 2px #000; overflow-wrap: anywhere">
+              <div data-fecha></div>
+              <div data-coordenadas></div>
+              <div data-direccion></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% else %}
+      <p class="my-3">No hay fotos sin GPS pendientes de asignar.</p>
+    {% endif %}
+
+    <div class="mt-4 flex justify-end gap-2">
+      <button type="button" data-cerrar class="px-3 py-2 border rounded">Cerrar</button>
+      {% if fotos_sin_referencia %}
+        <button type="submit" disabled class="px-3 py-2 rounded bg-indigo-600 text-white disabled:opacity-50">
+          Aplicar a seleccionadas
+        </button>
+      {% endif %}
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  const dialog = document.getElementById("ubicacion-referencia");
+  const form = dialog.querySelector("form");
+  const preview = dialog.querySelector("#referencia-previa");
+
+  document.getElementById("abrir-ubicacion-referencia")
+    .addEventListener("click", () => dialog.showModal());
+  dialog.querySelector("[data-cerrar]").addEventListener("click", () => dialog.close());
+
+  if (!preview) return;
+
+  let fotoEnVista = null;
+
+  function actualizarVista() {
+    const marcada = form.querySelector("[name=foto_referencia]:checked");
+    const selected = fotoEnVista || marcada;
+    form.querySelector("[type=submit]").disabled = !marcada;
+    preview.classList.toggle("hidden", !selected);
+    if (!selected) return;
+
+    const image = preview.querySelector("img");
+    if (image.getAttribute("src") !== selected.dataset.imagen) {
+      image.src = selected.dataset.imagen;
+    }
+    preview.querySelector("[data-fecha]").textContent = selected.dataset.fecha;
+    const lat = form.elements.latitud.value.trim();
+    const lng = form.elements.longitud.value.trim();
+    preview.querySelector("[data-coordenadas]").textContent = lat && lng ? `${lat}, ${lng}` : "";
+    preview.querySelector("[data-direccion]").textContent = form.elements.direccion_referencia.value;
+  }
+
+  form.addEventListener("input", (event) => {
+    if (event.target.name === "foto_referencia") {
+      fotoEnVista = event.target;
+    }
+    actualizarVista();
+  });
+
+  form.querySelectorAll("[data-ver-foto]").forEach((boton) => {
+    boton.addEventListener("click", () => {
+      fotoEnVista = boton.closest("div").querySelector("[name=foto_referencia]");
+      actualizarVista();
+    });
+  });
+
+  actualizarVista();
+})();
+</script>

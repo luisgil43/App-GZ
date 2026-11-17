@@ -583,6 +583,8 @@ class EvidenciaFoto(models.Model):
     )
     nota = models.TextField(blank=True, default="")
 
+    ubicacion_referencia = models.JSONField(null=True, blank=True)
+
     # Metadatos de captura
     lat = models.FloatField(blank=True, null=True)
     lng = models.FloatField(blank=True, null=True)

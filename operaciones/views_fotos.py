@@ -2620,12 +2620,129 @@ def borrar_evidencia_supervisor(request, ev_id: int):
     return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
 
 
+def _respuesta_foto_con_sello(foto):
+    from io import BytesIO
+    from textwrap import wrap
+
+    from django.http import Http404, HttpResponse
+    from django.utils.formats import date_format
+    from PIL import Image, ImageDraw, ImageFont, ImageOps
+
+    referencia = foto.ubicacion_referencia
+    if not foto.imagen or not referencia:
+        raise Http404("La foto no tiene ubicación de referencia.")
+
+    try:
+        with foto.imagen.open("rb") as archivo, Image.open(archivo) as original:
+            imagen = ImageOps.exif_transpose(original).convert("RGB")
+    except (OSError, Image.DecompressionBombError) as error:
+        raise Http404("No se pudo abrir la foto.") from error
+
+    imagen.thumbnail((2400, 2400), Image.Resampling.LANCZOS)
+    ancho, alto = imagen.size
+    tamano = max(10, min(round(ancho * 0.04), round(alto * 0.065)))
+    fuentes_sello = (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    )
+    for archivo_fuente in fuentes_sello:
+        try:
+            fuente = ImageFont.truetype(archivo_fuente, size=tamano)
+            break
+        except OSError:
+            continue
+    else:
+        raise Http404("La fuente del sello no está disponible.")
+    dibujo = ImageDraw.Draw(imagen)
+
+    fecha = foto.client_taken_at or foto.tomada_en
+    if timezone.is_aware(fecha):
+        fecha = timezone.localtime(fecha)
+    coordenadas = f"{referencia['latitud']}, {referencia['longitud']}"
+    direccion = wrap(referencia["direccion"], width=max(16, int(ancho * 0.88 / tamano)))
+    lineas = [date_format(fecha, "d M Y"), coordenadas, *direccion]
+
+    y = round(alto * 0.06)
+    borde = max(1, round(tamano * 0.05))
+    for texto in lineas:
+        dibujo.text(
+            (ancho / 2, y), texto, font=fuente, anchor="mt",
+            fill="white", stroke_width=borde, stroke_fill="#333333",
+        )
+        y += round(tamano * 1.24)
+
+    salida = BytesIO()
+    imagen.save(salida, format="JPEG", quality=92)
+    respuesta = HttpResponse(salida.getvalue(), content_type="image/jpeg")
+    respuesta["Cache-Control"] = "private, no-store"
+    return respuesta
+
+
+def _guardar_ubicacion_referencia(request, candidatas):
+    from decimal import Decimal, InvalidOperation
+
+    direccion = request.POST.get("direccion_referencia", "").strip()
+    if not direccion or len(direccion) > 200:
+        messages.error(request, "Ingresa una dirección de hasta 200 caracteres.")
+        return
+
+    coordenadas = {}
+    for campo, limite in (("latitud", 90), ("longitud", 180)):
+        valor = request.POST.get(campo, "").strip().replace(",", ".")
+        try:
+            numero = Decimal(valor)
+            if not numero.is_finite() or abs(numero) > limite:
+                raise InvalidOperation
+            coordenadas[campo] = format(numero.quantize(Decimal("0.000001")), "f")
+        except InvalidOperation:
+            messages.error(request, f"Revisa la {campo} ingresada.")
+            return
+
+    try:
+        ids = {int(valor) for valor in request.POST.getlist("foto_referencia")}
+    except ValueError:
+        messages.error(request, "La selección de fotos no es válida.")
+        return
+
+    if not ids:
+        messages.error(request, "Selecciona al menos una foto.")
+        return
+
+    actualizadas = candidatas.filter(pk__in=ids).update(
+        ubicacion_referencia={
+            **coordenadas,
+            "direccion": direccion,
+            "usuario_id": request.user.pk,
+            "registrada_en": timezone.now().isoformat(),
+        }
+    )
+    if actualizadas:
+        messages.success(request, f"Ubicación de referencia aplicada a {actualizadas} foto(s).")
+    if actualizadas < len(ids):
+        messages.warning(request, f"Se omitieron {len(ids) - actualizadas} foto(s) que ya no eran elegibles.")
+
+
 @login_required
 @rol_requerido("supervisor", "admin", "pm")
 def revisar_sesion_fotos(request, servicio_id):
     servicio = get_object_or_404(ServicioCotizado, pk=servicio_id)
 
     sesion = _get_or_create_sesion(servicio)
+
+    if request.method == "GET" and "foto_sellada" in request.GET:
+        from django.http import Http404
+
+        foto_id = request.GET["foto_sellada"]
+        if not re.fullmatch(r"[0-9]{1,18}", foto_id):
+            raise Http404("Foto inválida.")
+        foto = get_object_or_404(
+            EvidenciaFoto,
+            pk=int(foto_id),
+            tecnico_sesion_id__in=sesion.asignaciones.values("pk"),
+            ubicacion_referencia__isnull=False,
+        )
+        return _respuesta_foto_con_sello(foto)
 
     next_url = (
         request.POST.get("next")
@@ -2636,6 +2753,32 @@ def revisar_sesion_fotos(request, servicio_id):
     revisar_url = reverse(
         "operaciones:fotos_revisar_sesion", kwargs={"servicio_id": servicio.id}
     )
+
+    puede_agregar_referencia = bool(
+        request.user.is_superuser or request.user.es_admin_general
+    )
+    fotos_sin_referencia = EvidenciaFoto.objects.none()
+    if puede_agregar_referencia:
+        fotos_sin_referencia = (
+            EvidenciaFoto.objects.filter(
+                tecnico_sesion_id__in=sesion.asignaciones.values("pk"),
+                lat__isnull=True,
+                lng__isnull=True,
+                ubicacion_referencia__isnull=True,
+            )
+            .exclude(imagen="")
+            .select_related("requisito")
+            .order_by("requisito__orden", "pk")
+        )
+
+    if request.method == "POST" and request.POST.get("accion") == "ubicacion_referencia":
+        from django.http import HttpResponseForbidden
+        from urllib.parse import urlencode
+
+        if not puede_agregar_referencia:
+            return HttpResponseForbidden("Solo Administración puede agregar una ubicación de referencia.")
+        _guardar_ubicacion_referencia(request, fotos_sin_referencia)
+        return redirect(f"{revisar_url}?{urlencode({'next': next_url})}")
 
     asignaciones = list(
         sesion.asignaciones.select_related("tecnico")
@@ -2938,6 +3081,8 @@ def revisar_sesion_fotos(request, servicio_id):
         request,
         "operaciones/fotos_revisar_sesion.html",
         {
+            "puede_agregar_referencia": puede_agregar_referencia,
+            "fotos_sin_referencia": fotos_sin_referencia,
             "servicio": servicio,
             "sesion": sesion,
             "evidencias_por_asig": evidencias_por_asig,

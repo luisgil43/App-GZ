@@ -1,0 +1,8 @@
+{% if foto.ubicacion_referencia %}
+  <div class="absolute inset-x-2 z-10 pointer-events-none text-center font-bold text-white"
+       style="top: 6%; font-size: 0.8rem; line-height: 1.2; text-shadow: 0 1px 4px #000, 0 1px 2px #000; overflow-wrap: anywhere">
+    <div>{{ foto.client_taken_at|default:foto.tomada_en|date:"d M Y" }}</div>
+    <div>{{ foto.ubicacion_referencia.latitud }}, {{ foto.ubicacion_referencia.longitud }}</div>
+    <div>{{ foto.ubicacion_referencia.direccion }}</div>
+  </div>
+{% endif %}

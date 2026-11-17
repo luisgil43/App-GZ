@@ -54,7 +54,11 @@
         📸 Reporte parcial
       </a>
     {% endif %}
+    {% if puede_agregar_referencia %}
+      {% include "operaciones/_ubicacion_referencia_panel.html" %}
+    {% endif %}
   </div>
+
 
   {% if can_review %}
     <div class="flex items-center gap-2">
@@ -260,14 +264,16 @@
 
 
   {# Imagen completa (sin recorte) + click para abrir en pestaña nueva #}
-  <a href="{{ item.foto.imagen.url }}" target="_blank" rel="noopener"
+  <a href="{% if item.foto.ubicacion_referencia %}{% url 'operaciones:fotos_revisar_sesion' s.id %}?foto_sellada={{ item.foto.pk }}{% else %}{{ item.foto.imagen.url }}{% endif %}" target="_blank" rel="noopener"
      class="block group">
     <div class="w-full max-h-96 grid place-items-center p-2">
-      <img src="{{ item.foto.imagen.url }}"
+      <div class="relative max-w-full">
+        <img src="{% if item.foto.ubicacion_referencia %}{% url 'operaciones:fotos_revisar_sesion' s.id %}?foto_sellada={{ item.foto.pk }}{% else %}{{ item.foto.imagen.url }}{% endif %}"
            alt="Foto"
            loading="lazy"
            class="max-w-full max-h-96 h-auto w-auto object-contain rounded
                   transition-transform group-hover:scale-[1.01] cursor-zoom-in" />
+      </div>
     </div>
   </a>
 
@@ -309,7 +315,14 @@
       <span class="ml-1 text-gray-400">± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
     {% endif %}
   {% else %}
-    <span class="text-gray-400">📍 Sin GPS</span>
+    {% if item.foto.ubicacion_referencia %}
+      <a class="text-blue-600 hover:underline" target="_blank" rel="noopener"
+         href="https://www.google.com/maps?q={{ item.foto.ubicacion_referencia.latitud }},{{ item.foto.ubicacion_referencia.longitud }}">
+        📍 Ver ubicación de referencia
+      </a>
+    {% else %}
+      <span class="text-gray-400">📍 Sin GPS</span>
+    {% endif %}
   {% endif %}
 </div>
       {% if item.foto.nota %}<div class="text-gray-600">{{ item.foto.nota }}</div>{% endif %}
@@ -376,14 +389,16 @@
 
 
   {# Imagen completa (sin recorte) + click para abrir en pestaña nueva #}
-  <a href="{{ item.foto.imagen.url }}" target="_blank" rel="noopener"
+  <a href="{% if item.foto.ubicacion_referencia %}{% url 'operaciones:fotos_revisar_sesion' s.id %}?foto_sellada={{ item.foto.pk }}{% else %}{{ item.foto.imagen.url }}{% endif %}" target="_blank" rel="noopener"
      class="block group">
     <div class="w-full max-h-96 grid place-items-center p-2">
-      <img src="{{ item.foto.imagen.url }}"
+      <div class="relative max-w-full">
+        <img src="{% if item.foto.ubicacion_referencia %}{% url 'operaciones:fotos_revisar_sesion' s.id %}?foto_sellada={{ item.foto.pk }}{% else %}{{ item.foto.imagen.url }}{% endif %}"
            alt="Foto"
            loading="lazy"
            class="max-w-full max-h-96 h-auto w-auto object-contain rounded
                   transition-transform group-hover:scale-[1.01] cursor-zoom-in" />
+      </div>
     </div>
   </a>
 
@@ -425,7 +440,14 @@
       <span class="ml-1 text-gray-400">± {{ item.foto.gps_accuracy_m|floatformat:0|unlocalize }} m</span>
     {% endif %}
   {% else %}
-    <span class="text-gray-400">📍 Sin GPS</span>
+    {% if item.foto.ubicacion_referencia %}
+      <a class="text-blue-600 hover:underline" target="_blank" rel="noopener"
+         href="https://www.google.com/maps?q={{ item.foto.ubicacion_referencia.latitud }},{{ item.foto.ubicacion_referencia.longitud }}">
+        📍 Ver ubicación de referencia
+      </a>
+    {% else %}
+      <span class="text-gray-400">📍 Sin GPS</span>
+    {% endif %}
   {% endif %}
 </div>
       {% if item.foto.nota %}<div class="text-gray-600">{{ item.foto.nota }}</div>{% endif %}
