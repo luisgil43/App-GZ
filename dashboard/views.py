@@ -97,15 +97,23 @@ def inicio(request):
     # CONTEOS DEL MES ACTUAL
     # ========================================================
 
-    sitios_en_proceso = asignaciones_tecnico.filter(
-        estado="en_proceso",
+    # Contadores basados en servicios operativos reales.
+    # Las sesiones fotográficas históricas no deben crear
+    # trabajos activos que ya no están asignados al técnico.
+    servicios_del_tecnico = ServicioCotizado.objects.filter(
+        trabajadores_asignados=request.user,
+        mes_produccion__iexact=mes_actual_texto,
+    ).distinct()
+
+    sitios_en_proceso = servicios_del_tecnico.filter(
+        estado="en_progreso",
     ).count()
 
-    sitios_en_revision = asignaciones_tecnico.filter(
+    sitios_en_revision = servicios_del_tecnico.filter(
         estado="en_revision_supervisor",
     ).count()
 
-    sitios_aprobados = asignaciones_tecnico.filter(
+    sitios_aprobados = servicios_del_tecnico.filter(
         estado="aprobado_supervisor",
     ).count()
 
