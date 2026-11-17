@@ -45,7 +45,7 @@
     <h2 class="font-bold text-lg">Agregar ubicación de referencia</h2>
 
     {% if fotos_sin_referencia %}
-      <p class="my-2 text-sm">Selecciona las fotos del sitio. Omite las que ya tengan un sello visible.</p>
+      <p class="my-2 text-sm">Abre «Ver foto» y marca solo las imágenes que necesitan sello. Algunas ya tienen GPS guardado.</p>
       <div class="grid gap-2 sm:grid-cols-2">
         <label>Latitud <input class="border rounded px-2 w-full" name="latitud" maxlength="24" required></label>
         <label>Longitud <input class="border rounded px-2 w-full" name="longitud" maxlength="24" required></label>
@@ -73,6 +73,15 @@
                 </strong>
                 {{ foto.requisito.titulo|default:foto.titulo_manual|default:"Extra" }}<br>
                 {{ foto.client_taken_at|default:foto.tomada_en|date:"d M Y" }}
+                <span class="block text-xs text-gray-600">
+                  {% if foto.lat != None and foto.lng != None %}
+                    GPS guardado: {{ foto.lat }}, {{ foto.lng }}
+                  {% elif foto.lat != None or foto.lng != None %}
+                    GPS parcial
+                  {% else %}
+                    Sin GPS guardado
+                  {% endif %}
+                </span>
               </span>
               </label>
               <button type="button" data-ver-foto="{{ foto.pk }}"
@@ -96,7 +105,7 @@
         </div>
       </div>
     {% else %}
-      <p class="my-3">No hay fotos sin GPS pendientes de asignar.</p>
+      <p class="my-3">No hay fotos disponibles para agregar el sello.</p>
     {% endif %}
 
     <div class="mt-4 flex justify-end gap-2">

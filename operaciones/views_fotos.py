@@ -2762,8 +2762,6 @@ def revisar_sesion_fotos(request, servicio_id):
         fotos_sin_referencia = (
             EvidenciaFoto.objects.filter(
                 tecnico_sesion_id__in=sesion.asignaciones.values("pk"),
-                lat__isnull=True,
-                lng__isnull=True,
                 ubicacion_referencia__isnull=True,
             )
             .exclude(imagen="")
