@@ -47,8 +47,8 @@
     {% if fotos_sin_referencia %}
       <p class="my-2 text-sm">Abre «Ver foto» y marca solo las imágenes que necesitan sello. Algunas ya tienen GPS guardado.</p>
       <div class="grid gap-2 sm:grid-cols-2">
-        <label>Latitud <input class="border rounded px-2 w-full" name="latitud" maxlength="24" required></label>
-        <label>Longitud <input class="border rounded px-2 w-full" name="longitud" maxlength="24" required></label>
+        <label>Latitud <input class="border rounded px-2 w-full" name="latitud" maxlength="24" placeholder="-26.327591" required></label>
+        <label>Longitud <input class="border rounded px-2 w-full" name="longitud" maxlength="24" placeholder="-70.620192" required></label>
         <label class="sm:col-span-2">Dirección
           <input class="border rounded px-2 w-full" name="direccion_referencia" maxlength="200" required>
         </label>
@@ -130,6 +130,49 @@
   dialog.querySelector("[data-cerrar]").addEventListener("click", () => dialog.close());
 
   if (!preview) return;
+
+  const latitud = form.elements.latitud;
+  const longitud = form.elements.longitud;
+  const numero = /^[+-]?\d+(?:\.\d+)?$/;
+  const par = /^([+\-−]?\d+(?:[.,]\d+)?)\s*°?\s*[,;]\s*([+\-−]?\d+(?:[.,]\d+)?)\s*°?$/;
+
+  function normalizarCoordenada(valor) {
+    return valor.trim().replace(/°$/, "").trim().replace("−", "-").replace(",", ".");
+  }
+
+  for (const campo of [latitud, longitud]) {
+    campo.addEventListener("input", () => campo.setCustomValidity(""));
+    campo.addEventListener("paste", (event) => {
+      const texto = event.clipboardData?.getData("text").trim() || "";
+      const coordenadas = texto.match(par);
+      if (!coordenadas) return;
+
+      event.preventDefault();
+      latitud.value = normalizarCoordenada(coordenadas[1]);
+      longitud.value = normalizarCoordenada(coordenadas[2]);
+      latitud.setCustomValidity("");
+      longitud.setCustomValidity("");
+      actualizarVista();
+    });
+  }
+
+  form.addEventListener("submit", (event) => {
+    for (const [campo, nombre, limite] of [
+      [latitud, "latitud", 90],
+      [longitud, "longitud", 180],
+    ]) {
+      const valor = normalizarCoordenada(campo.value);
+      if (!numero.test(valor) || Math.abs(Number(valor)) > limite) {
+        event.preventDefault();
+        campo.setCustomValidity(
+          `Ingresa una ${nombre} decimal entre -${limite} y ${limite}.`
+        );
+        campo.reportValidity();
+        return;
+      }
+      campo.value = valor;
+    }
+  });
 
   let fotoEnVista = null;
 

@@ -2689,7 +2689,11 @@ def _guardar_ubicacion_referencia(request, candidatas):
 
     coordenadas = {}
     for campo, limite in (("latitud", 90), ("longitud", 180)):
-        valor = request.POST.get(campo, "").strip().replace(",", ".")
+        valor = (
+            request.POST.get(campo, "").strip()
+            .removesuffix("°").strip()
+            .replace("−", "-").replace(",", ".")
+        )
         try:
             numero = Decimal(valor)
             if not numero.is_finite() or abs(numero) > limite:
