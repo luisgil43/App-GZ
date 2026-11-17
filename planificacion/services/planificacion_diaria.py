@@ -426,25 +426,45 @@ def _query_sitios_elegibles_planificacion_diaria(
 def obtener_sitios_disponibles_planificacion_diaria(
     batch,
 ):
+    # Conservar la proteccion previa por participacion.
     ids_protegidos = _ids_sitios_batch_protegidos(batch)
+
+    # Una salida protegida reserva el sitio FISICO durante
+    # toda la semana, aunque existan varios SitioBatchSemanal.
+    salidas_protegidas = obtener_salidas_protegidas_batch(batch)
+
+    ids_fisicos_protegidos = set(
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            salida__in=salidas_protegidas,
+            sitio_batch__batch=batch,
+            estado__in=ESTADOS_SITIO_SALIDA_ACTIVOS,
+        ).values_list(
+            "sitio_batch__sitio_planificado__sitio_id",
+            flat=True,
+        )
+    )
 
     items = _query_sitios_elegibles_planificacion_diaria(batch)
 
-    # WARNING OPERACIONAL:
-    # conservar el sitio en pendientes, pero excluirlo del motor.
-    items = [
-        item
-        for item in items
-        if not item.warning_operacional
-    ]
-
     resultado = []
+    ids_fisicos_incluidos = set()
 
     for item in items:
+        if item.warning_operacional:
+            continue
 
         if item.pk in ids_protegidos:
             continue
 
+        fisico_id = item.sitio_planificado.sitio_id
+
+        if fisico_id in ids_fisicos_protegidos:
+            continue
+
+        if fisico_id in ids_fisicos_incluidos:
+            continue
+
+        ids_fisicos_incluidos.add(fisico_id)
         resultado.append(item)
 
     return resultado
@@ -458,17 +478,35 @@ def obtener_sitios_disponibles_planificacion_diaria(
 def obtener_sitios_pendientes_planificacion_diaria(
     batch,
 ):
-    ids_ya_programados = _ids_sitios_batch_ya_programados(batch)
+    # Identificar todos los sitios fisicos que tienen una
+    # participacion diaria vigente dentro de este batch.
+    ids_fisicos_programados = set(
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            sitio_batch__batch=batch,
+            estado__in=ESTADOS_SITIO_SALIDA_ACTIVOS,
+        ).exclude(
+            salida__estado="cancelada",
+        ).values_list(
+            "sitio_batch__sitio_planificado__sitio_id",
+            flat=True,
+        )
+    )
 
     items = _query_sitios_elegibles_planificacion_diaria(batch)
 
     resultado = []
+    ids_fisicos_incluidos = set()
 
     for item in items:
+        fisico_id = item.sitio_planificado.sitio_id
 
-        if item.pk in ids_ya_programados:
+        if fisico_id in ids_fisicos_programados:
             continue
 
+        if fisico_id in ids_fisicos_incluidos:
+            continue
+
+        ids_fisicos_incluidos.add(fisico_id)
         resultado.append(item)
 
     return resultado
@@ -3168,6 +3206,78 @@ def guardar_plan_diario_batch(
 
     # ========================================================
     # LIMPIAR PROPUESTA AUTOMÁTICA EDITABLE
+    # Comprobar identidad fisica antes de modificar salidas.
+    # Las salidas editables seran reemplazadas por este recalculo.
+    ids_salidas_editables = [
+        salida.pk for salida in obtener_salidas_editables_batch(batch)
+    ]
+
+    ocupaciones_protegidas = {}
+
+    participaciones_protegidas = (
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            sitio_batch__batch=batch,
+            estado__in=ESTADOS_SITIO_SALIDA_ACTIVOS,
+        )
+        .exclude(
+            salida_id__in=ids_salidas_editables,
+        )
+        .exclude(
+            salida__estado="cancelada",
+        )
+        .select_related(
+            "sitio_batch__sitio_planificado",
+            "salida",
+        )
+    )
+
+    for participacion in participaciones_protegidas:
+        fisico_id = (
+            participacion.sitio_batch.sitio_planificado.sitio_id
+        )
+        ocupaciones_protegidas.setdefault(
+            fisico_id,
+            participacion.salida_id,
+        )
+
+    sitios_propuestos = {}
+
+    for salida_propuesta in resultado["salidas"]:
+        salida_existente_id = (
+            salida_propuesta.get("salida_existente_id")
+            if salida_propuesta.get("completar_salida_existente")
+            else None
+        )
+
+        for dato_sitio in salida_propuesta["sitios"]:
+            item_batch = dato_sitio["sitio_batch"]
+            fisico_id = item_batch.sitio_planificado.sitio_id
+            codigo = item_batch.sitio_planificado.sitio.id_claro
+
+            if fisico_id in sitios_propuestos:
+                raise ValueError(
+                    f"El sitio {codigo} aparece mas de una vez "
+                    "en la propuesta de esta semana. "
+                    "No se guardo el recalculo."
+                )
+
+            salida_protegida_id = ocupaciones_protegidas.get(
+                fisico_id
+            )
+
+            if (
+                salida_protegida_id is not None
+                and salida_protegida_id != salida_existente_id
+            ):
+                raise ValueError(
+                    f"El sitio {codigo} ya esta asignado "
+                    f"a la salida protegida {salida_protegida_id}. "
+                    "No puede asignarse a otra cuadrilla o dia "
+                    "de la misma semana."
+                )
+
+            sitios_propuestos[fisico_id] = True
+
     # ========================================================
 
     salidas_eliminadas = _limpiar_salidas_editables_batch(

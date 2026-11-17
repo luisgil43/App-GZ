@@ -2984,6 +2984,7 @@ def editar_servicio_cotizado(request, pk):
     proyecto_anterior_id = servicio.proyecto_id
     actividad_anterior_id = servicio.actividad_id
 
+    id_claro_anterior = servicio.id_claro
     mes_anterior = servicio.mes_produccion
 
     tiene_tecnicos = servicio.trabajadores_asignados.exists()
@@ -3146,13 +3147,24 @@ def editar_servicio_cotizado(request, pk):
                     # VINCULAR PLANIFICACIÓN MENSUAL EXACTA
                     # ====================================================
 
-                    servicio.sitio_planificado = (
-                        obtener_sitio_planificado_para_servicio(
-                            id_claro=servicio.id_claro,
-                            mes_produccion=servicio.mes_produccion,
-                        )
+                    candidato = obtener_sitio_planificado_para_servicio(
+                        id_claro=servicio.id_claro,
+                        mes_produccion=servicio.mes_produccion,
                     )
 
+                    if candidato is not None:
+                        servicio.sitio_planificado = candidato
+                    elif (
+                        servicio.id_claro != id_claro_anterior
+                        or normalizar_mes_produccion(
+                            servicio.mes_produccion
+                        ) != normalizar_mes_produccion(mes_anterior)
+                    ):
+                        # Si cambio la identidad o el periodo,
+                        # no conservar una relacion anterior incorrecta.
+                        servicio.sitio_planificado = None
+                    # Si no cambiaron sitio ni periodo y no hay
+                    # candidato nuevo, conservar el vinculo existente.
                     servicio.save()
 
                     messages.success(
@@ -3421,6 +3433,47 @@ def obtener_sitio_planificado_para_servicio(
     if not anio or not mes or not 1 <= mes <= 12:
         return None
 
+    # Prioridad: ejecucion semanal real, incluso cuando el
+    # mes administrativo de planificacion sea diferente.
+    from planificacion.models import SitioBatchSemanal
+    from planificacion.services.vinculacion_operaciones import (
+        ESTADOS_BATCH_SITIO_INACTIVOS,
+        batch_intersecta_periodo,
+    )
+
+    participaciones = (
+        SitioBatchSemanal.objects.filter(
+            sitio_planificado__sitio__id_claro=id_claro,
+        )
+        .exclude(estado__in=ESTADOS_BATCH_SITIO_INACTIVOS)
+        .select_related("batch", "sitio_planificado")
+    )
+
+    candidatos_operacionales = {}
+    tiene_semana_activa = False
+
+    for participacion in participaciones:
+        tiene_semana_activa = True
+
+        if batch_intersecta_periodo(
+            participacion.batch,
+            anio=anio,
+            mes=mes,
+        ):
+            candidatos_operacionales[
+                participacion.sitio_planificado_id
+            ] = participacion.sitio_planificado
+
+    if len(candidatos_operacionales) == 1:
+        return next(iter(candidatos_operacionales.values()))
+
+    if tiene_semana_activa:
+        # Sin coincidencia o con varias coincidencias:
+        # no vincular arbitrariamente a otro periodo.
+        return None
+
+    # Sin semana activa, conservar la busqueda mensual
+    # existente para sitios aun no programados semanalmente.
     candidatos = list(
         SitioPlanificado.objects.filter(
             sitio__id_claro=id_claro,

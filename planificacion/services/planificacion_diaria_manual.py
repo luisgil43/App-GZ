@@ -216,6 +216,43 @@ def validar_sitio_para_programacion_manual(
         )
 
     sitio_planificado = sitio_batch.sitio_planificado
+    # Exclusividad del sitio fisico en todo el batch semanal.
+    # No considerar participaciones historicas inactivas.
+    otra_participacion = (
+        SitioSalidaPlanificacionDiaria.objects.filter(
+            sitio_batch__batch=batch,
+            sitio_batch__sitio_planificado__sitio_id=(
+                sitio_planificado.sitio_id
+            ),
+        )
+        .exclude(
+            sitio_batch_id=sitio_batch.pk,
+        )
+        .exclude(
+            estado__in=[
+                "retirado",
+                "reprogramado",
+                "cancelado",
+            ],
+        )
+        .exclude(
+            salida__estado="cancelada",
+        )
+        .select_related("salida")
+        .order_by("salida__fecha", "pk")
+        .first()
+    )
+
+    if otra_participacion is not None:
+        errores.append(
+            f"{identificador}: el sitio fisico ya aparece "
+            "en otra asignacion activa de esta semana "
+            f"({otra_participacion.salida.fecha:%d/%m/%Y}, "
+            f"salida {otra_participacion.salida_id}). "
+            "Debe retirarse o reprogramarse primero "
+            "la participacion anterior."
+        )
+
 
     # ========================================================
     # PERMISO
