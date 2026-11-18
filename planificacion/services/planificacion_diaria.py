@@ -3952,6 +3952,15 @@ def sincronizar_estado_sitio_salida(
 
     estado = obtener_estado_operacional_sitio(sitio_planificado)
 
+    # Estas participaciones conservan el resultado de su movimiento o retiro.
+    if sitio_salida.estado in {
+        "retirado",
+        "cancelado",
+        "reprogramado",
+        "no_ejecutado",
+    } or sitio_salida.salida.estado == "cancelada":
+        return estado
+
     estado_planificacion = estado["estado_planificacion"]
 
     mapa_estado_salida = {
