@@ -709,7 +709,7 @@ def descargar_excel_batch(
 
     completo:
         Exportación interna.
-        Conserva las columnas originales A-Q y añade Actividad en R.
+        Incluye Actividad, Fecha de salida y Estado de Operaciones en R-T.
 
     cliente:
         Exportación para enviar al cliente.
@@ -802,6 +802,35 @@ def descargar_excel_batch(
 
     exportacion_cliente = tipo_exportacion == "cliente"
 
+    salidas_por_item = {}
+    sitios_con_otra_salida = set()
+    estados_sin_salida_vigente = {"reprogramado", "retirado", "cancelado", "no_ejecutado"}
+    estados_operativos_excel = {
+        "asignado": "Asignado",
+        "en_ejecucion": "En ejecución",
+        "revision": "En revisión",
+        "finalizado": "Finalizado",
+    }
+    if not exportacion_cliente:
+        from planificacion.modelos.planificacion_diaria import SitioSalidaPlanificacionDiaria
+
+        participaciones = SitioSalidaPlanificacionDiaria.objects.filter(
+            sitio_batch__sitio_planificado_id__in=ids_sitios,
+            salida__fecha__isnull=False,
+        ).exclude(estado__in=estados_sin_salida_vigente)
+        salidas_del_batch = (
+            participaciones.filter(salida__batch=batch, sitio_batch__batch=batch)
+            .select_related("salida")
+            .order_by("-salida__fecha", "-pk")
+        )
+        for participacion in salidas_del_batch:
+            salidas_por_item.setdefault(participacion.sitio_batch_id, participacion)
+
+        sitios_con_otra_salida = set(
+            participaciones.exclude(salida__batch=batch)
+            .values_list("sitio_batch__sitio_planificado_id", flat=True)
+        )
+
     # --------------------------------------------------------
     # LIBRO
     # --------------------------------------------------------
@@ -818,7 +847,7 @@ def descargar_excel_batch(
     if exportacion_cliente:
         ultima_columna = "L"
     else:
-        ultima_columna = "R"
+        ultima_columna = "T"
 
     # --------------------------------------------------------
     # TÍTULO
@@ -877,6 +906,8 @@ def descargar_excel_batch(
         "Estado batch",
         "Observaciones",
         "Actividad",
+        "Fecha de salida",
+        "Estado de Operaciones",
     ]
 
     if exportacion_cliente:
@@ -1006,20 +1037,35 @@ def descargar_excel_batch(
             )
 
         else:
+            participacion = salidas_por_item.get(item.pk)
+            fecha_salida = participacion.salida.fecha if participacion else None
+            estado_operaciones = None
 
-            # A hasta Q.
-            valores = valores_completos
+            if participacion and (
+                participacion.estado == "finalizado"
+                or sitio_planificado.pk in sitios_con_otra_salida
+            ):
+                estado_operaciones = estados_operativos_excel.get(participacion.estado)
+            elif sitio_planificado.pk not in sitios_con_otra_salida:
+                estado = obtener_estado_operacional_sitio(sitio_planificado)
+                estado_operaciones = estados_operativos_excel.get(
+                    estado["estado_planificacion"]
+                )
+
+            valores = valores_completos + [fecha_salida, estado_operaciones]
 
         for columna, valor in enumerate(
             valores,
             start=1,
         ):
 
-            worksheet.cell(
+            celda = worksheet.cell(
                 row=fila,
                 column=columna,
                 value=valor,
             )
+            if not exportacion_cliente and columna == 19:
+                celda.number_format = "dd/mm/yyyy"
 
         fila += 1
 
