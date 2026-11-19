@@ -668,7 +668,7 @@
     return `${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)} ±${Math.round(meta.acc)} m`;
   }
 
-  function opciones(requisitos, seleccionado) {
+  function opciones(requisitos, seleccionado, conservarExtra = false) {
     selector.replaceChildren();
     for (const requisito of requisitos) {
       const texto = [requisito.etapa, requisito.titulo].filter(Boolean).join(" · ");
@@ -678,9 +678,11 @@
     const pendienteSeleccionado = requisitos.some(
       requisito => String(requisito.id) === String(seleccionado)
     );
-    selector.value = pendienteSeleccionado
-      ? String(seleccionado)
-      : String(requisitos[0]?.id || "");
+    selector.value = conservarExtra && String(seleccionado) === ""
+      ? ""
+      : pendienteSeleccionado
+        ? String(seleccionado)
+        : String(requisitos[0]?.id || "");
   }
 
   function actualizar() {
@@ -1033,7 +1035,8 @@
   });
   opciones(
     JSON.parse(document.getElementById("gz-requisitos-data").textContent),
-    selector.dataset.seleccionado
+    selector.dataset.seleccionado,
+    new URL(window.location.href).searchParams.get("req_id") === ""
   );
   actualizar();
   let consultaGpsActiva = false;

@@ -1611,7 +1611,7 @@ document.addEventListener("click", function(event) {
     window.location.origin
   );
   const requisito = formulario.querySelector('[name="req_id"]')?.value || "";
-  if (requisito) destino.searchParams.set("req_id", requisito);
+  destino.searchParams.set("req_id", requisito);
   window.location.href = destino.toString();
 }, true);
 </script>
