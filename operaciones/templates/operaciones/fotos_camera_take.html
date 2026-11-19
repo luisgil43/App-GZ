@@ -418,6 +418,79 @@
     font-size: 12px;
   }
 
+
+  .gz-camara #gz-volver {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    width: 36px;
+    min-height: 36px;
+    height: 36px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    font-size: 22px;
+    font-weight: 500;
+  }
+  .gz-camara #gz-requisito-completo {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 54px;
+    right: 10px;
+    max-width: none;
+    margin: 0;
+    padding: 8px 38px 8px 10px;
+    font-size: 12px;
+    line-height: 1.35;
+    min-height: 36px;
+  }
+  .gz-camara #gz-cambiar-requisito {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top, 0px));
+    right: 14px;
+    z-index: 7;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: white;
+    font-size: 25px;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+  }
+  .gz-camara .gz-ajustes-pantalla > summary {
+    display: none;
+  }
+  .gz-camara .gz-ajustes-pantalla:not([open]) {
+    display: none;
+  }
+  .gz-camara .gz-ajustes-pantalla[open] {
+    top: calc(
+      22px + env(safe-area-inset-top, 0px)
+      + var(--gz-requisito-alto, 48px)
+    );
+  }
+  .gz-camara .gz-sello {
+    top: calc(
+      24px + env(safe-area-inset-top, 0px)
+      + var(--gz-requisito-alto, 48px)
+    );
+  }
+  .gz-camara #gz-estado[hidden] {
+    display: none !important;
+  }
+  .gz-camara #gz-progreso:not(:empty) {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(15,23,42,.82);
+    color: white;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
 </style>
 
 <section class="gz-camara">
@@ -485,6 +558,25 @@
     if (elemento !== volverPantalla) ajustesPantalla.append(elemento);
   }
   contenedor.insertBefore(ajustesPantalla, estadoPantalla);
+
+  volverPantalla.textContent = "←";
+  volverPantalla.setAttribute("aria-label", "Volver a evidencias");
+  volverPantalla.title = "Volver a evidencias";
+
+  const botonRequisito = document.createElement("button");
+  botonRequisito.type = "button";
+  botonRequisito.id = "gz-cambiar-requisito";
+  botonRequisito.textContent = "⌄";
+  botonRequisito.setAttribute("aria-label", "Cambiar requerimiento o agregar nota");
+  botonRequisito.setAttribute("aria-expanded", "false");
+  botonRequisito.onclick = () => {
+    ajustesPantalla.open = !ajustesPantalla.open;
+  };
+  ajustesPantalla.addEventListener("toggle", () => {
+    botonRequisito.setAttribute("aria-expanded", String(ajustesPantalla.open));
+    botonRequisito.textContent = ajustesPantalla.open ? "⌃" : "⌄";
+  });
+  contenedor.append(botonRequisito);
 
   const requisitoVisible = document.getElementById("gz-requisito-completo");
   contenedor.append(requisitoVisible);
@@ -627,6 +719,20 @@
       fila.append(imagen, detalle, ver, quitar);
       cola.append(fila);
     }
+  }
+
+  function mostrarUbicacionActual() {
+    if (ocupada) return;
+    if (!gpsReciente()) {
+      sello.textContent = "Esperando una ubicación GPS reciente…";
+      return;
+    }
+    const clave = `${posicion.lat.toFixed(4)},${posicion.lng.toFixed(4)}`;
+    sello.textContent = [
+      fechaTexto(new Date().toISOString()),
+      coordenadas(posicion),
+      direcciones.get(clave) || "Consultando dirección…"
+    ].join("\n");
   }
 
   function guardarPosicion(pos) {
@@ -930,13 +1036,86 @@
     selector.dataset.seleccionado
   );
   actualizar();
+  let consultaGpsActiva = false;
+  let ultimoIntentoGps = 0;
+  let paginaCerrada = false;
+
+  function renovarUbicacion() {
+    if (
+      paginaCerrada || document.hidden || !stream ||
+      !navigator.geolocation || consultaGpsActiva ||
+      Date.now() - ultimoIntentoGps < 15000
+    ) return;
+
+    consultaGpsActiva = true;
+    ultimoIntentoGps = Date.now();
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        consultaGpsActiva = false;
+        if (paginaCerrada) return;
+        guardarPosicion(pos);
+        mostrarUbicacionActual();
+      },
+      error => {
+        consultaGpsActiva = false;
+        if (paginaCerrada) return;
+        if (error.code === 1) posicion = null;
+        if (!gpsReciente()) {
+          estado.textContent = errorGps(error);
+        }
+        mostrarUbicacionActual();
+      },
+      {enableHighAccuracy: true, maximumAge: 0, timeout: 12000}
+    );
+  }
+
   const relojGps = setInterval(() => {
     actualizarDisparador();
-    if (!ocupada && stream && !gpsReciente()) {
-      estado.textContent = "Cámara lista. Actualizaremos la ubicación al tomar la foto.";
-    }
+    renovarUbicacion();
+    mostrarUbicacionActual();
   }, 1000);
-  window.addEventListener("pagehide", () => clearInterval(relojGps));
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      ultimoIntentoGps = 0;
+      renovarUbicacion();
+      mostrarUbicacionActual();
+    }
+  });
+
+  window.addEventListener("pagehide", () => {
+    paginaCerrada = true;
+    clearInterval(relojGps);
+  });
+
+  // Los estados rutinarios no ocupan espacio sobre el visor.
+  function filtrarEstado() {
+    const texto = estado.textContent.trim();
+    const rutinario = !texto || /^(Ubicación disponible|Cámara lista|Foto lista|Pulsa el disparador|Esperando una ubicación reciente)/i.test(texto);
+    estado.hidden = rutinario;
+  }
+  const observadorEstado = new MutationObserver(filtrarEstado);
+  observadorEstado.observe(estado, {childList: true, subtree: true, characterData: true});
+  filtrarEstado();
+
+  // Confirmación breve después de guardar; los errores permanecen visibles.
+  let temporizadorAviso = null;
+  const observadorProgreso = new MutationObserver(() => {
+    clearTimeout(temporizadorAviso);
+    if (/^Fotos guardadas\./.test(progreso.textContent.trim())) {
+      temporizadorAviso = setTimeout(() => {
+        progreso.textContent = "";
+      }, 3000);
+    }
+  });
+  observadorProgreso.observe(progreso, {
+    childList: true, subtree: true, characterData: true
+  });
+  window.addEventListener("pagehide", () => {
+    observadorEstado.disconnect();
+    observadorProgreso.disconnect();
+    clearTimeout(temporizadorAviso);
+  });
   activar();
 })();
 </script>
