@@ -1615,4 +1615,123 @@ document.addEventListener("click", function(event) {
   window.location.href = destino.toString();
 }, true);
 </script>
+
+<style>
+  figure[data-ev-id] img {
+    cursor: zoom-in;
+  }
+  #gz-evidencia-ampliada {
+    position: fixed;
+    inset: 0;
+    width: 96vw;
+    max-width: 1400px;
+    height: 94vh;
+    height: 94dvh;
+    max-height: 96dvh;
+    margin: auto;
+    padding: 0;
+    border: 1px solid #ffffff30;
+    border-radius: 16px;
+    background: #101010;
+    color: white;
+    overflow: hidden;
+  }
+  #gz-evidencia-ampliada::backdrop {
+    background: rgba(0,0,0,.88);
+  }
+  #gz-evidencia-ampliada .gz-ampliada-barra {
+    height: 52px;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-sizing: border-box;
+    border-bottom: 1px solid #ffffff25;
+  }
+  #gz-evidencia-ampliada button {
+    border: 1px solid #ffffff50;
+    border-radius: 10px;
+    padding: 7px 14px;
+    background: #262626;
+    color: white;
+    cursor: pointer;
+  }
+  #gz-evidencia-ampliada img {
+    display: block;
+    width: 100%;
+    height: calc(100% - 52px);
+    object-fit: contain;
+  }
+</style>
+
+<dialog id="gz-evidencia-ampliada" aria-label="Fotografía completa">
+  <div class="gz-ampliada-barra">
+    <span>Fotografía completa</span>
+    <button type="button" id="gz-cerrar-evidencia">✕ Cerrar</button>
+  </div>
+  <img id="gz-evidencia-original" alt="Evidencia fotográfica ampliada">
+</dialog>
+
+<script>
+(() => {
+  const modal = document.getElementById("gz-evidencia-ampliada");
+  const original = document.getElementById("gz-evidencia-original");
+  let anterior = null;
+
+  function abrir(imagen) {
+    anterior = imagen;
+    original.src = imagen.currentSrc || imagen.src;
+    original.alt = imagen.alt || "Evidencia fotográfica completa";
+    if (!modal.open) modal.showModal();
+  }
+
+  document.addEventListener("click", event => {
+    const imagen = event.target.closest("figure[data-ev-id] img");
+    if (!imagen) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    abrir(imagen);
+  }, true);
+
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const imagen = event.target.closest("figure[data-ev-id] img");
+    if (!imagen) return;
+    event.preventDefault();
+    abrir(imagen);
+  });
+
+  function prepararMiniaturas() {
+    document.querySelectorAll("figure[data-ev-id] img").forEach(imagen => {
+      imagen.tabIndex = 0;
+      imagen.setAttribute("role", "button");
+      imagen.setAttribute("aria-label", "Abrir fotografía completa");
+      imagen.title = "Ver fotografía completa";
+    });
+  }
+
+  prepararMiniaturas();
+  const observador = new MutationObserver(prepararMiniaturas);
+  observador.observe(document.body, {childList: true, subtree: true});
+
+  document.getElementById("gz-cerrar-evidencia").onclick = () => modal.close();
+
+  modal.addEventListener("click", event => {
+    if (event.target !== modal) return;
+    const rect = modal.getBoundingClientRect();
+    if (
+      event.clientX < rect.left || event.clientX > rect.right ||
+      event.clientY < rect.top || event.clientY > rect.bottom
+    ) modal.close();
+  });
+
+  modal.addEventListener("close", () => {
+    original.removeAttribute("src");
+    if (anterior?.isConnected) anterior.focus();
+  });
+
+  window.addEventListener("pagehide", () => observador.disconnect());
+})();
+</script>
+
 {% endblock %}
