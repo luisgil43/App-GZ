@@ -10,7 +10,21 @@ from . import views_resumen, views_tarifas
 
 app_name = 'operaciones'  # <--- ESTA LÍNEA ES OBLIGATORIA PARA USAR NAMESPACES
 
+from . import views_camera
+from . import views_permisos_fotos
+
 urlpatterns = [
+    path(
+        "servicios/<int:pk>/permiso-archivos-evidencias/",
+        views_permisos_fotos.configurar_archivos_evidencias,
+        name="configurar_archivos_evidencias",
+    ),
+
+    path(
+        "fotos/asignacion/<int:pk>/camara/",
+        views_camera.camera_take,
+        name="fotos_camera_take",
+    ),
     path("buscar-mi-sitio/", views.buscar_mi_sitio, name="buscar_mi_sitio"),
     path("importar-sitios/", views.importar_sitios_excel, name="importar_sitios"),
     path("listar-sitios/", views.listar_sitios, name="listar_sitios"),

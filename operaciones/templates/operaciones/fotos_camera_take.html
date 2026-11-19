@@ -1,0 +1,666 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Tomar foto — DU{{ servicio.du }}{% endblock %}
+{% block content %}
+<style>
+  .gz-camara { max-width: 760px; margin: 24px auto; padding: 16px; background: white; border-radius: 18px; }
+  .gz-camara button, .gz-camara select, .gz-camara input, .gz-camara textarea {
+    border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px;
+  }
+  .gz-camara button { background: #0f766e; color: white; }
+  .gz-camara button:disabled { opacity: .45; cursor: not-allowed; }
+  .gz-camara label { display: block; margin: 12px 0; }
+  .gz-camara select, .gz-camara textarea, .gz-camara input { width: 100%; }
+  .gz-visor { position: relative; background: #111; margin-top: 12px; border-radius: 14px; overflow: hidden; }
+  .gz-visor video { display: block; width: 100%; max-height: 65vh; object-fit: contain; }
+  .gz-sello { position: absolute; top: 6%; left: 4%; right: 4%; color: white; text-align: center; font-weight: 700; text-shadow: 0 2px 5px #000; white-space: pre-line; pointer-events: none; }
+  .gz-acciones { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  .gz-cola { display: flex; gap: 12px; align-items: center; border-top: 1px solid #ddd; padding: 12px 0; }
+  .gz-cola img { width: 90px; height: 100px; object-fit: contain; }
+  #gz-preview { max-width: 96vw; max-height: 95vh; padding: 12px; border-radius: 12px; }
+  #gz-preview img { display: block; max-width: 90vw; max-height: 80vh; }
+  #gz-preview::backdrop { background: #000b; }
+
+  section.gz-camara {
+    width: calc(100% - 24px) !important;
+    max-width: 600px !important;
+    box-sizing: border-box;
+    margin: 16px auto !important;
+  }
+  .gz-camara .gz-visor {
+    padding-bottom: 104px;
+    background: #080808;
+  }
+  .gz-camara .gz-visor video {
+    width: 100%;
+    max-height: 62dvh;
+    object-fit: contain;
+  }
+  .gz-camara .gz-acciones {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 78px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    margin: 0;
+    padding: 14px 12px;
+    background: #080808;
+  }
+  .gz-camara #gz-tomar {
+    display: grid;
+    place-items: center;
+    width: 76px;
+    height: 76px;
+    padding: 5px;
+    border: 4px solid white;
+    border-radius: 50%;
+    background: transparent;
+    justify-self: center;
+  }
+  .gz-camara #gz-tomar span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: white;
+  }
+  .gz-camara #gz-tomar:active:not(:disabled) span {
+    transform: scale(.88);
+  }
+  .gz-camara #gz-iniciar,
+  .gz-camara #gz-subir {
+    font-size: 12px;
+    padding: 9px 5px;
+    border-color: #555;
+    background: #222;
+    color: white;
+  }
+  .gz-camara .gz-sello {
+    font-size: clamp(12px, 3vw, 20px);
+  }
+
+
+  /* Presentación de la cámara, limitada a esta pantalla. */
+  section.gz-camara {
+    width: calc(100% - 32px) !important;
+    max-width: 820px !important;
+    margin: 20px auto !important;
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+    border-radius: 26px;
+    box-shadow: 0 18px 50px rgba(15,23,42,.10);
+  }
+  .gz-camara #gz-volver {
+    display: inline-flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 10px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    background: #f8fafc;
+    color: #334155;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background .15s;
+  }
+  .gz-camara #gz-volver:hover { background: #e2e8f0; }
+  .gz-camara h1 { margin-top: 20px; font-size: 24px; }
+  .gz-camara label { font-weight: 600; color: #334155; }
+  .gz-camara select {
+    margin-top: 7px;
+    background: #fff;
+    min-height: 46px;
+    font-weight: 400;
+  }
+  .gz-camara #gz-requisito-completo {
+    margin-top: 10px;
+    padding: 14px 16px;
+    border-left: 4px solid #0d9488;
+    border-radius: 10px;
+    background: #f0fdfa;
+    color: #134e4a;
+    font-size: 15px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-weight: 500;
+  }
+  .gz-camara details { margin: 14px 0; }
+  .gz-camara summary { cursor: pointer; color: #475569; }
+  .gz-camara #gz-estado {
+    padding: 11px 14px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 14px 0;
+  }
+  .gz-camara .gz-visor {
+    width: 100%;
+    max-width: 560px;
+    margin: 16px auto 0;
+    padding-bottom: 112px;
+    border-radius: 22px;
+    background: #080808;
+  }
+  .gz-camara .gz-visor video {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 3 / 4;
+    max-height: none;
+    object-fit: contain;
+    background: #080808;
+  }
+  .gz-camara .gz-sello {
+    top: 4%;
+    font-size: clamp(12px, 2.3vw, 18px);
+    line-height: 1.4;
+  }
+  .gz-camara .gz-acciones {
+    min-height: 112px;
+    box-sizing: border-box;
+    padding: 16px;
+    gap: 14px;
+  }
+  .gz-camara #gz-iniciar,
+  .gz-camara #gz-subir {
+    min-height: 44px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .gz-camara #gz-subir:not(:disabled) {
+    background: #0f766e;
+    border-color: #14b8a6;
+  }
+  .gz-camara #gz-tomar:not(:disabled) {
+    opacity: 1;
+    box-shadow: 0 0 0 5px rgba(255,255,255,.12);
+    cursor: pointer;
+  }
+  .gz-camara .gz-cola {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 16px 0;
+  }
+  .gz-camara .gz-cola > div {
+    flex: 1 1 180px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  #gz-preview {
+    border: 0;
+    box-shadow: 0 24px 80px #0008;
+  }
+  @media (max-width: 600px) {
+    section.gz-camara {
+      width: calc(100% - 12px) !important;
+      padding: 14px;
+      margin: 6px auto !important;
+      border-radius: 20px;
+    }
+    .gz-camara h1 { font-size: 20px; }
+    .gz-camara .gz-visor { border-radius: 18px; }
+    .gz-camara .gz-sello { font-size: 12px; }
+    .gz-camara .gz-acciones { gap: 8px; padding: 16px 10px; }
+  }
+
+</style>
+
+<section class="gz-camara">
+  <a href="{% url 'operaciones:fotos_upload' a.pk %}" id="gz-volver">← Volver a evidencias</a>
+  <h1 class="text-xl font-bold mt-3">Tomar foto — DU{{ servicio.du }}</h1>
+  <p>{{ servicio.id_claro }}</p>
+  <form hidden>{% csrf_token %}</form>
+
+  <label>Requerimiento
+    <select id="gz-requisito" data-seleccionado="{{ requisito_seleccionado }}"></select>
+    <div id="gz-requisito-completo" aria-live="polite"></div>
+  </label>
+  {% if proyecto_especial %}
+    <label>Título para fotos extra
+      <input id="gz-titulo" maxlength="200">
+    </label>
+  {% endif %}
+  <details class="mt-2">
+    <summary>Agregar nota opcional</summary>
+    <label>Nota
+      <textarea id="gz-nota" rows="2"></textarea>
+    </label>
+  </details>
+
+  <p id="gz-estado" role="status">Preparando cámara y ubicación…</p>
+  <div class="gz-visor">
+    <video id="gz-video" autoplay playsinline muted></video>
+    <div id="gz-sello" class="gz-sello"></div>
+    <div class="gz-acciones">
+      <button type="button" id="gz-iniciar">Activar cámara</button>
+      <button type="button" id="gz-tomar"
+              aria-label="Tomar foto" title="Tomar foto" disabled>
+        <span aria-hidden="true"></span>
+      </button>
+      <button type="button" id="gz-subir" disabled>Subir fotos</button>
+    </div>
+  </div>
+
+  <p id="gz-progreso" role="status" class="mt-2"></p>
+  <div id="gz-cola"></div>
+</section>
+
+<dialog id="gz-preview">
+  <button type="button" id="gz-cerrar-preview">Cerrar</button>
+  <img alt="Foto con sello de captura" id="gz-preview-imagen">
+</dialog>
+
+{{ requisitos_camera|json_script:"gz-requisitos-data" }}
+
+<script>
+(() => {
+  const video = document.getElementById("gz-video");
+  const estado = document.getElementById("gz-estado");
+  const sello = document.getElementById("gz-sello");
+  const tomar = document.getElementById("gz-tomar");
+  const subir = document.getElementById("gz-subir");
+  const iniciar = document.getElementById("gz-iniciar");
+  const selector = document.getElementById("gz-requisito");
+  const nota = document.getElementById("gz-nota");
+  const titulo = document.getElementById("gz-titulo");
+  const cola = document.getElementById("gz-cola");
+  const progreso = document.getElementById("gz-progreso");
+  const preview = document.getElementById("gz-preview");
+  const previewImagen = document.getElementById("gz-preview-imagen");
+  const csrf = document.querySelector("[name=csrfmiddlewaretoken]").value;
+  const cameraUrl = "{% url 'operaciones:fotos_camera_take' a.pk %}";
+  const geoUrl = "{% url 'geo_cam:geocode' %}";
+  const especial = {{ proyecto_especial|yesno:"true,false" }};
+
+  let stream = null;
+  let watch = null;
+  let posicion = null;
+  let ocupada = false;
+  let fotos = [];
+  const direcciones = new Map();
+  let buscandoDireccion = false;
+  let ultimaConsultaDireccion = 0;
+
+  function gpsReciente() {
+    return posicion && Date.now() - posicion.timestamp <= 60000;
+  }
+
+  function actualizarDisparador() {
+    tomar.disabled = ocupada || !stream
+      || (!!selector.value && fotos.length > 0);
+  }
+
+  async function prepararDireccion(meta) {
+    const clave = `${meta.lat.toFixed(4)},${meta.lng.toFixed(4)}`;
+    if (direcciones.has(clave) || buscandoDireccion) return;
+    if (Date.now() - ultimaConsultaDireccion < 60000) return;
+    buscandoDireccion = true;
+    ultimaConsultaDireccion = Date.now();
+    try {
+      await direccion(meta);
+    } finally {
+      buscandoDireccion = false;
+    }
+  }
+
+  function fechaTexto(iso) {
+    return new Date(iso).toLocaleString("es-CL", {
+      day: "2-digit", month: "short", year: "numeric",
+      hour: "2-digit", minute: "2-digit"
+    });
+  }
+
+  function coordenadas(meta) {
+    return `${meta.lat.toFixed(6)}, ${meta.lng.toFixed(6)} ±${Math.round(meta.acc)} m`;
+  }
+
+  function opciones(requisitos, seleccionado) {
+    selector.replaceChildren();
+    for (const requisito of requisitos) {
+      const texto = [requisito.etapa, requisito.titulo].filter(Boolean).join(" · ");
+      selector.add(new Option(texto, String(requisito.id)));
+    }
+    selector.add(new Option("Foto extra", ""));
+    const pendienteSeleccionado = requisitos.some(
+      requisito => String(requisito.id) === String(seleccionado)
+    );
+    selector.value = pendienteSeleccionado
+      ? String(seleccionado)
+      : String(requisitos[0]?.id || "");
+  }
+
+  function actualizar() {
+    document.getElementById("gz-requisito-completo").textContent =
+      selector.selectedOptions[0]?.textContent || "Foto extra";
+    selector.disabled = ocupada || fotos.length > 0;
+    actualizarDisparador();
+    subir.disabled = ocupada || fotos.length === 0;
+    iniciar.disabled = ocupada;
+    cola.replaceChildren();
+
+    for (const foto of fotos) {
+      const fila = document.createElement("div");
+      fila.className = "gz-cola";
+      const imagen = document.createElement("img");
+      imagen.src = foto.url;
+      imagen.alt = "Captura con geolocalización";
+      const detalle = document.createElement("div");
+      detalle.textContent = `${foto.requisitoTexto} · ${fechaTexto(foto.fecha)} · ${foto.estado}`;
+      const ver = document.createElement("button");
+      ver.type = "button";
+      ver.textContent = "Ver foto";
+      ver.onclick = () => {
+        previewImagen.src = foto.url;
+        preview.showModal();
+      };
+      const quitar = document.createElement("button");
+      quitar.type = "button";
+      quitar.textContent = "Quitar";
+      quitar.disabled = ocupada || foto.estado === "Guardada";
+      quitar.onclick = () => {
+        URL.revokeObjectURL(foto.url);
+        fotos = fotos.filter(item => item !== foto);
+        actualizar();
+      };
+      fila.append(imagen, detalle, ver, quitar);
+      cola.append(fila);
+    }
+  }
+
+  function guardarPosicion(pos) {
+    const c = pos.coords;
+    if (![c.latitude, c.longitude, c.accuracy].every(Number.isFinite)) return;
+    posicion = {lat: c.latitude, lng: c.longitude, acc: c.accuracy, timestamp: pos.timestamp};
+    if (!ocupada) {
+      estado.textContent = `Ubicación disponible · ${coordenadas(posicion)}`;
+      const clave = `${posicion.lat.toFixed(4)},${posicion.lng.toFixed(4)}`;
+      sello.textContent = [
+        fechaTexto(new Date().toISOString()),
+        coordenadas(posicion),
+        direcciones.get(clave) || ""
+      ].filter(Boolean).join("\n");
+    }
+    actualizarDisparador();
+    prepararDireccion({...posicion});
+  }
+
+  function errorGps(error) {
+    const mensajes = {
+      1: "Permite el acceso a tu ubicación en el navegador.",
+      2: "Ubicación no disponible. Vuelve a intentarlo.",
+      3: "La ubicación tardó demasiado. Vuelve a intentarlo."
+    };
+    return mensajes[error.code] || "No se pudo obtener la ubicación.";
+  }
+
+  async function obtenerPosicion() {
+    if (!navigator.geolocation) throw new Error("Este navegador no permite geolocalización.");
+    if (!gpsReciente()) {
+      await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          pos => { guardarPosicion(pos); resolve(); },
+          error => reject(new Error(errorGps(error))),
+          {enableHighAccuracy: true, maximumAge: 60000, timeout: 12000}
+        );
+      });
+    }
+    if (!posicion) throw new Error("No hay una ubicación válida para esta captura.");
+    return {...posicion};
+  }
+
+  async function direccion(meta) {
+    const clave = `${meta.lat.toFixed(4)},${meta.lng.toFixed(4)}`;
+    if (direcciones.has(clave)) return direcciones.get(clave);
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 7000);
+    try {
+      const parametros = new URLSearchParams({lat: meta.lat, lng: meta.lng});
+      const respuesta = await fetch(`${geoUrl}?${parametros}`, {
+        credentials: "same-origin", signal: abort.signal,
+        headers: {"Accept": "application/json", "Accept-Language": "es"}
+      });
+      if (!respuesta.ok) return "";
+      const datos = await respuesta.json();
+      const texto = datos.results?.[0]?.formatted_address || "";
+      if (texto) direcciones.set(clave, texto);
+      return texto;
+    } catch (error) {
+      return "";
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function lineasTexto(ctx, texto, ancho) {
+    const lineas = [];
+    let actual = "";
+    for (const palabra of texto.split(/\s+/)) {
+      const candidata = actual ? `${actual} ${palabra}` : palabra;
+      if (actual && ctx.measureText(candidata).width > ancho) {
+        lineas.push(actual);
+        actual = palabra;
+      } else {
+        actual = candidata;
+      }
+    }
+    if (actual) lineas.push(actual);
+    return lineas;
+  }
+
+  function dibujarSello(canvas, textos) {
+    const ctx = canvas.getContext("2d");
+    let tamano = Math.max(14, Math.round(canvas.width * 0.037));
+    let lineas;
+    do {
+      ctx.font = `700 ${tamano}px Arial, sans-serif`;
+      lineas = textos.flatMap(texto => lineasTexto(ctx, texto, canvas.width * 0.92));
+      if (lineas.length * tamano * 1.2 < canvas.height * 0.38 || tamano <= 12) break;
+      tamano -= 1;
+    } while (true);
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.shadowColor = "rgba(0,0,0,.8)";
+    ctx.shadowBlur = Math.max(3, tamano * 0.18);
+    ctx.shadowOffsetY = Math.max(1, tamano * 0.04);
+    let y = canvas.height * 0.06;
+    for (const linea of lineas) {
+      ctx.fillText(linea, canvas.width / 2, y);
+      y += tamano * 1.2;
+    }
+  }
+
+  async function activar() {
+    if (ocupada) return;
+    try {
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Abre la página con HTTPS y permite el acceso a la cámara.");
+      }
+      if (stream) stream.getTracks().forEach(track => track.stop());
+      stream = null;
+      video.srcObject = null;
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {facingMode: {ideal: "environment"}, width: {ideal: 1920}, height: {ideal: 1080}},
+        audio: false
+      });
+      video.srcObject = stream;
+      await video.play();
+      estado.textContent = "Cámara lista. Obteniendo ubicación…";
+      if (watch === null && navigator.geolocation) {
+        watch = navigator.geolocation.watchPosition(
+          guardarPosicion,
+          error => {
+            if (error.code === 1) posicion = null;
+            if (!ocupada && !gpsReciente()) {
+              estado.textContent = error.code === 3
+                ? "Pulsa el disparador para volver a obtener tu ubicación."
+                : errorGps(error);
+            }
+            actualizarDisparador();
+          },
+          {enableHighAccuracy: true, maximumAge: 10000, timeout: 20000}
+        );
+      }
+    } catch (error) {
+      estado.textContent = error.message;
+    } finally {
+      actualizar();
+    }
+  }
+
+  tomar.onclick = async () => {
+    if (ocupada) return;
+    if (!video.videoWidth || !video.videoHeight) {
+      estado.textContent = "La cámara todavía se está preparando.";
+      return;
+    }
+    if (!selector.value && especial && !titulo?.value.trim()) {
+      estado.textContent = "Escribe el título de la foto extra.";
+      titulo?.focus();
+      return;
+    }
+    ocupada = true;
+    actualizar();
+    try {
+      estado.textContent = gpsReciente() ? "Tomando foto…" : "Obteniendo ubicación para la foto…";
+      const meta = await obtenerPosicion();
+      const fecha = new Date().toISOString();
+      const reqId = selector.value;
+      const requisitoTexto = selector.selectedOptions[0].textContent;
+      const notaCaptura = nota.value.trim();
+      const tituloCaptura = titulo?.value.trim() || "";
+
+      // Congelar el fotograma antes de consultar la dirección.
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      const claveDireccion = `${meta.lat.toFixed(4)},${meta.lng.toFixed(4)}`;
+      estado.textContent = "Preparando sello con la dirección…";
+      const address = direcciones.get(claveDireccion) || await direccion(meta);
+      const textos = [
+        fechaTexto(fecha),
+        coordenadas(meta),
+        address || "Dirección no disponible"
+      ];
+
+      dibujarSello(canvas, textos);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      if (!blob) throw new Error("No se pudo preparar la foto. Repite la captura.");
+      fotos.push({
+        blob, url: URL.createObjectURL(blob), meta, fecha, reqId,
+        requisitoTexto, nota: notaCaptura, titulo: tituloCaptura,
+        address, estado: "En cola"
+      });
+      sello.textContent = textos.join("\n");
+      estado.textContent = address
+        ? "Foto lista. Puedes ampliarla antes de subir."
+        : "Foto lista con GPS. La dirección no estuvo disponible.";
+    } catch (error) {
+      estado.textContent = error.message;
+    } finally {
+      ocupada = false;
+      actualizar();
+    }
+  };
+
+  subir.onclick = async () => {
+    if (ocupada || !fotos.length) return;
+    ocupada = true;
+    actualizar();
+    try {
+      for (const foto of fotos) {
+        if (foto.estado === "Guardada") continue;
+        foto.estado = "Subiendo…";
+        actualizar();
+        const datos = new FormData();
+        datos.append("imagen", foto.blob, "captura.jpg");
+        datos.append("req_id", foto.reqId);
+        datos.append("lat", foto.meta.lat);
+        datos.append("lng", foto.meta.lng);
+        datos.append("acc", foto.meta.acc);
+        datos.append("client_taken_at", foto.fecha);
+        datos.append("direccion_manual", foto.address);
+        datos.append("titulo_manual", foto.titulo);
+        datos.append("nota", foto.nota);
+        let respuesta;
+        try {
+          respuesta = await fetch(cameraUrl, {
+            method: "POST", body: datos, credentials: "same-origin",
+            headers: {"X-CSRFToken": csrf, "Accept": "application/json"}
+          });
+          const resultado = await respuesta.json();
+          if (!respuesta.ok || !resultado.ok) {
+            throw new Error(resultado.error || "No se pudo guardar la foto.");
+          }
+          foto.estado = "Guardada";
+          if (foto.reqId) {
+            const opcion = Array.from(selector.options).find(
+              item => item.value === String(foto.reqId)
+            );
+            if (opcion) opcion.remove();
+            selector.selectedIndex = 0;
+          }
+          progreso.textContent = `${fotos.filter(item => item.estado === "Guardada").length} de ${fotos.length} guardadas`;
+          actualizar();
+        } catch (error) {
+          foto.estado = "Pendiente de reintento";
+          throw error;
+        }
+      }
+
+      const anterior = selector.value;
+      for (const foto of fotos) URL.revokeObjectURL(foto.url);
+      fotos = [];
+      nota.value = "";
+      if (titulo) titulo.value = "";
+      const respuesta = await fetch(`${cameraUrl}?formato=json`, {
+        credentials: "same-origin", headers: {"Accept": "application/json"}, cache: "no-store"
+      });
+      const datos = await respuesta.json();
+      if (!respuesta.ok || !datos.ok) throw new Error(datos.error || "No se pudieron actualizar los requerimientos.");
+      opciones(datos.requisitos, anterior ? String(datos.requisitos[0]?.id || "") : "");
+      progreso.textContent = "Fotos guardadas. Puedes continuar con el siguiente requerimiento.";
+    } catch (error) {
+      progreso.textContent = error.message;
+    } finally {
+      ocupada = false;
+      actualizar();
+    }
+  };
+
+  iniciar.onclick = activar;
+  selector.onchange = actualizar;
+  document.getElementById("gz-cerrar-preview").onclick = () => preview.close();
+  window.addEventListener("beforeunload", event => {
+    if (fotos.some(foto => foto.estado !== "Guardada")) {
+      event.preventDefault();
+      event.returnValue = "";
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    if (watch !== null) navigator.geolocation.clearWatch(watch);
+  });
+  opciones(
+    JSON.parse(document.getElementById("gz-requisitos-data").textContent),
+    selector.dataset.seleccionado
+  );
+  actualizar();
+  const relojGps = setInterval(() => {
+    actualizarDisparador();
+    if (!ocupada && stream && !gpsReciente()) {
+      estado.textContent = "Cámara lista. Actualizaremos la ubicación al tomar la foto.";
+    }
+  }, 1000);
+  window.addEventListener("pagehide", () => clearInterval(relojGps));
+  activar();
+})();
+</script>
+{% endblock %}

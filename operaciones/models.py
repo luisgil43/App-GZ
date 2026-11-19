@@ -236,6 +236,13 @@ class SitiosTablaMetadata(models.Model):
 
 
 class ServicioCotizado(models.Model):
+    permitir_archivos_evidencias = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name="Permitir archivos de evidencias",
+        help_text="Habilita la galería para los técnicos de este servicio.",
+    )
+
     ESTADOS = [
         ("cotizado", "Cotizado"),
         ("aprobado_pendiente", "Aprobada, pendiente por asignar"),

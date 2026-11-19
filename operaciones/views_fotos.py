@@ -52,6 +52,8 @@ from .models import (EvidenciaFoto, RequisitoFoto, ServicioCotizado,
 
 # ========== Helpers ==========
 
+from .permisos_fotos import _ORIGEN_CAMARA, archivos_evidencias_habilitados
+
 def wasabi_client():
     return boto3.client(
         "s3",
@@ -1839,6 +1841,13 @@ def presign_put(request, asig_id: int):
 
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
 
+    if not archivos_evidencias_habilitados(a, request.user):
+        return JsonResponse(
+            {"ok": False, "error": "La carga de archivos está deshabilitada. Usa la cámara para tomar la foto."},
+            status=403,
+        )
+
+
     filename = request.POST.get("filename") or ""
     content_type = request.POST.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
     size_bytes = int(request.POST.get("size_bytes") or 0)
@@ -1885,6 +1894,13 @@ def finalize_upload(request, asig_id: int):
     considerando SOLO requisitos ACTivos y agrupados por norma de título.
     """
     a = get_object_or_404(SesionFotoTecnico, pk=asig_id, tecnico=request.user)
+
+    if not archivos_evidencias_habilitados(a, request.user):
+        return JsonResponse(
+            {"ok": False, "error": "La carga de archivos está deshabilitada. Usa la cámara para tomar la foto."},
+            status=403,
+        )
+
     s = a.sesion
 
     # ========================= Helpers locales =========================
@@ -2069,6 +2085,11 @@ def _wasabi_client():
 @rol_requerido('usuario')
 def upload_evidencias_fotos(request, pk):
     a = get_object_or_404(SesionFotoTecnico, pk=pk, tecnico=request.user)
+
+    if request.method == "POST" and not archivos_evidencias_habilitados(a, request.user):
+        messages.error(request, "La carga de archivos está deshabilitada. Usa la cámara para tomar la foto.")
+        return redirect("operaciones:fotos_upload", pk=a.pk)
+
     s = a.sesion
     servicio = s.servicio
 
@@ -2310,8 +2331,18 @@ def _order_evidencias(qs):
 @login_required
 @rol_requerido('usuario')
 @require_POST
-def upload_evidencias_ajax(request, pk):
+def upload_evidencias_ajax(request, pk, *, _origen_camara=None):
     a = get_object_or_404(SesionFotoTecnico, pk=pk, tecnico=request.user)
+
+    if (
+        _origen_camara is not _ORIGEN_CAMARA
+        and not archivos_evidencias_habilitados(a, request.user)
+    ):
+        return JsonResponse(
+            {"ok": False, "error": "La carga de archivos está deshabilitada. Usa la cámara para tomar la foto."},
+            status=403,
+        )
+
     s = a.sesion
 
     puede_subir = (a.estado == "en_proceso") or (

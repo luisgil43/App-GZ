@@ -127,7 +127,8 @@
 
     <div class="flex items-center gap-2">
       <!-- GALLERY -->
-      <input id="file-gallery-{{ r.id }}" type="file" name="imagenes[]" accept="image/*" multiple
+      {% if servicio.permitir_archivos_evidencias %}
+<input id="file-gallery-{{ r.id }}" type="file" name="imagenes[]" accept="image/*" multiple
              class="sr-only file-input" {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}disabled{% endif %}>
       <label for="file-gallery-{{ r.id }}"
              class="px-3 py-2 rounded text-sm cursor-pointer
@@ -137,6 +138,7 @@
       <span class="text-xs text-gray-600 filename" data-empty="Sin archivos">
         {% if r.id in locked_ids or r.uploaded > 0 or r.completed_global %}Cerrado{% else %}Sin archivos{% endif %}
       </span>
+{% endif %}
 
       <!-- CAMERA -->
       <input id="file-camera-{{ r.id }}" type="file" name="imagenes[]" accept="image/*" capture="environment"
@@ -194,9 +196,11 @@
     <input type="hidden" name="client_taken_at">
 
     <div class="flex items-center gap-2">
-      <input id="file-gallery-extra" type="file" name="imagenes[]" accept="image/*" multiple class="sr-only file-input">
+      {% if servicio.permitir_archivos_evidencias %}
+<input id="file-gallery-extra" type="file" name="imagenes[]" accept="image/*" multiple class="sr-only file-input">
       <label for="file-gallery-extra" class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm cursor-pointer">📁 Elegir archivos</label>
       <span class="text-xs text-gray-600 filename" data-empty="Sin archivos">Sin archivos</span>
+{% endif %}
 
       <input id="file-camera-extra" type="file" name="imagenes[]" accept="image/*" capture="environment" class="sr-only file-input-camera">
       <button type="button" class="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm trigger-camera" data-target="file-camera-extra">📷 Tomar</button>
@@ -1593,4 +1597,22 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 </script>
 
+
+<script id="gz-abrir-camara-propia">
+document.addEventListener("click", function(event) {
+  const boton = event.target.closest(".trigger-camera");
+  if (!boton || boton.disabled) return;
+  const formulario = boton.closest("form");
+  if (!formulario) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const destino = new URL(
+    "{% url 'operaciones:fotos_camera_take' a.pk %}",
+    window.location.origin
+  );
+  const requisito = formulario.querySelector('[name="req_id"]')?.value || "";
+  if (requisito) destino.searchParams.set("req_id", requisito);
+  window.location.href = destino.toString();
+}, true);
+</script>
 {% endblock %}
