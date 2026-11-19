@@ -209,6 +209,215 @@
     .gz-camara .gz-acciones { gap: 8px; padding: 16px 10px; }
   }
 
+
+  /* Cámara a pantalla completa, limitada a este template. */
+  html:has(section.gz-camara),
+  body:has(section.gz-camara) {
+    overflow: hidden;
+  }
+  section.gz-camara {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 10000 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #080808;
+    box-shadow: none;
+    overflow: hidden;
+  }
+  .gz-camara .gz-visor {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+  }
+  .gz-camara .gz-visor video {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+    object-fit: cover;
+  }
+  .gz-camara #gz-volver {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    z-index: 5;
+    min-height: 42px;
+    padding: 10px 14px;
+    background: rgba(15,23,42,.82);
+    color: white;
+    border: 1px solid #ffffff45;
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+    font-size: 13px;
+  }
+  .gz-camara #gz-volver:hover {
+    background: rgba(30,41,59,.95);
+  }
+  .gz-camara .gz-ajustes-pantalla {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: 12px;
+    z-index: 6;
+    max-width: calc(100% - 24px);
+    margin: 0;
+    color: white;
+  }
+  .gz-camara .gz-ajustes-pantalla > summary {
+    padding: 11px 14px;
+    border: 1px solid #ffffff45;
+    border-radius: 14px;
+    background: rgba(15,23,42,.82);
+    color: white;
+    font-size: 13px;
+    backdrop-filter: blur(12px);
+  }
+  .gz-camara .gz-ajustes-pantalla[open] {
+    top: calc(66px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    max-height: 65dvh;
+    overflow-y: auto;
+    padding: 16px;
+    border-radius: 18px;
+    background: #fff;
+    color: #0f172a;
+    box-shadow: 0 12px 40px #0005;
+  }
+  .gz-camara .gz-ajustes-pantalla[open] > summary {
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .gz-camara .gz-ajustes-pantalla h1 { font-size: 18px; }
+  .gz-camara .gz-sello {
+    top: calc(76px + env(safe-area-inset-top, 0px));
+    left: 5%;
+    right: 5%;
+    font-size: clamp(12px, 3.3vw, 19px);
+    line-height: 1.4;
+    z-index: 2;
+  }
+  .gz-camara .gz-acciones {
+    z-index: 3;
+    min-height: 112px;
+    padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(transparent, rgba(0,0,0,.85));
+  }
+  .gz-camara #gz-estado {
+    position: absolute;
+    z-index: 3;
+    bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: rgba(15,23,42,.72);
+    color: white;
+    font-size: 11px;
+    pointer-events: none;
+  }
+  .gz-camara .gz-bandeja-pantalla {
+    position: absolute;
+    z-index: 4;
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    max-height: 25dvh;
+    overflow-y: auto;
+    border-radius: 14px;
+    color: white;
+  }
+  .gz-camara .gz-bandeja-pantalla:has(.gz-cola) {
+    background: rgba(15,23,42,.88);
+    padding: 10px;
+  }
+  .gz-camara .gz-cola {
+    margin: 0;
+    padding: 5px 0;
+    border: 0;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .gz-camara .gz-cola img {
+    width: 55px;
+    height: 65px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+  .gz-camara #gz-progreso:empty { display: none; }
+  #gz-preview { z-index: 10001; }
+  @media (max-width: 360px) {
+    .gz-camara #gz-volver,
+    .gz-camara .gz-ajustes-pantalla > summary {
+      padding: 10px 8px;
+      font-size: 11px;
+    }
+  }
+
+
+  .gz-camara #gz-requisito-completo {
+    position: absolute;
+    z-index: 4;
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: 620px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    padding: 9px 12px;
+    border: 1px solid #ffffff35;
+    border-left: 3px solid #2dd4bf;
+    border-radius: 12px;
+    background: rgba(15,23,42,.80);
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    backdrop-filter: blur(10px);
+    pointer-events: none;
+  }
+  .gz-camara .gz-sello {
+    top: calc(
+      78px + env(safe-area-inset-top, 0px)
+      + var(--gz-requisito-alto, 48px)
+    );
+  }
+  .gz-camara .gz-ajustes-pantalla[open] {
+    left: auto;
+    right: 12px;
+    width: min(420px, calc(100% - 24px));
+    box-sizing: border-box;
+    padding: 12px;
+    max-height: 60dvh;
+  }
+  .gz-camara .gz-ajustes-pantalla h1,
+  .gz-camara .gz-ajustes-pantalla > p {
+    display: none;
+  }
+  .gz-camara .gz-ajustes-pantalla label {
+    margin: 8px 0;
+    font-size: 12px;
+  }
+  .gz-camara .gz-ajustes-pantalla select {
+    min-height: 38px;
+    padding: 8px;
+    font-size: 12px;
+  }
+
 </style>
 
 <section class="gz-camara">
@@ -260,6 +469,43 @@
 
 <script>
 (() => {
+  const contenedor = document.querySelector("section.gz-camara");
+  const visorPantalla = contenedor.querySelector(".gz-visor");
+  const volverPantalla = document.getElementById("gz-volver");
+  const estadoPantalla = document.getElementById("gz-estado");
+
+  const ajustesPantalla = document.createElement("details");
+  ajustesPantalla.className = "gz-ajustes-pantalla";
+  const resumenPantalla = document.createElement("summary");
+  resumenPantalla.textContent = "Cambiar / Nota";
+  ajustesPantalla.append(resumenPantalla);
+
+  for (const elemento of Array.from(contenedor.children)) {
+    if (elemento === estadoPantalla) break;
+    if (elemento !== volverPantalla) ajustesPantalla.append(elemento);
+  }
+  contenedor.insertBefore(ajustesPantalla, estadoPantalla);
+
+  const requisitoVisible = document.getElementById("gz-requisito-completo");
+  contenedor.append(requisitoVisible);
+
+  const ajustarSello = () => {
+    contenedor.style.setProperty(
+      "--gz-requisito-alto",
+      `${Math.ceil(requisitoVisible.getBoundingClientRect().height)}px`
+    );
+  };
+  const observadorRequisito = new ResizeObserver(ajustarSello);
+  observadorRequisito.observe(requisitoVisible);
+  window.addEventListener("pagehide", () => observadorRequisito.disconnect());
+
+  const colaPantalla = document.getElementById("gz-cola");
+  const progresoPantalla = document.getElementById("gz-progreso");
+  const bandejaPantalla = document.createElement("div");
+  bandejaPantalla.className = "gz-bandeja-pantalla";
+  bandejaPantalla.append(progresoPantalla, colaPantalla);
+  contenedor.append(bandejaPantalla);
+
   const video = document.getElementById("gz-video");
   const estado = document.getElementById("gz-estado");
   const sello = document.getElementById("gz-sello");
@@ -304,6 +550,16 @@
     ultimaConsultaDireccion = Date.now();
     try {
       await direccion(meta);
+      if (!ocupada && posicion) {
+        const claveActual = `${posicion.lat.toFixed(4)},${posicion.lng.toFixed(4)}`;
+        if (claveActual === clave) {
+          sello.textContent = [
+            fechaTexto(new Date().toISOString()),
+            coordenadas(posicion),
+            direcciones.get(clave) || "Consultando dirección…"
+          ].join("\n");
+        }
+      }
     } finally {
       buscandoDireccion = false;
     }
@@ -383,7 +639,7 @@
       sello.textContent = [
         fechaTexto(new Date().toISOString()),
         coordenadas(posicion),
-        direcciones.get(clave) || ""
+        direcciones.get(clave) || "Consultando dirección…"
       ].filter(Boolean).join("\n");
     }
     actualizarDisparador();
@@ -486,7 +742,11 @@
       stream = null;
       video.srcObject = null;
       stream = await navigator.mediaDevices.getUserMedia({
-        video: {facingMode: {ideal: "environment"}, width: {ideal: 1920}, height: {ideal: 1080}},
+        video: {
+          facingMode: {ideal: "environment"},
+          width: {ideal: 1080},
+          height: {ideal: 1920}
+        },
         audio: false
       });
       video.srcObject = stream;
@@ -538,9 +798,26 @@
 
       // Congelar el fotograma antes de consultar la dirección.
       const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      canvas.getContext("2d").drawImage(video, 0, 0);
+      const rect = video.getBoundingClientRect();
+      const proporcionVisor = rect.width / rect.height;
+      const proporcionVideo = video.videoWidth / video.videoHeight;
+      let anchoOrigen = video.videoWidth;
+      let altoOrigen = video.videoHeight;
+      if (proporcionVideo > proporcionVisor) {
+        anchoOrigen = altoOrigen * proporcionVisor;
+      } else {
+        altoOrigen = anchoOrigen / proporcionVisor;
+      }
+      canvas.width = Math.max(1, Math.round(anchoOrigen));
+      canvas.height = Math.max(1, Math.round(altoOrigen));
+      canvas.getContext("2d").drawImage(
+        video,
+        (video.videoWidth - anchoOrigen) / 2,
+        (video.videoHeight - altoOrigen) / 2,
+        anchoOrigen,
+        altoOrigen,
+        0, 0, canvas.width, canvas.height
+      );
       const claveDireccion = `${meta.lat.toFixed(4)},${meta.lng.toFixed(4)}`;
       estado.textContent = "Preparando sello con la dirección…";
       const address = direcciones.get(claveDireccion) || await direccion(meta);
