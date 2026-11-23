@@ -720,7 +720,9 @@ def ver_contrato(request, contrato_id):
             return redirect('rrhh:contratos_trabajo')
 
         # 👉 Nombre de descarga "bonito"
-        base_name = Path(contrato.archivo.name).name  # p.ej. PTS_NIVEL_PISO_uaf3tx
+        from usuarios.nombres_descarga import nombre_documento_descarga
+        from django.utils.http import content_disposition_header
+        base_name = nombre_documento_descarga(contrato.tipo_documento_laboral.nombre if contrato.tipo_documento_laboral_id else "Contrato de Trabajo", contrato.archivo.name, contrato.tecnico, extension_default=".pdf")
         # Si no tiene .pdf, se lo agregamos
         if not base_name.lower().endswith('.pdf'):
             base_name = f"{base_name}.pdf"
@@ -729,7 +731,7 @@ def ver_contrato(request, contrato_id):
         response = FileResponse(archivo, content_type='application/pdf')
         # inline = se abre en el navegador, pero si el usuario guarda, usa ese nombre .pdf
         # si quieres que SIEMPRE se descargue, cambia "inline" por "attachment"
-        response["Content-Disposition"] = f'inline; filename="{base_name}"'
+        response["Content-Disposition"] = content_disposition_header(False, base_name)
         return response
 
     except Exception as e:
@@ -847,9 +849,9 @@ def descargar_contratos_unificados(request, trabajador_id):
 
         nombre_completo = " ".join(nombre_completo.split())
 
-        nombre_archivo = (
-            f"Documentos Laborales - {nombre_completo}.pdf"
-        )
+        from usuarios.nombres_descarga import nombre_documento_descarga
+        from django.utils.http import content_disposition_header
+        nombre_archivo = nombre_documento_descarga("Documentos Laborales", "documentos.pdf", trabajador)
 
         respuesta = HttpResponse(
             contenido,
@@ -905,7 +907,9 @@ def descargar_contrato(request, contrato_id):
         )
         raise Http404("Documento no disponible")
 
-    nombre = Path(contrato.archivo.name).name
+    from usuarios.nombres_descarga import nombre_documento_descarga
+    from django.utils.http import content_disposition_header
+    nombre = nombre_documento_descarga(contrato.tipo_documento_laboral.nombre if contrato.tipo_documento_laboral_id else "Contrato de Trabajo", contrato.archivo.name, contrato.tecnico, extension_default=".pdf")
 
     if not nombre.lower().endswith(".pdf"):
         nombre += ".pdf"

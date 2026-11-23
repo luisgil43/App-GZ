@@ -490,7 +490,28 @@ def document_download(request, pk: int):
     except Exception:
         raise Http404("No se pudo abrir el documento.")
 
-    filename = os.path.basename(obj.file.name or "") or f"documento_{obj.pk}"
+    from usuarios.nombres_descarga import nombre_documento_descarga
+
+    trabajador_nombre = None
+    worker_id = request.GET.get("worker_id", "")
+    if worker_id.isdecimal():
+        trabajador_nombre = obj.workers.filter(pk=int(worker_id)).first()
+        if (
+            trabajador_nombre is None
+            and obj.scope == "ambos"
+            and obj.apply_to_all_workers
+        ):
+            trabajador_nombre = CustomUser.objects.filter(pk=int(worker_id)).first()
+    elif obj.scope != "empresa" and not obj.apply_to_all_workers:
+        trabajadores = list(obj.workers.order_by("pk")[:2])
+        if len(trabajadores) == 1:
+            trabajador_nombre = trabajadores[0]
+
+    filename = nombre_documento_descarga(
+        obj.title.strip() or obj.doc_type.name,
+        obj.file.name,
+        trabajador_nombre,
+    )
     content_type, _ = mimetypes.guess_type(filename)
     content_type = content_type or "application/octet-stream"
 
