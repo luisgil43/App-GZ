@@ -88,6 +88,10 @@ def consultar_detalle_sitio_movil(request, sitio_id):
         ("zonas_conflictivas", "Zonas conflictivas"),
         ("alarmas", "Alarmas"),
         ("guardias", "Guardias"),
+        ("ic_nombre", "IC"),
+        ("ic_telefono", "Teléfono del IC"),
+        ("oficina_nombre", "Oficina de retiro de llaves"),
+        ("oficina_direccion", "Dirección de retiro de llaves"),
         ("nivel", "Nivel"),
         ("descripcion", "Descripción"),
     ]
@@ -184,6 +188,10 @@ def consultar_detalle_sitio_movil_tecnico(request, sitio_id):
         ("zonas_conflictivas", "Zonas conflictivas"),
         ("alarmas", "Alarmas"),
         ("guardias", "Guardias"),
+        ("ic_nombre", "IC"),
+        ("ic_telefono", "Teléfono del IC"),
+        ("oficina_nombre", "Oficina de retiro de llaves"),
+        ("oficina_direccion", "Dirección de retiro de llaves"),
         ("nivel", "Nivel"),
         ("descripcion", "Descripción"),
     ]

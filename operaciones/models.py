@@ -159,7 +159,70 @@ def upload_to_acta_field(instance, filename: str) -> str:
 
 
 # ===== Modelos =====
+
+class IngenieroCampoSitio(models.Model):
+    nombre = models.CharField(max_length=200)
+    telefono = models.CharField(max_length=50)
+
+    class Meta:
+        ordering = ["nombre", "pk"]
+        verbose_name = "IC"
+        verbose_name_plural = "IC"
+
+    def __str__(self):
+        return f"{self.nombre} · {self.telefono}"
+
+
+class OficinaRetiroLlaves(models.Model):
+    nombre = models.CharField(max_length=200)
+    direccion = models.CharField(max_length=500)
+
+    class Meta:
+        ordering = ["nombre", "pk"]
+        verbose_name = "Oficina de retiro de llaves"
+        verbose_name_plural = "Oficinas de retiro de llaves"
+
+    def __str__(self):
+        return f"{self.nombre} · {self.direccion}"
+
+
 class SitioMovil(models.Model):
+    ic = models.ForeignKey(
+        "operaciones.IngenieroCampoSitio",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="sitios",
+    )
+    oficina_retiro_llaves = models.ForeignKey(
+        "operaciones.OficinaRetiroLlaves",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="sitios",
+    )
+
+    @property
+    def ic_nombre(self):
+        return self.ic.nombre if self.ic_id else ""
+
+    @property
+    def ic_telefono(self):
+        return self.ic.telefono if self.ic_id else ""
+
+    @property
+    def oficina_nombre(self):
+        if self.oficina_retiro_llaves_id:
+            return self.oficina_retiro_llaves.nombre
+        return ""
+
+    @property
+    def oficina_direccion(self):
+        if self.oficina_retiro_llaves_id:
+            return self.oficina_retiro_llaves.direccion
+        return ""
+
+
     id_sites = models.CharField(max_length=100, unique=True)
     id_claro = models.CharField(max_length=100, blank=True, null=True)
     id_sites_new = models.CharField(max_length=100, blank=True, null=True)

@@ -1,0 +1,298 @@
+
+<div class="inline-flex flex-wrap gap-2">
+  <button type="button" data-crear-catalogo="ic"
+          class="bg-blue-600 text-white rounded-full px-4 py-1.5 text-sm font-medium hover:bg-blue-700">
+    👷 Crear IC
+  </button>
+  <button type="button" data-crear-catalogo="oficina"
+          class="bg-emerald-600 text-white rounded-full px-4 py-1.5 text-sm font-medium hover:bg-emerald-700">
+    🏢 Crear oficina
+  </button>
+</div>
+
+<dialog id="sitio-catalogo-modal" aria-labelledby="sitio-catalogo-titulo">
+  <form id="sitio-catalogo-form" method="post">
+    {% csrf_token %}
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <h3 id="sitio-catalogo-titulo" class="font-bold text-lg"></h3>
+      <button type="button" id="sitio-catalogo-cerrar"
+              aria-label="Cerrar" class="text-xl">×</button>
+    </div>
+    <label class="block mb-4">
+      Nombre
+      <input name="nombre" required maxlength="200"
+             class="block w-full border rounded-lg p-2 mt-1">
+    </label>
+    <label class="block mb-4">
+      <span id="sitio-catalogo-etiqueta"></span>
+      <input id="sitio-catalogo-dato" required
+             class="block w-full border rounded-lg p-2 mt-1">
+    </label>
+    <p id="sitio-catalogo-error" role="alert"
+       class="text-sm text-red-700 mb-3"></p>
+    <button type="submit" id="sitio-catalogo-guardar"
+            class="bg-blue-600 text-white rounded-lg px-4 py-2">
+      Guardar
+    </button>
+  </form>
+</dialog>
+
+<style>
+  #sitio-catalogo-modal {
+    width: min(460px, calc(100vw - 24px));
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: auto;
+    padding: 22px;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    background: white;
+    color: #0f172a;
+    box-shadow: 0 20px 60px #0004;
+  }
+  #sitio-catalogo-modal::backdrop { background: #0f172a99; }
+  .sitio-catalogo-linea {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 260px;
+  }
+  .sitio-catalogo-linea .sitio-catalogo-select {
+    flex: 1;
+    min-width: 0;
+    width: 240px;
+    max-width: 380px;
+  }
+  .sitio-catalogo-lapiz {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border: 1px solid #bfdbfe;
+    border-radius: 9px;
+    background: #eff6ff;
+    cursor: pointer;
+  }
+  .sitio-catalogo-lapiz:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+</style>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("sitio-catalogo-modal");
+  const form = document.getElementById("sitio-catalogo-form");
+  const dato = document.getElementById("sitio-catalogo-dato");
+  const nombre = form.querySelector("[name=nombre]");
+  const error = document.getElementById("sitio-catalogo-error");
+  const guardar = document.getElementById("sitio-catalogo-guardar");
+  const csrf = form.querySelector("[name=csrfmiddlewaretoken]").value;
+
+  const crearUrls = {
+    ic: "{% url 'operaciones:crear_catalogo_sitio' 'ic' %}",
+    oficina: "{% url 'operaciones:crear_catalogo_sitio' 'oficina' %}"
+  };
+  const editarUrls = {
+    ic: "{% url 'operaciones:editar_catalogo_sitio' 'ic' 0 %}",
+    oficina: "{% url 'operaciones:editar_catalogo_sitio' 'oficina' 0 %}"
+  };
+
+  let tipo = "ic";
+  let editandoId = null;
+  let guardando = false;
+  let cargando = false;
+  let solicitudActual = 0;
+
+  function urlEditar(tipo, id) {
+    return editarUrls[tipo].replace("/0/", "/" + id + "/");
+  }
+
+  async function consultar(url, datos) {
+    const opciones = {
+      method: datos ? "POST" : "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {"Accept": "application/json"}
+    };
+    if (datos) {
+      opciones.headers["X-CSRFToken"] = csrf;
+      opciones.body = datos;
+    }
+    const respuesta = await fetch(url, opciones);
+    let resultado;
+    try {
+      resultado = await respuesta.json();
+    } catch (_) {
+      throw new Error("No se pudo confirmar la operación. Recarga para comprobarla.");
+    }
+    if (!respuesta.ok || !resultado.ok) {
+      throw new Error(resultado.error || "No se pudo completar la operación.");
+    }
+    return resultado;
+  }
+
+  function preparar(tipoNuevo, id = null) {
+    tipo = tipoNuevo;
+    editandoId = id;
+    form.reset();
+    error.textContent = "";
+    cargando = false;
+    nombre.disabled = false;
+    dato.disabled = false;
+    guardar.disabled = false;
+
+    const oficina = tipo === "oficina";
+    document.getElementById("sitio-catalogo-titulo").textContent =
+      (id ? "✏️ Editar " : "Crear ") + (oficina ? "oficina" : "IC");
+    document.getElementById("sitio-catalogo-etiqueta").textContent =
+      oficina ? "Dirección" : "Teléfono";
+    dato.name = oficina ? "direccion" : "telefono";
+    dato.type = oficina ? "text" : "tel";
+    dato.maxLength = oficina ? 500 : 50;
+    if (!modal.open) modal.showModal();
+  }
+
+  document.querySelectorAll("[data-crear-catalogo]").forEach(boton => {
+    boton.addEventListener("click", () => {
+      if (guardando) return;
+      solicitudActual++;
+      preparar(boton.dataset.crearCatalogo);
+    });
+  });
+
+  function actualizarLapiz(select) {
+    const boton = select.closest(".sitio-catalogo-linea")
+      ?.querySelector(".sitio-catalogo-lapiz");
+    if (boton) boton.disabled = !select.value || select.disabled;
+  }
+
+  document.querySelectorAll(".sitio-catalogo-select").forEach(select => {
+    const linea = document.createElement("div");
+    linea.className = "sitio-catalogo-linea";
+    select.before(linea);
+    linea.append(select);
+
+    const lapiz = document.createElement("button");
+    lapiz.type = "button";
+    lapiz.className = "sitio-catalogo-lapiz";
+    lapiz.textContent = "✏️";
+    lapiz.title = select.dataset.tipo === "ic"
+      ? "Editar el IC seleccionado"
+      : "Editar la oficina seleccionada";
+    lapiz.setAttribute("aria-label", lapiz.title);
+    linea.append(lapiz);
+    actualizarLapiz(select);
+
+    lapiz.addEventListener("click", async () => {
+      if (!select.value || select.disabled || guardando) return;
+      const solicitud = ++solicitudActual;
+      const id = select.value;
+      const tipoSeleccionado = select.dataset.tipo;
+      preparar(tipoSeleccionado, id);
+      cargando = true;
+      guardar.disabled = true;
+      nombre.disabled = true;
+      dato.disabled = true;
+      error.textContent = "Cargando datos…";
+
+      try {
+        const resultado = await consultar(urlEditar(tipoSeleccionado, id));
+        if (solicitud !== solicitudActual || !modal.open) return;
+        nombre.value = resultado.nombre;
+        dato.value = resultado.dato;
+        error.textContent = "";
+        nombre.disabled = false;
+        dato.disabled = false;
+        guardar.disabled = false;
+        nombre.focus();
+      } catch (e) {
+        if (solicitud === solicitudActual && modal.open) {
+          error.textContent = e.message;
+        }
+      } finally {
+        if (solicitud === solicitudActual) cargando = false;
+      }
+    });
+  });
+
+  function cerrar() {
+    if (guardando) return;
+    solicitudActual++;
+    modal.close();
+  }
+  document.getElementById("sitio-catalogo-cerrar").onclick = cerrar;
+  modal.addEventListener("cancel", evento => {
+    if (guardando) evento.preventDefault();
+    else solicitudActual++;
+  });
+
+  form.addEventListener("submit", async evento => {
+    evento.preventDefault();
+    if (guardando || cargando || guardar.disabled) return;
+    guardando = true;
+    guardar.disabled = true;
+    error.textContent = "";
+
+    try {
+      const url = editandoId
+        ? urlEditar(tipo, editandoId)
+        : crearUrls[tipo];
+      const resultado = await consultar(url, new FormData(form));
+
+      document.querySelectorAll(".sitio-catalogo-select").forEach(select => {
+        if (select.dataset.tipo !== tipo) return;
+        const valorActual = select.value;
+        let opcion = Array.from(select.options).find(
+          item => item.value === String(resultado.id)
+        );
+        if (opcion) opcion.remove();
+        opcion = new Option(resultado.texto, String(resultado.id));
+        const siguiente = Array.from(select.options).slice(1).find(
+          item => item.textContent.trim().localeCompare(resultado.texto, "es") > 0
+        );
+        select.add(opcion, siguiente || null);
+        select.value = valorActual;
+        actualizarLapiz(select);
+      });
+
+      modal.close();
+    } catch (e) {
+      error.textContent = e.message;
+    } finally {
+      guardando = false;
+      guardar.disabled = false;
+    }
+  });
+
+  document.addEventListener("change", async evento => {
+    const select = evento.target.closest(".sitio-catalogo-select");
+    if (!select) return;
+    const estado = select.closest("td").querySelector(".sitio-catalogo-estado");
+    const anterior = select.dataset.guardado;
+    const datos = new FormData();
+    datos.append("tipo", select.dataset.tipo);
+    datos.append("valor", select.value);
+    select.disabled = true;
+    actualizarLapiz(select);
+    estado.textContent = "Guardando…";
+    estado.style.color = "#475569";
+
+    try {
+      const resultado = await consultar(select.dataset.url, datos);
+      select.dataset.guardado = resultado.valor;
+      estado.textContent = "Guardado";
+      estado.style.color = "#047857";
+    } catch (e) {
+      select.value = anterior;
+      estado.textContent = e.message;
+      estado.style.color = "#b91c1c";
+    } finally {
+      select.disabled = false;
+      actualizarLapiz(select);
+    }
+  });
+});
+</script>

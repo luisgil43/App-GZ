@@ -3,6 +3,7 @@
 from django.urls import path
 
 from . import views
+from . import views_catalogos_sitios
 from . import views_fotos
 from . import views_fotos as fotos
 from . import views_produccion as produc
@@ -14,6 +15,23 @@ from . import views_camera
 from . import views_permisos_fotos
 
 urlpatterns = [
+    path(
+        "sitios/catalogos/<str:tipo>/<int:pk>/editar/",
+        views_catalogos_sitios.editar_catalogo_sitio,
+        name="editar_catalogo_sitio",
+    ),
+
+    path(
+        "sitios/catalogos/<str:tipo>/crear/",
+        views_catalogos_sitios.crear_catalogo_sitio,
+        name="crear_catalogo_sitio",
+    ),
+    path(
+        "sitios/<int:pk>/asignar-catalogo/",
+        views_catalogos_sitios.asignar_catalogo_sitio,
+        name="asignar_catalogo_sitio",
+    ),
+
     path(
         "servicios/<int:pk>/permiso-archivos-evidencias/",
         views_permisos_fotos.configurar_archivos_evidencias,

@@ -67,6 +67,7 @@ Listado de Sitios Móviles
            class="flex items-center gap-1 bg-blue-600 text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-blue-700 transition">
           📄 Descargar formato
         </a>
+{% include "operaciones/_catalogos_sitios.html" %}
 
       </div>
 
@@ -149,6 +150,8 @@ Listado de Sitios Móviles
 <!-- ====================================================== -->
 <!-- FILTROS -->
 <!-- ====================================================== -->
+
+
 
 <form id="filters-form"
       method="get"
@@ -458,6 +461,15 @@ Listado de Sitios Móviles
                  checked>
           <span>Acciones</span>
         </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="22" checked>
+          <span>IC</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input type="checkbox" class="col-toggle" data-col="23" checked>
+          <span>Oficina de retiro de llaves</span>
+        </label>
+
 
       </div>
 
@@ -573,6 +585,8 @@ Listado de Sitios Móviles
           Acciones
         </th>
 
+        <th class="p-2 border">IC</th>
+        <th class="p-2 border">Oficina de retiro de llaves</th>
       </tr>
 
     </thead>
@@ -809,14 +823,45 @@ Listado de Sitios Móviles
 
           </td>
 
-        </tr>
+
+          <td class="p-2 border">
+            <select class="sitio-catalogo-select border rounded-lg p-2 bg-white"
+                    aria-label="IC del sitio {{ sitio.id_claro|default:sitio.id_sites }}"
+                    data-tipo="ic"
+                    data-url="{% url 'operaciones:asignar_catalogo_sitio' sitio.pk %}"
+                    data-guardado="{{ sitio.ic_id|default_if_none:'' }}">
+              <option value="">Sin IC</option>
+              {% for ic in catalogo_ics %}
+                <option value="{{ ic.pk }}" {% if sitio.ic_id == ic.pk %}selected{% endif %}>
+                  {{ ic.nombre }} · {{ ic.telefono }}
+                </option>
+              {% endfor %}
+            </select>
+            <span class="sitio-catalogo-estado block text-xs mt-1" role="status"></span>
+          </td>
+          <td class="p-2 border">
+            <select class="sitio-catalogo-select border rounded-lg p-2 bg-white"
+                    aria-label="Oficina del sitio {{ sitio.id_claro|default:sitio.id_sites }}"
+                    data-tipo="oficina"
+                    data-url="{% url 'operaciones:asignar_catalogo_sitio' sitio.pk %}"
+                    data-guardado="{{ sitio.oficina_retiro_llaves_id|default_if_none:'' }}">
+              <option value="">Sin oficina</option>
+              {% for oficina in catalogo_oficinas %}
+                <option value="{{ oficina.pk }}" {% if sitio.oficina_retiro_llaves_id == oficina.pk %}selected{% endif %}>
+                  {{ oficina.nombre }} · {{ oficina.direccion }}
+                </option>
+              {% endfor %}
+            </select>
+            <span class="sitio-catalogo-estado block text-xs mt-1" role="status"></span>
+          </td>
+</tr>
 
 
       {% empty %}
 
         <tr>
 
-          <td colspan="22"
+          <td colspan="24"
               class="text-center
                      text-gray-500
                      p-4">

@@ -427,7 +427,10 @@ def listar_sitios(request):
     # ==========================
     # QUERY
     # ==========================
-    sitios = SitioMovil.objects.all().order_by("id_sites")
+    from .models import IngenieroCampoSitio, OficinaRetiroLlaves
+    sitios = SitioMovil.objects.select_related(
+        "ic", "oficina_retiro_llaves"
+    ).order_by("id_sites")
 
     if id_claro:
         sitios = sitios.filter(id_claro__icontains=id_claro)
@@ -464,6 +467,8 @@ def listar_sitios(request):
             "cantidad": cantidad,
             "pagina": pagina,
             "metadata_sitios": metadata_sitios,
+            "catalogo_ics": IngenieroCampoSitio.objects.all(),
+            "catalogo_oficinas": OficinaRetiroLlaves.objects.all(),
         },
     )
 
