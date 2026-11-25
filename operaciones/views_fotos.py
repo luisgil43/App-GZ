@@ -3268,6 +3268,22 @@ def _set_compact_grid(ws, last_col=30, default_col_w=4.5, body_row_h=18):
 # =========================================
 
 
+
+def _tmp_jpeg_from_evidencia_reporte(foto, **opciones):
+    """Usa en el informe el mismo sello que muestra la aplicación."""
+    from django.core.files.base import ContentFile
+
+    if foto.ubicacion_referencia:
+        respuesta = _respuesta_foto_con_sello(foto)
+        with ContentFile(
+            respuesta.content,
+            name=f"evidencia_{foto.pk}_sellada.jpg",
+        ) as archivo:
+            return _tmp_jpeg_from_filefield(archivo, **opciones)
+
+    return _tmp_jpeg_from_filefield(foto.imagen, **opciones)
+
+
 def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
     """
     Hoja 'Fotografias' (2 por fila, **1 columna por bloque**):
@@ -3428,8 +3444,8 @@ def _xlsx_path_from_evqs(servicio, ev_qs) -> str:
         tmp_img_path = ""
         try:
             # Base JPG con mayor fuente y menos compresión
-            tmp_img_path, w, h = _tmp_jpeg_from_filefield(
-                ev.imagen,
+            tmp_img_path, w, h = _tmp_jpeg_from_evidencia_reporte(
+                ev,
                 max_px=int(getattr(settings, "REPORT_IMG_MAX_PX", 2400)),
                 quality=int(
                     getattr(settings, "REPORT_IMG_JPG_QUALITY_SRC", 93)),
