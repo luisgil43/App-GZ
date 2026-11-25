@@ -463,6 +463,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!tbody) return;
 
+  document.getElementById("requirements-form").addEventListener("formdata", ({formData}) => {
+    const campos = ["id[]", "name[]", "order[]", "mandatory[]", "etapa[]"];
+    const columnas = campos.map(campo => formData.getAll(campo));
+    if (!columnas.every(columna => columna.length === columnas[0].length)) return;
+
+    const filas = columnas[0].map((_, indice) => columnas.map(columna => columna[indice]));
+    campos.forEach(campo => formData.delete(campo));
+    formData.set("requerimientos", JSON.stringify(filas));
+  });
+
   // -------------------------------------------------
   // FILTROS
   // -------------------------------------------------

@@ -1,5 +1,6 @@
 # operaciones/views_fotos.py
 import io
+import json
 import mimetypes
 import os
 import re
@@ -199,6 +200,33 @@ def _dedupe_requisitos(asig, allowed_norms: set | None = None):
             r.save(update_fields=["activo"])
 
 
+def _filas_requerimientos(post):
+    if "requerimientos" in post:
+        try:
+            filas = json.loads(post["requerimientos"])
+        except json.JSONDecodeError as error:
+            raise ValueError("La lista de requerimientos tiene un formato inválido.") from error
+        if not isinstance(filas, list) or any(
+            not isinstance(fila, list)
+            or len(fila) != 5
+            or not all(isinstance(valor, str) for valor in fila)
+            for fila in filas
+        ):
+            raise ValueError("La lista de requerimientos tiene un formato inválido.")
+        return filas
+
+    columnas = [
+        post.getlist(campo)
+        for campo in ("id[]", "name[]", "order[]", "mandatory[]", "etapa[]")
+    ]
+    if len({len(columna) for columna in columnas}) != 1:
+        raise ValueError(
+            "Los campos de los requerimientos no están completos. "
+            "Recarga la página e inténtalo nuevamente."
+        )
+    return zip(*columnas)
+
+
 @login_required
 @rol_requerido("supervisor", "admin", "pm")
 def configurar_requisitos(request, servicio_id):
@@ -259,24 +287,7 @@ def configurar_requisitos(request, servicio_id):
 
     if request.method == "POST":
         try:
-            ids = request.POST.getlist("id[]")
-            names = request.POST.getlist("name[]")
-            orders = request.POST.getlist("order[]")
-            mand = request.POST.getlist("mandatory[]")
-            etapas = request.POST.getlist("etapa[]")
-
-            if not (
-                len(ids)
-                == len(names)
-                == len(orders)
-                == len(mand)
-                == len(etapas)
-            ):
-                raise ValueError(
-                    "Los campos de los requerimientos "
-                    "no están completos. Recarga la página "
-                    "e inténtalo nuevamente."
-                )
+            filas = _filas_requerimientos(request.POST)
 
             etapas_validas = {
                 "",
@@ -288,14 +299,14 @@ def configurar_requisitos(request, servicio_id):
             desired = []
             posiciones = {}
 
-            for i, nm in enumerate(names):
+            for i, (rid, nm, orden_texto, obligatorio_texto, etapa_texto) in enumerate(filas):
                 titulo = (nm or "").strip()
 
                 if not titulo:
                     continue
 
                 try:
-                    orden = int(orders[i])
+                    orden = int(orden_texto)
 
                     if orden < 0:
                         raise ValueError
@@ -305,11 +316,8 @@ def configurar_requisitos(request, servicio_id):
                         f"Orden inválido en la fila {i + 1}."
                     )
 
-                obligatorio = mand[i] == "1"
-
-                rid = ids[i]
-
-                etapa = (etapas[i] or "").strip().lower()
+                obligatorio = obligatorio_texto == "1"
+                etapa = etapa_texto.strip().lower()
 
                 if etapa == "después":
                     etapa = "despues"
@@ -317,7 +325,7 @@ def configurar_requisitos(request, servicio_id):
                 if etapa not in etapas_validas:
                     raise ValueError(
                         f"Etapa inválida en la fila {i + 1}: "
-                        f"{etapas[i]}"
+                        f"{etapa_texto}"
                     )
 
                 norm = _norm_title(titulo)
