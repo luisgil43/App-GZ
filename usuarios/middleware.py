@@ -7,16 +7,33 @@ from zoneinfo import ZoneInfo
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.utils.deprecation import MiddlewareMixin
+
+
+class ActivitySessionMiddleware(SessionMiddleware):
+    def process_response(self, request, response):
+        # El sondeo puede terminar después de una interacción. Evita que
+        # guarde una copia anterior de la sesión por SAVE_EVERY_REQUEST.
+        if (
+            getattr(request, "is_photo_poll", False)
+            and not request.session.modified
+            and not request.session.is_empty()
+        ):
+            patch_vary_headers(response, ("Cookie",))
+            return response
+        return super().process_response(request, response)
 
 
 class SessionExpiryMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         self.idle_timeout = int(getattr(settings, "IDLE_TIMEOUT_SECONDS", 15 * 60))
+        self.user_idle_timeout = settings.USER_IDLE_TIMEOUT_SECONDS
         self.absolute_timeout = getattr(settings, "SESSION_ABSOLUTE_TIMEOUT", None)
 
     def __call__(self, request):
@@ -39,28 +56,49 @@ class SessionExpiryMiddleware:
 
         now = int(time.time())
         session = request.session
+        try:
+            view_name = resolve(request.path_info).view_name
+        except Resolver404:
+            view_name = None
 
-        if "last_activity" not in session:
-            session["last_activity"] = now
-        if "login_time" not in session:
-            session["login_time"] = now
+        request.is_photo_poll = view_name == "operaciones:fotos_status_json"
+        request.user_panel_session = self._is_user_panel(request)
+        idle_timeout = self.user_idle_timeout if request.user_panel_session else self.idle_timeout
+        last_activity = session.get("last_activity", now)
 
-        if self.idle_timeout and (now - session["last_activity"] > self.idle_timeout):
+        idle_seconds = now - last_activity
+        if idle_timeout and (
+            idle_seconds > idle_timeout
+            or (request.user_panel_session and idle_seconds == idle_timeout)
+        ):
             self._logout_and_redirect(
                 request, reason="Tu sesión fue cerrada por inactividad."
             )
             return redirect("usuarios:login_unificado")
 
         if self.absolute_timeout and (
-            now - session["login_time"] > int(self.absolute_timeout)
+            now - session.get("login_time", now) > int(self.absolute_timeout)
         ):
             self._logout_and_redirect(
                 request, reason="Tu sesión expiró por tiempo máximo de sesión."
             )
             return redirect("usuarios:login_unificado")
 
-        session["last_activity"] = now
+        if not request.is_photo_poll and view_name != "usuarios:session_activity":
+            session.setdefault("login_time", now)
+            session["last_activity"] = now
         return self.get_response(request)
+
+    def _is_user_panel(self, request):
+        if request.path_info.startswith("/admin/"):
+            return False
+        mode = request.session.get("ui_mode")
+        if mode in ("admin", "user"):
+            return mode == "user"
+        user = request.user
+        return _ui_has_user_role(user) or not (
+            _ui_has_admin_role(user) or user.es_flota or user.es_bodeguero
+        )
 
     def _logout_and_redirect(self, request, reason: str):
         for k in ("last_activity", "login_time"):
@@ -236,7 +274,7 @@ class UIModeRedirectMiddleware:
 
     def __call__(self, request):
         u = getattr(request, "user", None)
-        if not (u and u.is_authenticated):
+        if not (u and u.is_authenticated) or getattr(request, "is_photo_poll", False):
             return self.get_response(request)
 
         path = request.path or "/"

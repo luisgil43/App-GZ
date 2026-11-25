@@ -24,6 +24,7 @@ urlpatterns = [
     path('login/', views.login_unificado, name='login_unificado'),
     path('login/', views.login_unificado, name='login'),
     path('seleccionar-rol/', views.seleccionar_rol, name='seleccionar_rol'),
+    path("session-activity/", views.session_activity, name="session_activity"),
     path('notificacion/<int:pk>/leer/',
          views.marcar_notificacion_como_leida, name='leer_notificacion'),
 

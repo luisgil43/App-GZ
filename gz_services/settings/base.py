@@ -133,15 +133,15 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "usuarios.middleware.ActivitySessionMiddleware",
     "usuarios.middleware.ChileTimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "usuarios.middleware.SessionExpiryMiddleware",
     "usuarios.middleware.UIModeRedirectMiddleware",
     "usuarios.middleware.Enforce2FAMiddleware",
-    "usuarios.middleware.SessionExpiryMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
@@ -348,6 +348,7 @@ CSRF_FAILURE_VIEW = "usuarios.views.csrf_error_view"
 # Sesiones
 # ===============================
 IDLE_TIMEOUT_SECONDS = 15 * 60
+USER_IDLE_TIMEOUT_SECONDS = 6 * 60 * 60
 SESSION_ABSOLUTE_TIMEOUT = None
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True

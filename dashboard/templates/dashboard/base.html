@@ -1060,6 +1060,13 @@
 
   <script src="{% static 'js/miltel-ui.js' %}"></script>
 
+  {% if request.user_panel_session %}
+    <form id="gz-session-activity" action="{% url 'usuarios:session_activity' %}" method="post" hidden>
+      {% csrf_token %}
+    </form>
+    <script src="{% static 'js/user-session-activity.js' %}" defer></script>
+  {% endif %}
+
   <!-- ====================================================== -->
   <!-- INICIALIZACIÓN DE ICONOS -->
   <!-- ====================================================== -->

@@ -1,6 +1,7 @@
 from usuarios.decoradores import rol_requerido
 import base64
 import logging
+import time
 from datetime import timedelta
 from email.utils import formataddr
 from functools import wraps
@@ -21,6 +22,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.mail import EmailMultiAlternatives, send_mail
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
@@ -30,7 +32,7 @@ from django.utils.timezone import now
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect, requires_csrf_token
 from django.views.decorators.debug import sensitive_post_parameters
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from gz_services.utils.email_utils import enviar_correo_manual
 from usuarios.models import FirmaRepresentanteLegal  # 👈 importa el modelo
@@ -613,6 +615,17 @@ def seleccionar_rol(request):
         "can_user": can_user,
         "can_admin": can_admin,
     })
+
+@login_required
+@require_POST
+@csrf_protect
+def session_activity(request):
+    if request.user_panel_session:
+        timestamp = int(time.time())
+        request.session.setdefault("login_time", timestamp)
+        request.session["last_activity"] = timestamp
+    return HttpResponse(status=204)
+
 
 @login_required
 def marcar_notificacion_como_leida(request, pk):
