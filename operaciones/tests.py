@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from .models import RequisitoFoto, ServicioCotizado, SesionFotos, SesionFotoTecnico
+from .models import EvidenciaFoto, RequisitoFoto, ServicioCotizado, SesionFotos, SesionFotoTecnico
 
 
 @override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1000)
@@ -89,3 +89,43 @@ class ConfigurarRequerimientosTests(TestCase):
         self.assertRedirects(respuesta, self.destino, fetch_redirect_response=False)
         for asignacion in self.asignaciones:
             self.assertTrue(asignacion.requisitos.filter(titulo="Foto inicial", activo=True).exists())
+
+    def test_papelera_desactiva_equivalentes_y_conserva_evidencia(self):
+        primero, segundo = self.asignaciones
+        origen = RequisitoFoto.objects.create(tecnico_sesion=primero, titulo="Medición")
+        equivalente = RequisitoFoto.objects.create(tecnico_sesion=segundo, titulo="Medicion")
+        otro = RequisitoFoto.objects.create(tecnico_sesion=segundo, titulo="Otra foto", orden=4)
+        evidencia = EvidenciaFoto.objects.create(
+            tecnico_sesion=segundo, requisito=equivalente, imagen="test/existente.jpg",
+        )
+        url = reverse("operaciones:fotos_quitar_requerimiento", args=[self.servicio.pk, origen.pk])
+
+        self.assertEqual(self.client.get(url).status_code, 405)
+        for _ in range(2):
+            respuesta = self.client.post(url, HTTP_X_CSRFTOKEN=self.token, HTTP_ACCEPT="application/json")
+            self.assertEqual(respuesta.status_code, 200)
+            self.assertEqual(respuesta.json(), {"ok": True})
+
+        origen.refresh_from_db()
+        equivalente.refresh_from_db()
+        otro.refresh_from_db()
+        evidencia.refresh_from_db()
+        self.assertFalse(origen.activo)
+        self.assertFalse(equivalente.activo)
+        self.assertTrue(otro.activo)
+        self.assertEqual(otro.orden, 4)
+        self.assertEqual(evidencia.requisito_id, equivalente.pk)
+
+    def test_papelera_rechaza_un_requerimiento_de_otro_servicio(self):
+        otro_servicio = ServicioCotizado.objects.create(
+            mes_produccion="11/2026", detalle_tarea="Otro mantenimiento", monto_cotizado=0,
+        )
+        SesionFotos.objects.create(servicio=otro_servicio)
+        requisito = RequisitoFoto.objects.create(
+            tecnico_sesion=self.asignaciones[0], titulo="Solo en el servicio original",
+        )
+        url = reverse("operaciones:fotos_quitar_requerimiento", args=[otro_servicio.pk, requisito.pk])
+        respuesta = self.client.post(url, HTTP_X_CSRFTOKEN=self.token, HTTP_ACCEPT="application/json")
+        self.assertEqual(respuesta.status_code, 404)
+        requisito.refresh_from_db()
+        self.assertTrue(requisito.activo)

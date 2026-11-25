@@ -70,6 +70,8 @@ Configurar Requerimientos — DU{{ servicio.du }}
 
     </div>
 
+    <p id="requirement-delete-error" role="alert" class="text-sm text-red-700" hidden></p>
+
     <!-- FILTROS -->
 
     <div class="flex flex-wrap gap-3 items-end p-3 bg-gray-50 border rounded-xl">
@@ -318,6 +320,8 @@ Configurar Requerimientos — DU{{ servicio.du }}
 
                 <button type="button"
                         class="btn-del-row text-red-600 hover:underline"
+                        data-delete-url="{% url 'operaciones:fotos_quitar_requerimiento' servicio.id r.id %}"
+                        aria-label="Eliminar {{ r.titulo }}"
                         title="Eliminar fila">
 
                   🗑
@@ -402,7 +406,8 @@ Configurar Requerimientos — DU{{ servicio.du }}
               <td class="p-2 text-right">
 
                 <button type="button"
-                        class="btn-del-row text-red-600 hover:underline">
+                        class="btn-del-row text-red-600 hover:underline"
+                        aria-label="Eliminar fila">
 
                   🗑
 
@@ -463,7 +468,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (!tbody) return;
 
-  document.getElementById("requirements-form").addEventListener("formdata", ({formData}) => {
+  const form = document.getElementById("requirements-form");
+  const saveButton = form.querySelector('button[type="submit"]');
+  const deleteError = document.getElementById("requirement-delete-error");
+  let pendingDeletes = 0;
+
+  form.addEventListener("formdata", ({formData}) => {
     const campos = ["id[]", "name[]", "order[]", "mandatory[]", "etapa[]"];
     const columnas = campos.map(campo => formData.getAll(campo));
     if (!columnas.every(columna => columna.length === columnas[0].length)) return;
@@ -567,22 +577,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return vals.length
       ? Math.max(...vals) + 1
       : 0;
-
-  }
-
-  function reindexOrders() {
-
-    Array.from(
-      tbody.querySelectorAll("tr.requirement-row")
-    ).forEach((tr, i) => {
-
-      const order = tr.querySelector(
-        'input[name="order[]"]'
-      );
-
-      if (order) order.value = i;
-
-    });
 
   }
 
@@ -705,6 +699,7 @@ document.addEventListener("DOMContentLoaded", () => {
     btnDelete.type = "button";
     btnDelete.className =
       "btn-del-row text-red-600 hover:underline";
+    btnDelete.setAttribute("aria-label", "Eliminar fila");
 
     btnDelete.textContent = "🗑";
     btnDelete.title = "Eliminar fila";
@@ -746,19 +741,45 @@ document.addEventListener("DOMContentLoaded", () => {
   // ELIMINAR FILA
   // -------------------------------------------------
 
-  tbody.addEventListener("click", event => {
+  tbody.addEventListener("click", async event => {
 
     const button = event.target.closest(".btn-del-row");
 
-    if (!button) return;
+    if (!button || button.disabled) return;
 
     const row = button.closest("tr");
 
     if (!row) return;
 
-    row.remove();
+    const url = button.dataset.deleteUrl;
+    if (url) {
+      button.disabled = true;
+      saveButton.disabled = true;
+      pendingDeletes++;
+      deleteError.hidden = true;
 
-    reindexOrders();
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": form.elements.csrfmiddlewaretoken.value,
+            "Accept": "application/json",
+          },
+        });
+        if (!response.ok || !(await response.json()).ok) throw new Error();
+      } catch {
+        deleteError.textContent = "No se pudo eliminar el requerimiento. Inténtalo nuevamente.";
+        button.parentElement.append(deleteError);
+        deleteError.hidden = false;
+        button.disabled = false;
+        return;
+      } finally {
+        pendingDeletes--;
+        saveButton.disabled = pendingDeletes > 0;
+      }
+    }
+
+    row.remove();
     applyFilters();
 
   });

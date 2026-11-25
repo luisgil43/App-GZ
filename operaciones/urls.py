@@ -165,6 +165,11 @@ urlpatterns = [
         name="fotos_configurar_requisitos",
     ),
     path(
+        "servicios/<int:servicio_id>/fotos/requisitos/<int:requisito_id>/quitar/",
+        fotos.quitar_requerimiento_foto,
+        name="fotos_quitar_requerimiento",
+    ),
+    path(
         "servicios/<int:servicio_id>/fotos/requisitos/importar/",
         fotos.import_requirements_page,
         name="fotos_import_requirements_page",

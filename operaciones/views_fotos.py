@@ -200,6 +200,25 @@ def _dedupe_requisitos(asig, allowed_norms: set | None = None):
             r.save(update_fields=["activo"])
 
 
+@login_required
+@rol_requerido("supervisor", "admin", "pm")
+@require_POST
+@transaction.atomic
+def quitar_requerimiento_foto(request, servicio_id, requisito_id):
+    sesion = get_object_or_404(
+        SesionFotos.objects.select_for_update(), servicio_id=servicio_id,
+    )
+    requisitos = RequisitoFoto.objects.filter(tecnico_sesion__sesion=sesion)
+    requisito = get_object_or_404(requisitos, pk=requisito_id)
+    titulo_normalizado = _norm_title(requisito.titulo)
+    activos_equivalentes = [
+        pk for pk, titulo in requisitos.filter(activo=True).values_list("pk", "titulo")
+        if _norm_title(titulo) == titulo_normalizado
+    ]
+    requisitos.filter(pk__in=activos_equivalentes).update(activo=False)
+    return JsonResponse({"ok": True})
+
+
 def _filas_requerimientos(post):
     if "requerimientos" in post:
         try:
