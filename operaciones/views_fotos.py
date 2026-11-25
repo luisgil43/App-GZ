@@ -656,6 +656,71 @@ def configurar_requisitos(request, servicio_id):
                 "Sin fotografía"
             )
 
+
+    # Exportar los mismos requerimientos y estados de esta pantalla.
+    if request.method == "GET" and request.GET.get("formato") == "excel":
+        from io import BytesIO
+        from django.http import HttpResponse
+        from django.utils.http import content_disposition_header
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+
+        libro = Workbook()
+        hoja = libro.active
+        hoja.title = "Requerimientos"
+        hoja.append([
+            "Nombre del requerimiento", "Etapa", "Obligatorio", "Estado",
+        ])
+
+        etapas_excel = {
+            "": "Sin etapa",
+            "antes": "Antes",
+            "durante": "Durante",
+            "despues": "Después",
+        }
+
+        for requisito in canonical:
+            hoja.append([
+                requisito.titulo,
+                etapas_excel.get(requisito.etapa or "", requisito.etapa),
+                "Sí" if requisito.obligatorio else "No",
+                "Completado"
+                if requisito.estado_foto == "completada"
+                else "Pendiente",
+            ])
+            # Conservar los nombres como texto, incluso si empiezan con "=".
+            for celda in hoja[hoja.max_row]:
+                celda.data_type = "s"
+                celda.alignment = Alignment(
+                    vertical="top", wrap_text=True,
+                )
+
+        for celda in hoja[1]:
+            celda.font = Font(bold=True, color="FFFFFF")
+            celda.fill = PatternFill("solid", fgColor="0F766E")
+            celda.alignment = Alignment(wrap_text=True)
+
+        for columna, ancho in {"A": 100, "B": 18, "C": 16, "D": 20}.items():
+            hoja.column_dimensions[columna].width = ancho
+
+        hoja.freeze_panes = "A2"
+        hoja.auto_filter.ref = hoja.dimensions
+
+        salida = BytesIO()
+        libro.save(salida)
+        respuesta = HttpResponse(
+            salida.getvalue(),
+            content_type=(
+                "application/vnd.openxmlformats-officedocument."
+                "spreadsheetml.sheet"
+            ),
+        )
+        respuesta["Content-Disposition"] = content_disposition_header(
+            True, f"Requerimientos - DU{servicio.du}.xlsx",
+        )
+        respuesta["Cache-Control"] = "private, no-store"
+        return respuesta
+
     return render(
         request,
         "operaciones/fotos_configurar_requisitos.html",
