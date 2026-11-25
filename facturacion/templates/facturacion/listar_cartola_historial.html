@@ -374,7 +374,7 @@
     btn.disabled = true;
 
     try {
-      const csrf = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1];
+      const csrf = "{{ csrf_token }}";
 
       const form = new FormData();
       ids.forEach(id => form.append('ids[]', id));
