@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from operaciones.models import ServicioCotizado
@@ -355,11 +356,17 @@ def _query_sitios_elegibles_planificacion_diaria(
                 "no_requiere",
             ],
         )
-        .exclude(
-            sitio_planificado__estado__in=[
-                "cancelado",
-                "bloqueado",
-            ]
+        .alias(estado_servicio=Subquery(_ultimo_servicio_por_sitio().values("estado")[:1]))
+        .filter(
+            Q(sitio_planificado__estado__in=ESTADOS_SITIO_PLANIFICACION_DISPONIBLES)
+            | Q(
+                sitio_planificado__estado="completado",
+                estado_servicio__in=(
+                    ESTADOS_OPERACIONES_EJECUCION
+                    | ESTADOS_OPERACIONES_REVISION
+                    | {"asignado", "aprobado_pendiente"}
+                ),
+            )
         )
         .select_related(
             "sitio_planificado",
@@ -3793,6 +3800,20 @@ def obtener_servicio_operacional_sitio(
     )
 
 
+def _ultimo_servicio_por_sitio():
+    return ServicioCotizado.objects.filter(
+        sitio_planificado_id=OuterRef("sitio_planificado_id"),
+    ).order_by("-pk")
+
+
+def obtener_servicios_operacionales_por_sitio(ids_sitio_planificado):
+    servicios = ServicioCotizado.objects.filter(
+        sitio_planificado_id__in=ids_sitio_planificado,
+        pk=Subquery(_ultimo_servicio_por_sitio().values("pk")[:1]),
+    ).prefetch_related("trabajadores_asignados")
+    return {servicio.sitio_planificado_id: servicio for servicio in servicios}
+
+
 # ============================================================
 # ESTADO OPERACIONAL PARA PLANIFICACIÓN
 # ============================================================
@@ -3801,8 +3822,12 @@ def obtener_servicio_operacional_sitio(
 def obtener_estado_operacional_sitio(
     sitio_planificado,
 ):
-    servicio = obtener_servicio_operacional_sitio(sitio_planificado)
+    return obtener_estado_operacional_servicio(
+        obtener_servicio_operacional_sitio(sitio_planificado),
+    )
 
+
+def obtener_estado_operacional_servicio(servicio):
     if servicio is None:
 
         return {
@@ -4162,55 +4187,23 @@ def sincronizar_estado_planificacion_diaria_batch(
 # ============================================================
 
 
-def obtener_resumen_planificacion_diaria(
-    batch,
-):
-    salidas = list(
-        SalidaPlanificacionDiaria.objects.filter(
-            batch=batch,
-        )
-        .select_related(
-            "disponibilidad_cuadrilla",
-            ("disponibilidad_cuadrilla__" "cuadrilla_operativa"),
-        )
-        .prefetch_related(("sitios__" "sitio_batch__" "sitio_planificado__" "sitio"))
-        .order_by(
-            "fecha",
-            ("disponibilidad_cuadrilla__" "cuadrilla_operativa__orden"),
-            "orden",
-            "id",
-        )
+def obtener_resumen_planificacion_diaria(batch, *, cantidad_pendientes):
+    salidas = SalidaPlanificacionDiaria.objects.filter(batch=batch)
+    salidas_por_estado = defaultdict(int, salidas.order_by().values(
+        "estado",
+    ).annotate(total=Count("pk")).values_list("estado", "total"))
+
+    sitios = SitioSalidaPlanificacionDiaria.objects.filter(salida__batch=batch).exclude(
+        estado__in=["retirado", "cancelado"],
     )
-
-    total_sitios = 0
-
-    por_estado = defaultdict(int)
-
-    salidas_por_estado = defaultdict(int)
-
-    for salida in salidas:
-
-        salidas_por_estado[salida.estado] += 1
-
-        for sitio_salida in salida.sitios.all():
-
-            if sitio_salida.estado in {
-                "retirado",
-                "cancelado",
-            }:
-                continue
-
-            total_sitios += 1
-
-            por_estado[sitio_salida.estado] += 1
-
-    pendientes_reales = obtener_sitios_pendientes_planificacion_diaria(batch)
+    por_estado = defaultdict(int, sitios.order_by().values(
+        "estado",
+    ).annotate(total=Count("pk")).values_list("estado", "total"))
 
     return {
-        "salidas": (salidas),
-        "total_salidas": (len(salidas)),
-        "total_sitios": (total_sitios),
-        "disponibles_sin_planificar": (len(pendientes_reales)),
+        "total_salidas": sum(salidas_por_estado.values()),
+        "total_sitios": sum(por_estado.values()),
+        "disponibles_sin_planificar": cantidad_pendientes,
         "planificados": (por_estado["planificado"] + por_estado["listo_asignar"]),
         "asignados": (por_estado["asignado"]),
         "en_ejecucion": (por_estado["en_ejecucion"]),

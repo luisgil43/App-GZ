@@ -8,8 +8,9 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Prefetch, prefetch_related_objects
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -27,6 +28,7 @@ from planificacion.services.planificacion_diaria import (
     ESTADOS_SALIDA_EDITABLES, ESTADOS_SITIO_SALIDA_EDITABLES,
     _restaurar_sitio_planificado_si_corresponde, _sitio_batch_a_motor,
     guardar_plan_diario_batch, obtener_estado_operacional_sitio,
+    obtener_estado_operacional_servicio, obtener_servicios_operacionales_por_sitio,
     obtener_resumen_planificacion_diaria,
     obtener_sitios_pendientes_planificacion_diaria,
     sincronizar_estado_batch_desde_planificacion_diaria,
@@ -661,6 +663,7 @@ def mapa_pendientes_planificacion_diaria(
 def _construir_fila_sitio(
     sitio_salida,
     *,
+    servicio,
     contactos_por_sitio=None,
 ):
     """
@@ -723,11 +726,7 @@ def _construir_fila_sitio(
     # OPERACIONES
     # ========================================================
 
-    estado_operacional = obtener_estado_operacional_sitio(
-        sitio_planificado,
-    )
-
-    servicio = estado_operacional["servicio"]
+    estado_operacional = obtener_estado_operacional_servicio(servicio)
 
     estado_visual = _estado_visual_operaciones(
         estado_operacional["estado_operaciones"],
@@ -896,39 +895,19 @@ def lista_planificacion_diaria(
     situación diaria actual.
     """
 
-    batches = list(
-        BatchPlanificacionSemanal.objects.select_related(
-            "planificacion",
-            "configuracion_semana",
-        )
-        .prefetch_related(
-            "salidas_diarias",
-            "salidas_diarias__sitios",
-            "sitios",
-        )
-        .exclude(
-            estado="cancelado",
-        )
-        .order_by(
-            "-fecha_inicio",
-            "-id",
-        )
+    batches = (
+        BatchPlanificacionSemanal.objects.select_related("planificacion")
+        .exclude(estado="cancelado")
+        .order_by("-fecha_inicio", "-id")
     )
+    pagina = Paginator(batches, 12).get_page(request.GET.get("pagina"))
 
     filas = []
 
-    # ========================================================
-    # CONSTRUIR RESUMEN DE CADA SEMANA
-    # ========================================================
-
-    for batch in batches:
-
+    for batch in pagina:
+        cantidad_pendientes = len(obtener_sitios_pendientes_planificacion_diaria(batch))
         resumen = obtener_resumen_planificacion_diaria(
-            batch,
-        )
-
-        pendientes_planificar = obtener_sitios_pendientes_planificacion_diaria(
-            batch,
+            batch, cantidad_pendientes=cantidad_pendientes,
         )
 
         total_finalizados = int(
@@ -1016,7 +995,7 @@ def lista_planificacion_diaria(
 
             estado_diario_texto = "Planificada"
 
-        elif pendientes_planificar:
+        elif cantidad_pendientes:
 
             estado_diario = "lista_planificar"
 
@@ -1033,8 +1012,7 @@ def lista_planificacion_diaria(
                 "batch": batch,
                 "mensual": batch.planificacion,
                 "resumen": resumen,
-                "pendientes_planificar": (pendientes_planificar),
-                "cantidad_pendientes_planificar": (len(pendientes_planificar)),
+                "cantidad_pendientes_planificar": cantidad_pendientes,
                 "estado_diario": estado_diario,
                 "estado_diario_texto": (estado_diario_texto),
             }
@@ -1045,6 +1023,7 @@ def lista_planificacion_diaria(
         "planificacion/diaria/lista.html",
         {
             "filas": filas,
+            "pagina": pagina,
         },
     )
 
@@ -1141,6 +1120,21 @@ def detalle_planificacion_diaria(
             "id",
         )
     )
+    pendientes_planificar = obtener_sitios_pendientes_planificacion_diaria(batch)
+    prefetch_related_objects(pendientes_planificar, "prioridad_diaria")
+
+    servicios_por_sitio = obtener_servicios_operacionales_por_sitio({
+        fila.sitio_batch.sitio_planificado_id
+        for salida in salidas
+        for fila in salida.sitios.all()
+    })
+    ids_sitio = {
+        fila.sitio_batch.sitio_planificado.sitio_id
+        for salida in salidas
+        for fila in salida.sitios.all()
+    }
+    ids_sitio.update(item.sitio_planificado.sitio_id for item in pendientes_planificar)
+
     # ========================================================
     # CONTACTOS ACTUALES DE LOS SITIOS DEL BATCH
     # ========================================================
@@ -1153,22 +1147,10 @@ def detalle_planificacion_diaria(
     # realmente pertenecen al batch actual.
     # ========================================================
 
-    contactos_actuales = list(
-        ContactoSitio.objects.filter(
-            sitio__planificaciones__participaciones_batch__batch=batch,
-            activo=True,
-            sitio__isnull=False,
-        )
-        .select_related(
-            "sitio",
-        )
-        .order_by(
-            "sitio_id",
-            "prioridad_contacto",
-            "id",
-        )
-        .distinct()
-    )
+    contactos_actuales = ContactoSitio.objects.filter(
+        sitio_id__in=ids_sitio,
+        activo=True,
+    ).order_by("sitio_id", "prioridad_contacto", "id")
 
     contactos_por_sitio = defaultdict(
         list,
@@ -1194,6 +1176,9 @@ def detalle_planificacion_diaria(
             filas.append(
                 _construir_fila_sitio(
                     sitio_salida,
+                    servicio=servicios_por_sitio.get(
+                        sitio_salida.sitio_batch.sitio_planificado_id,
+                    ),
                     contactos_por_sitio=contactos_por_sitio,
                 )
             )
@@ -1259,16 +1244,6 @@ def detalle_planificacion_diaria(
             key=lambda elemento: elemento[0],
         )
     ]
-
-    # ========================================================
-    # SITIOS APROBADOS TODAVÍA SIN PROGRAMAR
-    # ========================================================
-
-    pendientes_planificar = list(
-        obtener_sitios_pendientes_planificacion_diaria(
-            batch,
-        )
-    )
 
     # ========================================================
     # PREPARAR PRIORIDAD EN LOS PENDIENTES
@@ -1413,7 +1388,7 @@ def detalle_planificacion_diaria(
     # ========================================================
 
     resumen = obtener_resumen_planificacion_diaria(
-        batch,
+        batch, cantidad_pendientes=len(pendientes_planificar),
     )
 
     # ========================================================

@@ -1058,6 +1058,25 @@ Planificación Diaria
 
       </div>
 
+      {% if pagina.has_other_pages %}
+        <nav aria-label="Páginas de planificación diaria"
+             class="mt-6 flex flex-wrap items-center justify-center gap-4 text-sm">
+          {% if pagina.has_previous %}
+            <a href="?pagina={{ pagina.previous_page_number }}"
+               class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-100">
+              Semanas más recientes
+            </a>
+          {% endif %}
+          <span class="text-slate-600">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+          {% if pagina.has_next %}
+            <a href="?pagina={{ pagina.next_page_number }}"
+               class="rounded-xl border border-slate-200 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-100">
+              Semanas anteriores
+            </a>
+          {% endif %}
+        </nav>
+      {% endif %}
+
 
     {% else %}
 
