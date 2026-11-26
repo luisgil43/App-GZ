@@ -6695,16 +6695,6 @@ def mis_servicios_tecnico(request):
         "",
     ).strip()
 
-    filtro_id_new = request.GET.get(
-        "id_new",
-        "",
-    ).strip()
-
-    filtro_detalle = request.GET.get(
-        "detalle",
-        "",
-    ).strip()
-
     filtro_estado = request.GET.get(
         "estado",
         "",
@@ -6812,16 +6802,6 @@ def mis_servicios_tecnico(request):
             mes_produccion=filtro_mes,
         )
 
-    if filtro_id_new:
-        queryset_base = queryset_base.filter(
-            id_new__icontains=filtro_id_new,
-        )
-
-    if filtro_detalle:
-        queryset_base = queryset_base.filter(
-            detalle_tarea__icontains=filtro_detalle,
-        )
-
     if filtro_estado:
         queryset_base = queryset_base.filter(
             estado=filtro_estado,
@@ -6863,6 +6843,8 @@ def mis_servicios_tecnico(request):
         None,
     )
 
+    parametros_sin_pagina.pop("id_new", None)
+    parametros_sin_pagina.pop("detalle", None)
     query_sin_pagina = parametros_sin_pagina.urlencode()
 
     # ============================================================
@@ -7268,8 +7250,6 @@ def mis_servicios_tecnico(request):
         "id_claro": filtro_id_claro,
         "region": filtro_region,
         "mes_produccion": filtro_mes,
-        "id_new": filtro_id_new,
-        "detalle": filtro_detalle,
         "estado": filtro_estado,
     }
 

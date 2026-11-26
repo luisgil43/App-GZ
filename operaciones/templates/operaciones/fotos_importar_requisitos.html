@@ -300,6 +300,14 @@ Importar Requerimientos — DU{{ servicio.du }}
             <td class="p-3 min-w-72 break-words">
 
               {{ item.name }}
+              {% if item.tipo == "entregable" %}
+                <span class="mt-1 block text-xs font-semibold text-indigo-700">
+                  Entregable{% if item.formato %} · {{ item.formato|upper }}{% endif %}
+                </span>
+                {% if item.instrucciones %}<p class="mt-1 text-xs text-slate-600">{{ item.instrucciones }}</p>{% endif %}
+              {% else %}
+                <span class="mt-1 block text-xs text-slate-500">Foto</span>
+              {% endif %}
 
             </td>
 
@@ -565,7 +573,7 @@ Importar Requerimientos — DU{{ servicio.du }}
             </td>
 
             <td class="p-3">
-              Indica si la fotografía es obligatoria
+              Indica si el requerimiento es obligatorio
             </td>
 
             <td class="p-3">
@@ -778,7 +786,10 @@ Importar Requerimientos — DU{{ servicio.du }}
       <code>mandatory</code>,
       <code>etapa</code>.
 
-      La columna etapa puede quedar en blanco.
+      Para solicitar documentos, agrega las columnas opcionales
+      <code>tipo</code> (usa <code>entregable</code>), <code>formato</code>
+      (por ejemplo, <code>pdf,dwg</code> para aceptar ambos formatos) e <code>instrucciones</code>.
+      Para entregables deja <code>etapa</code> vacía. Las filas sin <code>tipo</code> se importan como fotos.
 
     </p>
 

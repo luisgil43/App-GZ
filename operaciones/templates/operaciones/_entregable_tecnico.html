@@ -1,0 +1,74 @@
+<article data-entrega-tarjeta class="min-w-0 rounded-xl border border-indigo-100 bg-white p-3 sm:p-4">
+  <div class="flex flex-wrap items-start justify-between gap-2">
+    <h3 class="min-w-0 flex-1 font-semibold text-slate-900 [overflow-wrap:anywhere]">{{ requisito.titulo }}</h3>
+    {% if requisito.entrega %}
+      <span class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Entregado</span>
+    {% else %}
+      <span class="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">Pendiente</span>
+    {% endif %}
+  </div>
+  <p class="mt-1 text-xs text-slate-600">
+    {% if requisito.extensiones %}{{ requisito.extensiones|join:", "|upper }}{% else %}Cualquier formato documental{% endif %}
+    · {% if requisito.obligatorio %}Obligatorio{% else %}Opcional{% endif %}
+  </p>
+  {% if requisito.instrucciones %}
+    <p class="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700">{{ requisito.instrucciones }}</p>
+  {% endif %}
+  {% if requisito.formato %}
+    <a href="{% url 'operaciones:ejemplo_entregable' servicio.pk requisito.pk %}"
+       class="mt-1 inline-flex min-h-11 items-center text-sm font-semibold text-sky-800 hover:underline">
+      Descargar ejemplo
+    </a>
+  {% endif %}
+
+  {% if requisito.entrega %}
+    {% with entrega=requisito.entrega %}
+      <p class="mt-2 break-words text-sm text-slate-700">{{ entrega.nombre_original }}</p>
+      <div class="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold">
+        {% if entrega.tipo_visualizacion or entrega.es_planilla_xlsx %}
+          <a href="{% url 'operaciones:abrir_entrega_tecnico' servicio.pk entrega.pk 'visualizar' %}"
+             target="_blank" rel="noopener noreferrer"
+             class="inline-flex min-h-11 items-center rounded-lg border border-sky-200 bg-sky-50 px-3 text-sky-800">
+            Ver
+          </a>
+        {% endif %}
+        <a href="{% url 'operaciones:abrir_entrega_tecnico' servicio.pk entrega.pk 'descargar' %}"
+           class="inline-flex min-h-11 items-center rounded-lg border border-sky-200 px-3 text-sky-800">
+          Descargar
+        </a>
+        {% if puede_adjuntar_entregables and entrega.adjuntado_por_id == request.user.pk %}
+          <details class="min-w-0">
+            <summary class="flex min-h-11 cursor-pointer items-center rounded-lg border border-red-200 px-3 text-red-700">Eliminar</summary>
+            <form method="post" data-quitar-entrega
+                  action="{% url 'operaciones:quitar_entrega_tecnico' servicio.pk entrega.pk %}"
+                  class="mt-2 rounded-lg border border-red-200 bg-red-50 p-2">
+              {% csrf_token %}
+              <p class="text-xs text-red-800">Podrás adjuntar otro archivo a esta solicitud.</p>
+              <button type="submit" class="mt-1 min-h-11 rounded-lg bg-red-700 px-3 text-sm font-semibold text-white">
+                Eliminar archivo
+              </button>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    {% endwith %}
+  {% elif puede_adjuntar_entregables %}
+    <form method="post" enctype="multipart/form-data" data-form-entrega
+          action="{% url 'operaciones:entregar_requerimiento' servicio.pk requisito.pk %}"
+          class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+      {% csrf_token %}
+      <div class="min-w-0 flex-1">
+        <label for="archivo-{{ requisito.pk }}" class="block text-sm font-medium text-slate-700">Archivo</label>
+        <input id="archivo-{{ requisito.pk }}" name="archivo" type="file" required
+               accept="{% if requisito.extensiones %}.{{ requisito.extensiones|join:",." }}{% else %}.{{ extensiones_documentales|join:",." }}{% endif %}"
+               class="mt-1 min-h-11 w-full rounded-lg border border-slate-300 p-2 text-sm">
+      </div>
+      <button type="submit" class="min-h-11 rounded-lg bg-sky-700 px-3 py-2 text-sm font-semibold text-white hover:bg-sky-800">
+        Adjuntar
+      </button>
+    </form>
+  {% else %}
+    <p class="mt-2 text-sm text-slate-600">Puedes adjuntar el archivo mientras tu asignación esté en ejecución.</p>
+  {% endif %}
+  <p class="break-words text-sm text-slate-700" data-estado-entrega role="status"></p>
+</article>

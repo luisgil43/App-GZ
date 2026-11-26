@@ -1,0 +1,60 @@
+<li id="entregable-{{ entregable.id }}" {% if entregable.requerimiento_id %}data-entrega-requisito="{{ entregable.requerimiento_id }}"{% endif %}
+    class="flex flex-wrap items-start justify-between gap-2 py-3">
+  <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+    <p class="font-semibold text-gray-900">{{ entregable.titulo }}</p>
+    {% if entregable.requerimiento %}
+      <p class="text-xs font-medium text-sky-800">Entregado por requerimiento</p>
+    {% endif %}
+    <p class="text-xs text-gray-600">
+      {{ entregable.nombre_original }} · {{ entregable.adjuntado_en|date:"d/m/Y H:i" }}
+      {% if entregable.adjuntado_por %}
+        · {{ entregable.adjuntado_por.get_full_name|default:entregable.adjuntado_por.username }}
+      {% endif %}
+    </p>
+  </div>
+  <div class="flex flex-col items-end gap-1">
+    <div class="flex flex-wrap justify-end gap-2">
+      {% if entregable.tipo_visualizacion or entregable.es_planilla_xlsx %}
+        <a href="{% url 'operaciones:visualizar_entregable' entregable.servicio_id entregable.id %}"
+           target="_blank" rel="noopener noreferrer"
+           aria-label="Visualizar {{ entregable.titulo }} en otra pestaña"
+           class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 font-semibold text-sky-800 hover:bg-sky-100">
+          Visualizar
+        </a>
+      {% endif %}
+      <button type="button"
+              data-descarga-url="{% url 'operaciones:descargar_entregable' entregable.servicio_id entregable.id %}"
+              aria-label="Descargar {{ entregable.titulo }}"
+              class="rounded-lg border border-sky-200 px-3 py-1.5 font-semibold text-sky-800 hover:bg-sky-50">
+        Descargar
+      </button>
+      <button type="button" data-pedir-eliminar
+              aria-label="Eliminar {{ entregable.titulo }}" aria-expanded="false"
+              aria-controls="confirmar-entregable-{{ entregable.id }}"
+              class="rounded-lg border border-red-200 px-3 py-1.5 font-semibold text-red-700 hover:bg-red-50">
+        Eliminar
+      </button>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-slate-600">
+      <span data-descarga-espera aria-hidden="true" hidden
+            class="h-3 w-3 animate-spin rounded-full border-2 border-sky-700 border-t-transparent"></span>
+      <span data-descarga-estado role="status"></span>
+    </div>
+  </div>
+  <div id="confirmar-entregable-{{ entregable.id }}" data-confirmacion-eliminar hidden
+       class="basis-full rounded-lg border border-red-200 bg-red-50 p-2 text-red-900">
+    <p class="font-medium">¿Eliminar este entregable de forma permanente?</p>
+    <div class="mt-2 flex flex-wrap gap-2">
+      <button type="button" data-cancelar-eliminar
+              class="rounded-lg border border-red-200 bg-white px-3 py-1.5 font-semibold text-red-800">
+        Cancelar
+      </button>
+      <button type="button"
+              data-eliminar-url="{% url 'operaciones:eliminar_entregable' entregable.servicio_id entregable.id %}"
+              class="rounded-lg bg-red-700 px-3 py-1.5 font-semibold text-white hover:bg-red-800">
+        Eliminar archivo
+      </button>
+    </div>
+    <p class="mt-1 empty:m-0" role="status" data-eliminar-estado></p>
+  </div>
+</li>

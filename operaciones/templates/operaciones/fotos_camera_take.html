@@ -241,12 +241,21 @@
     padding: 0;
     border-radius: 0;
   }
-  .gz-camara .gz-visor video {
+  .gz-camara .gz-encuadre {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+  }
+  .gz-camara .gz-marco-video { overflow: hidden; }
+  .gz-camara .gz-marco-video video {
     width: 100%;
     height: 100%;
     max-height: none;
     aspect-ratio: auto;
-    object-fit: cover;
+    object-fit: contain;
+    transform: scale(var(--gz-zoom, 1));
   }
   .gz-camara #gz-volver {
     position: absolute;
@@ -313,10 +322,32 @@
     padding: 16px 14px calc(16px + env(safe-area-inset-bottom, 0px));
     background: linear-gradient(transparent, rgba(0,0,0,.85));
   }
+  .gz-camara .gz-acciones .gz-control-zoom {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-self: center;
+    gap: .65rem;
+    width: min(100%, 280px);
+    margin: 0;
+    padding: 0 .65rem;
+    border-radius: 12px;
+    background: rgba(15,23,42,.82);
+    color: white;
+    font-size: 13px;
+  }
+  .gz-camara .gz-control-zoom input {
+    min-height: 44px;
+    min-width: 0;
+    padding: 0;
+    flex: 1;
+    accent-color: #5eead4;
+  }
+  .gz-control-zoom output { min-width: 2.6rem; text-align: right; font-variant-numeric: tabular-nums; }
   .gz-camara #gz-estado {
     position: absolute;
     z-index: 3;
-    bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--gz-acciones-alto, 160px) + 4px);
     left: 12px;
     right: 12px;
     margin: 0;
@@ -330,7 +361,7 @@
   .gz-camara .gz-bandeja-pantalla {
     position: absolute;
     z-index: 4;
-    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(var(--gz-acciones-alto, 160px) + 48px);
     left: 12px;
     right: 12px;
     max-height: 25dvh;
@@ -517,9 +548,18 @@
 
   <p id="gz-estado" role="status">Preparando cámara y ubicación…</p>
   <div class="gz-visor">
-    <video id="gz-video" autoplay playsinline muted></video>
+    <div class="gz-encuadre">
+      <div class="gz-marco-video">
+        <video id="gz-video" autoplay playsinline muted></video>
+      </div>
+    </div>
     <div id="gz-sello" class="gz-sello"></div>
     <div class="gz-acciones">
+      <label class="gz-control-zoom">
+        <span>Zoom</span>
+        <input id="gz-zoom" type="range" min="1" max="3" step="0.1" value="1" disabled>
+        <output id="gz-zoom-valor" for="gz-zoom">1×</output>
+      </label>
       <button type="button" id="gz-iniciar">Activar cámara</button>
       <button type="button" id="gz-tomar"
               aria-label="Tomar foto" title="Tomar foto" disabled>
@@ -599,6 +639,11 @@
   contenedor.append(bandejaPantalla);
 
   const video = document.getElementById("gz-video");
+  const marcoVideo = video.parentElement;
+  const encuadre = marcoVideo.parentElement;
+  const acciones = visorPantalla.querySelector(".gz-acciones");
+  const zoomControl = document.getElementById("gz-zoom");
+  const zoomValor = document.getElementById("gz-zoom-valor");
   const estado = document.getElementById("gz-estado");
   const sello = document.getElementById("gz-sello");
   const tomar = document.getElementById("gz-tomar");
@@ -625,12 +670,40 @@
   let buscandoDireccion = false;
   let ultimaConsultaDireccion = 0;
 
+  function ajustarEncuadre() {
+    if (video.videoWidth && video.videoHeight) {
+      const escala = Math.min(
+        encuadre.clientWidth / video.videoWidth,
+        encuadre.clientHeight / video.videoHeight,
+      );
+      marcoVideo.style.width = `${video.videoWidth * escala}px`;
+      marcoVideo.style.height = `${video.videoHeight * escala}px`;
+    }
+    contenedor.style.setProperty("--gz-acciones-alto", `${acciones.offsetHeight}px`);
+  }
+
+  function aplicarZoom() {
+    marcoVideo.style.setProperty("--gz-zoom", zoomControl.value);
+    const etiqueta = `${zoomControl.value.replace(".", ",")}×`;
+    zoomValor.value = etiqueta;
+    zoomControl.setAttribute("aria-valuetext", etiqueta);
+  }
+
+  const observadorEncuadre = new ResizeObserver(ajustarEncuadre);
+  observadorEncuadre.observe(encuadre);
+  observadorEncuadre.observe(acciones);
+  video.addEventListener("resize", ajustarEncuadre);
+  zoomControl.addEventListener("input", aplicarZoom);
+  window.addEventListener("pagehide", () => observadorEncuadre.disconnect());
+
   function gpsReciente() {
     return posicion && Date.now() - posicion.timestamp <= 60000;
   }
 
   function actualizarDisparador() {
+    zoomControl.disabled = ocupada || !stream || !video.videoWidth;
     tomar.disabled = ocupada || !stream
+      || (!especial && !selector.value)
       || (!!selector.value && fotos.length > 0);
   }
 
@@ -674,11 +747,11 @@
       const texto = [requisito.etapa, requisito.titulo].filter(Boolean).join(" · ");
       selector.add(new Option(texto, String(requisito.id)));
     }
-    selector.add(new Option("Foto extra", ""));
+    if (especial) selector.add(new Option("Foto extra", ""));
     const pendienteSeleccionado = requisitos.some(
       requisito => String(requisito.id) === String(seleccionado)
     );
-    selector.value = conservarExtra && String(seleccionado) === ""
+    selector.value = especial && conservarExtra && String(seleccionado) === ""
       ? ""
       : pendienteSeleccionado
         ? String(seleccionado)
@@ -687,8 +760,8 @@
 
   function actualizar() {
     document.getElementById("gz-requisito-completo").textContent =
-      selector.selectedOptions[0]?.textContent || "Foto extra";
-    selector.disabled = ocupada || fotos.length > 0;
+      selector.selectedOptions[0]?.textContent || "Sin requerimientos de fotos pendientes";
+    selector.disabled = ocupada || fotos.length > 0 || !selector.options.length;
     actualizarDisparador();
     subir.disabled = ocupada || fotos.length === 0;
     iniciar.disabled = ocupada;
@@ -853,12 +926,14 @@
         video: {
           facingMode: {ideal: "environment"},
           width: {ideal: 1080},
-          height: {ideal: 1920}
         },
         audio: false
       });
       video.srcObject = stream;
       await video.play();
+      zoomControl.value = "1";
+      aplicarZoom();
+      ajustarEncuadre();
       estado.textContent = "Cámara lista. Obteniendo ubicación…";
       if (watch === null && navigator.geolocation) {
         watch = navigator.geolocation.watchPosition(
@@ -883,7 +958,7 @@
   }
 
   tomar.onclick = async () => {
-    if (ocupada) return;
+    if (ocupada || (!especial && !selector.value)) return;
     if (!video.videoWidth || !video.videoHeight) {
       estado.textContent = "La cámara todavía se está preparando.";
       return;
@@ -906,16 +981,9 @@
 
       // Congelar el fotograma antes de consultar la dirección.
       const canvas = document.createElement("canvas");
-      const rect = video.getBoundingClientRect();
-      const proporcionVisor = rect.width / rect.height;
-      const proporcionVideo = video.videoWidth / video.videoHeight;
-      let anchoOrigen = video.videoWidth;
-      let altoOrigen = video.videoHeight;
-      if (proporcionVideo > proporcionVisor) {
-        anchoOrigen = altoOrigen * proporcionVisor;
-      } else {
-        altoOrigen = anchoOrigen / proporcionVisor;
-      }
+      const zoom = Number(zoomControl.value);
+      const anchoOrigen = video.videoWidth / zoom;
+      const altoOrigen = video.videoHeight / zoom;
       canvas.width = Math.max(1, Math.round(anchoOrigen));
       canvas.height = Math.max(1, Math.round(altoOrigen));
       canvas.getContext("2d").drawImage(

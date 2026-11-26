@@ -48,12 +48,13 @@ from usuarios.decoradores import rol_requerido
 
 from .models import \
     SitioMovil  # para traer ID SITES, dirección, comuna, región
-from .models import (EvidenciaFoto, RequisitoFoto, ServicioCotizado,
+from .models import (EntregableServicio, EvidenciaFoto, PerfilRequerimientoEntregable, RequerimientoEntregable, RequisitoFoto, ServicioCotizado,
                      SesionFotos, SesionFotoTecnico, _site_name_for)
 
 # ========== Helpers ==========
 
 from .permisos_fotos import _ORIGEN_CAMARA, archivos_evidencias_habilitados
+from .views_entregables import RequerimientoEntregableForm, puede_adjuntar_entregables
 
 def wasabi_client():
     return boto3.client(
@@ -755,6 +756,8 @@ def configurar_requisitos(request, servicio_id):
             "servicio": servicio,
             "sesion": sesion,
             "requirements": canonical,
+            "form_requerimiento_entregable": RequerimientoEntregableForm(),
+            "requerimientos_entregables": servicio.requerimientos_entregables.select_related("formato", "entrega"),
             "is_special": bool(
                 sesion.proyecto_especial
             ),
@@ -802,6 +805,9 @@ def download_requirements_template(request, servicio_id, ext):
         "order",
         "mandatory",
         "etapa",
+        "tipo",
+        "formato",
+        "instrucciones",
     ]
 
     ejemplos = [
@@ -810,18 +816,30 @@ def download_requirements_template(request, servicio_id, ext):
             0,
             1,
             "antes",
+            "foto",
+            "",
+            "",
+            "foto",
+            "",
+            "",
         ],
         [
             "Foto durante instalación",
             1,
             1,
             "durante",
+            "foto",
+            "",
+            "",
         ],
         [
             "Foto después de intervención",
             2,
             1,
             "despues",
+            "foto",
+            "",
+            "",
         ],
         [
             "Foto adicional del sitio",
@@ -830,6 +848,8 @@ def download_requirements_template(request, servicio_id, ext):
             "",
         ],
     ]
+
+    ejemplos.append(["Certificado de montaje", 4, 1, "", "entregable", "pdf", "Incluye firma."])
 
     # --------------------------------------------------
     # CSV
@@ -886,13 +906,16 @@ def download_requirements_template(request, servicio_id, ext):
 
         ws.freeze_panes = "A2"
 
-        ws.auto_filter.ref = "A1:D5"
+        ws.auto_filter.ref = f"A1:G{ws.max_row}"
 
         anchos = {
             "A": 65,
             "B": 14,
             "C": 17,
             "D": 20,
+            "E": 18,
+            "F": 16,
+            "G": 46,
         }
 
         for columna, ancho in anchos.items():
@@ -936,6 +959,10 @@ def download_requirements_template(request, servicio_id, ext):
 
         validacion_etapa.add("D2:D10001")
 
+        validacion_tipo = DataValidation(type="list", formula1='"foto,entregable"', allow_blank=True)
+        ws.add_data_validation(validacion_tipo)
+        validacion_tipo.add("E2:E10001")
+
         # Validación de obligatoriedad.
         validacion_obligatorio = DataValidation(
             type="list",
@@ -976,7 +1003,7 @@ def download_requirements_template(request, servicio_id, ext):
             ],
             [
                 "mandatory",
-                "1 = fotografía obligatoria. " "0 = fotografía opcional.",
+                "1 = requisito obligatorio. 0 = requisito opcional.",
             ],
             [
                 "etapa",
@@ -1000,6 +1027,9 @@ def download_requirements_template(request, servicio_id, ext):
                 "Después",
                 "Fotografías del trabajo terminado.",
             ],
+            ["tipo", "foto o entregable. Vacío conserva el comportamiento de foto."],
+            ["formato", "Extensiones del entregable, por ejemplo pdf, xlsx o dwg. Separa varias con comas."],
+            ["instrucciones", "Indicaciones opcionales para completar el entregable."],
             [
                 "Duplicados",
                 "No repitas nombres de requerimientos. "
@@ -1126,12 +1156,18 @@ def importar_requisitos(request, servicio_id):
 
         return texto
 
+    def datos_entregable(obtener):
+        return {
+            campo: str(obtener(campo) or "").strip()
+            for campo in ("tipo", "formato", "instrucciones")
+        }
+
     def validar_duplicados(filas):
 
         grupos = defaultdict(list)
 
         for item in filas:
-            grupos[_norm_title(item["name"])].append(item["fila"])
+            grupos[(item["tipo"], _norm_title(item["name"]))].append(item["fila"])
 
         referencias = {}
 
@@ -1192,6 +1228,28 @@ def importar_requisitos(request, servicio_id):
                 etapa,
                 fila,
             )
+
+            campos = datos_entregable(item.get)
+            tipo = campos["tipo"].lower() or "foto"
+            extensiones = list(dict.fromkeys(
+                extension.lstrip(".")
+                for extension in re.split(r"[,;\s]+", campos["formato"].lower())
+                if extension
+            ))
+            instrucciones = campos["instrucciones"]
+            if tipo not in {"foto", "entregable"}:
+                raise ValueError(f"Tipo inválido en la fila {fila}. Usa foto o entregable.")
+            if len(nombre.strip()) > (200 if tipo == "foto" else EntregableServicio.TITULO_MAX_LENGTH):
+                raise ValueError(f"El nombre de la fila {fila} supera el largo permitido.")
+            if tipo == "foto" and (extensiones or instrucciones):
+                raise ValueError(f"Formato e instrucciones corresponden a entregables en la fila {fila}.")
+            if tipo == "entregable" and item["etapa"]:
+                raise ValueError(f"Deja la etapa vacía para el entregable de la fila {fila}.")
+            if any(extension not in EntregableServicio.EXTENSIONES_DOCUMENTALES for extension in extensiones):
+                raise ValueError(f"Formato documental inválido en la fila {fila}: {campos['formato']}.")
+            if len(instrucciones) > 3000:
+                raise ValueError(f"Las instrucciones de la fila {fila} superan 3000 caracteres.")
+            item.update(tipo=tipo, formato=",".join(extensiones), instrucciones=instrucciones)
 
     # --------------------------------------------------
     # CONFIRMACIÓN DE IMPORTACIÓN
@@ -1367,6 +1425,7 @@ def importar_requisitos(request, servicio_id):
                                 "name": nombre,
                                 "mandatory": obligatorio,
                                 "etapa": etapa,
+                                **datos_entregable(registro.get),
                             }
                         )
 
@@ -1467,6 +1526,12 @@ def importar_requisitos(request, servicio_id):
                             start=1,
                         )
 
+                    indices_extra = {
+                        campo: titulos.index(campo)
+                        for campo in ("tipo", "formato", "instrucciones")
+                        if tiene_cabecera and campo in titulos
+                    }
+
                     for numero_fila, registro in registros:
 
                         nombre = (
@@ -1535,6 +1600,10 @@ def importar_requisitos(request, servicio_id):
                                 "name": nombre,
                                 "mandatory": obligatorio,
                                 "etapa": etapa,
+                                **datos_entregable({
+                                    campo: registro[indice]
+                                    for campo, indice in indices_extra.items() if indice < len(registro)
+                                }.get),
                             }
                         )
 
@@ -1582,6 +1651,12 @@ def importar_requisitos(request, servicio_id):
             )
         )
 
+        entregables_existentes = {
+            _norm_title(titulo)
+            for titulo in servicio.requerimientos_entregables.values_list("titulo", flat=True)
+        }
+        existentes_por_tipo = {"foto": existentes, "entregable": entregables_existentes}
+
         vista_filas = []
 
         for item in filas:
@@ -1596,7 +1671,7 @@ def importar_requisitos(request, servicio_id):
                     **item,
                     "duplicado": bool(relacionadas),
                     "relacionadas": relacionadas,
-                    "existente": (_norm_title(item["name"]) in existentes),
+                    "existente": (_norm_title(item["name"]) in existentes_por_tipo[item["tipo"]]),
                 }
             )
 
@@ -1653,20 +1728,37 @@ def importar_requisitos(request, servicio_id):
             item["mandatory"],
             item["etapa"],
         )
-        for item in filas
+        for item in filas if item["tipo"] == "foto"
     ]
+    documentos = [item for item in filas if item["tipo"] == "entregable"]
 
     try:
 
         with transaction.atomic():
 
-            sesion = _get_or_create_sesion(servicio)
+            if documentos:
+                ServicioCotizado.objects.select_for_update().get(pk=servicio.pk)
+                requisitos_por_nombre = {
+                    _norm_title(requisito.titulo): requisito
+                    for requisito in servicio.requerimientos_entregables.all()
+                }
+                for item in documentos:
+                    requisito = requisitos_por_nombre.get(_norm_title(item["name"]))
+                    if requisito is None:
+                        requisito = RequerimientoEntregable(servicio=servicio, titulo=item["name"])
+                    requisito.extension = item["formato"]
+                    requisito.instrucciones = item["instrucciones"]
+                    requisito.obligatorio = item["mandatory"]
+                    requisito.save()
+                    PerfilRequerimientoEntregable.guardar_desde(requisito)
+
+            sesion = _get_or_create_sesion(servicio) if normalized else None
 
             asignaciones = list(
                 sesion.asignaciones.select_related("tecnico").prefetch_related(
                     "requisitos"
                 )
-            )
+            ) if sesion else []
 
             total_creados = 0
             total_omitidos = 0
@@ -1804,6 +1896,8 @@ def importar_requisitos(request, servicio_id):
 
             mensaje += f", {total_omitidos} ya existentes"
 
+        if documentos:
+            mensaje += f". Entregables procesados: {len(documentos)}"
         mensaje += "."
 
         messages.success(
@@ -1925,6 +2019,18 @@ def _safe_key(filename: str, subdir: str = "") -> str:
     return f"{SAFE_PREFIX}{sub}{today}/{uid}_{base.split('.')[0][:40]}{ext}"
 
 
+def _error_destino_foto(asignacion, req_id):
+    if not req_id:
+        if not asignacion.sesion.proyecto_especial:
+            return "Las fotos extra solo están habilitadas para proyectos especiales."
+        return None
+    if not req_id.isascii() or not req_id.isdecimal() or len(req_id) > 18:
+        return "Requisito inválido."
+    if not asignacion.requisitos.filter(pk=req_id, activo=True).exists():
+        return "El requisito no existe o fue desactivado."
+    return None
+
+
 @login_required
 @require_POST
 def presign_put(request, asig_id: int):
@@ -1939,6 +2045,10 @@ def presign_put(request, asig_id: int):
             status=403,
         )
 
+
+    error = _error_destino_foto(a, request.POST.get("req_id"))
+    if error:
+        return JsonResponse({"ok": False, "error": error}, status=400)
 
     filename = request.POST.get("filename") or ""
     content_type = request.POST.get("content_type") or mimetypes.guess_type(filename)[0] or "application/octet-stream"
@@ -2098,6 +2208,12 @@ def finalize_upload(request, asig_id: int):
     if not key or (".." in key) or (not key.startswith(SAFE_PREFIX)):
         return JsonResponse({"ok": False, "error": "Key inválida."}, status=400)
 
+    error = _error_destino_foto(a, req_id)
+    if error:
+        return JsonResponse({"ok": False, "error": error}, status=400)
+    if not req_id and not titulo_manual:
+        return JsonResponse({"ok": False, "error": "Ingresa un título para la foto extra."}, status=400)
+
     # Límite global configurable de extras (si no hay requisito)
     if not req_id and _limit_reached(s, adding=1):
         lim = EXTRA_MAX
@@ -2216,6 +2332,10 @@ def upload_evidencias_fotos(request, pk):
             return redirect("operaciones:fotos_upload", pk=a.pk)
 
         req_id = request.POST.get("req_id") or None
+        error = _error_destino_foto(a, req_id)
+        if error:
+            messages.error(request, error)
+            return redirect("operaciones:fotos_upload", pk=a.pk)
         nota = (request.POST.get("nota") or "").strip()
         lat = request.POST.get("lat") or None
         lng = request.POST.get("lng") or None
@@ -2396,6 +2516,9 @@ def upload_evidencias_fotos(request, pk):
         "pendientes_aceptar": pendientes_aceptar,
         "can_finish": can_finish,
         "is_proyecto_especial": s.proyecto_especial,
+        "requerimientos_entregables": servicio.requerimientos_entregables.select_related("formato", "entrega"),
+        "puede_adjuntar_entregables": puede_adjuntar_entregables(servicio, a),
+        "extensiones_documentales": EntregableServicio.EXTENSIONES_DOCUMENTALES,
     })
 
 # ============================
@@ -2475,24 +2598,10 @@ def upload_evidencias_ajax(request, pk, *, _origen_camara=None):
     titulo_manual = (request.POST.get("titulo_manual") or "").strip()
     direccion_manual = (request.POST.get("direccion_manual") or "").strip()
 
-    # Validar req_id: si viene, debe ser de ESTA asignación y estar ACTIVO
-    req_id = None
-    if req_id_raw:
-        try:
-            req_id_int = int(req_id_raw)
-        except Exception:
-            return JsonResponse({"ok": False, "error": "Requisito inválido."}, status=400)
-
-        req_ok = RequisitoFoto.objects.filter(
-            id=req_id_int,
-            tecnico_sesion=a,
-            activo=True,               # 👈 solo requisitos activos
-        ).exists()
-
-        if not req_ok:
-            return JsonResponse({"ok": False, "error": "El requisito no existe o fue desactivado."}, status=400)
-
-        req_id = req_id_int  # validado
+    error = _error_destino_foto(a, req_id_raw)
+    if error:
+        return JsonResponse({"ok": False, "error": error}, status=400)
+    req_id = int(req_id_raw) if req_id_raw else None
 
     # Proyecto especial: si NO hay req_id, exigir título
     if s.proyecto_especial and not req_id and not titulo_manual:
@@ -2915,6 +3024,13 @@ def revisar_sesion_fotos(request, servicio_id):
     )
 
     can_review = sesion.estado == "en_revision_supervisor"
+    requerimientos_entregables = list(
+        servicio.requerimientos_entregables.select_related("entrega")
+    )
+    entregables_pendientes = sum(
+        requisito.obligatorio and not hasattr(requisito, "entrega")
+        for requisito in requerimientos_entregables
+    )
 
     if request.method == "POST":
         accion = request.POST.get("accion")
@@ -2926,6 +3042,9 @@ def revisar_sesion_fotos(request, servicio_id):
             return redirect(f"{revisar_url}?next={next_url}")
 
         if accion == "aprobar":
+            if entregables_pendientes:
+                messages.error(request, "Completa los entregables obligatorios antes de aprobar el servicio.")
+                return redirect(f"{revisar_url}?next={next_url}")
             with transaction.atomic():
 
                 try:
@@ -3209,6 +3328,12 @@ def revisar_sesion_fotos(request, servicio_id):
             "puede_agregar_referencia": puede_agregar_referencia,
             "fotos_sin_referencia": fotos_sin_referencia,
             "servicio": servicio,
+            "entregables": servicio.entregables.select_related("adjuntado_por", "requerimiento"),
+            "requerimientos_entregables": requerimientos_entregables,
+            "entregables_pendientes": entregables_pendientes,
+            "entregable_titulo_max_length": EntregableServicio.TITULO_MAX_LENGTH,
+            "entregable_extensiones": EntregableServicio.extensiones_selector(),
+            "entregable_formatos": EntregableServicio.EXTENSIONES_ADMITIDAS,
             "sesion": sesion,
             "evidencias_por_asig": evidencias_por_asig,
             "etapas_revision": etapas_revision,

@@ -2,6 +2,8 @@
 
 import os
 import re
+import unicodedata
+from hashlib import sha256
 from decimal import Decimal
 from uuid import uuid4
 
@@ -525,6 +527,129 @@ class ServicioCotizado(models.Model):
 
     def __str__(self):
         return f"DU {self.du} - {self.id_claro}"
+
+
+def ruta_entregable_servicio(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    return f"operaciones/entregables/{instance.servicio_id}/{uuid4().hex}{extension}"
+
+
+def ruta_ejemplo_entregable(instance, filename):
+    extension = os.path.splitext(filename)[1].lower()
+    return f"operaciones/entregables/formatos/{uuid4().hex}{extension}"
+
+
+class FormatoEntregable(models.Model):
+    nombre = models.CharField(max_length=500)
+    ejemplo = models.FileField(upload_to=ruta_ejemplo_entregable, storage=_gz_storage, max_length=255)
+    nombre_original = models.CharField(max_length=255)
+
+    class Meta:
+        ordering = ["nombre", "pk"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class RequerimientoEntregable(models.Model):
+    servicio = models.ForeignKey(
+        ServicioCotizado, on_delete=models.CASCADE, related_name="requerimientos_entregables",
+    )
+    titulo = models.CharField(max_length=500)
+    instrucciones = models.TextField(blank=True, max_length=3000)
+    extension = models.CharField(max_length=255, blank=True)
+    obligatorio = models.BooleanField(default=True)
+    formato = models.ForeignKey(FormatoEntregable, on_delete=models.PROTECT, null=True, blank=True)
+
+    class Meta:
+        ordering = ["pk"]
+
+    @property
+    def extensiones(self):
+        return self.extension.split(",") if self.extension else []
+
+    @staticmethod
+    def clave_titulo(titulo):
+        texto = unicodedata.normalize("NFKD", titulo.casefold())
+        return " ".join("".join(c for c in texto if not unicodedata.combining(c)).split())
+
+
+class PerfilRequerimientoEntregable(models.Model):
+    huella = models.CharField(max_length=64, unique=True)
+    clave = models.TextField()
+    titulo = models.CharField(max_length=500)
+    instrucciones = models.TextField(blank=True)
+    extension = models.CharField(max_length=255, blank=True)
+    obligatorio = models.BooleanField(default=True)
+    formato = models.ForeignKey(FormatoEntregable, on_delete=models.SET_NULL, null=True, blank=True)
+
+    @classmethod
+    def guardar_desde(cls, requisito):
+        clave = requisito.clave_titulo(requisito.titulo)
+        cls.objects.update_or_create(
+            huella=sha256(clave.encode()).hexdigest(),
+            defaults={
+                "clave": clave,
+                "titulo": requisito.titulo, "instrucciones": requisito.instrucciones,
+                "extension": requisito.extension, "obligatorio": requisito.obligatorio,
+                "formato_id": requisito.formato_id,
+            },
+        )
+
+
+class EntregableServicio(models.Model):
+    TITULO_MAX_LENGTH = 500
+    EXTENSIONES_ADMITIDAS = (
+        "pdf", "doc", "docx", "xls", "xlsx", "csv", "ppt", "pptx", "txt",
+        "zip", "jpg", "jpeg", "png",
+        "dwg", "dxf", "dwt", "dwf", "dwfx", "dgn",
+        "ifc", "rvt", "rfa", "step", "stp", "iges", "igs", "stl", "kml", "kmz",
+    )
+    EXTENSIONES_DOCUMENTALES = tuple(
+        extension for extension in EXTENSIONES_ADMITIDAS
+        if extension not in {"jpg", "jpeg", "png"}
+    )
+    TIPOS_VISUALIZABLES = {
+        ".pdf": "application/pdf",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".txt": "text/plain",
+        ".csv": "text/plain",
+    }
+
+    servicio = models.ForeignKey(
+        ServicioCotizado, on_delete=models.CASCADE, related_name="entregables",
+    )
+    titulo = models.CharField(max_length=TITULO_MAX_LENGTH)
+    requerimiento = models.OneToOneField(
+        RequerimientoEntregable, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="entrega",
+    )
+    archivo = models.FileField(
+        upload_to=ruta_entregable_servicio, storage=_gz_storage, max_length=255,
+    )
+    nombre_original = models.CharField(max_length=255)
+    adjuntado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+    )
+    adjuntado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-adjuntado_en", "-pk"]
+
+    @classmethod
+    def extensiones_selector(cls):
+        return ",".join(f".{extension}" for extension in cls.EXTENSIONES_ADMITIDAS)
+
+    @property
+    def tipo_visualizacion(self):
+        extension = os.path.splitext(self.nombre_original)[1].lower()
+        return self.TIPOS_VISUALIZABLES.get(extension)
+
+    @property
+    def es_planilla_xlsx(self):
+        return self.nombre_original.lower().endswith(".xlsx")
 
 
 class SesionFotos(models.Model):

@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ entregable.titulo }} · Vista previa</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font: 15px/1.45 system-ui, sans-serif;
+      --texto: #14243a;
+      --secundario: #475b6c;
+      --linea: #dce6e9;
+      --verde: #07624c;
+      --encabezado: #e9f5ef;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f2f6f8; color: var(--texto); }
+    main { max-width: 110rem; margin-inline: auto; padding: clamp(.85rem, 2.8vw, 2.75rem); }
+    .cabecera {
+      display: flex;
+      align-items: flex-start;
+      gap: clamp(.75rem, 2vw, 1.35rem);
+      border: 1px solid #24415a;
+      border-radius: 1.25rem;
+      padding: clamp(1rem, 3vw, 2rem);
+      background: linear-gradient(115deg, #11263d, #193b50);
+      color: white;
+    }
+    .icono {
+      display: grid;
+      width: 2.8rem;
+      height: 2.8rem;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid #518579;
+      border-radius: .85rem;
+      background: #184b46;
+      color: #bcf3d5;
+    }
+    .icono svg { width: 1.45rem; height: 1.45rem; }
+    .du { color: #b8e9d7; font-size: .82rem; font-weight: 700; }
+    h1 { margin: .1rem 0 .25rem; font-size: clamp(1.4rem, 3vw, 2.35rem); line-height: 1.16; overflow-wrap: anywhere; }
+    .archivo { margin: 0; color: #cfdee9; font-size: .88rem; overflow-wrap: anywhere; }
+    .hoja {
+      margin-top: 1rem;
+      overflow: hidden;
+      border: 1px solid var(--linea);
+      border-radius: 1.1rem;
+      background: #fff;
+      box-shadow: 0 6px 24px #1634480a;
+    }
+    .controles {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem 1.25rem;
+      padding: .9rem 1.1rem;
+    }
+    form { display: flex; flex-wrap: wrap; align-items: center; gap: .55rem; min-width: 0; max-width: 100%; }
+    label { font-weight: 700; }
+    select, button { min-height: 2.4rem; padding: .35rem .65rem; border-radius: .55rem; font: inherit; }
+    select { max-width: min(100%, 22rem); border: 1px solid #b9cbd3; background: white; color: var(--texto); }
+    button { border: 1px solid var(--verde); background: var(--verde); color: white; font-weight: 650; cursor: pointer; }
+    button:hover { background: #084c3d; }
+    :focus-visible { outline: 2px solid #08745a; outline-offset: 3px; }
+    .tabla:focus-visible { outline-offset: -3px; }
+    .alcance { margin: 0; color: var(--secundario); font-size: .83rem; }
+    .tabla { max-height: 68vh; overflow: auto; border-block-start: 1px solid var(--linea); scrollbar-color: #97aeb8 #eef3f5; }
+    table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: .88rem; }
+    th, td { padding: .55rem .8rem; border-inline-end: 1px solid var(--linea); border-block-end: 1px solid var(--linea); }
+    thead th { position: sticky; top: 0; z-index: 2; background: var(--encabezado); color: #215847; font-weight: 700; }
+    thead th:first-child, tbody th { position: sticky; left: 0; min-width: 2.8rem; text-align: right; font-variant-numeric: tabular-nums; }
+    thead th:first-child { z-index: 3; }
+    tbody th { z-index: 1; background: #eff4f6; color: var(--secundario); }
+    td { min-width: 8.5rem; max-width: 20rem; background: #fff; white-space: pre-wrap; overflow-wrap: anywhere; vertical-align: top; }
+    tbody tr:nth-child(even) td { background: #f7fafb; }
+    tbody tr:hover td { background: #ecf7f1; }
+    .nota { margin: 0; padding: .75rem 1.1rem; color: var(--secundario); font-size: .83rem; }
+    .error { margin: 1rem 0 0; padding: 1rem; border: 1px solid #e9c8ad; border-radius: .85rem; background: #fff8ef; color: #793813; }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="cabecera">
+      <div class="icono" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="2"></rect>
+          <path d="M3.5 9.5h17m-11 0v10m5-10v10m-11-5h17"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="du">DU{{ entregable.servicio.du }}</div>
+        <h1>{{ entregable.titulo }}</h1>
+        <p class="archivo">{{ entregable.nombre_original }}</p>
+      </div>
+    </header>
+
+    {% if error %}
+      <p class="error" role="alert">{{ error }} Puedes descargar el archivo desde «Ver entregables».</p>
+    {% else %}
+      <section class="hoja" aria-label="Vista previa de Excel">
+        <div class="controles">
+          <form method="get">
+            <label for="hoja">Hoja</label>
+            <select id="hoja" name="hoja">
+              {% for hoja in hojas %}
+                <option value="{{ hoja }}"{% if hoja == hoja_actual %} selected{% endif %}>{{ hoja }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit">Ver hoja</button>
+          </form>
+          <p class="alcance" id="alcance">Vista previa de hasta 100 filas y 30 columnas</p>
+        </div>
+        {% if filas %}
+          <div class="tabla" role="region" aria-label="Celdas de {{ hoja_actual }}" tabindex="0">
+            <table aria-describedby="alcance">
+              <thead>
+                <tr>
+                  <th scope="col" aria-label="Número de fila">#</th>
+                  {% for columna in columnas %}<th scope="col">{{ columna }}</th>{% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                {% for fila in filas %}
+                  <tr>
+                    <th scope="row">{{ forloop.counter }}</th>
+                    {% for celda in fila %}<td>{{ celda }}</td>{% endfor %}
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="nota">La hoja está vacía.</p>
+        {% endif %}
+        <p class="nota">Para ver las fotos, los gráficos y el formato original, descarga el archivo desde «Ver entregables».</p>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

@@ -82,6 +82,8 @@
         </div>
 
         <div
+          id="conteo-servicios-tecnico"
+          aria-live="polite"
           class="
             inline-flex
             w-fit
@@ -238,10 +240,11 @@
           class="
             grid
             grid-cols-1
+            max-w-5xl
             gap-3
             sm:grid-cols-2
-            lg:grid-cols-4
-            xl:grid-cols-7
+            items-end
+            lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.65fr)_minmax(0,1.25fr)_minmax(0,1.25fr)_auto]
           "
         >
 
@@ -274,7 +277,7 @@
                 rounded-xl
                 border border-slate-300
                 bg-white
-                px-3 py-2.5
+                px-2.5 py-2
                 text-sm
                 text-slate-800
                 shadow-sm
@@ -317,7 +320,7 @@
                 rounded-xl
                 border border-slate-300
                 bg-white
-                px-3 py-2.5
+                px-2.5 py-2
                 text-sm
                 text-slate-800
                 shadow-sm
@@ -360,7 +363,7 @@
                 rounded-xl
                 border border-slate-300
                 bg-white
-                px-3 py-2.5
+                px-2.5 py-2
                 text-sm
                 text-slate-800
                 shadow-sm
@@ -400,7 +403,7 @@
                 rounded-xl
                 border border-slate-300
                 bg-white
-                px-3 py-2.5
+                px-2.5 py-2
                 text-sm
                 text-slate-800
                 shadow-sm
@@ -431,92 +434,6 @@
 
           </div>
 
-          <!-- ID New -->
-          <div>
-
-            <label
-              for="filter-id-new"
-              class="
-                mb-1
-                block
-                text-[11px]
-                font-extrabold
-                uppercase
-                tracking-wide
-                text-slate-500
-              "
-            >
-              ID New
-            </label>
-
-            <input
-              id="filter-id-new"
-              type="text"
-              name="id_new"
-              value="{{ filtros.id_new }}"
-              placeholder="Ej. CL-05..."
-              class="
-                w-full
-                rounded-xl
-                border border-slate-300
-                bg-white
-                px-3 py-2.5
-                text-sm
-                text-slate-800
-                shadow-sm
-                outline-none
-                transition
-                focus:border-cyan-400
-                focus:ring-2
-                focus:ring-cyan-100
-              "
-            >
-
-          </div>
-
-          <!-- Detalle -->
-          <div>
-
-            <label
-              for="filter-detalle"
-              class="
-                mb-1
-                block
-                text-[11px]
-                font-extrabold
-                uppercase
-                tracking-wide
-                text-slate-500
-              "
-            >
-              Detalle tarea
-            </label>
-
-            <input
-              id="filter-detalle"
-              type="text"
-              name="detalle"
-              value="{{ filtros.detalle }}"
-              placeholder="Buscar tarea"
-              class="
-                w-full
-                rounded-xl
-                border border-slate-300
-                bg-white
-                px-3 py-2.5
-                text-sm
-                text-slate-800
-                shadow-sm
-                outline-none
-                transition
-                focus:border-cyan-400
-                focus:ring-2
-                focus:ring-cyan-100
-              "
-            >
-
-          </div>
-
           <!-- Estado -->
           <div>
 
@@ -543,7 +460,7 @@
                 rounded-xl
                 border border-slate-300
                 bg-white
-                px-3 py-2.5
+                px-2.5 py-2
                 text-sm
                 text-slate-800
                 shadow-sm
@@ -574,20 +491,17 @@
 
           </div>
 
-        </div>
-
-        <div class="flex flex-wrap items-center justify-end gap-2">
-
           <a
             href="{% url 'operaciones:mis_servicios_tecnico' %}"
             class="
               inline-flex
               items-center
               justify-center
+              justify-self-end
               rounded-xl
               border border-slate-300
               bg-white
-              px-4 py-2.5
+              px-3 py-2
               text-sm
               font-bold
               text-slate-600
@@ -599,34 +513,10 @@
             Limpiar
           </a>
 
-          <button
-            type="submit"
-            class="
-              inline-flex
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              border border-cyan-200
-              bg-gradient-to-r
-              from-cyan-600
-              to-blue-600
-              px-5 py-2.5
-              text-sm
-              font-black
-              text-white
-              shadow-md
-              transition
-              hover:-translate-y-0.5
-              hover:shadow-lg
-            "
-          >
-            🔎 Aplicar filtros
-          </button>
-
         </div>
 
       </form>
+      <p id="estado-filtros-tecnico" role="status" class="text-xs text-slate-600"></p>
 
     </div>
 
@@ -634,7 +524,9 @@
     <!-- TABLA -->
     <!-- ==================================================== -->
 
-    <div class="w-full overflow-x-auto">
+    <div id="resultados-servicios-tecnico" class="min-w-0 w-full" aria-busy="false">
+    <div id="tabla-servicios-desplazable" class="w-full overflow-x-auto" role="region"
+         aria-label="Tabla de actividades asignadas" tabindex="0">
 
   <table
     class="
@@ -1010,7 +902,7 @@
                           hover:bg-sky-100
                         "
                       >
-                        📷 Subir fotos
+                        📷 Fotos y entregables
                       </a>
 
                     {% endif %}
@@ -1399,6 +1291,7 @@
       </div>
 
     {% endif %}
+    </div>
 
   </div>
 
@@ -1415,8 +1308,8 @@
       + location.pathname;
 
     function zone() {
-      return document.querySelector(
-        ".overflow-x-auto"
+      return document.getElementById(
+        "tabla-servicios-desplazable"
       );
     }
 
@@ -1533,29 +1426,74 @@
       }
     );
 
-    const cantidadSelect =
-      document.getElementById(
-        "cantidad"
-      );
-
-    if (cantidadSelect) {
-      cantidadSelect.addEventListener(
-        "change",
-        function () {
-          const form =
-            document.getElementById(
-              "excel-filter-form"
-            );
-
-          if (form) {
-            form.submit();
-          }
-        }
-      );
-    }
   })();
 </script>
 
+<script>
+  (() => {
+    const form = document.getElementById("excel-filter-form");
+    const resultados = document.getElementById("resultados-servicios-tecnico");
+    const conteo = document.getElementById("conteo-servicios-tecnico");
+    const estado = document.getElementById("estado-filtros-tecnico");
+    let espera;
+    let consulta;
+
+    async function filtrar() {
+      consulta?.abort();
+      const actual = new AbortController();
+      consulta = actual;
+      const url = new URL(form.action, location.href);
+      url.search = new URLSearchParams(new FormData(form)).toString();
+      resultados.setAttribute("aria-busy", "true");
+      estado.textContent = "";
+
+      try {
+        const respuesta = await fetch(url, {
+          signal: actual.signal, headers: {"Accept": "text/html"},
+        });
+        if (!respuesta.ok || respuesta.redirected) throw new Error();
+        const pagina = new DOMParser().parseFromString(await respuesta.text(), "text/html");
+        if (actual.signal.aborted) return;
+        const nuevos = pagina.getElementById(resultados.id);
+        const nuevoConteo = pagina.getElementById(conteo.id);
+        if (!nuevos || !nuevoConteo) throw new Error();
+
+        const horizontal = document.getElementById("tabla-servicios-desplazable")?.scrollLeft || 0;
+        resultados.replaceChildren(...nuevos.childNodes);
+        conteo.replaceChildren(...nuevoConteo.childNodes);
+        const tabla = document.getElementById("tabla-servicios-desplazable");
+        if (tabla) tabla.scrollLeft = horizontal;
+        window.history.replaceState(window.history.state, "", url);
+        document.dispatchEvent(new Event("gz:servicios-tecnico-actualizados"));
+      } catch {
+        if (!actual.signal.aborted) {
+          estado.textContent = "No se pudieron actualizar los resultados. Modifica un filtro para reintentar.";
+        }
+      } finally {
+        if (consulta === actual) resultados.setAttribute("aria-busy", "false");
+      }
+    }
+
+    function programar(delay) {
+      clearTimeout(espera);
+      consulta?.abort();
+      if (delay) espera = setTimeout(filtrar, delay);
+      else filtrar();
+    }
+
+    form.addEventListener("input", evento => {
+      if (!evento.isComposing && evento.target.matches("input")) programar(300);
+    });
+    form.addEventListener("compositionend", () => programar(300));
+    form.addEventListener("change", evento => {
+      if (evento.target.matches("select")) programar(0);
+    });
+    form.addEventListener("submit", evento => {
+      evento.preventDefault();
+      programar(0);
+    });
+  })();
+</script>
 
 <!-- ======================================================== -->
 <!-- GZ SERVICES — GOOGLE MAPS / WAZE                         -->
@@ -1984,6 +1922,8 @@
     saveVisibility(!isVisible());
     applyVisibility();
   });
+
+  document.addEventListener("gz:servicios-tecnico-actualizados", applyVisibility);
 
   if (document.readyState === "loading") {
     document.addEventListener(

@@ -1,0 +1,113 @@
+<section id="requerimientos-entregables" class="scroll-mt-32 rounded-2xl border border-sky-200 bg-white p-4 shadow-sm sm:p-5">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <h2 class="text-lg font-semibold text-slate-900">Requerimientos de entregables</h2>
+    <span id="conteo-requerimientos-entregables" class="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-sky-800">
+      {{ requerimientos_entregables|length }} solicitado{{ requerimientos_entregables|length|pluralize }}
+    </span>
+  </div>
+
+  <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
+    <h3 class="text-sm font-semibold text-slate-900">Nueva solicitud</h3>
+    <form id="solicitud-entregable" method="post" enctype="multipart/form-data"
+          data-sugerencias-url="{% url 'operaciones:sugerir_requerimientos_entregables' %}"
+          action="{% url 'operaciones:solicitar_entregable' servicio.pk %}"
+          class="mt-3 grid items-start gap-3 text-sm sm:grid-cols-2 [&_input]:w-full [&_input]:rounded-lg [&_input]:border [&_input]:border-slate-300 [&_input]:px-2 [&_input]:py-1.5 [&_select]:w-full [&_select]:rounded-lg [&_select]:border [&_select]:border-slate-300 [&_select]:px-2 [&_select]:py-1.5 [&_textarea]:w-full [&_textarea]:rounded-lg [&_textarea]:border [&_textarea]:border-slate-300 [&_textarea]:px-2 [&_textarea]:py-1.5">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next_url }}">
+      {% for campo in form_requerimiento_entregable %}
+        {% if campo.name == 'extensiones' %}
+          <fieldset class="min-w-0 sm:col-span-2">
+            <legend class="mb-1 font-medium text-slate-700">{{ campo.label }}</legend>
+            <details class="rounded-lg border border-slate-300 bg-white px-2 py-1.5">
+              <summary id="resumen-extensiones-entregable" class="cursor-pointer text-slate-700">Cualquier formato documental</summary>
+              <div class="mt-2 grid grid-cols-3 gap-y-1 sm:grid-cols-5 lg:grid-cols-8">
+                {% for opcion in campo %}
+                  <label for="{{ opcion.id_for_label }}" class="flex items-center gap-1.5 text-xs text-slate-700 [&_input]:!w-auto">
+                    {{ opcion.tag }} {{ opcion.choice_label }}
+                  </label>
+                {% endfor %}
+              </div>
+            </details>
+          </fieldset>
+        {% else %}
+        <div class="min-w-0 {% if campo.name == 'instrucciones' %}sm:col-span-2{% endif %}">
+          <label for="{{ campo.id_for_label }}" class="mb-1 block font-medium text-slate-700">
+            {% if campo.name == 'obligatorio' %}
+              <span class="inline-flex items-center gap-2 [&_input]:w-auto">{{ campo }} {{ campo.label }}</span>
+            {% else %}
+              {{ campo.label }}
+            {% endif %}
+          </label>
+          {% if campo.name == 'titulo' %}
+            <div id="selector-nombres-requerimientos" class="relative">
+              <div class="flex gap-1 [&_input]:min-w-0">
+                {{ campo }}
+                <button id="abrir-nombres-requerimientos" type="button" aria-label="Mostrar nombres guardados"
+                        aria-controls="nombres-requerimientos" aria-expanded="false"
+                        class="shrink-0 rounded-lg border border-slate-300 bg-white px-3 text-slate-700 hover:bg-sky-50">
+                  <span aria-hidden="true">▾</span>
+                </button>
+              </div>
+              <div id="nombres-requerimientos" hidden
+                   class="absolute inset-x-0 z-20 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg"
+                   aria-label="Nombres guardados"></div>
+            </div>
+          {% elif campo.name != 'obligatorio' %}
+            {{ campo }}
+          {% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      <div class="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+        <p class="text-xs text-slate-600">Puedes elegir un formato reutilizable o adjuntar un nuevo ejemplo para reutilizarlo en otros servicios.</p>
+        <button type="submit" class="rounded-lg bg-sky-700 px-3 py-2 font-semibold text-white hover:bg-sky-800">
+          Solicitar entregable
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <p id="estado-requerimientos-entregables" class="mt-2 text-sm text-slate-700 empty:m-0" role="status"></p>
+  <ul id="lista-requerimientos-entregables" class="mt-3 grid gap-3 lg:grid-cols-2">
+    {% for requisito in requerimientos_entregables %}
+      <li class="min-w-0 rounded-xl border border-slate-200 border-l-4 {% if requisito.entrega %}border-l-emerald-500{% else %}border-l-amber-500{% endif %} bg-white px-3 py-3 text-sm">
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <h3 class="min-w-0 flex-1 font-semibold text-slate-900 [overflow-wrap:anywhere]">{{ requisito.titulo }}</h3>
+          <div class="flex shrink-0 items-center gap-2">
+          {% if requisito.entrega %}
+            <span class="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">Entregado</span>
+          {% else %}
+            <span class="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">Pendiente</span>
+          {% endif %}
+            <button type="button"
+                    data-quitar-requisito="{% url 'operaciones:quitar_requerimiento_entregable' servicio.pk requisito.pk %}"
+                    aria-label="Quitar {{ requisito.titulo }}" title="Quitar requerimiento"
+                    class="rounded-md px-1.5 py-1 text-red-700 hover:bg-red-50 focus-visible:ring-2 focus-visible:ring-red-500">
+              <span aria-hidden="true">🗑</span>
+            </button>
+          </div>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-700">
+          <span class="rounded bg-sky-50 px-2 py-0.5 font-medium text-sky-800">
+            {% if requisito.extension %}{{ requisito.extensiones|join:", "|upper }}{% else %}Cualquier formato documental{% endif %}
+          </span>
+          <span class="rounded bg-slate-100 px-2 py-0.5">{% if requisito.obligatorio %}Obligatorio{% else %}Opcional{% endif %}</span>
+        </div>
+        {% if requisito.instrucciones %}
+          <p class="mt-2 whitespace-pre-wrap text-sm text-slate-700 [overflow-wrap:anywhere]">{{ requisito.instrucciones }}</p>
+        {% endif %}
+        {% if requisito.formato %}
+          <p class="mt-2 text-xs text-slate-600 [overflow-wrap:anywhere]"><strong>Ejemplo</strong> · {{ requisito.formato.nombre }}</p>
+        {% endif %}
+        {% if requisito.entrega %}
+          <p class="mt-2 text-xs text-slate-600 [overflow-wrap:anywhere]"><strong>Archivo recibido</strong> · {{ requisito.entrega.nombre_original }}</p>
+        {% endif %}
+      </li>
+    {% endfor %}
+    <li id="requerimientos-entregables-vacio" {% if requerimientos_entregables %}hidden{% endif %}
+        class="rounded-xl border border-dashed border-slate-300 p-3 text-sm text-slate-600 lg:col-span-2">
+      Aún no hay entregables solicitados para este servicio.
+    </li>
+  </ul>
+
+</section>

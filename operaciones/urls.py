@@ -4,7 +4,7 @@ from django.urls import path
 
 from . import views
 from . import views_catalogos_sitios
-from . import views_fotos
+from . import views_entregables, views_fotos
 from . import views_fotos as fotos
 from . import views_produccion as produc
 from . import views_resumen, views_tarifas
@@ -159,6 +159,66 @@ urlpatterns = [
         name="fotos_revisar_sesion",
     ),
     # Requisitos de fotos
+    path(
+        "entregables/requerimientos/sugerencias/",
+        views_entregables.sugerir_requerimientos_entregables,
+        name="sugerir_requerimientos_entregables",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/requerimientos/<int:requisito_id>/quitar/",
+        views_entregables.quitar_requerimiento_entregable,
+        name="quitar_requerimiento_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/solicitar/",
+        views_entregables.solicitar_entregable,
+        name="solicitar_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/solicitados/",
+        views_entregables.entregables_del_tecnico,
+        name="entregables_del_tecnico",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/solicitados/<int:requisito_id>/adjuntar/",
+        views_entregables.entregar_requerimiento,
+        name="entregar_requerimiento",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/solicitados/<int:requisito_id>/ejemplo/",
+        views_entregables.ejemplo_entregable,
+        name="ejemplo_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/archivo/<int:entregable_id>/quitar/",
+        views_entregables.quitar_entrega_tecnico,
+        name="quitar_entrega_tecnico",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/archivo/<int:entregable_id>/<str:accion>/",
+        views_entregables.abrir_entrega_tecnico,
+        name="abrir_entrega_tecnico",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/adjuntar/",
+        views_entregables.adjuntar_entregable,
+        name="adjuntar_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/<int:entregable_id>/descargar/",
+        views_entregables.descargar_entregable,
+        name="descargar_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/<int:entregable_id>/eliminar/",
+        views_entregables.eliminar_entregable,
+        name="eliminar_entregable",
+    ),
+    path(
+        "servicios/<int:servicio_id>/entregables/<int:entregable_id>/visualizar/",
+        views_entregables.visualizar_entregable,
+        name="visualizar_entregable",
+    ),
     path(
         "servicios/<int:servicio_id>/fotos/requisitos/",
         fotos.configurar_requisitos,

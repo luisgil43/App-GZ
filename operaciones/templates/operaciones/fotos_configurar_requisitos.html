@@ -7,20 +7,42 @@ Configurar Requerimientos — DU{{ servicio.du }}
 
 {% block dashboard_content %}
 
-<div class="max-w-5xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+<div class="mx-auto mt-5 max-w-7xl space-y-5 px-3 pb-6 sm:px-5">
 
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-2xl font-bold text-gray-800">
-      📸 Configurar Requerimientos — DU{{ servicio.du }}
-      ({{ servicio.id_claro }})
-    </h2>
-
-    <a href="{{ next_url }}"
-       class="text-sm text-gray-600 hover:underline">
-      ← Volver a la lista
-    </a>
+  <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gradient-to-r from-slate-900 to-sky-900 p-5 text-white shadow-sm">
+    <div>
+      <p class="text-xs font-semibold tracking-wide text-sky-200">DU{{ servicio.du }}{% if servicio.id_claro %} · {{ servicio.id_claro }}{% endif %}</p>
+      <h1 class="mt-1 text-2xl font-bold">Configurar requerimientos</h1>
+    </div>
+    <div class="flex flex-wrap gap-2 text-sm font-semibold">
+      <a href="{% url 'operaciones:fotos_revisar_sesion' servicio.pk %}?next={{ next_url|urlencode }}"
+         class="rounded-lg border border-sky-200 bg-white px-3 py-2 text-sky-900 hover:bg-sky-50">
+        🔎 Ir a revisión fotográfica
+      </a>
+      <a href="{{ next_url }}" class="rounded-lg border border-sky-700 px-3 py-2 text-white hover:bg-sky-800">← Volver</a>
+    </div>
   </div>
 
+  <nav aria-label="Secciones de requerimientos" class="flex flex-wrap gap-2 text-sm font-semibold">
+    <a href="#requerimientos-entregables" class="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sky-800">📎 Entregables</a>
+    <a href="#requerimientos-fotos" class="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-indigo-800">📸 Fotos</a>
+    <a class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+       href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}?next={{ next_url|urlencode }}">📥 Importar CSV o XLSX</a>
+  </nav>
+
+  {% include "operaciones/_requerimientos_entregables_admin.html" %}
+  {% if form_requerimiento_entregable %}
+    <script src="{% static 'js/entregables-servicio.js' %}" defer></script>
+  {% endif %}
+
+  <section id="requerimientos-fotos" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5" aria-labelledby="titulo-requerimientos-fotos">
+  <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <h2 id="titulo-requerimientos-fotos" class="text-lg font-semibold text-slate-900">Requerimientos de fotos</h2>
+    <div class="flex flex-wrap gap-2 text-sm font-semibold">
+      <a id="descargar-excel-requerimientos" href="?formato=excel"
+         class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-800 hover:bg-emerald-100">📊 Descargar Excel</a>
+    </div>
+  </div>
   <form method="post"
         action="?next={{ next_url|urlencode }}"
         class="space-y-4"
@@ -50,25 +72,6 @@ Configurar Requerimientos — DU{{ servicio.du }}
       </span>
 
     </label>
-
-    <!-- IMPORTAR -->
-
-    <div class="flex flex-wrap gap-2 items-center">
-
-      <a class="px-3 py-1.5 rounded-full text-sm border hover:bg-gray-50"
-         href="{% url 'operaciones:fotos_import_requirements_page' servicio.id %}?next={{ next_url|urlencode }}">
-
-        📥 Importar (CSV/XLSX)
-
-      </a>
-      <a id="descargar-excel-requerimientos"
-         href="?formato=excel"
-         class="px-3 py-1.5 rounded-full text-sm border bg-emerald-600 text-white hover:bg-emerald-700">
-        📊 Descargar Excel
-      </a>
-
-
-    </div>
 
     <p id="requirement-delete-error" role="alert" class="text-sm text-red-700" hidden></p>
 
@@ -449,6 +452,7 @@ Configurar Requerimientos — DU{{ servicio.du }}
     </div>
 
   </form>
+  </section>
 
 </div>
 

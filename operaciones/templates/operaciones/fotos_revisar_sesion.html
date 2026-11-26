@@ -1,5 +1,5 @@
 {% extends "dashboard_admin/base.html" %}
-{% load humanize l10n %}
+{% load humanize l10n static %}
 
 
 {% block title %}Revisión fotográfica{% endblock %}
@@ -8,6 +8,16 @@
 
 {% with s=servicio %}
 <div class="max-w-7xl mx-auto bg-white p-6 rounded-2xl shadow mt-6">
+
+  <nav aria-label="Navegación de revisión" class="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium">
+    <a href="{{ next_url }}" class="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 hover:underline">
+      <span aria-hidden="true">←</span> Volver
+    </a>
+    <a href="{% url 'operaciones:fotos_configurar_requisitos' s.id %}?next={{ request.get_full_path|urlencode }}#requerimientos-entregables"
+       class="inline-flex items-center gap-1 text-sky-800 hover:underline">
+      <span aria-hidden="true">📋</span> Ir a requerimientos
+    </a>
+  </nav>
 
   <!-- Encabezado -->
   <div class="mb-4">
@@ -34,12 +44,6 @@
 <!-- Acciones -->
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
   <div class="flex flex-wrap gap-2">
-<a href="{{ next_url }}"
-   class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded shadow inline-flex items-center gap-1">
-  ⬅️ Volver
-</a>
-
-
     {# ✅ Acta (PDF): SIEMPRE visible, esté o no aprobado #}
    <a href="{% url 'operaciones:generar_acta_preview' s.id %}?force=1&save=1"
    target="_blank" rel="noopener"
@@ -57,6 +61,10 @@
     {% if puede_agregar_referencia %}
       {% include "operaciones/_ubicacion_referencia_panel.html" %}
     {% endif %}
+    <button id="ver-entregables" type="button" aria-haspopup="dialog" aria-controls="entregables"
+       class="inline-flex items-center px-4 py-2 rounded border border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100">
+      📎 Ver entregables
+    </button>
   </div>
 
 
@@ -66,8 +74,8 @@
   {% csrf_token %}
   <input type="hidden" name="accion" value="aprobar">
   <input type="hidden" name="next" value="{{ next_url }}">
-  <button type="submit"
-          class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow">
+  <button id="aprobar-revision" type="submit" {% if entregables_pendientes %}disabled{% endif %}
+          class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow disabled:cursor-not-allowed disabled:opacity-50">
     ✅ Aprobar & generar reporte
   </button>
 </form>
@@ -86,6 +94,103 @@
 </div>
 
 
+
+<section class="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3"
+         aria-labelledby="titulo-adjuntar-entregable">
+  <h2 id="titulo-adjuntar-entregable" class="text-sm font-semibold text-gray-900">Adjuntar entregable</h2>
+
+  <form id="form-entregable" method="post" enctype="multipart/form-data"
+        action="{% url 'operaciones:adjuntar_entregable' s.id %}"
+        class="mt-2 grid items-end gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+    {% csrf_token %}
+    <div class="min-w-0">
+      <label for="entregable-requerimiento" class="block text-sm font-medium text-gray-700">Vincular a requerimiento</label>
+      <select id="entregable-requerimiento" name="requerimiento"
+              class="mt-0.5 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm">
+        <option value="">Adjunto libre · Solo Administración</option>
+        {% for requisito in requerimientos_entregables %}
+          <option value="{{ requisito.pk }}" data-extension="{% if requisito.extensiones %}.{{ requisito.extensiones|join:",." }}{% endif %}" {% if requisito.entrega %}disabled{% endif %}>
+            {{ requisito.titulo }}{% if requisito.extension %} · {{ requisito.extensiones|join:", "|upper }}{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="min-w-0">
+      <label for="entregable-titulo" class="block text-sm font-medium text-gray-700">Nombre del entregable</label>
+      <input id="entregable-titulo" name="titulo" required maxlength="{{ entregable_titulo_max_length }}"
+             placeholder="Ej. Informe de cálculo"
+             class="mt-0.5 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm">
+    </div>
+    <div class="min-w-0">
+      <label for="entregable-archivo" class="block text-sm font-medium text-gray-700">Archivo</label>
+      <input id="entregable-archivo" name="archivo" type="file" required
+             aria-describedby="entregable-formatos"
+             accept="{{ entregable_extensiones }}"
+             class="mt-0.5 w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm">
+    </div>
+    <button type="submit" class="rounded-lg bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-800">
+      Adjuntar archivo
+    </button>
+  </form>
+  <p id="entregable-formatos" class="mt-1.5 text-[11px] leading-snug text-slate-600">
+    <span class="font-semibold">Formatos admitidos</span>
+    <span>{{ entregable_formatos|join:", "|upper }}</span>
+  </p>
+  <div class="flex flex-wrap items-center gap-2 text-xs text-slate-700">
+    <span id="entregable-espera" aria-hidden="true" hidden
+          class="h-4 w-4 animate-spin rounded-full border-2 border-sky-700 border-t-transparent"></span>
+    <progress id="entregable-progreso" max="100" aria-label="Progreso de subida" hidden></progress>
+    <span id="entregable-estado" role="status" class="mt-1 empty:m-0"></span>
+  </div>
+</section>
+
+{% if requerimientos_entregables %}
+  <section aria-labelledby="entregables-revision-titulo" class="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="entregables-revision-titulo" class="font-semibold text-slate-900">Requerimientos de entregables</h2>
+      <span id="entregables-pendientes" class="text-sm text-slate-600">{{ entregables_pendientes }} obligatorios pendientes</span>
+    </div>
+    <ul class="mt-2 divide-y divide-indigo-100 rounded-lg bg-white px-3 text-sm">
+      {% for requisito in requerimientos_entregables %}
+        <li class="flex flex-wrap items-center justify-between gap-2 py-2"
+            data-revision-requisito="{{ requisito.pk }}" data-obligatorio="{{ requisito.obligatorio|yesno:'si,no' }}">
+          <div class="min-w-0 [overflow-wrap:anywhere]">
+            <p class="font-semibold text-slate-900">{{ requisito.titulo }}</p>
+            <p class="text-xs text-slate-600">
+              {% if requisito.extension %}{{ requisito.extensiones|join:", "|upper }}{% else %}Documento{% endif %}
+              · {% if requisito.obligatorio %}Obligatorio{% else %}Opcional{% endif %}
+            </p>
+          </div>
+          <button type="button" data-revision-abrir="{{ requisito.pk }}" {% if not requisito.entrega %}hidden{% endif %}
+                  class="rounded-lg border border-sky-200 bg-sky-50 px-2 py-1 font-semibold text-sky-800 hover:bg-sky-100">
+            Ver entregable
+          </button>
+          <span data-revision-pendiente {% if requisito.entrega %}hidden{% endif %}
+                class="rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-900">Pendiente</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+
+<dialog id="entregables" aria-labelledby="titulo-entregables"
+        class="m-auto max-h-[85vh] w-11/12 max-w-4xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl backdrop:bg-slate-900/50 sm:p-5">
+  <div class="flex items-center justify-between gap-3 border-b border-slate-200 pb-3">
+    <h2 id="titulo-entregables" class="font-semibold text-slate-900">Entregables del proyecto</h2>
+    <button id="cerrar-entregables" type="button" autofocus
+            class="rounded-lg bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-sky-800 focus-visible:ring-2 focus-visible:ring-sky-600 focus-visible:ring-offset-2">
+      Cerrar
+    </button>
+  </div>
+  <p id="entregables-estado" class="mt-2 text-sm text-slate-600 empty:m-0" role="status"></p>
+  <ul id="lista-entregables" class="divide-y divide-gray-200 text-sm">
+    {% for entregable in entregables %}
+      {% include "operaciones/_entregable_fila.html" %}
+    {% endfor %}
+    <li id="entregables-vacio" class="py-3 text-gray-600" {% if entregables %}hidden{% endif %}>Aún no hay entregables adjuntos.</li>
+  </ul>
+</dialog>
+<script src="{% static 'js/entregables-servicio.js' %}" defer></script>
 
 <!-- gz-admin-stages-v1 -->
 <div class="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
