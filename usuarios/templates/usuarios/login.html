@@ -618,8 +618,7 @@
       transition:
         border-color 0.18s ease,
         background 0.18s ease,
-        box-shadow 0.18s ease,
-        transform 0.18s ease;
+        box-shadow 0.18s ease;
     }
 
     form input::placeholder {
@@ -644,8 +643,6 @@
         0 0 23px rgba(111, 219, 224, 0.10),
         inset 0 1px 7px rgba(0, 0, 0, 0.31);
 
-      transform:
-        translateY(-1px);
     }
 
     /* ====================================================== */
@@ -994,7 +991,13 @@
 
       form input[type="text"],
       form input[type="password"] {
+        -webkit-appearance: none;
+        appearance: none;
+        display: block;
         height: 48px;
+        font-size: 16px;
+        line-height: 24px;
+        caret-color: #a5f3fc;
       }
 
       .footer img {
