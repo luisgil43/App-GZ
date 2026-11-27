@@ -632,6 +632,20 @@ class EntregableServicioTests(TestCase):
         ver = reverse("operaciones:abrir_entrega_tecnico", args=[self.servicio.pk, libre.pk, "visualizar"])
         self.assertEqual(self.client.get(ver).status_code, 404)
 
+    def test_borrado_supervisor_responde_json_y_conserva_archivo_compartido(self):
+        asignacion = self.asignar_tecnico_en_proceso()
+        ruta = "fotos/compartida.jpg"
+        primera = EvidenciaFoto.objects.create(tecnico_sesion=asignacion, imagen=ruta)
+        segunda = EvidenciaFoto.objects.create(tecnico_sesion=asignacion, imagen=ruta)
+        url = reverse("operaciones:fotos_borrar_evidencia_supervisor", args=[primera.pk])
+        campo = EvidenciaFoto._meta.get_field("imagen")
+        with patch.object(campo, "storage", self.almacen), patch.object(self.almacen, "delete") as borrar:
+            respuesta = self.client.post(url, HTTP_X_CSRFTOKEN=self.token, HTTP_ACCEPT="application/json")
+            borrar.assert_not_called()
+        self.assertEqual(respuesta.json(), {"ok": True})
+        self.assertFalse(EvidenciaFoto.objects.filter(pk=primera.pk).exists())
+        self.assertTrue(EvidenciaFoto.objects.filter(pk=segunda.pk).exists())
+
     def test_fotos_extra_dependen_de_proyecto_especial_sin_bloquear_las_etapas(self):
         rol, _ = Rol.objects.get_or_create(nombre="usuario")
         self.tecnico.roles.add(rol)

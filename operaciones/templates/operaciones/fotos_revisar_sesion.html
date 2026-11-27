@@ -192,8 +192,8 @@
 </dialog>
 <script src="{% static 'js/entregables-servicio.js' %}" defer></script>
 
-<!-- gz-admin-stages-v1 -->
-<div class="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
+<p id="estado-revision-fotos" class="sr-only" role="status"></p>
+<div id="admin-progreso-fotos" class="mb-5 p-4 rounded-xl border border-gray-200 bg-gray-50">
 
   <div class="font-semibold text-gray-900">
     📸 Progreso fotográfico del servicio
@@ -360,7 +360,7 @@
 
                   {% for item in requisito.evidencias %}
 
-  <figure class="border rounded p-2 relative">
+  <figure data-evidencia-id="{{ item.foto.pk }}" class="border rounded p-2 relative">
     <div class="relative rounded overflow-hidden bg-black/5">
  {% if item.foto.lat and item.foto.lng %}
   <div class="absolute top-2 left-2 z-10">
@@ -485,7 +485,7 @@
 
           {% for item in extras_revision %}
 
-  <figure class="border rounded p-2 relative">
+  <figure data-evidencia-id="{{ item.foto.pk }}" class="border rounded p-2 relative">
     <div class="relative rounded overflow-hidden bg-black/5">
  {% if item.foto.lat and item.foto.lng %}
   <div class="absolute top-2 left-2 z-10">
@@ -632,6 +632,7 @@
 
       <p class="mt-1 text-sm text-gray-600">¿Seguro que deseas eliminar esta foto? Esta acción no se puede deshacer.</p>
 
+      <p id="error-borrado-foto" class="text-sm text-red-700" role="alert"></p>
       <form id="delete-form" method="post" class="mt-4">
         {% csrf_token %}
         <div class="flex justify-end gap-2">
@@ -648,8 +649,6 @@
 
 
 <script>
-  const claveRetornoBorrado = "gz-revision-borrado:" + window.location.pathname;
-
   // Modal Eliminar
   document.addEventListener('DOMContentLoaded', function () {
     const modal    = document.getElementById('delete-modal');
@@ -657,15 +656,19 @@
     const backdrop = document.getElementById('delete-backdrop');
     const cancel   = document.getElementById('delete-cancel');
     const closeBtn = document.getElementById('delete-close');
+    const confirmar = form.querySelector('[type="submit"]');
+    const errorBorrado = document.getElementById('error-borrado-foto');
     let origen;
 
     function openModal(actionUrl) {
       if (!form) return;
+      errorBorrado.textContent = '';
       form.setAttribute('action', actionUrl);
       modal.classList.remove('hidden');
       document.body.classList.add('overflow-hidden');
     }
     function closeModal() {
+      if (confirmar.disabled) return;
       modal.classList.add('hidden');
       document.body.classList.remove('overflow-hidden');
       if (form) form.removeAttribute('action');
@@ -683,15 +686,34 @@
       }
     });
 
-    form?.addEventListener('submit', function () {
+    form.addEventListener('submit', async function (evento) {
+      evento.preventDefault();
+      if (confirmar.disabled) return;
+      confirmar.disabled = true;
+      confirmar.textContent = 'Eliminando…';
+      modal.setAttribute('aria-busy', 'true');
+      errorBorrado.textContent = '';
       try {
-        sessionStorage.setItem(claveRetornoBorrado, JSON.stringify({
-          id: origen?.id,
-          distancia: origen?.getBoundingClientRect().top,
-          scrollY: window.scrollY,
-          consulta: document.getElementById('buscar-requisito-foto')?.value
-        }));
-      } catch (_) {}
+        const respuesta = await fetch(form.action, {
+          method: 'POST', body: new FormData(form),
+          headers: {'Accept': 'application/json'}
+        });
+        const datos = await respuesta.json();
+        if (!respuesta.ok || !datos.ok) {
+          throw new Error(datos.error || 'No se pudo confirmar la eliminación.');
+        }
+        confirmar.disabled = false;
+        closeModal();
+        document.dispatchEvent(new CustomEvent('revision-foto-eliminada', {detail: origen}));
+      } catch (error) {
+        errorBorrado.textContent = error instanceof SyntaxError
+          ? 'No se pudo confirmar la eliminación. Comprueba si tu sesión sigue activa.'
+          : error.message;
+      } finally {
+        confirmar.disabled = false;
+        confirmar.textContent = 'Eliminar';
+        modal.removeAttribute('aria-busy');
+      }
     });
 
     [backdrop, cancel, closeBtn].forEach(function (el) {
@@ -727,7 +749,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
-  const etapas = Array.from(
+  let etapas = Array.from(
     document.querySelectorAll("#admin-revision-etapas details.admin-etapa")
   );
 
@@ -739,7 +761,7 @@ document.addEventListener("DOMContentLoaded", function () {
     .toLocaleLowerCase("es")
     .replace(/\s+/g, " ")
     .trim();
-  const grupos = etapas.map(etapa => ({
+  const obtenerGrupos = () => etapas.map(etapa => ({
     etapa,
     requisitos: Array.from(etapa.querySelectorAll(".admin-requisito"), tarjeta => ({
       tarjeta,
@@ -774,11 +796,11 @@ document.addEventListener("DOMContentLoaded", function () {
   function filtrarRequerimientos() {
     const consulta = normalizar(buscar.value);
     if (consulta && !abiertasAntesDeBuscar) {
-      abiertasAntesDeBuscar = new Set(etapas.filter(etapa => etapa.open));
+      abiertasAntesDeBuscar = new Set(etapas.filter(etapa => etapa.open).map(etapa => etapa.dataset.etapa));
     }
 
     let coincidencias = 0;
-    grupos.forEach(({ etapa, requisitos }) => {
+    obtenerGrupos().forEach(({ etapa, requisitos }) => {
       let hayCoincidencias = false;
       requisitos.forEach(({ tarjeta, titulo }) => {
         const coincide = titulo.includes(consulta);
@@ -790,7 +812,7 @@ document.addEventListener("DOMContentLoaded", function () {
       if (consulta) {
         etapa.open = hayCoincidencias;
       } else if (abiertasAntesDeBuscar) {
-        etapa.open = abiertasAntesDeBuscar.has(etapa);
+        etapa.open = abiertasAntesDeBuscar.has(etapa.dataset.etapa);
       }
     });
 
@@ -802,36 +824,13 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   buscar?.addEventListener("input", filtrarRequerimientos);
-  let retorno;
-  try {
-    retorno = JSON.parse(sessionStorage.getItem(claveRetornoBorrado));
-    sessionStorage.removeItem(claveRetornoBorrado);
-  } catch (_) {}
-  if (retorno && buscar) buscar.value = retorno.consulta || "";
   if (buscar?.value) filtrarRequerimientos();
-  if (retorno) {
-    const destino = document.getElementById(retorno.id);
-    const etapa = destino?.closest("details.admin-etapa");
-    if (etapa) etapa.open = true;
-    requestAnimationFrame(() => {
-      const posicion = destino
-        ? window.scrollY + destino.getBoundingClientRect().top - retorno.distancia
-        : retorno.scrollY;
-      window.scrollTo({ top: posicion, behavior: "instant" });
-    });
-  }
-
-  const toggle = document.getElementById("admin-pendientes-toggle");
-  const panel = document.getElementById("admin-pendientes-panel");
-  const mas = document.getElementById("admin-pendientes-mas");
-
-  const items = Array.from(
-    document.querySelectorAll(".admin-pendiente-item")
-  );
 
   let visibles = 10;
 
   function actualizarLista() {
+    const mas = document.getElementById("admin-pendientes-mas");
+    const items = document.querySelectorAll(".admin-pendiente-item");
     items.forEach((item, index) => {
       item.classList.toggle("hidden", index >= visibles);
     });
@@ -847,28 +846,20 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  if (toggle && panel) {
-    toggle.addEventListener("click", function () {
-      const abrir = panel.classList.contains("hidden");
-
-      panel.classList.toggle("hidden", !abrir);
-      toggle.setAttribute("aria-expanded", abrir ? "true" : "false");
-      toggle.textContent = abrir
-        ? "Ocultar pendientes"
-        : "Ver pendientes";
-    });
-  }
-
-  if (mas) {
-    mas.addEventListener("click", function () {
+  document.addEventListener("click", evento => {
+    const toggle = evento.target.closest("#admin-pendientes-toggle");
+    if (toggle) {
+      const panel = document.getElementById("admin-pendientes-panel");
+      const abrir = panel.classList.toggle("hidden") === false;
+      toggle.setAttribute("aria-expanded", String(abrir));
+      toggle.textContent = abrir ? "Ocultar pendientes" : "Ver pendientes";
+    }
+    if (evento.target.closest("#admin-pendientes-mas")) {
       visibles += 10;
       actualizarLista();
-    });
-  }
-
-  document.querySelectorAll("[data-ir-requisito]").forEach(boton => {
-    boton.addEventListener("click", function () {
-
+    }
+    const boton = evento.target.closest("[data-ir-requisito]");
+    if (boton) {
       const id = boton.dataset.irRequisito;
       const destino = document.getElementById(
         "admin-requisito-" + id
@@ -893,8 +884,84 @@ document.addEventListener("DOMContentLoaded", function () {
           block: "center"
         });
       });
-    });
+    }
   });
+
+  const estadoRevision = document.getElementById("estado-revision-fotos");
+  let consultaActiva;
+  let borradoPendiente = null;
+
+  function firma(etapa) {
+    return JSON.stringify([
+      etapa.textContent.replace(/\s+/g, " ").trim(),
+      Array.from(etapa.querySelectorAll("[data-evidencia-id]"), foto => foto.dataset.evidenciaId)
+    ]);
+  }
+
+  async function actualizarRevision() {
+    if (consultaActiva || document.hidden || !document.getElementById("delete-modal").classList.contains("hidden")) return;
+    const borrado = borradoPendiente;
+    consultaActiva = true;
+    try {
+      const respuesta = await fetch(window.location.href, {cache: "no-store"});
+      if (!respuesta.ok || respuesta.redirected) throw new Error();
+      const pagina = new DOMParser().parseFromString(await respuesta.text(), "text/html");
+      const nuevaLista = pagina.getElementById("admin-revision-etapas");
+      const nuevoProgreso = pagina.getElementById("admin-progreso-fotos");
+      if (!nuevaLista || !nuevoProgreso) throw new Error();
+      if (borradoPendiente !== borrado || !document.getElementById("delete-modal").classList.contains("hidden")) return;
+
+      const lista = document.getElementById("admin-revision-etapas");
+      const progreso = document.getElementById("admin-progreso-fotos");
+      const resumen = nodo => nodo.textContent.replace(/Ocultar pendientes|Ver pendientes|Mostrar 10 más(?: \(\d+ restantes\))?/g, "").replace(/\s+/g, " ").trim();
+      const nuevas = Array.from(nuevaLista.querySelectorAll("details.admin-etapa"));
+      const actuales = new Map(etapas.map(etapa => [etapa.dataset.etapa, etapa]));
+      const ordenIgual = nuevas.length === etapas.length && nuevas.every((etapa, i) => etapa.dataset.etapa === etapas[i].dataset.etapa);
+      const cambioFotos = !ordenIgual || nuevas.some(etapa => firma(etapa) !== firma(actuales.get(etapa.dataset.etapa)));
+      const cambioProgreso = resumen(progreso) !== resumen(nuevoProgreso);
+      const ancla = borrado?.isConnected ? borrado : Array.from(lista.querySelectorAll(".admin-requisito, #admin-fotos-extra"))
+        .find(tarjeta => tarjeta.getClientRects().length && tarjeta.getBoundingClientRect().bottom > 100);
+      const distancia = ancla?.getBoundingClientRect().top;
+      if (cambioFotos) {
+        const abiertas = new Set(etapas.filter(etapa => etapa.open).map(etapa => etapa.dataset.etapa));
+        const etapasActualizadas = nuevas.map(nueva => {
+          const actual = actuales.get(nueva.dataset.etapa);
+          if (actual && firma(actual) === firma(nueva)) return actual;
+          nueva.open = abiertas.has(nueva.dataset.etapa);
+          nueva.addEventListener("toggle", guardarEtapas);
+          if (actual && ordenIgual) actual.replaceWith(nueva);
+          return nueva;
+        });
+        if (!ordenIgual) lista.replaceChildren(...etapasActualizadas);
+        etapas = etapasActualizadas;
+        if (buscar?.value) filtrarRequerimientos();
+      }
+      if (cambioProgreso) {
+        const abierto = document.getElementById("admin-pendientes-toggle")?.getAttribute("aria-expanded") === "true";
+        progreso.replaceWith(nuevoProgreso);
+        if (abierto) document.getElementById("admin-pendientes-toggle")?.click();
+        actualizarLista();
+      }
+      const destino = ancla && document.getElementById(ancla.id);
+      if ((cambioFotos || cambioProgreso) && destino?.getClientRects().length) {
+        window.scrollBy({top: destino.getBoundingClientRect().top - distancia, behavior: "instant"});
+      }
+      if (borrado) estadoRevision.textContent = "Foto eliminada correctamente.";
+      borradoPendiente = null;
+    } catch (_) {
+      if (borrado) estadoRevision.textContent = "Foto eliminada. El resumen se actualizará al recuperar la conexión.";
+    } finally {
+      consultaActiva = false;
+      if (borradoPendiente && borradoPendiente !== borrado) actualizarRevision();
+    }
+  }
+
+  document.addEventListener("revision-foto-eliminada", evento => {
+    borradoPendiente = evento.detail;
+    actualizarRevision();
+  });
+  document.addEventListener("visibilitychange", actualizarRevision);
+  setInterval(actualizarRevision, 30000);
 
   actualizarLista();
 

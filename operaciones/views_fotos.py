@@ -2828,6 +2828,7 @@ def borrar_evidencia_foto(request, ev_id: int):
 @login_required
 @rol_requerido('supervisor', 'admin', 'pm')
 def borrar_evidencia_supervisor(request, ev_id: int):
+    solicita_json = "application/json" in request.headers.get("Accept", "")
     ev = get_object_or_404(EvidenciaFoto, pk=ev_id)
     servicio = ev.tecnico_sesion.sesion.servicio
     revision = reverse("operaciones:fotos_revisar_sesion", args=[servicio.pk])
@@ -2840,6 +2841,8 @@ def borrar_evidencia_supervisor(request, ev_id: int):
     ESTADOS_PERMITIDOS = {'en_revision_supervisor',
                           'en_progreso', 'rechazado_supervisor'}
     if servicio.estado not in ESTADOS_PERMITIDOS:
+        if solicita_json:
+            return JsonResponse({"error": "No se puede eliminar evidencias en el estado actual del proyecto."}, status=409)
         messages.warning(
             request, "No se puede eliminar evidencias en el estado actual del proyecto.")
         return redirect(revision)
@@ -2856,8 +2859,12 @@ def borrar_evidencia_supervisor(request, ev_id: int):
             pass
 
         ev.delete()
+        if solicita_json:
+            return JsonResponse({"ok": True})
         messages.success(request, "Evidencia eliminada correctamente.")
     else:
+        if solicita_json:
+            return JsonResponse({"error": "Método no permitido."}, status=405)
         messages.error(request, "Método no permitido.")
 
     return redirect(revision)
