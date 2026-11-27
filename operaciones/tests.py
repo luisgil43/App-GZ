@@ -625,3 +625,37 @@ class EntregableServicioTests(TestCase):
             }, **cabeceras)
             self.assertEqual(respuesta.status_code, 200)
         self.assertTrue(asignacion.evidencias.filter(requisito__isnull=True, titulo_manual="Foto adicional").exists())
+
+    def test_miniatura_de_requerimiento_compartida_solo_con_el_equipo_asignado(self):
+        rol, _ = Rol.objects.get_or_create(nombre="usuario")
+        self.tecnico.roles.add(rol)
+        asignacion = self.asignar_tecnico_en_proceso()
+        companero = get_user_model().objects.create_user(username="companero_miniatura")
+        companero.roles.add(rol)
+        self.servicio.trabajadores_asignados.add(companero)
+        otra_asignacion = SesionFotoTecnico.objects.create(
+            sesion=asignacion.sesion, tecnico=companero, estado="en_proceso",
+        )
+        propio = RequisitoFoto.objects.create(tecnico_sesion=asignacion, titulo="Mállá", etapa="despues")
+        equivalente = RequisitoFoto.objects.create(tecnico_sesion=otra_asignacion, titulo="Malla", etapa="despues")
+        evidencia = EvidenciaFoto.objects.create(
+            tecnico_sesion=otra_asignacion, requisito=equivalente, imagen="fotos/compartida.jpg",
+        )
+        pantalla = reverse("operaciones:fotos_upload", args=[asignacion.pk])
+        estado = reverse("operaciones:fotos_status_json", args=[asignacion.pk])
+        foto = reverse("operaciones:foto_de_requerimiento", args=[evidencia.pk])
+
+        self.client.force_login(self.tecnico, backend="django.contrib.auth.backends.ModelBackend")
+        respuesta = self.client.get(pantalla)
+        self.assertContains(respuesta, "Buscar requerimiento")
+        self.assertContains(respuesta, f'src="{foto}"')
+        self.assertIn(
+            {"id": propio.pk, "global_done": True, "foto_id": evidencia.pk},
+            self.client.get(estado).json()["requisitos"],
+        )
+        with patch.object(EvidenciaFoto._meta.get_field("imagen"), "storage", self.almacen):
+            self.assertRedirects(self.client.get(foto), "/media/fotos/compartida.jpg", fetch_redirect_response=False)
+
+        self.servicio.trabajadores_asignados.remove(self.tecnico)
+        self.assertEqual(self.client.get(foto).status_code, 404)
+        self.assertEqual(self.client.get(estado).status_code, 404)

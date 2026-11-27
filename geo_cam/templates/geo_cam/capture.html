@@ -218,8 +218,11 @@ async function geocode(lat,lng){
       paintHUD();
       return;
     }
-    const best = j.results?.[0];
-    const line2 = (best?.formatted_address || "").slice(0,120);
+    const best = j.results?.[j.indice_direccion_preferida ?? 0];
+    const direccion = best?.formatted_address || "";
+    const line2 = (direccion && j.direccion_es_referencia_vial
+      ? `Referencia vial: ${direccion}`
+      : direccion).slice(0,120);
     let city="", region="", country="";
     (best?.address_components||[]).forEach(c=>{
       if(c.types.includes("locality")) city=c.long_name;

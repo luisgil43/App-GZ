@@ -98,6 +98,31 @@ def gallery(request):
     return render(request, "geo_cam/gallery.html", {"photos": qs})
 
 
+def _indice_direccion_preferida(resultados):
+    disponibles = [
+        (indice, resultado) for indice, resultado in enumerate(resultados)
+        if resultado.get("formatted_address")
+    ]
+    for tipo in ("street_address", "route"):
+        for indice, resultado in disponibles:
+            if tipo in resultado.get("types", []):
+                return indice
+    for indice, resultado in disponibles:
+        if _es_referencia_vial(resultado):
+            return indice
+    return disponibles[0][0] if disponibles else None
+
+
+def _es_referencia_vial(resultado):
+    tipos = resultado.get("types", [])
+    return "street_address" not in tipos and (
+        "route" in tipos or any(
+            "route" in componente.get("types", [])
+            for componente in resultado.get("address_components", [])
+        )
+    )
+
+
 @login_required
 @require_GET
 def geocode_google(request):
@@ -143,6 +168,11 @@ def geocode_google(request):
                 data.get("status"),
                 data.get("error_message"),
             )
+        else:
+            resultados = data.get("results", [])
+            indice = _indice_direccion_preferida(resultados)
+            data["indice_direccion_preferida"] = indice
+            data["direccion_es_referencia_vial"] = indice is not None and _es_referencia_vial(resultados[indice])
         return JsonResponse(data, status=200)
 
     except requests.Timeout:

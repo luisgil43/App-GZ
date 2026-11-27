@@ -1732,10 +1732,13 @@
       .replace(/"/g,'&quot;');
   }
 
+  let seleccionManual = false;
+
   function renderOptions(key){
     const globalVals = getExcelGlobal();
     const values = Array.from(globalVals[key] || []).sort((a,b) => String(a).localeCompare(String(b)));
     const selected = activeFilters[key];
+    seleccionManual = false;
 
     optionsBox.innerHTML = '';
 
@@ -1765,29 +1768,37 @@
     const opts = Array.from(optionsBox.querySelectorAll('.excel-opt'));
 
     function refreshSelectAllState(){
-      const checkedCount = opts.filter(o => o.checked).length;
+      const visibles = opts.filter(o => o.closest('[data-option-label]').style.display !== 'none');
+      const checkedCount = visibles.filter(o => o.checked).length;
 
       if (!selectAll) return;
 
-      selectAll.checked = opts.length > 0 && checkedCount === opts.length;
-      selectAll.indeterminate = checkedCount > 0 && checkedCount < opts.length;
+      selectAll.checked = visibles.length > 0 && checkedCount === visibles.length;
+      selectAll.indeterminate = checkedCount > 0 && checkedCount < visibles.length;
     }
 
     refreshSelectAllState();
 
     if (selectAll) {
       selectAll.addEventListener('change', () => {
+        seleccionManual = true;
         opts.forEach(o => {
-          o.checked = selectAll.checked;
+          if (o.closest('[data-option-label]').style.display !== 'none') {
+            o.checked = selectAll.checked;
+          }
         });
 
-        selectAll.indeterminate = false;
+        refreshSelectAllState();
       });
     }
 
     opts.forEach(o => {
-      o.addEventListener('change', refreshSelectAllState);
+      o.addEventListener('change', () => {
+        seleccionManual = true;
+        refreshSelectAllState();
+      });
     });
+    searchInput.oninput = refreshSelectAllState;
   }
 
   function filterOptionList(q){
@@ -1947,7 +1958,13 @@
          conservamos esos seleccionados y agregamos lo visible.
   */
 
-  if (addVisibleSearch && query) {
+  if (query && seleccionManual) {
+    checkedNow.forEach(opt => {
+      if (opt.closest('[data-option-label]').style.display !== 'none') {
+        selected.add(opt.dataset.value);
+      }
+    });
+  } else if (addVisibleSearch && query) {
 
     if (hadActiveFilter) {
       // Conserva el filtro múltiple que ya estaba aplicado

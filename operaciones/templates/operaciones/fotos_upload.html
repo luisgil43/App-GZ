@@ -87,6 +87,16 @@
   <div id="fotos-del-servicio" class="mt-4 grid scroll-mt-28 gap-4 lg:grid-cols-2 lg:gap-6">
     <div class="min-w-0">
       <h2 class="font-semibold mb-2">Fotos solicitadas</h2>
+      {% if requisitos %}
+        <div class="mb-3">
+          <label for="buscar-requisito-foto" class="mb-1 block text-sm font-medium text-slate-700">Buscar requerimiento</label>
+          <input id="buscar-requisito-foto" type="search" autocomplete="off" enterkeyhint="search"
+                 aria-controls="resultados-requisitos-foto" placeholder="Ej. malla"
+                 class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-sky-500 focus:outline-none">
+        </div>
+        <p id="estado-busqueda-fotos" hidden role="status" class="mb-2 text-sm text-slate-600"></p>
+        <ul id="resultados-requisitos-foto" hidden class="space-y-2"></ul>
+      {% endif %}
       <ul class="space-y-2" id="requisitos-lista">
         {% for r in requisitos %}
 <li class="border rounded p-3 requisito-tarjeta"
@@ -100,7 +110,8 @@
       {{ r.orden }}. {{ r.titulo }} {% if r.obligatorio %}<span class="text-red-600">*</span>{% endif %}
 
       {% if r.id in locked_ids and r.uploaded|default:0 == 0 %}
-        <span class="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">Tomado</span>
+        <span class="ml-2 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700 req-badge"
+              data-req="{{ r.id }}" data-state="done">Tomado</span>
       {% else %}
        <span
   class="ml-2 text-xs px-2 py-0.5 rounded req-badge
@@ -120,6 +131,15 @@
   {% if r.descripcion %}
     <div class="text-sm text-gray-600">{{ r.descripcion }}</div>
   {% endif %}
+
+  <button type="button" data-miniatura-requisito data-foto-id="{{ r.foto_requisito_id|default_if_none:'' }}"
+          {% if not r.foto_requisito_id %}hidden{% endif %}
+          aria-label="Ampliar foto de {{ r.titulo }}"
+          class="mt-2 rounded-lg border border-slate-200 bg-slate-50 focus-visible:ring-2 focus-visible:ring-sky-600">
+    <img width="96" height="72" loading="lazy" decoding="async" alt="Foto de {{ r.titulo }}"
+         class="h-[72px] w-24 rounded-lg object-cover"
+         {% if r.foto_requisito_id %}src="{% url 'operaciones:foto_de_requerimiento' r.foto_requisito_id %}"{% endif %}>
+  </button>
 
   <form method="post" enctype="multipart/form-data" class="mt-2 geo-upload-form ajax-uploader">
     {% csrf_token %}
@@ -1152,6 +1172,15 @@ async function bestEffortGps(form){
     if (!Array.isArray(list)) return;
 
     list.forEach(function(r){
+      const miniatura = document.querySelector(`#requisito-${r.id} [data-miniatura-requisito]`);
+      const fotoId = String(r.foto_id ?? "");
+      if (miniatura && miniatura.dataset.fotoId !== fotoId) {
+        miniatura.dataset.fotoId = fotoId;
+        miniatura.hidden = !fotoId;
+        const imagen = miniatura.querySelector("img");
+        if (fotoId) imagen.src = "{% url 'operaciones:foto_de_requerimiento' 0 %}".replace("/0/", `/${fotoId}/`);
+        else imagen.removeAttribute("src");
+      }
       var badge = document.querySelector('.req-badge[data-req="' + r.id + '"]');
       var nowState = r.global_done ? 'done' : 'pending';
 
@@ -1161,12 +1190,12 @@ async function bestEffortGps(form){
           badge.setAttribute('data-state', nowState);
           if (nowState === 'done'){
             badge.textContent = 'Completado';
-            badge.classList.remove('bg-red-100','text-red-800');
+            badge.classList.remove('bg-red-100','text-red-800','bg-gray-200','text-gray-700');
             badge.classList.add('bg-green-100','text-green-800');
             if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, false);
           } else {
             badge.textContent = 'Pendiente';
-            badge.classList.remove('bg-green-100','text-green-800');
+            badge.classList.remove('bg-green-100','text-green-800','bg-gray-200','text-gray-700');
             badge.classList.add('bg-red-100','text-red-800');
             if (typeof window.__setReqEnabled === 'function') window.__setReqEnabled(r.id, true);
           }
@@ -1318,6 +1347,7 @@ document.addEventListener("DOMContentLoaded", function () {
   ];
 
   const grupos = new Map();
+  let listadoPorEtapa = lista;
 
   const normalizar = texto => String(texto || "")
     .normalize("NFD")
@@ -1416,6 +1446,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // No ocultar tarjetas mientras tengan archivos en cola.
     lista.replaceWith(contenedor);
+    listadoPorEtapa = contenedor;
 
     try {
       const guardadas = JSON.parse(
@@ -1427,6 +1458,35 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     } catch (_) {}
   }
+
+  const buscar = document.getElementById("buscar-requisito-foto");
+  const resultados = document.getElementById("resultados-requisitos-foto");
+  const resumenBusqueda = document.getElementById("estado-busqueda-fotos");
+  const posiciones = new Map();
+  const titulos = tarjetas.map(tarjeta => normalizar(tarjeta.dataset.titulo));
+
+  function filtrarRequerimientos() {
+    const consulta = normalizar(buscar.value);
+    for (const [tarjeta, posicion] of posiciones) posicion.replaceWith(tarjeta);
+    posiciones.clear();
+    listadoPorEtapa.hidden = Boolean(consulta);
+    resultados.hidden = resumenBusqueda.hidden = !consulta;
+    if (!consulta) return;
+
+    tarjetas.forEach((tarjeta, indice) => {
+      if (!titulos[indice].includes(consulta)) return;
+      const posicion = document.createComment("");
+      tarjeta.before(posicion);
+      posiciones.set(tarjeta, posicion);
+      resultados.append(tarjeta);
+    });
+    const cantidad = posiciones.size;
+    resumenBusqueda.textContent = cantidad
+      ? `${cantidad} requerimiento${cantidad === 1 ? "" : "s"} encontrado${cantidad === 1 ? "" : "s"}`
+      : "No hay requerimientos que coincidan.";
+  }
+
+  buscar?.addEventListener("input", filtrarRequerimientos);
 
   function completada(tarjeta) {
     const distintivo = tarjeta.querySelector(
@@ -1497,6 +1557,10 @@ document.addEventListener("DOMContentLoaded", function () {
         );
 
         if (!destino) return;
+        if (buscar?.value && !posiciones.has(destino)) {
+          buscar.value = "";
+          filtrarRequerimientos();
+        }
 
         const etapa = destino.closest("details.gz-etapa");
 
@@ -1683,7 +1747,7 @@ document.addEventListener("click", function(event) {
 <dialog id="gz-evidencia-ampliada" aria-label="Fotografía completa">
   <div class="gz-ampliada-barra">
     <span>Fotografía completa</span>
-    <button type="button" id="gz-cerrar-evidencia">✕ Cerrar</button>
+    <button type="button" id="gz-cerrar-evidencia" aria-label="Cerrar fotografía">✕</button>
   </div>
   <img id="gz-evidencia-original" alt="Evidencia fotográfica ampliada">
 </dialog>
@@ -1694,19 +1758,20 @@ document.addEventListener("click", function(event) {
   const original = document.getElementById("gz-evidencia-original");
   let anterior = null;
 
-  function abrir(imagen) {
-    anterior = imagen;
+  function abrir(imagen, origen = imagen) {
+    anterior = origen;
     original.src = imagen.currentSrc || imagen.src;
     original.alt = imagen.alt || "Evidencia fotográfica completa";
     if (!modal.open) modal.showModal();
   }
 
   document.addEventListener("click", event => {
-    const imagen = event.target.closest("figure[data-ev-id] img");
+    const miniatura = event.target.closest("[data-miniatura-requisito]");
+    const imagen = miniatura?.querySelector("img") || event.target.closest("figure[data-ev-id] img");
     if (!imagen) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    abrir(imagen);
+    abrir(imagen, miniatura || imagen);
   }, true);
 
   document.addEventListener("keydown", event => {

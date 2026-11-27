@@ -284,6 +284,15 @@
 
 
   <!-- Revisión consolidada por etapa -->
+  {% if etapas_revision %}
+    <div class="mb-3">
+      <label for="buscar-requisito-foto" class="mb-1 block text-sm font-medium text-slate-700">Buscar requerimiento</label>
+      <input id="buscar-requisito-foto" type="search" autocomplete="off" enterkeyhint="search"
+             aria-controls="admin-revision-etapas" placeholder="Ej. malla"
+             class="min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base focus:border-sky-500 focus:outline-none">
+    </div>
+    <p id="estado-busqueda-fotos" hidden role="status" class="mb-2 text-sm text-slate-600"></p>
+  {% endif %}
   <div id="admin-revision-etapas" class="space-y-4">
 
     {% for etapa in etapas_revision %}
@@ -320,6 +329,7 @@
           {% for requisito in etapa.requisitos %}
 
             <article id="admin-requisito-{{ requisito.id }}"
+                     data-titulo="{{ requisito.titulo }}"
                      class="admin-requisito rounded-lg border p-3 sm:p-4
                             {% if requisito.completada %}border-green-200{% else %}border-red-200{% endif %}">
 
@@ -705,8 +715,24 @@ document.addEventListener("DOMContentLoaded", function () {
   );
 
   const clave = "gz-admin-etapas:" + window.location.pathname;
+  const buscar = document.getElementById("buscar-requisito-foto");
+  const estadoBusqueda = document.getElementById("estado-busqueda-fotos");
+  const normalizar = texto => texto.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .replace(/\s+/g, " ")
+    .trim();
+  const grupos = etapas.map(etapa => ({
+    etapa,
+    requisitos: Array.from(etapa.querySelectorAll(".admin-requisito"), tarjeta => ({
+      tarjeta,
+      titulo: normalizar(tarjeta.dataset.titulo)
+    }))
+  }));
+  let abiertasAntesDeBuscar = null;
 
   function guardarEtapas() {
+    if (abiertasAntesDeBuscar) return;
     const abiertas = etapas
       .filter(etapa => etapa.open)
       .map(etapa => etapa.dataset.etapa);
@@ -727,6 +753,39 @@ document.addEventListener("DOMContentLoaded", function () {
     etapa.open = guardadas.includes(etapa.dataset.etapa);
     etapa.addEventListener("toggle", guardarEtapas);
   });
+
+  function filtrarRequerimientos() {
+    const consulta = normalizar(buscar.value);
+    if (consulta && !abiertasAntesDeBuscar) {
+      abiertasAntesDeBuscar = new Set(etapas.filter(etapa => etapa.open));
+    }
+
+    let coincidencias = 0;
+    grupos.forEach(({ etapa, requisitos }) => {
+      let hayCoincidencias = false;
+      requisitos.forEach(({ tarjeta, titulo }) => {
+        const coincide = titulo.includes(consulta);
+        tarjeta.hidden = !coincide;
+        hayCoincidencias ||= coincide;
+        coincidencias += Number(coincide);
+      });
+      etapa.hidden = Boolean(consulta) && !hayCoincidencias;
+      if (consulta) {
+        etapa.open = hayCoincidencias;
+      } else if (abiertasAntesDeBuscar) {
+        etapa.open = abiertasAntesDeBuscar.has(etapa);
+      }
+    });
+
+    if (!consulta) abiertasAntesDeBuscar = null;
+    estadoBusqueda.hidden = !consulta;
+    estadoBusqueda.textContent = coincidencias
+      ? (coincidencias === 1 ? "1 requerimiento encontrado" : `${coincidencias} requerimientos encontrados`)
+      : "No se encontraron requerimientos.";
+  }
+
+  buscar?.addEventListener("input", filtrarRequerimientos);
+  if (buscar?.value) filtrarRequerimientos();
 
   const toggle = document.getElementById("admin-pendientes-toggle");
   const panel = document.getElementById("admin-pendientes-panel");
@@ -784,6 +843,10 @@ document.addEventListener("DOMContentLoaded", function () {
       if (!destino) return;
 
       const etapa = destino.closest("details.admin-etapa");
+      if (buscar && (destino.hidden || etapa?.hidden)) {
+        buscar.value = "";
+        filtrarRequerimientos();
+      }
 
       if (etapa) {
         etapa.open = true;

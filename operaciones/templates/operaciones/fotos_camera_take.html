@@ -864,7 +864,10 @@
       });
       if (!respuesta.ok) return "";
       const datos = await respuesta.json();
-      const texto = datos.results?.[0]?.formatted_address || "";
+      const direccion = datos.results?.[datos.indice_direccion_preferida ?? 0]?.formatted_address || "";
+      const texto = direccion && datos.direccion_es_referencia_vial
+        ? `Referencia vial: ${direccion}`
+        : direccion;
       if (texto) direcciones.set(clave, texto);
       return texto;
     } catch (error) {

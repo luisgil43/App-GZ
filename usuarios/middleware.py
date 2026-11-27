@@ -61,7 +61,10 @@ class SessionExpiryMiddleware:
         except Resolver404:
             view_name = None
 
-        request.is_photo_poll = view_name == "operaciones:fotos_status_json"
+        request.is_photo_poll = view_name in {
+            "operaciones:fotos_status_json",
+            "operaciones:foto_de_requerimiento",
+        }
         request.user_panel_session = self._is_user_panel(request)
         idle_timeout = self.user_idle_timeout if request.user_panel_session else self.idle_timeout
         last_activity = session.get("last_activity", now)

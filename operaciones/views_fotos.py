@@ -31,7 +31,8 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.text import slugify
-from django.views.decorators.http import require_POST
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_POST, require_safe
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -2463,17 +2464,12 @@ def upload_evidencias_fotos(request, pk):
     )
 
     # ¿Qué títulos ya tiene *cualquier* técnico del equipo? (match por título)
-    titles_done = set(
-        _norm_title(t) for t in
-        EvidenciaFoto.objects
-        .filter(tecnico_sesion__sesion=s, requisito_id__isnull=False)
-        .values_list("requisito__titulo", flat=True)
-        .distinct()
-    )
+    fotos_por_titulo = _fotos_por_titulo(s)
 
     requisitos = list(requisitos)
     for r in requisitos:
-        setattr(r, "completed_global", _norm_title(r.titulo) in titles_done)
+        r.foto_requisito_id = fotos_por_titulo.get(_norm_title(r.titulo))
+        r.completed_global = r.foto_requisito_id is not None
 
     locked_ids = [r.id for r in requisitos if r.completed_global and r.uploaded == 0]
 
@@ -2483,16 +2479,8 @@ def upload_evidencias_fotos(request, pk):
         .filter(tecnico_sesion__sesion=s, obligatorio=True, activo=True)
         .values_list("titulo", flat=True)
     )
-    taken_titles = (
-        s.asignaciones
-         .values("requisitos__titulo")
-         .annotate(c=Count("requisitos__evidencias"))
-         .filter(c__gt=0)
-         .values_list("requisitos__titulo", flat=True)
-    )
     required_set = {_norm_title(t) for t in req_titles if t}
-    taken_titles_set = {_norm_title(t) for t in taken_titles if t}
-    faltantes_global = sorted(required_set - taken_titles_set)
+    faltantes_global = sorted(required_set.difference(fotos_por_titulo))
 
     # ¿quién no ha aceptado?
     pendientes_aceptar = []
@@ -2685,6 +2673,35 @@ def _norm_title(s: str) -> str:
     s = re.sub(r"\s+", " ", s)
     return s
 
+def _fotos_por_titulo(sesion):
+    fotos = {}
+    evidencias = (
+        EvidenciaFoto.objects.filter(
+            tecnico_sesion__sesion=sesion, requisito__tecnico_sesion__sesion=sesion,
+        ).exclude(imagen="").order_by()
+        .values("requisito__titulo").annotate(foto_id=Max("pk"))
+        .values_list("requisito__titulo", "foto_id")
+    )
+    for titulo, foto_id in evidencias:
+        clave = _norm_title(titulo)
+        fotos[clave] = max(fotos.get(clave, 0), foto_id)
+    return fotos
+
+
+@login_required
+@rol_requerido("usuario")
+@require_safe
+@never_cache
+def foto_de_requerimiento(request, ev_id):
+    evidencia = get_object_or_404(
+        EvidenciaFoto.objects.exclude(imagen=""),
+        pk=ev_id,
+        requisito__isnull=False,
+        tecnico_sesion__sesion__servicio__trabajadores_asignados=request.user,
+    )
+    return redirect(evidencia.imagen.url)
+
+
 @login_required
 def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs):
     """
@@ -2694,7 +2711,8 @@ def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs
 
     a = (SesionFotoTecnico.objects
          .select_related("sesion")
-         .filter(pk=asignacion_id, tecnico__is_active=True)  # opcional
+         .filter(pk=asignacion_id, tecnico=request.user, tecnico__is_active=True,
+                 sesion__servicio__trabajadores_asignados=request.user)
          .first())
     if not a:
         return JsonResponse({"ok": False, "error": "Asignación no encontrada."}, status=404)
@@ -2721,32 +2739,14 @@ def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs
         .values("id", "titulo", "obligatorio", "orden")
     )
 
-    canon_by_norm = {}  # norm -> {"id","titulo","obligatorio","orden","ids":set()}
+    canon_by_norm = {}
     for r in reqs_session_qs:
         norm = _norm_title(r["titulo"])
         b = canon_by_norm.get(norm)
-        if not b:
-            canon_by_norm[norm] = {
-                "id": r["id"], "titulo": r["titulo"], "obligatorio": r["obligatorio"],
-                "orden": r["orden"], "ids": {r["id"]}
-            }
-        else:
-            b["ids"].add(r["id"])
-            if (r["orden"], r["id"]) < (b["orden"], b["id"]):
-                b["id"] = r["id"]; b["titulo"] = r["titulo"]
-                b["obligatorio"] = r["obligatorio"]; b["orden"] = r["orden"]
+        if b is None or (r["orden"], r["id"]) < (b["orden"], b["id"]):
+            canon_by_norm[norm] = r
 
-    global_done_by_norm = {norm: False for norm in canon_by_norm.keys()}
-    if canon_by_norm:
-        all_ids = [rid for v in canon_by_norm.values() for rid in v["ids"]]
-        ids_with_ev = set(
-            EvidenciaFoto.objects
-            .filter(requisito_id__in=all_ids)
-            .values_list("requisito_id", flat=True)
-        )
-        for norm, b in canon_by_norm.items():
-            if any(rid in ids_with_ev for rid in b["ids"]):
-                global_done_by_norm[norm] = True
+    fotos_por_titulo = _fotos_por_titulo(s)
 
     # Requisitos activos del técnico actual (para pintar badges por ID)
     reqs_tech = list(
@@ -2757,15 +2757,17 @@ def fotos_status_json(request, asignacion_id=None, asig_id=None, *args, **kwargs
     )
     requisitos_resp = []
     for r in reqs_tech:
+        foto_id = fotos_por_titulo.get(_norm_title(r["titulo"]))
         requisitos_resp.append({
             "id": r["id"],
-            "global_done": bool(global_done_by_norm.get(_norm_title(r["titulo"]), False)),
+            "global_done": foto_id is not None,
+            "foto_id": foto_id,
         })
 
     # Faltantes globales (solo obligatorios activos por norma)
     faltantes_global = []
     for norm, b in sorted(canon_by_norm.items(), key=lambda x: (x[1]["orden"], x[1]["id"])):
-        if b["obligatorio"] and not global_done_by_norm.get(norm, False):
+        if b["obligatorio"] and norm not in fotos_por_titulo:
             faltantes_global.append(b["titulo"])
 
     # Técnicos pendientes de aceptar (ajusta el estado según tu flujo)

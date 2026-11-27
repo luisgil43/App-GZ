@@ -289,6 +289,11 @@ urlpatterns = [
         views_fotos.fotos_status_json,
         name="fotos_status_json",
     ),
+    path(
+        "fotos/evidencia/<int:ev_id>/foto-requerimiento/",
+        views_fotos.foto_de_requerimiento,
+        name="foto_de_requerimiento",
+    ),
     path("fotos/<int:asig_id>/presign/", views_fotos.presign_put, name="fotos_presign"),
     path(
         "fotos/<int:asig_id>/finalize/",
