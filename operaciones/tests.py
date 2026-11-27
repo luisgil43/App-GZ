@@ -663,16 +663,21 @@ class EntregableServicioTests(TestCase):
         imagen = BytesIO()
         Image.new("RGB", (12, 12), "white").save(imagen, format="JPEG")
         campo = EvidenciaFoto._meta.get_field("imagen")
-        with patch.object(campo, "storage", self.almacen):
+        almacen = FileSystemStorage(location=self.almacen.location, allow_overwrite=True)
+        with patch.object(campo, "storage", almacen):
+            rutas = set()
             for etapa in ("antes", "durante", "despues"):
                 requisito = RequisitoFoto.objects.create(
                     tecnico_sesion=asignacion, titulo=f"Foto {etapa}", etapa=etapa,
                 )
                 respuesta = self.client.post(camara, {
                     **datos, "req_id": requisito.pk,
-                    "imagen": SimpleUploadedFile("foto.jpg", imagen.getvalue(), content_type="image/jpeg"),
+                    "imagen": SimpleUploadedFile("captura.jpg", imagen.getvalue(), content_type="image/jpeg"),
                 }, **cabeceras)
                 self.assertEqual(respuesta.status_code, 200)
+                rutas.add(requisito.evidencias.get().imagen.name)
+            self.assertEqual(len(rutas), 3)
+            self.assertTrue(all(almacen.exists(ruta) for ruta in rutas))
             asignacion.sesion.proyecto_especial = True
             asignacion.sesion.save(update_fields=["proyecto_especial"])
             self.assertContains(self.client.get(pantalla), "Fotos Extra")

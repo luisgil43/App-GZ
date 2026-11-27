@@ -124,8 +124,8 @@ def upload_to_evidencia(instance, filename: str) -> str:
         tecnico_name = "Tecnico"
     tecnico_name = _safe_filename(tecnico_name)
 
-    # Nombre de archivo seguro
-    fname = _safe_filename(filename)
+    # La cámara reutiliza el nombre captura.jpg. Cada evidencia necesita su propia clave en Wasabi.
+    fname = f"{uuid4().hex}_{_safe_filename(filename)}"
 
     return f"{base}/{tecnico_name}/Evidencias/{fname}"
 
