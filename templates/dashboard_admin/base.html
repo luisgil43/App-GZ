@@ -624,6 +624,9 @@
                   Realizar Asignación
                 </a>
               </li>
+              {% if request.user.es_admin_general or request.user.es_supervisor or request.user.es_pm %}
+                <li><a href="{% url 'operaciones:formatos_entregables' %}">Formatos</a></li>
+              {% endif %}
 
 
               <!-- ================================================== -->

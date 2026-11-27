@@ -2699,6 +2699,8 @@ def foto_de_requerimiento(request, ev_id):
         requisito__isnull=False,
         tecnico_sesion__sesion__servicio__trabajadores_asignados=request.user,
     )
+    if evidencia.ubicacion_referencia:
+        return _respuesta_foto_con_sello(evidencia)
     return redirect(evidencia.imagen.url)
 
 

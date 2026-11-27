@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ entregable.titulo }} · Vista previa</title>
+  <title>{{ titulo }} · Vista previa</title>
   <style>
     :root {
       color-scheme: light;
@@ -91,8 +91,8 @@
         </svg>
       </div>
       <div>
-        <div class="du">DU{{ entregable.servicio.du }}</div>
-        <h1>{{ entregable.titulo }}</h1>
+        {% if entregable.servicio_id %}<div class="du">DU{{ entregable.servicio.du }}</div>{% endif %}
+        <h1>{{ titulo }}</h1>
         <p class="archivo">{{ entregable.nombre_original }}</p>
       </div>
     </header>

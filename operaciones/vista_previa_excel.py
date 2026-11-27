@@ -49,11 +49,15 @@ def _leer_hoja(archivo, hoja_elegida):
         libro.close()
 
 
-def vista_previa_excel(request, entregable, almacen):
-    contexto = {"entregable": entregable, "hojas": [], "filas": []}
+def vista_previa_excel(request, entregable, almacen, *, archivo_fuente=None, titulo=None):
+    archivo_fuente = archivo_fuente if archivo_fuente is not None else entregable.archivo
+    contexto = {
+        "entregable": entregable, "titulo": titulo or entregable.titulo,
+        "hojas": [], "filas": [],
+    }
     try:
         respuesta = almacen.connection.meta.client.get_object(
-            Bucket=almacen.bucket_name, Key=entregable.archivo.name,
+            Bucket=almacen.bucket_name, Key=archivo_fuente.name,
         )
         with closing(respuesta["Body"]) as cuerpo, TemporaryFile() as archivo:
             if respuesta["ContentLength"] > MAX_ARCHIVO:

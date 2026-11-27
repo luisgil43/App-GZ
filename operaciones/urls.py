@@ -158,6 +158,14 @@ urlpatterns = [
         fotos.revisar_sesion_fotos,
         name="fotos_revisar_sesion",
     ),
+    path("formatos/", views_entregables.formatos_entregables, name="formatos_entregables"),
+    path("formatos/<int:formato_id>/ver/", views_entregables.ver_formato_entregable, name="ver_formato_entregable"),
+    path("formatos/<int:formato_id>/eliminar/", views_entregables.eliminar_formato_entregable, name="eliminar_formato_entregable"),
+    path(
+        "formatos/<int:formato_id>/descargar/",
+        views_entregables.descargar_formato_entregable,
+        name="descargar_formato_entregable",
+    ),
     # Requisitos de fotos
     path(
         "entregables/requerimientos/sugerencias/",

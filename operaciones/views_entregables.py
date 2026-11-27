@@ -9,13 +9,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import FileExtensionValidator
 from django.db import DatabaseError, transaction
+from django.db.models.deletion import ProtectedError
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.http import content_disposition_header, url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_POST, require_safe
+from django.views.decorators.http import require_POST, require_http_methods, require_safe
 
 from usuarios.decoradores import rol_requerido
 
@@ -40,6 +41,13 @@ class EntregableForm(ArchivoEntregableForm):
     titulo = forms.CharField(
         label="Nombre del entregable", max_length=EntregableServicio.TITULO_MAX_LENGTH,
     )
+
+
+class FormatoEntregableForm(ArchivoEntregableForm):
+    nombre = forms.CharField(
+        label="Nombre del formato", max_length=FormatoEntregable._meta.get_field("nombre").max_length,
+    )
+    field_order = ["nombre", "archivo"]
 
 
 class RequerimientoEntregableForm(forms.ModelForm):
@@ -112,6 +120,77 @@ def _limpiar_archivo(campo):
             campo.delete(save=False)
         except (OSError, BotoCoreError, ClientError):
             logger.exception("Error al limpiar un archivo de entregables.")
+
+
+@login_required
+@rol_requerido("supervisor", "admin", "pm")
+@require_http_methods(["GET", "HEAD", "POST"])
+@never_cache
+def formatos_entregables(request):
+    form = FormatoEntregableForm()
+    if request.method == "POST":
+        form = FormatoEntregableForm(request.POST, request.FILES)
+        if form.is_valid():
+            archivo = form.cleaned_data["archivo"]
+            formato = FormatoEntregable(
+                nombre=form.cleaned_data["nombre"], nombre_original=archivo.name,
+            )
+            try:
+                formato.ejemplo.save(archivo.name, archivo, save=False)
+                formato.save()
+            except (OSError, BotoCoreError, ClientError, S3UploadFailedError, DatabaseError):
+                logger.exception("Error al guardar un formato de entregable.")
+                _limpiar_archivo(formato.ejemplo)
+                form.add_error(None, "No se pudo guardar el formato. Inténtalo nuevamente.")
+            else:
+                messages.success(request, "Formato guardado.")
+                return redirect("operaciones:formatos_entregables")
+
+    return render(request, "operaciones/formatos_entregables.html", {
+        "form": form,
+        "formatos": FormatoEntregable.objects.all(),
+    })
+
+
+@login_required
+@rol_requerido("supervisor", "admin", "pm")
+@require_safe
+@never_cache
+def descargar_formato_entregable(request, formato_id):
+    return _descargar_formato(get_object_or_404(FormatoEntregable, pk=formato_id))
+
+
+@login_required
+@rol_requerido("supervisor", "admin", "pm")
+@require_safe
+@never_cache
+def ver_formato_entregable(request, formato_id):
+    formato = get_object_or_404(FormatoEntregable, pk=formato_id)
+    if formato.es_planilla_xlsx:
+        return vista_previa_excel(
+            request, formato, formato.ejemplo.storage,
+            archivo_fuente=formato.ejemplo, titulo=formato.nombre,
+        )
+    if not formato.tipo_visualizacion:
+        raise Http404("Este formato se puede descargar desde el catálogo.")
+    return _descargar_formato(formato, adjunto=False)
+
+
+@login_required
+@rol_requerido("supervisor", "admin", "pm")
+@require_POST
+def eliminar_formato_entregable(request, formato_id):
+    try:
+        with transaction.atomic():
+            formato = get_object_or_404(FormatoEntregable.objects.select_for_update(), pk=formato_id)
+            archivo = formato.ejemplo
+            formato.delete()
+            transaction.on_commit(lambda: _limpiar_archivo(archivo))
+    except ProtectedError:
+        messages.error(request, "El formato está vinculado a un requerimiento. Quita el vínculo antes de eliminarlo.")
+    else:
+        messages.success(request, "Formato eliminado.")
+    return redirect("operaciones:formatos_entregables")
 
 
 def _guardar_entregable(entregable, archivo):
@@ -301,18 +380,21 @@ def ejemplo_entregable(request, servicio_id, requisito_id):
         servicio.requerimientos_entregables.select_related("formato"),
         pk=requisito_id, formato__isnull=False,
     )
-    formato = requisito.formato
+    return _descargar_formato(requisito.formato)
+
+
+def _descargar_formato(formato, *, adjunto=True):
     try:
         url = formato.ejemplo.storage.url(
             formato.ejemplo.name, expire=300, http_method="GET",
             parameters={
-                "ResponseContentDisposition": content_disposition_header(True, formato.nombre_original),
-                "ResponseContentType": CONTENIDO_ENTREGABLE,
+                "ResponseContentDisposition": content_disposition_header(adjunto, formato.nombre_original),
+                "ResponseContentType": CONTENIDO_ENTREGABLE if adjunto else formato.tipo_visualizacion,
                 "ResponseCacheControl": "private, no-store",
             },
         )
     except (BotoCoreError, ClientError):
-        logger.exception("Error al preparar un ejemplo de entregable para el servicio %s", servicio_id)
+        logger.exception("Error al preparar la descarga del formato %s", formato.pk)
         return _error("No se pudo descargar el ejemplo. Inténtalo nuevamente.", 503)
     respuesta = redirect(url)
     respuesta["Referrer-Policy"] = "no-referrer"

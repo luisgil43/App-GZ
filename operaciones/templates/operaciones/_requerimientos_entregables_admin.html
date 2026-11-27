@@ -54,6 +54,9 @@
             </div>
           {% elif campo.name != 'obligatorio' %}
             {{ campo }}
+            {% if campo.name == 'formato' %}
+              <a href="{% url 'operaciones:formatos_entregables' %}" class="mt-1 inline-block text-xs font-medium text-sky-800 hover:underline">Ver catálogo de formatos</a>
+            {% endif %}
           {% endif %}
         </div>
         {% endif %}

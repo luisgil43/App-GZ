@@ -9,6 +9,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile, TemporaryUploadedFile
+from django.http import HttpResponse
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -324,6 +325,63 @@ class EntregableServicioTests(TestCase):
         respuesta = self.subir("informe.pdf", b"datos", titulo="I" * 501)
         self.assertEqual(respuesta.status_code, 400)
         self.assertFalse(self.servicio.entregables.exists())
+
+    def test_formato_del_catalogo_disponible_en_selector_y_perfil(self):
+        catalogo = reverse("operaciones:formatos_entregables")
+        titulo = "Informe de verticalidad"
+        campo = FormatoEntregable._meta.get_field("ejemplo")
+        with patch.object(campo, "storage", self.almacen):
+            respuesta = self.client.post(catalogo, {
+                "csrfmiddlewaretoken": self.token, "nombre": titulo,
+                "archivo": SimpleUploadedFile("verticalidad.xlsx", b"plantilla"),
+            })
+            self.assertRedirects(respuesta, catalogo)
+            formato = FormatoEntregable.objects.get(nombre=titulo)
+            self.assertTrue(self.almacen.exists(formato.ejemplo.name))
+            descarga = reverse("operaciones:descargar_formato_entregable", args=[formato.pk])
+            self.assertContains(self.client.get(catalogo), descarga)
+            with patch.object(self.almacen, "url", return_value="https://almacen.example/formato"):
+                self.assertRedirects(
+                    self.client.get(descarga), "https://almacen.example/formato",
+                    fetch_redirect_response=False,
+                )
+
+        configuracion = reverse("operaciones:fotos_configurar_requisitos", args=[self.servicio.pk])
+        self.assertContains(self.client.get(configuracion), f'<option value="{formato.pk}">{titulo}</option>')
+        solicitar = reverse("operaciones:solicitar_entregable", args=[self.servicio.pk])
+        self.assertEqual(self.client.post(solicitar, {
+            "csrfmiddlewaretoken": self.token, "titulo": titulo,
+            "instrucciones": "Incluye todas las mediciones.",
+            "extensiones": ["pdf", "xlsx"], "obligatorio": "on", "formato": formato.pk,
+        }).status_code, 302)
+        self.assertEqual(self.servicio.requerimientos_entregables.get().formato, formato)
+        sugerencias = reverse("operaciones:sugerir_requerimientos_entregables")
+        self.assertEqual(self.client.get(sugerencias, {"q": "verticalidad"}).json()["resultados"], [{
+            "titulo": titulo, "instrucciones": "Incluye todas las mediciones.",
+            "extensiones": ["pdf", "xlsx"], "obligatorio": True, "formato": formato.pk,
+        }])
+
+    def test_ver_y_eliminar_formato_sin_romper_requerimientos(self):
+        formato = FormatoEntregable(nombre="Certificado", nombre_original="certificado.pdf")
+        campo = FormatoEntregable._meta.get_field("ejemplo")
+        with patch.object(campo, "storage", self.almacen):
+            formato.ejemplo.save("certificado.pdf", SimpleUploadedFile("certificado.pdf", b"pdf"))
+            ruta = formato.ejemplo.name
+            ver = reverse("operaciones:ver_formato_entregable", args=[formato.pk])
+            eliminar = reverse("operaciones:eliminar_formato_entregable", args=[formato.pk])
+            with patch.object(self.almacen, "url", return_value="https://almacen.example/vista") as url:
+                self.assertRedirects(self.client.get(ver), "https://almacen.example/vista", fetch_redirect_response=False)
+                self.assertTrue(url.call_args.kwargs["parameters"]["ResponseContentDisposition"].startswith("inline"))
+            self.assertEqual(self.client.get(eliminar).status_code, 405)
+            requisito = self.servicio.requerimientos_entregables.create(titulo="Certificado", formato=formato)
+            self.client.post(eliminar, {"csrfmiddlewaretoken": self.token})
+            self.assertTrue(FormatoEntregable.objects.filter(pk=formato.pk).exists())
+            self.assertTrue(self.almacen.exists(ruta))
+            requisito.delete()
+            with self.captureOnCommitCallbacks(execute=True):
+                self.client.post(eliminar, {"csrfmiddlewaretoken": self.token})
+            self.assertFalse(FormatoEntregable.objects.filter(pk=formato.pk).exists())
+            self.assertFalse(self.almacen.exists(ruta))
 
     def test_solicitud_documental_y_ejemplo_para_el_tecnico_asignado(self):
         campo = FormatoEntregable._meta.get_field("ejemplo")
@@ -655,6 +713,15 @@ class EntregableServicioTests(TestCase):
         )
         with patch.object(EvidenciaFoto._meta.get_field("imagen"), "storage", self.almacen):
             self.assertRedirects(self.client.get(foto), "/media/fotos/compartida.jpg", fetch_redirect_response=False)
+
+        evidencia.ubicacion_referencia = {
+            "latitud": "-26.327583", "longitud": "-70.620211", "direccion": "Chañaral",
+        }
+        evidencia.save(update_fields=["ubicacion_referencia"])
+        with patch("operaciones.views_fotos._respuesta_foto_con_sello") as generar_sello:
+            generar_sello.return_value = HttpResponse(b"foto sellada", content_type="image/jpeg")
+            self.assertEqual(self.client.get(foto).content, b"foto sellada")
+            generar_sello.assert_called_once_with(evidencia)
 
         self.servicio.trabajadores_asignados.remove(self.tecnico)
         self.assertEqual(self.client.get(foto).status_code, 404)

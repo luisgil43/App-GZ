@@ -550,6 +550,15 @@ class FormatoEntregable(models.Model):
     def __str__(self):
         return self.nombre
 
+    @property
+    def tipo_visualizacion(self):
+        extension = os.path.splitext(self.nombre_original)[1].lower()
+        return EntregableServicio.TIPOS_VISUALIZABLES.get(extension)
+
+    @property
+    def es_planilla_xlsx(self):
+        return self.nombre_original.lower().endswith(".xlsx")
+
 
 class RequerimientoEntregable(models.Model):
     servicio = models.ForeignKey(
