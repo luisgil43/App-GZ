@@ -10,6 +10,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from urllib.parse import urlencode
 
 import boto3
 import xlsxwriter
@@ -2829,13 +2830,19 @@ def borrar_evidencia_foto(request, ev_id: int):
 def borrar_evidencia_supervisor(request, ev_id: int):
     ev = get_object_or_404(EvidenciaFoto, pk=ev_id)
     servicio = ev.tecnico_sesion.sesion.servicio
+    revision = reverse("operaciones:fotos_revisar_sesion", args=[servicio.pk])
+    siguiente = request.GET.get("next", "")
+    if siguiente and url_has_allowed_host_and_scheme(
+        siguiente, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    ):
+        revision += "?" + urlencode({"next": siguiente})
 
     ESTADOS_PERMITIDOS = {'en_revision_supervisor',
                           'en_progreso', 'rechazado_supervisor'}
     if servicio.estado not in ESTADOS_PERMITIDOS:
         messages.warning(
             request, "No se puede eliminar evidencias en el estado actual del proyecto.")
-        return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
+        return redirect(revision)
 
     if request.method == "POST":
         # 🔒 Borrado seguro del archivo físico (si nadie más lo referencia)
@@ -2853,7 +2860,7 @@ def borrar_evidencia_supervisor(request, ev_id: int):
     else:
         messages.error(request, "Método no permitido.")
 
-    return redirect('operaciones:fotos_revisar_sesion', servicio_id=servicio.id)
+    return redirect(revision)
 
 
 def _respuesta_foto_con_sello(foto):
@@ -3011,7 +3018,6 @@ def revisar_sesion_fotos(request, servicio_id):
 
     if request.method == "POST" and request.POST.get("accion") == "ubicacion_referencia":
         from django.http import HttpResponseForbidden
-        from urllib.parse import urlencode
 
         if not puede_agregar_referencia:
             return HttpResponseForbidden("Solo Administración puede agregar una ubicación de referencia.")

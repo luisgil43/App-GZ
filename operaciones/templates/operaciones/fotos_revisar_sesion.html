@@ -474,7 +474,7 @@
 
     {% if extras_revision %}
 
-      <details class="admin-etapa border border-gray-200 rounded-xl overflow-hidden"
+      <details id="admin-fotos-extra" class="admin-etapa border border-gray-200 rounded-xl overflow-hidden"
                data-etapa="extras">
 
         <summary class="cursor-pointer px-4 py-4 bg-gray-50 hover:bg-gray-100 font-bold">
@@ -648,6 +648,8 @@
 
 
 <script>
+  const claveRetornoBorrado = "gz-revision-borrado:" + window.location.pathname;
+
   // Modal Eliminar
   document.addEventListener('DOMContentLoaded', function () {
     const modal    = document.getElementById('delete-modal');
@@ -655,6 +657,7 @@
     const backdrop = document.getElementById('delete-backdrop');
     const cancel   = document.getElementById('delete-cancel');
     const closeBtn = document.getElementById('delete-close');
+    let origen;
 
     function openModal(actionUrl) {
       if (!form) return;
@@ -674,7 +677,21 @@
       if (!btn) return;
       e.preventDefault();
       const actionUrl = btn.getAttribute('data-action');
-      if (actionUrl) openModal(actionUrl);
+      if (actionUrl) {
+        origen = btn.closest('.admin-requisito, #admin-fotos-extra');
+        openModal(actionUrl);
+      }
+    });
+
+    form?.addEventListener('submit', function () {
+      try {
+        sessionStorage.setItem(claveRetornoBorrado, JSON.stringify({
+          id: origen?.id,
+          distancia: origen?.getBoundingClientRect().top,
+          scrollY: window.scrollY,
+          consulta: document.getElementById('buscar-requisito-foto')?.value
+        }));
+      } catch (_) {}
     });
 
     [backdrop, cancel, closeBtn].forEach(function (el) {
@@ -785,7 +802,24 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   buscar?.addEventListener("input", filtrarRequerimientos);
+  let retorno;
+  try {
+    retorno = JSON.parse(sessionStorage.getItem(claveRetornoBorrado));
+    sessionStorage.removeItem(claveRetornoBorrado);
+  } catch (_) {}
+  if (retorno && buscar) buscar.value = retorno.consulta || "";
   if (buscar?.value) filtrarRequerimientos();
+  if (retorno) {
+    const destino = document.getElementById(retorno.id);
+    const etapa = destino?.closest("details.admin-etapa");
+    if (etapa) etapa.open = true;
+    requestAnimationFrame(() => {
+      const posicion = destino
+        ? window.scrollY + destino.getBoundingClientRect().top - retorno.distancia
+        : retorno.scrollY;
+      window.scrollTo({ top: posicion, behavior: "instant" });
+    });
+  }
 
   const toggle = document.getElementById("admin-pendientes-toggle");
   const panel = document.getElementById("admin-pendientes-panel");
